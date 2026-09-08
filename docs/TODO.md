@@ -5,7 +5,11 @@ The single task list for WakeyWakey, sorted by priority. Two sources feed it:
 - **Device feedback** from the maintainer trying the app on real hardware (intake happens in the
   untracked `tasks.txt`; items are moved here once they are formulated as TODOs).
 - **The audit** of project description, documentation, requirements, tests and CI against the
-  actual code.
+  actual code — both its ranked findings and the underlying per-area survey, so that items the
+  ranking cut off (most of the licensing ones) are represented here too.
+
+Every item below was checked against the current code before being written down; where a claim
+could not be confirmed from the repository it says so instead of asserting it.
 
 Conventions:
 
@@ -112,6 +116,23 @@ Conventions:
 - **Done when:** the release build depends on analyze/test/SCA/secret/SAST, and a deliberately
   failing check demonstrably prevents an APK from being published.
 - **Requirement:** R1
+
+### T-32 · The background rescheduling R2 requires does not exist
+
+- [ ] Implement (or formally drop) app-independent rescheduling when fewer than 7 days are armed.
+- **Why:** R2 demands that a new alarm is produced "in the background when fewer than 7 days ahead
+  are currently scheduled, without requiring the app to be open". There is no such mechanism:
+  `scheduleAlarms` is reachable only from four UI call sites and from the handler when an alarm
+  actually fires, and the calendar preload runs once at app startup. There is no periodic worker,
+  no WorkManager, and no fewer-than-7-days trigger anywhere. R2's status calls this "not verified
+  end-to-end", which understates it — it is not implemented.
+- **Evidence:** `lib/screens/sleep_habits/screen_sleephabits.dart:72,77`,
+  `lib/screens/alarms/screen_alarms.dart:188,231`, `lib/models/alarms/handler.dart:193` are the
+  only callers; `lib/main.dart:242` is the only preload;
+  `grep -rniE "workmanager|boot_completed" lib/` finds nothing of ours.
+- **Done when:** either a background path exists and is tested, or R2 is rewritten to describe what
+  the app actually promises.
+- **Requirement:** R2
 
 ---
 
@@ -273,6 +294,113 @@ Conventions:
   removed, and R11's status states what was actually reviewed.
 - **Requirement:** R11
 
+### T-33 · Proprietary Google/ML Kit binaries are a second GPLv3 exposure
+
+- [ ] Assess the licence position of the barcode-scanning stack alongside T-05.
+- **Why:** T-05 covers Syncfusion, but the QR feature itself links proprietary Google binaries:
+  `mobile_scanner` pulls `play-services-mlkit-barcode-scanning` and `com.google.mlkit:barcode-scanning`,
+  which ship under Google's terms rather than an open-source licence. For a GPLv3 work these raise
+  the same "no further restrictions" question, and this one sits directly under the app's headline
+  feature — so it cannot be resolved by swapping a calendar widget.
+- **Evidence:** `mobile_scanner-7.4.0/android/build.gradle:66,69`.
+- **Done when:** a tracked decision records the licence basis for the whole shipped dependency set,
+  not just Syncfusion.
+- **Requirement:** R8, R9
+
+### T-34 · GPLv3 source-offer obligations are unaddressed for the distributed APK
+
+- [ ] Decide how Corresponding Source is provided to anyone who receives the APK.
+- **Why:** the release workflow attaches a signed APK to a GitHub Release while the repository is
+  private, and nothing publishes or offers the corresponding source. Conveying a GPLv3 binary
+  carries that obligation; right now there is no mechanism and no written position.
+- **Done when:** either the repository is public at release time, or the release carries a written
+  source offer that someone could actually act on.
+- **Requirement:** R9
+
+### T-35 · The LICENSE header breaks licence detection and strips the copyright from the build
+
+- [ ] Move the project/copyright lines out of the verbatim GPLv3 text.
+- **Why:** two lines are prepended above the licence text, which is enough for GitHub to classify
+  the repository as `NOASSERTION / Other` — so the README badge is the only licence signal a visitor
+  gets — and it also means Flutter's licence collector ships the bare GPLv3 text without the
+  project's own copyright notice in the app's NOTICES.
+- **Evidence:** `LICENSE:1-2`; `gh api repos/Dam0k1es/wakeywakey` returns
+  `license.spdx_id: NOASSERTION`.
+- **Done when:** GitHub reports GPL-3.0, and the shipped notices carry the project copyright.
+- **Requirement:** R9
+
+### T-36 · The app has no third-party licence or notice surface
+
+- [ ] Add a licences screen (e.g. `showLicensePage`) reachable from the About page.
+- **Why:** Flutter embeds the dependency notices in the binary, but nothing in the app displays
+  them, so the notice-retention obligations of the BSD/MIT/Apache dependencies — and GPLv3's own
+  requirement to make the licence available to the user — are not met in the shipped product.
+- **Evidence:** `grep -rn "showLicensePage\|LicensePage\|NOTICES" lib/` → 0 hits.
+- **Done when:** a user can read the licence and third-party notices from inside the app.
+- **Requirement:** R9
+
+### T-37 · The E2E suite runs on no routine trigger
+
+- [ ] Run the integration tests on pushes/PRs, not only on a tag or a manual dispatch.
+- **Why:** the E2E gate is the project's strongest quality evidence, but `ci.yml` does not reference
+  the integration tests at all — they exist only in `release.yml`, which fires on a `v*.*.*` tag or
+  manual dispatch. Since no tag has ever been pushed, the gate has never protected a normal change;
+  every commit so far reached `master` without it.
+- **Evidence:** `grep -c integration_test .github/workflows/ci.yml` → 0;
+  `.github/workflows/release.yml:3-7` (triggers).
+- **Done when:** a change that breaks an E2E scenario is caught before it lands, not only when
+  someone cuts a release. Consider the runtime cost and gate it on `master` only if needed.
+
+### T-38 · The QR gate has unconditional bypasses
+
+- [ ] Decide, document and test the fail-safe paths that dismiss an alarm without a scan.
+- **Why:** the "guaranteed wake-up" promise has escape hatches: if no overlay can be shown, the
+  handler waits three seconds and calls `Alarm.stopAll()`; the scanner also offers an emergency-stop
+  button when the camera fails. These are defensible as fail-safes — being locked out by a broken
+  camera is worse — but they are undocumented, untested, and not mentioned where the feature is
+  advertised.
+- **Evidence:** `lib/models/alarms/handler.dart:169-176`;
+  `lib/screens/scan_code/qr_scanner.dart:277-285,310-317`.
+- **Done when:** each bypass has a test, a written rationale, and an honest sentence in the feature
+  description.
+- **Requirement:** R4
+
+### T-39 · The QR gate is enforced only in the Flutter UI layer
+
+- [ ] Make alarm dismissal depend on validation somewhere the UI cannot bypass.
+- **Why:** the whole gate hangs off one `Alarm.ringing` subscription in the home widget plus a
+  `context.mounted` check. If that widget is not alive when an alarm fires, nothing enforces the
+  scan requirement — the strength of the app's differentiating feature depends on widget lifecycle.
+- **Evidence:** `lib/main.dart:215-225`; `lib/models/alarms/handler.dart:140,154`.
+- **Done when:** the requirement is enforced independently of which widget happens to be mounted,
+  or the limitation is documented as accepted.
+- **Requirement:** R4
+
+### T-40 · No CI check is actually enforceable
+
+- [ ] Decide how the "must pass before master" rule is enforced, given the repository's plan.
+- **Why:** the requirements register says its checks must be guaranteed "before any push to
+  `master`", but branch protection and rulesets are unavailable on this private repository's plan,
+  every commit so far went straight to `master` with zero pull requests, and CI runs after the push
+  anyway. A red run cannot stop anything. This undercuts T-06 and T-11: gating the release build is
+  necessary but not sufficient while nothing can block a push.
+- **Evidence:** `gh api …/branches/master/protection` and `…/rulesets` both return 403
+  ("Upgrade to GitHub Pro or make this repository public"); `gh pr list --state all` is empty.
+- **Done when:** either the repository is public/upgraded and protection is on, or the register says
+  plainly that enforcement is by maintainer discipline.
+- **Requirement:** R1
+
+### T-41 · Permissions are requested before the privacy policy is reachable
+
+- [ ] Present the data-handling information before or alongside the first permission prompt.
+- **Why:** calendar, camera, exact-alarm and notification permissions are all requested from the
+  splash screen at first launch, while the privacy policy is only reachable later through Settings.
+  For a project claiming GDPR alignment, the transparency step comes after the consent step.
+- **Evidence:** `lib/main.dart:136-153` (splash-screen permission flow);
+  `assets/text/Privacy.md` reachable only via the About page.
+- **Done when:** a first-run user can read what is collected before granting anything.
+- **Requirement:** R7, R11
+
 ---
 
 ## P2 — real work, does not block a release
@@ -399,6 +527,64 @@ Conventions:
   reboot/force-stop survival, audio and the gentle-wake ramp, real camera decoding, and
   calendar-derived scheduling — and the E2E suite is documented well enough to run.
 
+### T-42 · Six persisted settings are unreachable or unused
+
+- [ ] Wire them up or remove them.
+- **Why:** three are fully dead — `doNotDisturbEnabled`, `turnOffNotifications`, `turnOffCalls` are
+  declared and persisted but have zero readers outside `AppState`, for a feature the use cases mark
+  as never implemented. Three more are read by logic but have no UI: `wakeUpSteps`, which drives the
+  entire `_adjustAlarmTimes` comparison window, `startOfWeekDay`, and `rescheduleOnAlarm`. So the
+  single knob that governs how aggressively alarms are estimated cannot be changed by a user, while
+  settings that do nothing are stored.
+- **Evidence:** `grep -rn "doNotDisturbEnabled\|turnOffNotifications\|turnOffCalls" lib/` → no hits
+  outside `lib/app_state.dart`; `wakeUpSteps`/`startOfWeekDay`/`rescheduleOnAlarm` have 0 hits under
+  `lib/screens/`; `lib/models/scheduling/scheduling.dart:141` consumes `wakeUpSteps`.
+- **Done when:** every persisted setting is either user-changeable and consumed, or gone.
+
+### T-43 · The gentle-wake ramp duration is hardcoded
+
+- [ ] Make the fade duration configurable, or state that it is fixed.
+- **Why:** the whole tuning surface of a headline feature is `const Duration(seconds: 60)`. The one
+  user-facing duration that sounds related ("duration to wake up") feeds scheduling, not the ramp —
+  so a user adjusting it changes something else entirely.
+- **Evidence:** `lib/app_state.dart:487`.
+- **Done when:** the ramp length is either a setting or documented as fixed at 60 seconds.
+
+### T-44 · A dead gallery-scan button would bypass the camera gate if wired in
+
+- [ ] Remove `AnalyzeImageFromGalleryButton`, or gate it so it cannot dismiss an alarm.
+- **Why:** the widget picks an image from the gallery and runs it through the scanner. It is
+  currently never instantiated, but it sits in the scanner's own button file — wiring it into the
+  alarm-dismissal scanner would let a screenshot of the QR code dismiss the alarm, defeating the
+  "physical code in another room" premise. It is also the reason the app requests gallery access.
+- **Evidence:** `lib/screens/scan_code/scanner_button_widgets.dart:5-49`; no instantiation anywhere
+  in `lib/`.
+- **Done when:** the code is gone, or it exists only on the import screen and cannot reach the
+  dismissal path.
+- **Requirement:** R4
+
+### T-45 · A failure loading preferences can still prevent the app from starting
+
+- [ ] Bring the `SharedPreferences.getInstance()` call inside the guard its own comment promises.
+- **Why:** `_loadFromPreferences` carries a comment stating that a failure must never throw out of
+  the method, because `main()` awaits initialisation before `runApp` — but the `getInstance()` call
+  itself sits outside the `try`. If it throws, the app does not start at all, which for an alarm
+  clock means every armed alarm is silently unreachable.
+- **Evidence:** `lib/app_state.dart:660` (call), `:661-665` (the comment), `:666` (`try` starts
+  after).
+- **Done when:** a preferences failure degrades to defaults instead of blocking launch, covered by a
+  test.
+- **Requirement:** R3
+
+### T-46 · The scheduling window is hardcoded
+
+- [ ] Make the forward window and calendar preload range configurable, or justify the constants.
+- **Why:** scheduling covers a fixed 7-day forward window and the preload is a hardcoded two past /
+  one future week. Several of the numbered TODOs in `main.dart` describe exactly this as unfinished,
+  and it interacts with T-02's estimate-abort threshold.
+- **Evidence:** `lib/models/scheduling/scheduling.dart:54`; `lib/main.dart:242`.
+- **Done when:** the ranges are either settings or documented as deliberate constants with a reason.
+
 ---
 
 ## P3 — housekeeping
@@ -429,3 +615,27 @@ Conventions:
 - **Evidence:** `lib/main.dart:21-63`.
 - **Done when:** the block is reduced to genuine in-code markers, and anything user-visible lives
   in this file with a priority.
+
+### T-47 · `CLAUDE.md` contains several inaccurate statements
+
+- [ ] Correct the specific errors, independently of the broader status rewrite in T-28.
+- **Why:** the file is the agent-facing instruction sheet, so wrong detail there propagates. Known
+  errors: it states the timezone override is `^0.11.1` while `pubspec.yaml` pins `^0.11.0`, and it
+  explicitly instructs keeping those in sync; it points readers to `MissingPluginException` handling
+  that does not exist anywhere in `lib/`; it claims `personas.md` is annotated where features were
+  never implemented, which it is not; and it describes both scheduling script directories as using
+  `stdin`, which only one does.
+- **Evidence:** `CLAUDE.md:86` vs `pubspec.yaml:61,84`; `CLAUDE.md:16-17` vs
+  `grep -rn "MissingPluginException" lib/` → 0 hits; `CLAUDE.md:134-137` vs `docs/personas.md`;
+  `CLAUDE.md:111-113` vs `test/getEarliestAlarm/main.dart`.
+- **Done when:** each statement in the file is either true or removed.
+
+### T-48 · No source file carries a licence header
+
+- [ ] Decide whether to add per-file GPLv3 notices.
+- **Why:** none of the Dart sources carry a copyright or licence header, so a file copied out of the
+  repository loses any licence trace. This is recommended GPLv3 practice rather than a strict
+  requirement — the point is to make it a recorded decision instead of an oversight.
+- **Done when:** either headers exist, or a tracked note says they were deliberately omitted.
+- **Requirement:** R9
+

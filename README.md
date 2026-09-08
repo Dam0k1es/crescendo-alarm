@@ -129,10 +129,10 @@ All known gaps are tracked as prioritised TODOs in [`docs/TODO.md`](docs/TODO.md
 feedback and audit findings in one list, with evidence and an acceptance criterion per item.
 
 The ones that currently block a production push: Sleep-Habits durations are not subtracted from the
-derived alarm time; calendar-derived times are discarded for most days; the per-alarm enable switch
-does not stop an alarm; alarm survival across a reboot or force-stop is unverified; a direct
-dependency is not open source (a GPLv3 conflict); and the signed release APK is built with no
-quality gate.
+derived alarm time; calendar-derived times are discarded for most days; the background rescheduling
+the requirements demand does not exist; the per-alarm enable switch does not stop an alarm; alarm
+survival across a reboot or force-stop is unverified; a direct dependency is not open source (a
+GPLv3 conflict); and the signed release APK is built with no quality gate.
 
 ### Project Documentation
 
