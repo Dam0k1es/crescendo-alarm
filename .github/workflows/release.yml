@@ -82,6 +82,16 @@ jobs:
           # for what actually runs.
           script: bash .github/scripts/run_e2e_tests.sh
 
+      - name: Upload E2E evidence (video, audio-focus log, test output)
+        # if: always() - an evidence artifact matters most exactly when the
+        # run failed, to see what actually happened on the device.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-evidence
+          path: e2e_evidence/
+          if-no-files-found: warn
+
   build-signed-release:
     name: Build & sign release APK
     needs: e2e-tests
@@ -146,3 +156,25 @@ jobs:
         with:
           files: build/app/outputs/flutter-apk/app-release.apk
           generate_release_notes: true
+
+  cleanup-old-artifacts:
+    name: Keep only latest run's artifacts + latest successful run's
+    # Runs after every attempt (needs: [...] + if: always()), whether or not
+    # the release actually happened, so a failed e2e-tests run's evidence
+    # still gets pruned down over time. Storage policy: keep this run's own
+    # artifacts, plus whichever *other* release.yml run was most recently
+    # successful (so there's always one known-good reference build/evidence
+    # set available even when the latest run failed) - everything else from
+    # this workflow gets deleted. ci.yml's artifacts are untouched; see
+    # .github/scripts/cleanup_old_artifacts.sh for how that scoping works.
+    needs: [e2e-tests, build-signed-release]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete superseded release.yml artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/cleanup_old_artifacts.sh
