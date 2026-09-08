@@ -193,36 +193,44 @@ Conventions:
   clearly quarantined as a historical experiment.
 - **Requirement:** R2
 
-### T-11 · Two of R1's five security tools cannot fail a run
+### T-11 · Two of R1's five security tools cannot fail a run — PARTIALLY RESOLVED (2026-09-08)
 
-- [ ] Make the claim match the pipeline, or the pipeline match the claim — and record accepted
-      findings in a tracked file.
-- **Why:** R1 asserts "no high-or-above finding — met", but `mobsfscan` runs with `--no-fail` and
+- [ ] Make the pipeline itself enforce this (un-excepted HIGH findings must fail the run).
+- **Why:** R1 asserted "no high-or-above finding — met", but `mobsfscan` runs with `--no-fail` and
   the MobSF step only prints counts with no threshold. The current MobSF report on master carries
   one HIGH (installable on Android 7.0 / `minSdk=24`) and a security score of 51 while the job
-  concludes success. The task-hijacking finding R1 cites as a known false positive has its
+  concludes success. The task-hijacking finding R1 cited as a known false positive had its
   rationale written down nowhere.
 - **Evidence:** `.github/workflows/ci.yml:115` (`--no-fail`), `scripts/mobsf_summary.py` (prints
   only); MobSF report from the newest master run: `HIGH: 1`, `WARNING: 14`, `security_score: 51`;
-  `grep -rniE "strandhogg|task.?hijack"` finds only the two places that *cite* the rationale
-  (`docs/REQUIREMENTS.md:17-18`, `ci.yml:112`).
-- **Done when:** un-excepted HIGH findings fail the run, accepted exceptions live in a tracked
-  file with a reason and a date, and R1's wording matches what actually gates.
+  `grep -rniE "strandhogg|task.?hijack"` found only the two places that *cited* the rationale
+  without recording it.
+- **Resolution so far (documentation only):** `docs/REQUIREMENTS.md` R1 rewritten to say plainly
+  which three tools actually gate the pipeline and which two do not, and now carries the accepted
+  rationale for both outstanding findings (the `mobsfscan` task-hijacking pattern and the MobSF
+  `minSdk=24` HIGH) directly, in a tracked file, for the first time.
+- **Still open (code):** un-excepted HIGH findings still cannot fail the run - `--no-fail` and the
+  threshold-free MobSF summary are unchanged.
 - **Requirement:** R1
 
-### T-12 · The evidence several requirements cite is not in the repository
+### T-12 · The evidence several requirements cite is not in the repository — PARTIALLY RESOLVED (2026-09-08)
 
-- [ ] Track the security/quality evidence, or stop citing it as the basis for a "met" status.
+- [ ] Decide R6's remaining citation: commit the underlying review, or keep summarising inline.
 - **Why:** `docs/quality-baseline-2026-09.md` and `docs/release-readiness-2026-09.md` are excluded
-  by `.gitignore`, so anyone cloning this repo gets a requirements register whose "checked by" and
-  "met" justifications point at files that do not exist. They are referenced from tracked files in
-  about a dozen places, including test-file headers and workflow comments.
+  by `.gitignore`, so anyone cloning this repo got a requirements register whose "checked by" and
+  "met" justifications pointed at files that do not exist for them. They were referenced from
+  tracked files in about a dozen places, including test-file headers and workflow comments.
 - **Evidence:** `.gitignore:438-439`; `git ls-files docs/` lists six files, neither snapshot among
-  them; citations in `docs/REQUIREMENTS.md:19,30,33,71,76,122,140`, `CLAUDE.md:117,119,126`,
-  `integration_test/app_test.dart:12,18`, `test/handler_stale_alarm_test.dart:1`,
-  `.github/workflows/ci.yml:111`, `.github/workflows/release.yml:61`.
-- **Done when:** the substance those documents carry is either committed (PII-reviewed first) or
-  summarised inline where it is cited, and no tracked file points at an untracked path.
+  them; citations were in `docs/REQUIREMENTS.md:19,30,33,71,76,122,140`, `CLAUDE.md:117,119,126`.
+- **Resolution so far:** R1, R2, R4, R8, R9 and R11 in `docs/REQUIREMENTS.md` no longer rely on the
+  gitignored docs at all - their evidence and rationale are now written directly into the tracked
+  requirements file. `CLAUDE.md`'s "Quality baseline snapshot" section now says explicitly that
+  both files are gitignored, untracked, and predate the current testing status, instead of citing
+  them as if a reader could open them. R6 still names `docs/quality-baseline-2026-09.md` for its
+  full write-up (with substance now inlined and an explicit "this file is gitignored" note) - that
+  one citation was left as a pointer rather than fully removed.
+- **Still open:** the citations inside `integration_test/app_test.dart`, `test/handler_stale_alarm_test.dart`
+  and the two workflow files are unchanged (code/test/workflow files, out of scope for this pass).
 - **Requirement:** R1, R2, R6, R11
 
 ### T-13 · The tag → GitHub Release path has never run and would fail
@@ -248,9 +256,9 @@ Conventions:
 - **Done when:** an alarm set to repeat on specific weekdays fires on exactly those days, covered
   by a test over the production scheduling function.
 
-### T-15 · The gentle-wake ramp has no evidence of any kind
+### T-15 · The gentle-wake ramp has no evidence of any kind — RESOLVED for the doc route (2026-09-08)
 
-- [ ] Exercise the fade path, or state plainly that it is unverified.
+- [x] State plainly that it is unverified (the alternative to actually exercising the fade path).
 - **Why:** a headline feature and half of R4. Gentle wake defaults to off, so no test enables it and
   the `VolumeSettings.fade` branch is never executed; the CI emulator also runs without audio. The
   audio-focus log does show the app taking alarm-usage audio focus, which is genuine but says
@@ -259,9 +267,9 @@ Conventions:
   fixed), `lib/screens/alarms/screen_alarms.dart:263` (dialog default);
   `grep -niE "gentle|fade|volume" integration_test/app_test.dart` → nothing; emulator started with
   `-noaudio`; 3 of 249 audio-focus polls show `usage=USAGE_ALARM`.
-- **Done when:** either an E2E scenario enables gentle wake and samples stream volume across the
-  60-second window asserting a rising trajectory, or R4 and the evidence README say the ramp is
-  unverified and only the fixed-volume path is exercised.
+- **Resolution:** `docs/REQUIREMENTS.md` R4 now states plainly that the ramp is never exercised and
+  only the fixed-volume path is covered. Adding an actual E2E scenario for the fade path (the other
+  half of this TODO's "done when") remains open and is a code change, out of scope for this pass.
 - **Requirement:** R4
 
 ### T-16 · The QR test seam does not isolate the camera, and ships in release builds
@@ -282,16 +290,23 @@ Conventions:
   stream, and nothing test-shaped is reachable in a release build (prefer an injected dependency
   over a static).
 
-### T-17 · The privacy policy does not match the app
+### T-17 · The privacy policy does not match the app — RESOLVED (2026-09-08)
 
-- [ ] Rewrite `assets/text/Privacy.md` against what the app actually does.
-- **Why:** R11 reads "met", but that check only covered the contact address. The policy describes
-  data the app cannot collect (location, NFC) while omitting camera, gallery access,
-  calendar *writes* and the locally stored deactivation code.
+- [x] Rewrite `assets/text/Privacy.md` against what the app actually does.
+- **Why:** R11 reads "met", but that check only covered the contact address. The policy described
+  data the app cannot collect (location, NFC) while omitting camera and the locally stored
+  deactivation code/alarms.
 - **Evidence:** `assets/text/Privacy.md` against the permissions in
-  `android/app/src/main/AndroidManifest.xml` and the QR/calendar code paths.
-- **Done when:** every declared permission and every stored data item is either described or
-  removed, and R11's status states what was actually reviewed.
+  `android/app/src/main/AndroidManifest.xml` and the QR/calendar code paths. Re-verified while
+  fixing this: `WRITE_CALENDAR` is declared but unused (`createOrUpdateEvent` is commented out in
+  `lib/screens/schedule/calendar.dart:91`) - the app currently only *reads* the calendar, and
+  `READ_EXTERNAL_STORAGE` is declared but never actually requested at runtime
+  (`lib/utils/permissions.dart` requests only exact-alarm, notification, camera and calendar) -
+  consistent with T-44's dead gallery-import button.
+- **Resolution:** `assets/text/Privacy.md` rewritten to describe calendar reads, camera use for QR
+  scanning, and locally stored alarms/settings/deactivation code; the location/NFC claim removed; a
+  line added disclosing the plugin-derived `INTERNET` permission and that it sends nothing. R11 in
+  `docs/REQUIREMENTS.md` corrected to state what the original review actually covered.
 - **Requirement:** R11
 
 ### T-33 · Proprietary Google/ML Kit binaries are a second GPLv3 exposure
@@ -317,16 +332,21 @@ Conventions:
   source offer that someone could actually act on.
 - **Requirement:** R9
 
-### T-35 · The LICENSE header breaks licence detection and strips the copyright from the build
+### T-35 · The LICENSE header breaks licence detection and strips the copyright from the build — PARTIALLY RESOLVED (2026-09-08)
 
-- [ ] Move the project/copyright lines out of the verbatim GPLv3 text.
-- **Why:** two lines are prepended above the licence text, which is enough for GitHub to classify
-  the repository as `NOASSERTION / Other` — so the README badge is the only licence signal a visitor
-  gets — and it also means Flutter's licence collector ships the bare GPLv3 text without the
-  project's own copyright notice in the app's NOTICES.
-- **Evidence:** `LICENSE:1-2`; `gh api repos/Dam0k1es/wakeywakey` returns
+- [ ] Confirm GitHub re-detects GPL-3.0 after the fix, and give the app an in-app notices surface.
+- **Why:** two lines were prepended above the licence text, which was enough for GitHub to classify
+  the repository as `NOASSERTION / Other` — so the README badge was the only licence signal a
+  visitor got — and it also meant Flutter's licence collector shipped the bare GPLv3 text without
+  the project's own copyright notice anywhere in the app.
+- **Evidence:** `LICENSE:1-2` (before this fix); `gh api repos/Dam0k1es/wakeywakey` returned
   `license.spdx_id: NOASSERTION`.
-- **Done when:** GitHub reports GPL-3.0, and the shipped notices carry the project copyright.
+- **Resolution so far:** the two lines are removed from `LICENSE`, which now starts directly with
+  the canonical GPLv3 text; the copyright notice moved to `README.md`'s License section instead
+  (`Copyright (C) 2026 Dam0k1es`).
+- **Still open:** whether GitHub now detects `GPL-3.0` needs confirming after this change is pushed
+  (detection re-runs on push, not retroactively); and the app itself still has no in-app licence/
+  notices screen to carry the copyright to an end user - that's T-36, unchanged by this fix.
 - **Requirement:** R9
 
 ### T-36 · The app has no third-party licence or notice surface
@@ -401,23 +421,28 @@ Conventions:
 - **Done when:** a first-run user can read what is collected before granting anything.
 - **Requirement:** R7, R11
 
-### T-49 · Requirement claims about permissions do not match the built APK
+### T-49 · Requirement claims about permissions do not match the built APK — PARTIALLY RESOLVED (2026-09-08)
 
-- [ ] Re-derive R7's and R4's permission statements from the merged manifest, not from `lib/`.
-- **Why:** R7 asserts "no user data leaves the device — met" on the basis of a check scoped to Dart
-  source in `lib/`, but the shipped APK declares `INTERNET` and `ACCESS_NETWORK_STATE`, pulled in
-  through plugin manifest merging. That does not prove data leaves the device, and the offline claim
-  may well still hold — but it cannot be closed with a source grep while the app has network
-  capability. R4 has the mirror-image problem: it cites the app manifest as evidence that the
+- [ ] Name every permission the shipped app actually holds, and capture traffic during an E2E run.
+- **Why:** R7 asserted "no user data leaves the device — met" on the basis of a check scoped to
+  Dart source in `lib/`, but the shipped APK declares `INTERNET` and `ACCESS_NETWORK_STATE`, pulled
+  in through plugin manifest merging. That does not prove data leaves the device, and the offline
+  claim may well still hold — but it cannot be closed with a source grep while the app has network
+  capability. R4 had the mirror-image problem: it cited the app manifest as evidence that the
   camera permission is declared, and the app manifest does not declare `CAMERA` at all; it too
   arrives via merge.
 - **Evidence:** `android/app/src/main/AndroidManifest.xml:51-64` (no `INTERNET`, no `CAMERA`);
   the merged manifest and `aapt2 dump permissions` on the built APK show `INTERNET`,
   `ACCESS_NETWORK_STATE`, `CAMERA`, `BROADCAST_CLOSE_SYSTEM_DIALOGS`, `READ_APP_BADGE` and several
   vendor launcher-badge permissions.
-- **Done when:** both requirements cite the merged manifest, name every permission the shipped app
-  actually holds, and state what evidence supports the offline claim given network capability
-  exists (e.g. a traffic capture during an E2E run).
+- **Resolution so far:** R4 and R7 in `docs/REQUIREMENTS.md` now both cite the merged manifest
+  rather than the app's own, name the specific permissions involved (`INTERNET`,
+  `ACCESS_NETWORK_STATE`, `CAMERA`), and state explicitly that the offline claim rests on an
+  absence of evidence rather than a positive check. `assets/text/Privacy.md` also now discloses the
+  plugin-derived `INTERNET` permission to end users.
+- **Still open:** neither requirement yet names *every* permission the shipped app holds
+  exhaustively, and no traffic capture during an E2E run has been added as positive evidence for
+  the offline claim (a code/CI change).
 - **Requirement:** R4, R7
 
 ---
@@ -531,20 +556,25 @@ Conventions:
   `lib/models/alarms/manual_alarm.dart` and the volume default in `lib/app_state.dart`.
 - **Done when:** a calendar-derived alarm rings at the configured volume, asserted by a test.
 
-### T-28 · Correct the stale claims in `CLAUDE.md` and `REQUIREMENTS.md`
+### T-28 · Correct the stale claims in `CLAUDE.md` and `REQUIREMENTS.md` — RESOLVED (2026-09-08)
 
-- [ ] Bring both in line with what is now verified.
-- **Why:** both still state that no build has ever been installed or run on a real or emulated
-  Android device, and `CLAUDE.md` additionally states that no integration/E2E tests exist. The
-  release workflow runs E2E tests on an API-34 emulator and gates the signed build on them.
-  `REQUIREMENTS.md` uses the falsified claim as the single root cause of R2/R3/R4, so its register
-  mis-attributes which gaps actually remain. Neither document mentions the E2E gate, the evidence
+- [x] Bring both in line with what is now verified.
+- **Why:** both stated that no build had ever been installed or run on a real or emulated Android
+  device, and `CLAUDE.md` additionally stated that no integration/E2E tests exist. The release
+  workflow runs E2E tests on an API-34 emulator and gates the signed build on them.
+  `REQUIREMENTS.md` used the falsified claim as the single root cause of R2/R3/R4, so its register
+  mis-attributed which gaps actually remain. Neither document mentioned the E2E gate, the evidence
   artifact, or how to run the suite.
-- **Evidence:** `CLAUDE.md:116-121`, `docs/REQUIREMENTS.md:138-141`; the newest release run passed
-  all three E2E scenarios on the emulator.
-- **Done when:** both documents state what is verified on-device and narrow the open gaps to
-  reboot/force-stop survival, audio and the gentle-wake ramp, real camera decoding, and
-  calendar-derived scheduling — and the E2E suite is documented well enough to run.
+- **Evidence:** `CLAUDE.md:116-121` (before this fix), `docs/REQUIREMENTS.md:138-141` (before this
+  fix); the newest release run passed all three E2E scenarios on the emulator.
+- **Resolution:** `CLAUDE.md`'s "Testing status" section rewritten to list what
+  `integration_test/app_test.dart` actually covers, what it doesn't, and that a real on-device run
+  now happens on every release; the "Quality baseline snapshot" section clarified that both
+  snapshot docs predate the E2E work and are gitignored. `REQUIREMENTS.md`'s R2, R3 and R4 statuses
+  and the closing summary rewritten to attribute the real remaining gaps (no background
+  rescheduling mechanism, no reboot/force-stop test, no audio/ramp/camera-isolated coverage)
+  instead of "never ran on a device". README's "Quality Checks" section now documents the E2E gate
+  and the local command to run it.
 
 ### T-42 · Six persisted settings are unreachable or unused
 
@@ -616,13 +646,26 @@ Conventions:
 - **Done when:** every bundled asset has a documented source and licence, or is replaced.
 - **Requirement:** R10
 
-### T-30 · Annotate or retire the planning artifacts
+### T-30 · Annotate or retire the planning artifacts — PARTIALLY RESOLVED (2026-09-08)
 
-- [ ] Mark what the personas, use cases, UML diagram and risk graphic describe but never shipped.
+- [ ] Annotate the UML diagram and risk graphic themselves (or retire them).
 - **Why:** the descriptive documents miss the app in both directions: the README's three headline
   features understate the shipped surface, while `personas.md`, the UML diagram and `risk.png`
   still model features and classes that were never built and carry no annotation saying so.
-  `use-cases.md` states that everything unmarked shipped, which is not the case.
+  `use-cases.md` stated that everything unmarked shipped, which was not the case.
+- **Resolution so far:** `use-cases.md` annotated inline (the "Disable alarm" switch is a no-op;
+  "Manage/Disable Deactivation Codes" only has Generate/Remove for a single code, no separate
+  disable; "Print as QR Code" is only partially implemented - the code renders on-screen, but
+  share/print is an explicit "future feature" stub) and its blanket top-note corrected to
+  acknowledge shipped-but-broken items as a third category, tracked in `docs/TODO.md` rather than
+  as planning gaps. `personas.md` given its own annotation note plus a specific correction to Tom's
+  jetlag/timezone claim (the app only reads the device's current timezone; there is no dedicated
+  jetlag-adjustment feature). `choice-of-technologies.md` annotated on its iOS cross-platform claim
+  (unverified - iOS has never been built or run).
+- **Still open:** `risk.png` (a diagram modelling a since-abandoned NFC deactivation component) and
+  `UML_WakeyWakey.drawio` are images/diagrams and were not annotated in place; `CLAUDE.md`'s
+  "Project documentation" section now points at this TODO instead, but that is a pointer, not an
+  annotation on the artifacts themselves.
 - **Done when:** each planning document either matches the code or says plainly where it does not.
 
 ### T-31 · Triage the `main.dart` TODO backlog
@@ -635,18 +678,23 @@ Conventions:
 - **Done when:** the block is reduced to genuine in-code markers, and anything user-visible lives
   in this file with a priority.
 
-### T-47 · `CLAUDE.md` contains several inaccurate statements
+### T-47 · `CLAUDE.md` contains several inaccurate statements — RESOLVED (2026-09-08)
 
-- [ ] Correct the specific errors, independently of the broader status rewrite in T-28.
+- [x] Correct the specific errors, independently of the broader status rewrite in T-28.
 - **Why:** the file is the agent-facing instruction sheet, so wrong detail there propagates. Known
-  errors: it states the timezone override is `^0.11.1` while `pubspec.yaml` pins `^0.11.0`, and it
-  explicitly instructs keeping those in sync; it points readers to `MissingPluginException` handling
-  that does not exist anywhere in `lib/`; it claims `personas.md` is annotated where features were
-  never implemented, which it is not; and it describes both scheduling script directories as using
-  `stdin`, which only one does.
+  errors: it stated the timezone override is `^0.11.1` while `pubspec.yaml` pins `^0.11.0`, and it
+  explicitly instructs keeping those in sync; it pointed readers to `MissingPluginException`
+  handling that does not exist anywhere in `lib/`; it claimed `personas.md` is annotated where
+  features were never implemented, which it was not; and it described both scheduling script
+  directories as using `stdin`, which only one does.
 - **Evidence:** `CLAUDE.md:86` vs `pubspec.yaml:61,84`; `CLAUDE.md:16-17` vs
   `grep -rn "MissingPluginException" lib/` → 0 hits; `CLAUDE.md:134-137` vs `docs/personas.md`;
   `CLAUDE.md:111-113` vs `test/getEarliestAlarm/main.dart`.
+- **Resolution:** timezone override corrected to `^0.11.0`; the Linux/`device_calendar` note now
+  describes the real generic `try/catch` around `retrieveCalendars()` in
+  `lib/screens/schedule/calendar.dart` instead of a handler that doesn't exist; `personas.md` is now
+  actually annotated (see T-30), making the claim true; the stdin description now says "in
+  `adjustTime/`'s case also `stdin.readLineSync()`", matching that only one script uses it.
 - **Done when:** each statement in the file is either true or removed.
 
 ### T-48 · No source file carries a licence header

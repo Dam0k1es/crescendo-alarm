@@ -74,24 +74,32 @@ CI runs via [GitHub Actions](.github/workflows/ci.yml) and scales with the branc
 
 - **`dev`**: fast feedback (`flutter analyze` + `flutter test`) plus a debug **development** APK,
   uploaded as a downloadable build artifact on the run.
-- **`master`** (and PRs into it): the full pipeline - analyze, test, dependency vulnerability scan
-  ([osv-scanner](https://github.com/google/osv-scanner)), secret scan
-  ([trufflehog](https://github.com/trufflesecurity/trufflehog)), Android source SAST
-  ([mobsfscan](https://github.com/MobSF/mobsfscan)), a signed **production** release APK build, and
-  a full [MobSF](https://mobsf.github.io/docs/) static scan of that build. The production APK is
-  uploaded as a build artifact on every run. Only Android is actually built in CI - see "Supported
-  Platforms" above for why Linux/iOS aren't.
-- Tagged releases: pushing a `v*.*.*` tag runs a separate
-  [release workflow](.github/workflows/release.yml) that builds the same signed production APK and
-  attaches it to a formal GitHub Release (with generated release notes) - use this for actual
-  version bumps; the per-push artifact above is for grabbing "whatever's on master right now."
+- **`master`** (and PRs into it): analyze, test, dependency vulnerability scan
+  ([osv-scanner](https://github.com/google/osv-scanner)) and secret scan
+  ([trufflehog](https://github.com/trufflesecurity/trufflehog)) - all of which can fail the run -
+  plus Android source SAST ([mobsfscan](https://github.com/MobSF/mobsfscan)) and a full
+  [MobSF](https://mobsf.github.io/docs/) static scan, both currently informational only (see
+  [`docs/TODO.md`](docs/TODO.md) T-11). A signed **production** release APK is also built and
+  uploaded as an artifact on every run - currently regardless of whether the checks above passed
+  (T-06). Only Android is actually built in CI - see "Supported Platforms" above for why
+  Linux/iOS aren't.
+- End-to-end tests on a real Android emulator (`integration_test/app_test.dart`) run in the
+  separate [release workflow](.github/workflows/release.yml) and gate its signed build - see
+  "Testing status" below for what they cover. Run the same suite locally with a connected device or
+  running emulator: `flutter test integration_test/app_test.dart -d <device-id>`.
+- Tagged releases: pushing a `v*.*.*` tag runs the release workflow, which builds the same signed
+  production APK (after the E2E gate above) and attaches it to a formal GitHub Release (with
+  generated release notes) - use this for actual version bumps; the per-push artifact above is for
+  grabbing "whatever's on master right now."
 
 To run the same checks locally before committing:
 
 ```sh
 flutter analyze                # static analysis / lints
 flutter test                   # unit tests
-bash scripts/security-scan.sh  # analyze + osv-scanner + trufflehog
+bash scripts/security-scan.sh  # analyze + osv-scanner + trufflehog - narrower than CI's pipeline
+                                # (no mobsfscan/MobSF, and its secret-scan step currently can't
+                                # fail on a finding the way CI's does - see docs/TODO.md T-26)
 flutter build apk --debug      # verify the Android build
 ```
 
@@ -150,4 +158,5 @@ Contributions are welcome! Please fork this repository and submit pull requests.
 
 ### License
 
-This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
+Copyright (C) 2026 Dam0k1es. Licensed under the GNU General Public License v3.0 - see the
+[LICENSE](LICENSE) file for the full text.

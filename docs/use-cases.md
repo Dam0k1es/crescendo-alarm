@@ -1,6 +1,9 @@
 > Note (2026-09): items marked **not implemented** below were planned but
-> didn't make it into the shipped app. Everything else reflects real,
-> implemented features.
+> didn't make it into the shipped app. A few other items are annotated as
+> shipped but not working as described (a UI control exists but the
+> underlying behaviour is a no-op, or a stub) - those are tracked as bugs in
+> `docs/TODO.md`, not planning gaps. Everything else reflects real,
+> implemented, working features.
 
 # FEATURES
 
@@ -27,7 +30,8 @@
 
 - Edit alarm
 
-- Disable alarm
+- Disable alarm (**shipped as a UI switch, but currently a no-op** - toggling it off does not
+  actually cancel the underlying alarm; see `docs/TODO.md` T-03)
 
 - Remove alarm
 
@@ -61,10 +65,14 @@
 ## Deactivation Code
 
 - Create Deactivation Code
-- Manage Deactivation Codes
-- Disable Deactivation Code
+- Manage Deactivation Codes (**only one code exists at a time** - "manage" is Generate/Remove, not
+  a list of multiple codes)
+- Disable Deactivation Code (**not implemented as distinct from removing it** - there is Generate
+  and Remove, no way to keep a code stored but temporarily inactive)
 - Remove Deactivation Codes
-- Print Deactivation Code as QR Code (="QR Code")
+- Print Deactivation Code as QR Code (="QR Code") (**partially implemented**: the code is rendered
+  and displayed as a QR image on-screen; the "share/print" action is an explicit stub that shows
+  "This is a future feature!" and does nothing)
 - Scan QR Code
 - Optional: Write Deactivation Code to NFC Tag (="Deactivation Tag") - **not implemented**
 - Optional: Read Deactivation Tag - **not implemented**

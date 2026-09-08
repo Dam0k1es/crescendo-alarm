@@ -5,26 +5,35 @@ personal data.
 
 ## Data Collected
 
-The App collects the following data:
+The App collects the following data, all of it stored locally on your device:
 
-- Calendar Data: With your permission, the App accesses your calendar to derive intelligent wake-up
-  times based on your commitments.
+- Calendar Data: With your permission, the App reads your calendar to derive intelligent wake-up
+  times based on your commitments. The App does not write to or modify your calendar.
 
-- Location Data: The App uses your location to calculate the distance to your NFC tags and adjust
-  the wake-up functionality accordingly.
+- Camera Data: With your permission, the App uses your camera to scan a QR code that deactivates a
+  "guaranteed wake-up" alarm. The camera feed is used only at the moment of scanning to detect the
+  code - no photo or video is stored or transmitted.
 
-The App does not collect any other personal data such as name, email address, or contact
-information.
+- Alarms and Sleep-Habit Settings: alarms you create, your sleep-habit preferences, and a
+  locally-generated deactivation code (if you choose to set one up) are stored on your device to
+  make the App work.
+
+The App does not collect your name, email address, contact information, or your device's location.
+
+The installed app declares an internet-access permission, brought in by a bundled software
+component rather than requested by the App's own code; the App does not use it to send any data
+anywhere.
 
 ## Use of Data
 
-The collected data is stored locally on your device and is not shared with third parties. It is used
-as follows:
+The collected data is stored locally on your device and is not shared with third parties. It is
+used as follows:
 
 - Calendar Data is used to intelligently adjust your wake-up times based on your scheduled events.
 
-- Location Data is used to calculate the distance to your NFC tags and adjust the wake-up
-  functionality accordingly.
+- Camera Data is used only to check a scanned QR code against your stored deactivation code.
+
+- Alarms and Sleep-Habit Settings are used to run the App's core alarm and scheduling features.
 
 ## Data Security
 
@@ -33,9 +42,9 @@ accidental or unlawful processing, accidental loss, destruction, or damage.
 
 ## Partners
 
-We do not share your data with anyone. We do not sell your data. However we may use third party
-libraries
-to help us with certain features, which may have their own privacy policies we do not control.
+We do not share your data with anyone. We do not sell your data. The App makes no network requests
+of its own; it may bundle third-party libraries to implement certain features, which may have their
+own privacy policies we do not control.
 
 ## Changes to this Privacy Policy
 
@@ -48,4 +57,4 @@ any updates.
 If you have any questions about this Privacy Policy, please contact us at
 dam0kes@member.fsf.org.\
 \
-Last updated: 2024-06-18
+Last updated: 2026-09-08

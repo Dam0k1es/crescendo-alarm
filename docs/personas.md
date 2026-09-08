@@ -1,3 +1,9 @@
+> Note (2026-09): these personas predate the finished app. Where a persona's
+> stated need corresponds to a real, working feature, no annotation is
+> added; where it goes beyond what the app actually does, that is called
+> out inline. See `docs/TODO.md` for anything tracked as a bug rather than
+> a documentation gap.
+
 # Marie, die Krankenschwester
 ## Steckbrief
 - Name: Marie
@@ -36,6 +42,13 @@ Toms unregelmäßiges Schlafmuster und häufige Reisen machen es schwierig, eine
 
 ## Ziele mit der App "Wakey Wakey"
 Tom möchte eine Wecker-App verwenden, die ihm hilft, seinen Schlafplan anzupassen und ihm dabei hilft, sich an verschiedene Zeitzonen anzupassen, während er auf Geschäftsreise ist. Er sucht nach einer Lösung, die ihn sanft und effektiv aufweckt, um den Tag zu beginnen, auch wenn er unter Jetlag leidet und wenig Schlaf hatte.
+
+> **Anmerkung (2026-09):** Die App liest beim Start lediglich die aktuelle Zeitzone des Geräts aus
+> und interpretiert Kalendereinträge entsprechend - das ist Standardverhalten jeder
+> kalenderbasierten App, kein dediziertes Jetlag-Feature. Es gibt keinen Algorithmus, der
+> Nutzer:innen aktiv beim Anpassen an eine neue Zeitzone unterstützt (z. B. schrittweise
+> Weckzeit-Verschiebung, Warnungen bei Zeitzonenwechsel). Toms Bedürfnis nach aktiver
+> Jetlag-Unterstützung ist damit nur teilweise abgedeckt.
 
 
 # Emma, die Studentin

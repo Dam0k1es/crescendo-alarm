@@ -13,8 +13,10 @@ names, emails, or locations to tracked files - see "PII policy" below.
 - **Android** is the actual target platform this app is built for.
 - **Linux desktop** exists only as a fast local dev/debug loop (no emulator/device needed to smoke-test
   UI and core logic changes) - it is not a real deployment target. `device_calendar` has no Linux
-  implementation, so calendar integration always no-ops there by design (see `MissingPluginException`
-  handling).
+  implementation, so `retrieveCalendars()` throws there; the generic `try/catch` around that call in
+  `lib/screens/schedule/calendar.dart` swallows it like any other error (there is no
+  `MissingPluginException`-specific handling), leaving `calendars` empty and the app simply
+  proceeding with none, by design.
 - **iOS** has project scaffolding but has never been built or run in this environment (no Mac/Xcode
   available here) - treat it as unverified, not "supported."
 - **Windows, macOS, and web scaffolding were removed** (they existed from the original
@@ -83,7 +85,7 @@ remove - but check `flutter build apk` still succeeds first.
   preview-numbered packages (`android-37.0`, `.1`, `.2`), not a plain `android-37` target AGP can
   resolve - any build fails with `Failed to find target with hash string 'android-37'`. Revisit
   once upstream publishes a fixed release.
-- **`timezone: ^0.11.1`** - `device_calendar` (even its latest release) still pins
+- **`timezone: ^0.11.0`** - `device_calendar` (even its latest release) still pins
   `timezone: ^0.9.0`, while `syncfusion_flutter_calendar` requires `^0.11.0` - a real unresolved
   conflict between the two packages' declared constraints. Forcing 0.11.x is safe in practice: the
   public API (`TZDateTime`, `Location`, `getLocation`) is unchanged between 0.9.x and 0.11.x, only
@@ -108,30 +110,50 @@ individually, including AI-assistant chat history that can leak real usernames a
   It replaced a stale `flutter create` counter-app placeholder that had never been adapted to this
   project and failed on every run (`ProviderNotFoundException`) - if `flutter test` ever goes red
   again on this file, that's a real regression, not a flaky leftover.
-- `test/adjustTime/` and `test/getEarliestAlarm/`: real scheduling-logic test *cases*, but wired up
-  as standalone interactive scripts (`main.dart`, uses `print`/`stdin.readLineSync()`), not
-  `package:test` tests - `flutter test` does not run them. They're genuine candidates for
-  conversion into real `test()` blocks before relying on `flutter test` as a full regression gate
-  for scheduling logic.
-- No integration/end-to-end tests exist yet. See the E2E test plan in
-  `docs/quality-baseline-2026-09.md` for what a first pass should cover.
-- No build has ever been installed/run on a real or emulated Android device in this environment
-  (see `docs/release-readiness-2026-09.md` for why - the Android emulator proved unreliable on this
-  VM's nested-virtualization setup). Android verification so far is build success plus static
-  analysis (MobSF, mobsfscan, manual review) only, not an actual on-device run.
+- `test/handler_stale_alarm_test.dart`: real `package:test` unit tests for the stale-alarm predicate
+  in `lib/models/alarms/handler.dart`. `flutter test` runs 6 tests total (1 widget + 5 here), not
+  just the one widget smoke test.
+- `test/adjustTime/` and `test/getEarliestAlarm/`: standalone interactive scripts (`main.dart`, uses
+  `print`, and in `adjustTime/`'s case also `stdin.readLineSync()`), not `package:test` tests -
+  `flutter test` does not run them. Do not convert them as-is: neither imports
+  `package:wakeywakey`, and `test/adjustTime/`'s algorithm no longer matches the production
+  scheduler in `lib/models/scheduling/scheduling.dart` - see `docs/TODO.md` (T-10) for what porting
+  them properly requires. The scheduling engine itself currently has no automated coverage at all.
+- `integration_test/app_test.dart`: real end-to-end tests, driven against an actual Android
+  emulator in `.github/workflows/release.yml`'s `e2e-tests` job, gating the signed release build.
+  Three scenarios are covered and currently pass: a manual alarm firing and being dismissed via the
+  default overlay, one being dismissed via an injected QR scan result, and a created alarm being
+  read back after app state is rebuilt (see `docs/TODO.md` T-04 for why that last one proves less
+  than its name suggests). Not covered by this suite or anything else: alarm survival across a
+  reboot or force-stop, audio playback and the gentle-wake volume ramp (the CI emulator runs with
+  audio disabled and gentle wake defaults to off), real camera QR decoding, and calendar-derived
+  scheduling (the CI emulator has no calendar accounts). See `docs/TODO.md` for the complete,
+  current list of test-quality and coverage gaps.
+- A real on-device run now happens on every release build - do not describe Android verification as
+  "build success plus static analysis only" going forward; that was true before the E2E work below
+  and no longer is.
 
 ## Quality baseline snapshot
 
 A point-in-time SAST/SCA/PII/security assessment and an end-to-end test plan live in
-`docs/quality-baseline-2026-09.md`. Treat it as a snapshot, not a living document - re-run
-`scripts/security-scan.sh` and `flutter analyze` for current status rather than trusting the
-numbers in that file as still accurate.
+`docs/quality-baseline-2026-09.md`; an initial release-readiness assessment lives in
+`docs/release-readiness-2026-09.md`. Both are gitignored (not tracked in version control, so a fresh
+clone will not have them) and predate the E2E work described above - treat them purely as
+historical, point-in-time snapshots, not living documents, and don't expect them to agree with the
+testing status above. Re-run `scripts/security-scan.sh` and `flutter analyze` for current SAST/SCA
+status, and see `docs/TODO.md` for current test/evidence status, rather than trusting either
+snapshot file as still accurate.
 
 ## Project documentation
 
 `docs/` also holds `REQUIREMENTS.md` (essential pre-`master` requirements - check this before any
-production push), `personas.md`, `use-cases.md`, `choice-of-technologies.md`, and a UML diagram
-(`UML_WakeyWakey.drawio`) from the original project planning. The persona/use-case/tech-choice
-docs predate the finished app and have been annotated where they describe features that were
-planned but never implemented (e.g. NFC-tag deactivation, Do Not Disturb) - don't assume everything
-in them shipped.
+production push), `TODO.md` (every known open task, prioritised, with evidence and an acceptance
+criterion - the living record of what's actually wrong or missing, as opposed to the two frozen
+snapshots above), `personas.md`, `use-cases.md`, `choice-of-technologies.md`, a risk/dataflow
+diagram (`risk.png`) and a UML diagram (`UML_WakeyWakey.drawio`) from the original project
+planning. `use-cases.md`, `personas.md` and `choice-of-technologies.md` predate the finished app
+and have been annotated inline where they describe features that were planned but never
+implemented (e.g. NFC-tag deactivation, Do Not Disturb) or claims that no longer hold - don't assume
+everything in them shipped as described. `risk.png` and the UML diagram are images from the same
+planning phase and carry no such annotation; cross-check them against `docs/TODO.md` (T-30) before
+trusting what they model.
