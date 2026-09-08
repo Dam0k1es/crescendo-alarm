@@ -1,0 +1,129 @@
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:wakeywakey/app_state.dart';
+import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+
+int getRandom() {
+  return Random().nextInt(99999999);
+}
+
+tz.TZDateTime convertToTZDateTime(DateTime dateTime, String timeZone) {
+  final location = tz.getLocation(timeZone);
+  return tz.TZDateTime.from(dateTime, location);
+}
+
+DateTime convertFromTZDateTime(tz.TZDateTime tzDateTime) {
+  return DateTime.fromMillisecondsSinceEpoch(tzDateTime.millisecondsSinceEpoch);
+}
+
+int compareTimeOfDay(TimeOfDay a, TimeOfDay b) {
+  if (a.hour != b.hour) {
+    return a.hour.compareTo(b.hour);
+  } else {
+    return a.minute.compareTo(b.minute);
+  }
+}
+
+String formatTimeOfDay(TimeOfDay time) {
+  final String hour = time.hour.toString().padLeft(2, '0');
+  final String minute = time.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
+}
+
+String formatDateTime(DateTime dateTime) {
+  String weekday = DateFormat('EEEE').format(dateTime);
+  String dayOfMonth = DateFormat('d').format(dateTime);
+  String month = DateFormat('MMMM').format(dateTime);
+  String year = DateFormat('yyyy').format(dateTime);
+  String formattedDate = '$weekday, $dayOfMonth. $month $year';
+  return formattedDate;
+}
+
+Duration durationFromString(String time) {
+  // Remove the ' h' at the end
+  time = time.replaceAll(' h', '');
+
+  // Split the string
+  List<String> parts = time.split(':');
+  int hours = int.parse(parts[0]);
+  int minutes = int.parse(parts[1]);
+
+  // Create and return a duration
+  return Duration(hours: hours, minutes: minutes);
+}
+
+void displayToast(BuildContext context, String message) {
+  final scaffold = ScaffoldMessenger.of(context);
+  scaffold.showSnackBar(
+    SnackBar(
+      content: Text(message, style: const TextStyle(fontSize: 16)),
+      action: SnackBarAction(
+        label: 'Dismiss',
+        onPressed: () {},
+      ),
+      duration: const Duration(seconds: 5),
+    ),
+  );
+}
+
+void showFullScreenOverlay(BuildContext context, Widget widget) {
+  debugPrint("=====showFullScreenOverlay ($widget)");
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => widget,
+      fullscreenDialog: true,
+    ),
+  );
+}
+
+Future<void> preloadCalendarData(AppState appState,
+    {int pastWeeks = 1, int futureWeeks = 2}) async {
+  try {
+    appState.firstUpdateOfCalendar = false;
+  } catch (e) {
+    debugPrint("=====updateCalendarData: Error loading app state: $e");
+  }
+
+  int pastDays = pastWeeks * 7;
+  int futureDays = futureWeeks * 7;
+  await loadCalendarData(appState, Duration(days: pastDays),
+      Duration(days: futureDays), DateTime.now());
+
+  DateTime weekStart = getStartOfWeek(appState, DateTime.now());
+
+  for (int i = 0; i < pastWeeks; i++) {
+    DateTime startOfWeek = weekStart.subtract(Duration(days: i * 7));
+    appState.fetchedCalendarWeeks.add(startOfWeek);
+    debugPrint(
+        "=====preloadCalendarData: Preloaded the week starting with $startOfWeek");
+  }
+
+  for (int i = 1; i <= futureWeeks; i++) {
+    DateTime startOfWeek = weekStart.add(Duration(days: i * 7));
+    appState.fetchedCalendarWeeks.add(startOfWeek);
+    debugPrint(
+        "=====preloadCalendarData: Preloaded the week starting with $startOfWeek");
+  }
+}
+
+DateTime getStartOfWeek(AppState appState, DateTime dateTime) {
+  if (dateTime.weekday != appState.startOfWeekDay) {
+    return dateTime.subtract(Duration(days: dateTime.weekday - 1));
+  } else {
+    return dateTime;
+  }
+}
+
+Duration durationFromTimeOfDay(TimeOfDay time) {
+  return Duration(hours: time.hour, minutes: time.minute);
+}
+
+// Expecting a String like '08:15'
+TimeOfDay timeOfDayFromString(String data) {
+  return TimeOfDay(
+      hour: int.parse(data.split(':')[0]),
+      minute: int.parse(data.split(':')[1]));
+}

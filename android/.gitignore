@@ -1,0 +1,14 @@
+# Note: gradle-wrapper.jar, gradlew, and gradlew.bat are intentionally NOT
+# ignored here, unlike Flutter's own default template - they let anyone
+# (including CI) run `./gradlew` on a fresh clone without a pre-installed
+# Gradle or without re-running `flutter create` to regenerate them.
+/.gradle
+/captures/
+/local.properties
+GeneratedPluginRegistrant.java
+
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/docs/deployment/android#reference-the-keystore-from-the-app
+key.properties
+**/*.keystore
+**/*.jks
