@@ -401,6 +401,25 @@ Conventions:
 - **Done when:** a first-run user can read what is collected before granting anything.
 - **Requirement:** R7, R11
 
+### T-49 · Requirement claims about permissions do not match the built APK
+
+- [ ] Re-derive R7's and R4's permission statements from the merged manifest, not from `lib/`.
+- **Why:** R7 asserts "no user data leaves the device — met" on the basis of a check scoped to Dart
+  source in `lib/`, but the shipped APK declares `INTERNET` and `ACCESS_NETWORK_STATE`, pulled in
+  through plugin manifest merging. That does not prove data leaves the device, and the offline claim
+  may well still hold — but it cannot be closed with a source grep while the app has network
+  capability. R4 has the mirror-image problem: it cites the app manifest as evidence that the
+  camera permission is declared, and the app manifest does not declare `CAMERA` at all; it too
+  arrives via merge.
+- **Evidence:** `android/app/src/main/AndroidManifest.xml:51-64` (no `INTERNET`, no `CAMERA`);
+  the merged manifest and `aapt2 dump permissions` on the built APK show `INTERNET`,
+  `ACCESS_NETWORK_STATE`, `CAMERA`, `BROADCAST_CLOSE_SYSTEM_DIALOGS`, `READ_APP_BADGE` and several
+  vendor launcher-badge permissions.
+- **Done when:** both requirements cite the merged manifest, name every permission the shipped app
+  actually holds, and state what evidence supports the offline claim given network capability
+  exists (e.g. a traffic capture during an E2E run).
+- **Requirement:** R4, R7
+
 ---
 
 ## P2 — real work, does not block a release
