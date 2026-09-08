@@ -192,8 +192,8 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   late final AppState _appState;
-  static StreamSubscription<AlarmSet>? subscription;
-  static AlarmSet _previousRingingAlarms = AlarmSet.empty();
+  StreamSubscription<AlarmSet>? _subscription;
+  AlarmSet _previousRingingAlarms = AlarmSet.empty();
   late Notifications notifications;
 
   @override
@@ -204,9 +204,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     // Load app state
     _appState = Provider.of<AppState>(context, listen: false);
 
-    // Subscribe to alarm stream
+    // Subscribe to alarm stream. Instance-scoped (not static): a previous
+    // version used a static subscription guarded by `??=`, which meant that
+    // if MyHomePage was ever remounted with a different AppState (confirmed
+    // happening across integration_test's testWidgets, which share one app
+    // process - and a real hot-restart during development would do the same
+    // thing), the *first* Handler/AppState pairing silently kept handling
+    // every alarm forever, ignoring the new one entirely.
     Handler handler = Handler(context);
-    subscription ??= Alarm.ringing.listen((ringingAlarms) {
+    _subscription = Alarm.ringing.listen((ringingAlarms) {
       // Alarm.ringing emits the full set of currently-ringing alarms on every
       // change, not one event per newly-ringing alarm - so diff against the
       // previous set to call handleAlarm exactly once per alarm.
@@ -240,6 +246,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_subscription?.cancel());
     super.dispose();
   }
 
