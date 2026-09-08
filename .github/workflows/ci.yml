@@ -1,8 +1,15 @@
 name: CI
+#
+# Branch strategy:
+# - dev: fast feedback only (analyze + test). Keep this quick so it's cheap to push often.
+# - master (and PRs targeting it): the full pipeline - analyze, test, SCA, secret scan,
+#   mobsfscan, Android debug build, and a full MobSF static scan of that build.
+# Only Android is actually built here - Linux/iOS/desktop targets aren't real deployment
+# targets for this project (see README "Supported Platforms"), so there's no CI job for them.
 
 on:
   push:
-    branches: [master]
+    branches: [master, dev]
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -20,12 +27,21 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
 
+  # Everything below only runs for the full pipeline (master pushes and PRs into master) -
+  # not for plain dev-branch pushes.
+
   sca-and-secrets:
     name: SCA & Secret Scan
+    if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +63,7 @@ jobs:
 
   mobsfscan:
     name: mobsfscan (Android source)
+    if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,28 +84,10 @@ jobs:
           name: mobsfscan-report
           path: mobsfscan-report.json
 
-  build-linux:
-    name: Build Linux (debug)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-      - name: Install Linux desktop build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libgtk-3-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
-      - run: flutter pub get
-      - run: flutter build linux --debug
-
   build-android-debug:
     name: Build Android (debug)
+    if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    outputs:
-      apk-path: build/app/outputs/flutter-apk/app-debug.apk
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -99,6 +98,18 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
       - run: flutter pub get
       - run: flutter build apk --debug
       - uses: actions/upload-artifact@v4
@@ -108,6 +119,7 @@ jobs:
 
   mobsf-full-scan:
     name: MobSF (full static scan of debug APK)
+    if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     needs: build-android-debug
     steps:

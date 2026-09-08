@@ -70,22 +70,26 @@ dart run flutter_launcher_icons
 
 ### Quality Checks
 
-All of the following run automatically on every push/PR via [GitHub Actions](.github/workflows/ci.yml).
-To run them locally before committing or opening a pull request:
+CI runs via [GitHub Actions](.github/workflows/ci.yml) and scales with the branch:
+
+- **`dev`**: fast feedback only - `flutter analyze` + `flutter test`.
+- **`master`** (and PRs into it): the full pipeline - analyze, test, dependency vulnerability scan
+  ([osv-scanner](https://github.com/google/osv-scanner)), secret scan
+  ([trufflehog](https://github.com/trufflesecurity/trufflehog)), Android source SAST
+  ([mobsfscan](https://github.com/MobSF/mobsfscan)), an Android debug build, and a full
+  [MobSF](https://mobsf.github.io/docs/) static scan of that build. Only Android is actually built
+  in CI - see "Supported Platforms" above for why Linux/iOS aren't.
+- Signed release APKs are built by a separate [release workflow](.github/workflows/release.yml),
+  triggered by pushing a `v*.*.*` tag, and attached to a GitHub Release.
+
+To run the same checks locally before committing:
 
 ```sh
 flutter analyze                # static analysis / lints
 flutter test                   # unit tests
-bash scripts/security-scan.sh  # analyze + dependency vulnerability scan (osv-scanner) + secret scan (trufflehog)
-flutter build linux --debug    # verify the Linux dev/debug build (see "Supported Platforms")
+bash scripts/security-scan.sh  # analyze + osv-scanner + trufflehog
 flutter build apk --debug      # verify the Android build
 ```
-
-`scripts/security-scan.sh` requires [osv-scanner](https://github.com/google/osv-scanner) and
-[trufflehog](https://github.com/trufflesecurity/trufflehog) on `PATH`.
-
-Signed release APKs are built by a separate [release workflow](.github/workflows/release.yml),
-triggered by pushing a `v*.*.*` tag.
 
 Note: `flutter` commands that need to create plugin symlinks (`analyze`, `build`, `test`, `run`,
 `pub get`) will fail with a `PathAccessException` on a checkout living on a filesystem without
