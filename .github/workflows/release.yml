@@ -18,6 +18,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - name: Free disk space
+        # A fresh AVD's userdata partition alone needs ~7.4 GB - GitHub's
+        # runners don't have that much free by default once their
+        # pre-installed toolchains are accounted for (confirmed by a real
+        # "Not enough space to create userdata partition" failure). Remove
+        # large pre-installed toolchains this job never uses; deliberately
+        # leaves the Android SDK/NDK alone since our own build needs it.
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost \
+            /opt/hostedtoolcache/CodeQL
+          docker image prune -af || true
+          df -h /
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
