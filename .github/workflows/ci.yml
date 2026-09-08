@@ -108,10 +108,10 @@ jobs:
           python-version: "3.12"
       - run: pip install mobsfscan
       - name: Run mobsfscan
-        # --no-fail: findings here are informational (see docs/quality-baseline-2026-09.md -
-        # the one real hit, a StrandHogg task-hijacking warning, is a documented tool
-        # limitation/false-positive that doesn't account for the Gradle-resolved targetSdk).
-        # The JSON report is still uploaded below for review.
+        # --no-fail: findings here are informational (see docs/REQUIREMENTS.md R1 - the one real
+        # hit, a StrandHogg task-hijacking warning, is a documented tool limitation/false-positive
+        # that doesn't account for the Gradle-resolved targetSdk). The JSON report is still
+        # uploaded below for review. See docs/TODO.md T-11 for making this actually gate.
         run: mobsfscan --no-fail --json -o mobsfscan-report.json android/
       - name: Upload report
         if: always()

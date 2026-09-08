@@ -96,12 +96,22 @@ run in CI, not on-device, and don't add runtime overhead.
 The app must not modify the device or other applications' data beyond its own sandboxed storage
 and the calendar entries the user explicitly grants access to.
 
-- **Checked by:** manual security review - confirmed no network SDKs are used from `lib/` (though
-  see R7 on the app's declared `INTERNET` permission), no filesystem access outside the app's own
-  sandbox and (for QR-from-gallery, currently unreachable code - `docs/TODO.md` T-44)
-  `READ_EXTERNAL_STORAGE`, and `android:allowBackup="false"` to prevent local-secret extraction via
-  `adb backup`. The full write-up lives in `docs/quality-baseline-2026-09.md`, which is gitignored
-  and local to whoever ran the review, not part of this repository's tracked history.
+- **Checked by:** manual security review, findings recorded here directly rather than in an
+  untracked file:
+  - No network SDKs are used from `lib/` (though see R7 on the app's declared `INTERNET`
+    permission).
+  - No filesystem access outside the app's own sandbox and (for QR-from-gallery, currently
+    unreachable code - `docs/TODO.md` T-44) `READ_EXTERNAL_STORAGE`.
+  - `android:allowBackup` was found unset (defaults to `true`) during an earlier pass - the
+    deactivation-code payload and other prefs, stored via `SharedPreferences`, would have been
+    included in Android's auto-backup / `adb backup` by default, letting anyone with adb/backup
+    access extract them without root. Fixed: `android:allowBackup="false"` is set in
+    `AndroidManifest.xml`.
+  - Deactivation-code generation uses `Random.secure()`. QR-code validation happens before any
+    alarm-stopping side effect. AndroidManifest permissions all map to real, used features.
+    ProGuard rules don't disable meaningful obfuscation. The on-screen deactivation QR code is
+    intentionally unprotected against screenshots - the user is meant to photograph or print it for
+    physical placement, by design, not a gap.
 - **Status:** met, per static analysis. Not independently verified via dynamic/runtime testing.
 
 ## R7 - No data extraction; GDPR-compliant, privacy-friendly

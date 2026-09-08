@@ -19,13 +19,8 @@ Welcome to Wakey Wakey, an innovative alarm clock app designed for individuals w
 ## Supported Platforms
 
 - **Android** is the actual target platform. `minSdk` 24 (Android 7.0), `targetSdk` 36 (Android 16).
-- **Linux desktop** builds and runs, but only as a fast local dev/debug loop - it is not a
-  supported deployment target. Calendar integration always no-ops there (no Linux implementation
-  of the calendar plugin exists), by design.
 - **iOS** has project scaffolding but has never actually been built or run - treat it as
   unverified, not supported, until someone with a Mac/Xcode does that work.
-- Windows, macOS, and web scaffolding (leftover from the initial `flutter create`) has been
-  removed, as none of them was ever a real target.
 
 ## Installation Instructions
 
@@ -54,13 +49,6 @@ Ensure you have the following installed:
    flutter run
    ```
 
-The launcher icons for Android/iOS are already generated and checked into the repository, so this
-step isn't needed on a fresh clone. Only regenerate them if you change `assets/icons/icon.png`:
-
-```sh
-dart run flutter_launcher_icons
-```
-
 ### Usage
 
 - Open Wakey Wakey on your mobile device.
@@ -68,68 +56,13 @@ dart run flutter_launcher_icons
 - Set up your alarm preferences and add necessary QR codes in remote locations.
 - Enjoy a more reliable and interactive waking experience.
 
-### Quality Checks
+### Quality & Testing
 
-CI runs via [GitHub Actions](.github/workflows/ci.yml) and scales with the branch:
-
-- **`dev`**: fast feedback (`flutter analyze` + `flutter test`) plus a debug **development** APK,
-  uploaded as a downloadable build artifact on the run.
-- **`master`** (and PRs into it): analyze, test, dependency vulnerability scan
-  ([osv-scanner](https://github.com/google/osv-scanner)) and secret scan
-  ([trufflehog](https://github.com/trufflesecurity/trufflehog)) - all of which can fail the run -
-  plus Android source SAST ([mobsfscan](https://github.com/MobSF/mobsfscan)) and a full
-  [MobSF](https://mobsf.github.io/docs/) static scan, both currently informational only (see
-  [`docs/TODO.md`](docs/TODO.md) T-11). A signed **production** release APK is also built and
-  uploaded as an artifact on every run - currently regardless of whether the checks above passed
-  (T-06). Only Android is actually built in CI - see "Supported Platforms" above for why
-  Linux/iOS aren't.
-- End-to-end tests on a real Android emulator (`integration_test/app_test.dart`) run in the
-  separate [release workflow](.github/workflows/release.yml) and gate its signed build - see
-  "Testing status" below for what they cover. Run the same suite locally with a connected device or
-  running emulator: `flutter test integration_test/app_test.dart -d <device-id>`.
-- Tagged releases: pushing a `v*.*.*` tag runs the release workflow, which builds the same signed
-  production APK (after the E2E gate above) and attaches it to a formal GitHub Release (with
-  generated release notes) - use this for actual version bumps; the per-push artifact above is for
-  grabbing "whatever's on master right now."
-
-To run the same checks locally before committing:
-
-```sh
-flutter analyze                # static analysis / lints
-flutter test                   # unit tests
-bash scripts/security-scan.sh  # analyze + osv-scanner + trufflehog - narrower than CI's pipeline
-                                # (no mobsfscan/MobSF, and its secret-scan step currently can't
-                                # fail on a finding the way CI's does - see docs/TODO.md T-26)
-flutter build apk --debug      # verify the Android build
-```
-
-Note: `flutter` commands that need to create plugin symlinks (`analyze`, `build`, `test`, `run`,
-`pub get`) will fail with a `PathAccessException` on a checkout living on a filesystem without
-symlink support (e.g. a VirtualBox/vboxsf shared folder) - use a checkout on a native filesystem.
-
-### Testing status
-
-- **Unit/widget (`flutter test`, 6 tests):** one widget smoke test that renders the splash screen,
-  plus five cases covering a single stale-alarm predicate. This is a thin gate, not a regression
-  net - see "Open items" below.
-- **End-to-end on a real Android emulator:** `integration_test/app_test.dart` runs against an
-  API-34 emulator in the [release workflow](.github/workflows/release.yml) and gates the signed
-  release build. Three scenarios are covered and currently pass: a manual alarm firing and being
-  dismissed through the default overlay, a manual alarm being dismissed through an injected QR
-  scan result, and a created alarm being read back after app state is rebuilt. Each run uploads an
-  `e2e-evidence` artifact (screen recording without audio, an audio-focus timeline, and the raw
-  test log).
-- **Static and supply-chain:** `flutter analyze`, `osv-scanner`, `trufflehog`, `mobsfscan` and a
-  full MobSF scan of the built APK, as described under "Quality Checks" - but note which of those
-  can actually fail a run (see "Open items").
-- **Manual device testing** by the maintainer has confirmed the ring-and-stop flow on real
-  hardware; findings from it are tracked in [`docs/TODO.md`](docs/TODO.md).
-- **Not covered by any automated verification:** alarm survival across a device reboot or an app
-  force-stop; audio playback and the gentle-wake volume ramp (the CI emulator runs with audio
-  disabled, and gentle wake defaults to off, so that code path never executes); decoding a real
-  physical QR code through the camera; and calendar-derived scheduling (the CI emulator has no
-  calendar accounts).
-- **iOS** has never been built or run - no Mac/Xcode has been involved in this project.
+Every change is automatically checked (static analysis, dependency/secret scanning) and tested,
+including end-to-end tests on a real Android emulator that must pass before a signed release build
+is produced. See [`CLAUDE.md`](CLAUDE.md) for exactly which checks run where, how to run them
+locally, and the current, honest testing status - and [`docs/TODO.md`](docs/TODO.md) for the known
+gaps in that coverage.
 
 ### Open items
 

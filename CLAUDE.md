@@ -32,6 +32,12 @@ a copy on a native filesystem (e.g. `rsync` the repo to `~/projects/wakeywakey` 
 sync finished changes back. Do not "fix" this by chasing a symlink error inside Gradle - it's a
 filesystem limitation, not a project bug.
 
+## Development process
+
+New features and changes are developed test-driven: write the test(s) that specify the desired
+behavior first (they should fail against the current code), then implement to make them pass. For a
+bug fix, that means a regression test that reproduces the bug before touching the fix.
+
 ## Build & run
 
 ```sh
@@ -46,6 +52,35 @@ bash scripts/security-scan.sh   # analyze + osv-scanner (SCA) + trufflehog (secr
 `flutter build apk` on a from-scratch environment will trigger the Android Gradle Plugin to
 auto-download several SDK platforms/build-tools on first run (it resolves whatever `compileSdk`
 values the app and its transitive plugins declare) - this is normal and can take a while.
+
+Launcher icons for Android/iOS are already generated and checked into the repository - regenerating
+them isn't needed on a fresh clone. Only run this if you change `assets/icons/icon.png`:
+
+```sh
+dart run flutter_launcher_icons
+```
+
+## CI/CD pipeline
+
+Two workflows under `.github/workflows/`:
+
+- **`ci.yml`** runs on every push and PR, scaled by branch: `dev` gets fast feedback only
+  (`flutter analyze` + `flutter test`, plus a debug development APK uploaded as an artifact).
+  `master` (and PRs into it) additionally runs `osv-scanner` (SCA) and `trufflehog` (secrets) - both
+  of which can fail the run - plus `mobsfscan` and a full MobSF static scan, which currently cannot
+  (see `docs/TODO.md` T-11), and builds+uploads a signed production release APK, currently
+  regardless of whether the checks above passed (T-06 - `build-android-release` has no `needs:`).
+- **`release.yml`** runs `integration_test/app_test.dart` against a real Android emulator and gates
+  its own signed release build on that suite passing; triggered by a `v*.*.*` tag (which additionally
+  attaches the APK to a formal GitHub Release with generated notes) or manually via
+  `workflow_dispatch`. Run the same E2E suite locally with a connected device or running emulator:
+  `flutter test integration_test/app_test.dart -d <device-id>`.
+- `scripts/security-scan.sh` mirrors part of the `master` pipeline locally (`flutter analyze` +
+  `osv-scanner` + `trufflehog`) but is narrower than CI - no `mobsfscan`/MobSF, and its secret-scan
+  step currently can't fail on a finding the way CI's does (`docs/TODO.md` T-26).
+
+The tag → GitHub Release path has never actually been exercised (no tag has been pushed yet) - see
+`docs/TODO.md` T-13 before relying on it.
 
 ## Toolchain versions (as verified working, September 2026)
 

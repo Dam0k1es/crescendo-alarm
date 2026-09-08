@@ -58,10 +58,11 @@ jobs:
         # the runner user by default - without this, android-emulator-runner
         # silently falls back to `-accel off` (full software CPU emulation),
         # and the emulator then takes far longer to boot than its own
-        # boot-wait timeout allows. See docs/quality-baseline-2026-09.md's VM
-        # recommendations for why real KVM access matters this much - this
-        # project has hit the software-emulation failure mode before, just on
-        # a different (nested-virtualization) root cause.
+        # boot-wait timeout allows. This project has hit the software-emulation
+        # failure mode before, just on a different (nested-virtualization)
+        # root cause on a local dev VM - see docs/quality-baseline-2026-09.md's
+        # VM recommendations if you have a local copy of that (gitignored)
+        # snapshot doc.
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules

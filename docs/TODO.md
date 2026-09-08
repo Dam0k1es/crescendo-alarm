@@ -213,24 +213,25 @@ Conventions:
   threshold-free MobSF summary are unchanged.
 - **Requirement:** R1
 
-### T-12 · The evidence several requirements cite is not in the repository — PARTIALLY RESOLVED (2026-09-08)
+### T-12 · The evidence several requirements cite is not in the repository — RESOLVED (2026-09-09)
 
-- [ ] Decide R6's remaining citation: commit the underlying review, or keep summarising inline.
+- [x] Decide R6's remaining citation: commit the underlying review, or keep summarising inline.
 - **Why:** `docs/quality-baseline-2026-09.md` and `docs/release-readiness-2026-09.md` are excluded
   by `.gitignore`, so anyone cloning this repo got a requirements register whose "checked by" and
   "met" justifications pointed at files that do not exist for them. They were referenced from
   tracked files in about a dozen places, including test-file headers and workflow comments.
 - **Evidence:** `.gitignore:438-439`; `git ls-files docs/` lists six files, neither snapshot among
-  them; citations were in `docs/REQUIREMENTS.md:19,30,33,71,76,122,140`, `CLAUDE.md:117,119,126`.
-- **Resolution so far:** R1, R2, R4, R8, R9 and R11 in `docs/REQUIREMENTS.md` no longer rely on the
-  gitignored docs at all - their evidence and rationale are now written directly into the tracked
-  requirements file. `CLAUDE.md`'s "Quality baseline snapshot" section now says explicitly that
-  both files are gitignored, untracked, and predate the current testing status, instead of citing
-  them as if a reader could open them. R6 still names `docs/quality-baseline-2026-09.md` for its
-  full write-up (with substance now inlined and an explicit "this file is gitignored" note) - that
-  one citation was left as a pointer rather than fully removed.
-- **Still open:** the citations inside `integration_test/app_test.dart`, `test/handler_stale_alarm_test.dart`
-  and the two workflow files are unchanged (code/test/workflow files, out of scope for this pass).
+  them; citations were in `docs/REQUIREMENTS.md:19,30,33,71,76,122,140`, `CLAUDE.md:117,119,126`,
+  `integration_test/app_test.dart:12,18`, `test/handler_stale_alarm_test.dart:1`,
+  `.github/workflows/ci.yml:111`, `.github/workflows/release.yml:61`.
+- **Resolution:** every requirement's evidence and rationale is now written directly into
+  `docs/REQUIREMENTS.md` - R6's remaining citation was chosen resolved by fully inlining its
+  three findings (no network SDKs from `lib/`, sandboxed filesystem access only, the
+  `allowBackup` fix) rather than pointing at the gitignored file at all. The comment citations in
+  `integration_test/app_test.dart`, `test/handler_stale_alarm_test.dart`, `ci.yml` and
+  `release.yml` were also updated to point at tracked files (`docs/REQUIREMENTS.md`,
+  `docs/TODO.md`) instead, except `release.yml`'s VM-recommendations pointer, which now says
+  plainly that the doc it names is gitignored and only useful if you happen to have a local copy.
 - **Requirement:** R1, R2, R6, R11
 
 ### T-13 · The tag → GitHub Release path has never run and would fail
@@ -477,13 +478,19 @@ Conventions:
 - **Why:** requested; there is no usage documentation beyond four bullet points.
 - **Done when:** the manual covers every screen and control that the GUI exposes.
 
-### T-22 · Rework the README for a reader who is not a developer
+### T-22 · Rework the README for a reader who is not a developer — RESOLVED (2026-09-09)
 
-- [ ] Remove the note about removed Windows/macOS/web scaffolding; remove the launcher-icon
+- [x] Remove the note about removed Windows/macOS/web scaffolding; remove the launcher-icon
       regeneration step (the icons are static); remove the VirtualBox/`vboxsf` note; rewrite
       "Quality Checks" so it does not address the reader as a contributor who will push tags; and
       replace the "Testing status" section with something shorter in a different form.
 - **Why:** requested. Most of that material belongs in `CLAUDE.md`, not in the project's front page.
+- **Resolution:** the Windows/macOS/web note, the vboxsf gotcha and the launcher-icon step were
+  removed from README (all three were already duplicated in `CLAUDE.md`, or moved there - the
+  launcher-icon command now lives under `CLAUDE.md`'s "Build & run"). "Quality Checks" and "Testing
+  status" were replaced by a single short "Quality & Testing" paragraph pointing to `CLAUDE.md` (now
+  home to a new "CI/CD pipeline" section) and `docs/TODO.md` for detail. `CLAUDE.md` also gained a
+  "Development process" section recording the project's new test-driven-development rule.
 - **Done when:** the README reads as a description of the app for someone evaluating or using it,
   with contributor-only detail moved or dropped.
 
@@ -627,14 +634,96 @@ Conventions:
 
 ### T-46 · The scheduling window is hardcoded
 
-- [ ] Make the forward window and calendar preload range configurable, or justify the constants.
-- **Why:** scheduling covers a fixed 7-day forward window and the preload is a hardcoded two past /
-  one future week. Several of the numbered TODOs in `main.dart` describe exactly this as unfinished,
-  and it interacts with T-02's estimate-abort threshold.
-- **Evidence:** `lib/models/scheduling/scheduling.dart:54`; `lib/main.dart:242`.
-- **Done when:** the ranges are either settings or documented as deliberate constants with a reason.
+- [ ] Make the forward window, preload range, and estimate-abort threshold configurable, or justify
+      the constants.
+- **Why:** scheduling covers a fixed 7-day forward window, the preload is a hardcoded two past / one
+  future week, and `_adjustAlarmTimes` aborts scheduling entirely once 7 alarms needed estimating -
+  none of the three is user-changeable. `lib/main.dart`'s old TODO backlog named exactly these three
+  as unfinished (`0x49`, `0x392`, `0x395` - see T-31); they were not separately re-tracked because
+  they are this same gap.
+- **Evidence:** `lib/models/scheduling/scheduling.dart:54` (window), `:169` (`>= 7` threshold);
+  `lib/main.dart:242` (preload).
+- **Done when:** the ranges/threshold are either settings or documented as deliberate constants with
+  a reason.
 
 ---
+
+### T-50 · Manual alarms don't respect two global settings
+
+- [ ] Make manual alarms honor the vibration switch, and clarify/implement "respect time of day
+      change".
+- **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31). Two distinct gaps: (a)
+  there is a global vibration setting that manual alarms don't apply (no `vibration` field is
+  threaded through `ManualAlarm`/`MyAlarm`) - `lib/screens/alarms/screen_alarms.dart`'s alarm editor
+  has no vibration control at all, so this needs a settings-model change too, not just a scheduling
+  fix; (b) "respect time of day change" is not specified precisely enough in the original note to
+  know what behavior is wanted - possibly reacting to a live system clock/DST change while an alarm
+  is already scheduled. Clarify the intent before implementing (b).
+- **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x502`/`0x503` (see T-31).
+- **Done when:** (a) a vibration switch exists and manual alarms honor it, covered by a test; (b) is
+  either implemented with a test, or dropped with a written reason.
+
+### T-51 · Theme does not follow the system light/dark setting
+
+- [ ] Add a "follow system" option alongside the existing manual dark-mode toggle.
+- **Why:** `MyApp.build` sets `themeMode` from `appState.darkMode` (a manual boolean), never
+  `ThemeMode.system` - so the app cannot automatically match the OS theme, only be switched by hand.
+- **Evidence:** `lib/main.dart:106-108`; `lib/app_state.dart`'s `darkMode` getter/setter.
+- **Done when:** a "system" option exists in Settings > Appearance and actually drives `themeMode`,
+  covered by a widget test.
+
+### T-52 · Several scheduling/sleep-habit options are hardcoded, not user-configurable
+
+- [ ] Add settings for: scheduling (or not) on days without calendar entries, 24h-vs-AM/PM display,
+      and a per-weekday "duration to get ready".
+- **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31), the parts of it not
+  already covered by T-42/T-43/T-46. Today: a day with no calendar entries always gets the 23:59
+  placeholder-or-estimate treatment (see T-02) with no way to opt out per day; times are always
+  displayed in one fixed format; and "duration to get ready" is a single global value with no
+  per-weekday override, unlike `repeatOnDays` which is at least per-weekday (T-14).
+- **Evidence:** `lib/main.dart`'s pre-triage TODO block, items `0x393`, `0x398`, `0x399` (see T-31).
+- **Done when:** each option is either implemented (with a test) or explicitly dropped with a
+  written reason.
+
+### T-53 · No way to choose which calendar counts as "the work calendar"
+
+- [ ] Let the user select which calendar(s) feed the scheduling algorithm.
+- **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31). `use-cases.md` describes
+  "Select Calendar for interconnection" as a use case, but no per-calendar selection UI exists -
+  `grep -rn "workCalendar\|selectedCalendar" lib/` finds nothing, and `calendar.dart`'s
+  `retrieveCalendars()` result is used without a filtering step.
+- **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x48` (see T-31);
+  `lib/screens/schedule/calendar.dart`.
+- **Done when:** a calendar-selection UI exists and `scheduleAlarms` only considers entries from the
+  selected calendar(s), covered by a test.
+
+### T-55 · Possible stale-data race when opening the Schedule screen before preload finishes
+
+- [ ] Verify whether this is still reproducible, then fix or close it.
+- **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31): "wrong scheduled alarm
+  infos if opening scheduled alarm page before preloading finished" and "duplicate calendar entries
+  for preloaded weeks (on first load only?)". `screen_schedule.dart` does guard on
+  `appState.calendarsInitialized`/`firstUpdateOfCalendar`, which may already mitigate this - it was
+  not re-verified against a live race during this triage pass, only read statically.
+- **Evidence:** `lib/main.dart`'s pre-triage TODO block, items `0x461`/`0x462` (see T-31);
+  `lib/app_state.dart`'s `calendarsInitialized`/`firstUpdateOfCalendar`;
+  `lib/screens/schedule/screen_schedule.dart:234,291`.
+- **Done when:** a test reproduces the race (or confirms it no longer occurs) by opening the
+  Schedule screen concurrently with `preloadCalendarData`.
+
+### T-57 · No fallback scheduling target when there are no calendar entries at all
+
+- [ ] Decide and implement what should happen when `scheduleAlarms` finds zero calendar entries.
+- **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31). Today,
+  `scheduleAlarms` logs "No events in calendar. Aborting." and schedules nothing at all - there is
+  no user-configurable fallback wake-up target for days/weeks with no calendar data, distinct from
+  T-02's per-day 23:59-placeholder handling (which only applies once *some* days in the window do
+  have entries).
+- **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x53` (see T-31);
+  `lib/models/scheduling/scheduling.dart:78-79`.
+- **Done when:** either a fallback target is implemented and tested, or the app's behavior with zero
+  calendar entries is explicitly documented as "schedule nothing" and surfaced to the user (rather
+  than only logged).
 
 ## P3 — housekeeping
 
@@ -668,13 +757,22 @@ Conventions:
   annotation on the artifacts themselves.
 - **Done when:** each planning document either matches the code or says plainly where it does not.
 
-### T-31 · Triage the `main.dart` TODO backlog
+### T-31 · Triage the `main.dart` TODO backlog — RESOLVED (2026-09-09)
 
-- [ ] Decide which of the numbered TODOs at the top of `lib/main.dart` are real commitments and
+- [x] Decide which of the numbered TODOs at the top of `lib/main.dart` are real commitments and
       move those here.
 - **Why:** the block mixes cosmetic wishes with items that mean an advertised setting does not
   exist. Several overlap with T-01, T-02, T-14 and T-27.
-- **Evidence:** `lib/main.dart:21-63`.
+- **Evidence:** `lib/main.dart:21-63` (before this triage).
+- **Resolution:** each of the 13 numbered items was checked against the current code individually.
+  Four were confirmed already superseded by existing tracked gaps (`0x391`/`0x397`/`0x39B` by T-42,
+  `0x39C` by T-43) and three more by T-46 (`0x49`, `0x392`, `0x395`, the last one verified still
+  hardcoded at `scheduling.dart:169`). One (`0x28`'s "read color from calendar" sub-item) was
+  confirmed already implemented (`calendar.dart:61`) and dropped. The remaining eight genuine,
+  still-open items became T-50 through T-59 (skipping the numbers already used), each with its own
+  evidence and acceptance criterion. `lib/main.dart`'s TODO block itself was reduced to a single
+  pointer comment; `lib/models/alarms/handler.dart`'s duplicate copy of the `0x39B` note was
+  updated to cite T-42 instead.
 - **Done when:** the block is reduced to genuine in-code markers, and anything user-visible lives
   in this file with a priority.
 
@@ -705,4 +803,44 @@ Conventions:
   requirement — the point is to make it a recorded decision instead of an oversight.
 - **Done when:** either headers exist, or a tracked note says they were deliberately omitted.
 - **Requirement:** R9
+
+### T-54 · No custom Android notification icon
+
+- [ ] Set a proper small icon for the alarm/reminder notifications instead of the default.
+- **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31). `Notifications`'s channel
+  setup passes `null` for the icon, so Android falls back to the app's launcher icon (or a generic
+  system icon, depending on OS version) rather than a purpose-made small monochrome notification
+  icon.
+- **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x511` (see T-31);
+  `lib/utils/notifications.dart:11`.
+- **Done when:** a proper notification icon asset exists and is wired up.
+
+### T-56 · Alarm tones are a static bundled list
+
+- [ ] Source available tones dynamically (e.g. from device storage or a user-added set) instead of
+      a fixed list.
+- **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31) - a nice-to-have, not a
+  bug; the current static list works, it's just inflexible.
+- **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x55` (see T-31);
+  `lib/screens/settings/page_alarmtones.dart`.
+- **Done when:** either implemented, or explicitly deprioritised with a reason.
+
+### T-58 · Consider a toast instead of a notification for some feedback
+
+- [ ] Decide where (if anywhere) a toast would be more appropriate than the current notification.
+- **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31) - a UX design question,
+  not a defect, and under-specified (which notification(s) it refers to was never recorded).
+- **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x52` (see T-31).
+- **Done when:** either a specific notification is identified and changed, or this is closed as "no
+  change wanted" with a reason.
+
+### T-59 · `AppState`'s calendar meetings are not modeled as a proper 1:n map
+
+- [ ] Refactor the internal meetings data structure.
+- **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31) - an internal data-model
+  cleanup with no user-visible effect, lowest priority of the carried-forward items.
+- **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x45` (see T-31); `AppState`'s
+  meetings-related fields.
+- **Done when:** the refactor is done and existing tests (once T-10 exists) still pass, or this is
+  closed as not worth the churn.
 

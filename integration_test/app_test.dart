@@ -1,22 +1,23 @@
 // Real end-to-end tests, driven against a real (emulated or physical)
 // Android device via `flutter test integration_test/` (or `flutter drive`).
-// These exercise the actual native `alarm`/`shared_preferences` plugins, not
-// mocks - alarms really fire via the OS, and persistence really round-trips
-// through on-device storage.
+// These exercise the actual native `alarm` plugin - alarms really fire via
+// the OS. Scenario 3's persistence check currently reads an in-process
+// SharedPreferences cache rather than a genuine on-device storage round-trip
+// (see docs/TODO.md T-04) - it does not yet prove what its name suggests.
 //
 // Prerequisites (see .github/workflows for how CI sets these up):
 // - All dangerous permissions pre-granted via `adb shell pm grant` /
 //   `adb shell appops set`, so the in-app permission flow completes without
 //   needing to interact with OS dialogs.
-// - Covers Tier 1, items 1-3 of the E2E test plan in
-//   docs/quality-baseline-2026-09.md. Item 4 (stale alarm auto-stop) is a
-//   pure-logic test covered separately in test/handler_stale_alarm_test.dart
-//   instead, since it needs no device/UI.
+// - Covers the first three items of the E2E test plan in docs/TODO.md (see
+//   also docs/REQUIREMENTS.md R3/R4). A fourth item, stale alarm auto-stop,
+//   is a pure-logic test covered separately in
+//   test/handler_stale_alarm_test.dart instead, since it needs no device/UI.
 //
 // Scope note: scenario 2 (QR deactivation) injects the scan result via
 // QrScanner.debugBarcodeStreamOverride rather than actually feeding camera
-// data - see that field's doc comment and docs/quality-baseline-2026-09.md
-// for why.
+// data - see that field's doc comment in lib/screens/scan_code/qr_scanner.dart
+// and docs/TODO.md T-16 for why, and what that does and doesn't prove.
 
 import 'dart:async';
 

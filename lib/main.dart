@@ -18,48 +18,8 @@ import 'package:wakeywakey/utils/notifications.dart';
 import 'package:wakeywakey/utils/permissions.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
-// TODO [#1] Manual alarm respect global settings - 0x50
-// - integrate vibration switch (and attribute in myalarm class) - 0x502
-// - respect time of day change - 0x503
-
-// TODO [#2] Respect system dark/light
-
-// TODO [#2] Scheduling algorithm respecting past and future week - 0x49
-
-// TODO [#5] User changeable options - 0x39
-// - pre calculation range of scheduled alarms - 0x392
-// - reschedule alarm if rescheduleOnAlarm is set - 0x39B
-// - threshold for cancellation of alarm scheduling based on too many estimations - 0x395
-// - option to schedule or not schedule alarm on days without calendar entries - 0x393
-// - offset for estimated alarms - 0x391
-// - option to set week start day - 0x397
-// - option to set hour format (24h vs am/pm) - 0x398
-// - durationToGetReady per weekday - 0x399
-// - durationToGentleWake - 0x39C
-
-// TODO [#5] Let user decide which calendar is considered as a work calendar - 0x48
-
-// TODO [#6] Notifcation library - 0x51
-// - Icon for Notification on Android - 0x511
-
-// TODO [#6] Fix async error - 0x46
-// - wrong scheduled alarm infos if opening scheduled alarm page before preloading finished - 0x461
-// - duplicate calendar entries for preloaded weeks (on first load only?) - 0x462
-
-// TODO [#7] Consider using toast instead of notification - 0x52
-
-// TODO [#7] Add scheduling based on target in case of no calendar entries - 0x53
-
-// TODO [#7] source tones dynamic instead of static list - 0x55
-
-// TODO [#7] Full calendar functionality - 0x41
-
-// TODO [#8] Read all colors from the OS calendar - 0x28
-// - Read color from calendar (y)
-// - Generate name from hex value
-// - ...
-
-// TODO [#9] rewrite appState.meetings to map 1:n - 0x45
+// Feature backlog: see docs/TODO.md T-50 through T-59 (triaged from this file's former ad-hoc
+// TODO list - docs/TODO.md T-31 records what happened to each original item).
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

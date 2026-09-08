@@ -1,9 +1,8 @@
-// Covers Tier 1, item 4 of the E2E test plan in docs/quality-baseline-2026-09.md:
-// an alarm set in the past must be recognized as stale so Handler.handleAlarm
+// An alarm set in the past must be recognized as stale so Handler.handleAlarm
 // stops it instead of showing an overlay. This is pure logic with no UI/device
 // dependency, so a plain unit test is more appropriate than a full
 // integration_test - see integration_test/app_test.dart for the device-driven
-// scenarios (items 1-3).
+// scenarios, and docs/TODO.md for the full E2E coverage picture.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wakeywakey/models/alarms/handler.dart';

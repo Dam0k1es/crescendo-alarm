@@ -177,8 +177,8 @@ class Handler {
   }
 
   static void onAlarmHandled(AppState appState, int alarmID) {
-// Reschedule alarms if rescheduleOnAlarm is set
-// TODO reschedule alarm if rescheduleOnAlarm is set - 0x39B
+    // Reschedule alarms if rescheduleOnAlarm is set. The setting itself has no
+    // UI to change it yet - see docs/TODO.md T-42.
     try {
       Scheduler scheduler = Scheduler();
       if (appState.rescheduleOnAlarm) {
