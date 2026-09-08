@@ -438,3 +438,6 @@ fabric.properties
 docs/quality-baseline-*.md
 docs/release-readiness-*.md
 
+
+# Maintainer's local device-test feedback intake; formulated TODOs live in docs/TODO.md
+tasks.txt
