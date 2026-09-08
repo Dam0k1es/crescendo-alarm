@@ -114,10 +114,13 @@ symlink support (e.g. a VirtualBox/vboxsf shared folder) - use a checkout on a n
 - **Static and supply-chain:** `flutter analyze`, `osv-scanner`, `trufflehog`, `mobsfscan` and a
   full MobSF scan of the built APK, as described under "Quality Checks" - but note which of those
   can actually fail a run (see "Open items").
-- **Not verified on a device yet:** alarm survival across a device reboot or an app force-stop;
-  audio playback and the gentle-wake volume ramp (the CI emulator runs with audio disabled);
-  decoding a real physical QR code through the camera; and calendar-derived scheduling (the CI
-  emulator has no calendar accounts, so that path is never executed).
+- **Manual device testing** by the maintainer has confirmed the ring-and-stop flow on real
+  hardware; findings from it are tracked in [`docs/TODO.md`](docs/TODO.md).
+- **Not covered by any automated verification:** alarm survival across a device reboot or an app
+  force-stop; audio playback and the gentle-wake volume ramp (the CI emulator runs with audio
+  disabled, and gentle wake defaults to off, so that code path never executes); decoding a real
+  physical QR code through the camera; and calendar-derived scheduling (the CI emulator has no
+  calendar accounts).
 - **iOS** has never been built or run - no Mac/Xcode has been involved in this project.
 
 ### Open items
