@@ -10,8 +10,63 @@ env:
   FLUTTER_VERSION: "3.47.2"
 
 jobs:
+  e2e-tests:
+    name: E2E tests (real emulator)
+    # A production release requires these to actually pass on a real device -
+    # no exceptions, no time-boxed skip. If this job fails or times out, the
+    # release does not happen (build-signed-release below depends on it).
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-
+      - run: flutter pub get
+
+      - name: Run E2E tests on a real emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          # KVM works directly on GitHub's Linux runners (unlike a nested-virt
+          # VM) - see docs/quality-baseline-2026-09.md's VM recommendations
+          # for why that distinction matters.
+          script: |
+            adb wait-for-device
+
+            # flutter test builds, installs, and runs the app - grant the
+            # permissions PermissionsManager.requestPermissions() will ask
+            # for as soon as the package actually appears, in the background,
+            # so the real run never hits an OS permission dialog.
+            (
+              for i in $(seq 1 120); do
+                if adb shell pm list packages | grep -q com.wakeywakey.wakeywakey; then
+                  adb shell pm grant com.wakeywakey.wakeywakey android.permission.CAMERA || true
+                  adb shell pm grant com.wakeywakey.wakeywakey android.permission.READ_CALENDAR || true
+                  adb shell pm grant com.wakeywakey.wakeywakey android.permission.WRITE_CALENDAR || true
+                  adb shell pm grant com.wakeywakey.wakeywakey android.permission.POST_NOTIFICATIONS || true
+                  adb shell appops set com.wakeywakey.wakeywakey SCHEDULE_EXACT_ALARM allow || true
+                  break
+                fi
+                sleep 2
+              done
+            ) &
+
+            flutter test integration_test/app_test.dart -d emulator-5554
+
   build-signed-release:
     name: Build & sign release APK
+    needs: e2e-tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

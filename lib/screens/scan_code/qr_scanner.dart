@@ -15,7 +15,24 @@ import 'package:wakeywakey/screens/scan_code/scanner_overlay.dart';
 class QrScanner extends StatefulWidget {
   final bool displayExitButton;
 
-  const QrScanner({super.key, this.displayExitButton = false});
+  const QrScanner({
+    super.key,
+    this.displayExitButton = false,
+  });
+
+  /// Test-only seam: when set, this stream is used by every `QrScanner`
+  /// instance instead of the real camera's
+  /// [MobileScannerController.barcodes]. It's a static field (not a
+  /// constructor parameter) because production code
+  /// (`Handler.handleAlarm`) constructs `QrScanner()` directly with no way
+  /// to thread a parameter through - E2E tests instead set this before
+  /// triggering the alarm-ringing flow, to exercise the deactivation logic
+  /// (`_handleBarcode`/`_validateDeactivationCode`) without simulating an
+  /// actual camera feed (mobile_scanner's native camera preview isn't
+  /// something integration_test can drive directly). Never set outside of
+  /// tests; must be reset to null in the test's `tearDown`.
+  @visibleForTesting
+  static Stream<BarcodeCapture>? debugBarcodeStreamOverride;
 
   @override
   State<QrScanner> createState() => _QrScannerState();
@@ -39,8 +56,15 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
     // Start listening to lifecycle changes.
     WidgetsBinding.instance.addObserver(this);
 
-    // Start listening to the barcode events.
-    _subscription = controller.barcodes.listen(_handleBarcode);
+    // Start listening to the barcode events (or the injected test stream).
+    _subscription =
+        (QrScanner.debugBarcodeStreamOverride ?? controller.barcodes)
+            .listen(_handleBarcode);
+
+    if (QrScanner.debugBarcodeStreamOverride != null) {
+      // Test mode: never touch the real camera.
+      return;
+    }
 
     // Start existing scanner if it was running.
     try {

@@ -70,6 +70,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
 
 # device_calendar (even its latest release, 4.3.3) still pins `timezone: ^0.9.0`,
 # while syncfusion_flutter_calendar >=29.2.7 requires `timezone: ^0.11.0` -

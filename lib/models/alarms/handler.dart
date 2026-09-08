@@ -12,6 +12,19 @@ import 'package:wakeywakey/screens/scan_code/qr_scanner.dart';
 import 'package:wakeywakey/utils/notifications.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
+/// Whether an alarm's scheduled [eventDateTime] is already in the past
+/// relative to [now]. Compares full DateTimes (not just day/hour/minute) so
+/// a stale alarm from a previous day/month/year is correctly detected too;
+/// both are truncated to minute precision, as the alarm plugin may trigger
+/// an alarm a few milliseconds before or after the scheduled time.
+bool isAlarmStale(DateTime eventDateTime, DateTime now) {
+  final eventMinute = DateTime(eventDateTime.year, eventDateTime.month,
+      eventDateTime.day, eventDateTime.hour, eventDateTime.minute);
+  final nowMinute =
+      DateTime(now.year, now.month, now.day, now.hour, now.minute);
+  return eventMinute.isBefore(nowMinute);
+}
+
 class Handler {
   final BuildContext _context;
   late final AppState _appState;
@@ -82,19 +95,7 @@ class Handler {
       // Check if the alarm is set in the past
       bool alarmSetBeforeNow = false;
       try {
-        DateTime now = DateTime.now();
-        // Compare full DateTimes (not just day/hour/minute) so a stale alarm
-        // from a previous day/month/year is correctly detected too; truncate
-        // to minute precision, as the alarm plugin may trigger an alarm a few
-        // milliseconds before or after the scheduled time.
-        DateTime eventMinute = DateTime(event.dateTime.year,
-            event.dateTime.month, event.dateTime.day, event.dateTime.hour,
-            event.dateTime.minute);
-        DateTime nowMinute =
-            DateTime(now.year, now.month, now.day, now.hour, now.minute);
-        if (eventMinute.isBefore(nowMinute)) {
-          alarmSetBeforeNow = true;
-        }
+        alarmSetBeforeNow = isAlarmStale(event.dateTime, DateTime.now());
       } catch (e) {
         debugPrint(
             "=====handleAlarm: Failed to check if alarm is set in the past: $e");
