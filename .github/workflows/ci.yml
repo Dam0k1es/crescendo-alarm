@@ -129,15 +129,7 @@ jobs:
             -H "Authorization: $API_KEY" \
             -F "hash=$HASH" -F "scan_type=apk" -F "file_name=app-debug.apk" \
             -o mobsf-report.json
-          python3 -c "
-import json
-d = json.load(open('mobsf-report.json'))
-appsec = d.get('appsec', {})
-print('HIGH:', len(appsec.get('high', [])))
-for h in appsec.get('high', []): print(' -', h['title'])
-print('WARNING:', len(appsec.get('warning', [])))
-for w in appsec.get('warning', []): print(' -', w['title'])
-"
+          python3 "$GITHUB_WORKSPACE/scripts/mobsf_summary.py" mobsf-report.json
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
