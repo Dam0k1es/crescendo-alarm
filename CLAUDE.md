@@ -8,6 +8,18 @@ scanning a physical QR code to deactivate the alarm. Fully offline - no network 
 License: GNU GPLv3 (see `LICENSE`). Author/copyright holder: Dam0k1es. Do not add other personal
 names, emails, or locations to tracked files - see "PII policy" below.
 
+## Supported platforms
+
+- **Android** is the actual target platform this app is built for.
+- **Linux desktop** exists only as a fast local dev/debug loop (no emulator/device needed to smoke-test
+  UI and core logic changes) - it is not a real deployment target. `device_calendar` has no Linux
+  implementation, so calendar integration always no-ops there by design (see `MissingPluginException`
+  handling).
+- **iOS** has project scaffolding but has never been built or run in this environment (no Mac/Xcode
+  available here) - treat it as unverified, not "supported."
+- **Windows and macOS scaffolding were removed** (they existed from the original `flutter create`
+  template but were never a real target and added maintenance surface for no benefit).
+
 ## Critical gotcha: build from a native filesystem, not a shared folder
 
 If this checkout lives on a VirtualBox `vboxsf` (or similar network/shared) mount, **every**
@@ -23,7 +35,7 @@ filesystem limitation, not a project bug.
 flutter pub get
 flutter analyze
 flutter test
-flutter build linux --debug     # Linux desktop, needs clang/cmake/ninja/pkg-config
+flutter build linux --debug     # dev/debug loop only, not a deployment target - see "Supported platforms"
 flutter build apk --debug       # Android, needs the Android SDK components below
 bash scripts/security-scan.sh   # analyze + osv-scanner (SCA) + trufflehog (secrets)
 ```
@@ -102,6 +114,10 @@ individually, including AI-assistant chat history that can leak real usernames a
   for scheduling logic.
 - No integration/end-to-end tests exist yet. See the E2E test plan in
   `docs/quality-baseline-2026-09.md` for what a first pass should cover.
+- No build has ever been installed/run on a real or emulated Android device in this environment
+  (see `docs/release-readiness-2026-09.md` for why - the Android emulator proved unreliable on this
+  VM's nested-virtualization setup). Android verification so far is build success plus static
+  analysis (MobSF, mobsfscan, manual review) only, not an actual on-device run.
 
 ## Quality baseline snapshot
 

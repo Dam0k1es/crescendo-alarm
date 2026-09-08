@@ -1,3 +1,6 @@
+// This is a standalone interactive debug script, not an automated test -
+// print is its actual output mechanism, not a logging omission.
+// ignore_for_file: avoid_print
 import 'adjust.dart';
 import 'cases.dart';
 import 'package:intl/intl.dart';

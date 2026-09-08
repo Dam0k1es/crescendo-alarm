@@ -1,5 +1,8 @@
 # wakeywakey
 
+[![CI](https://github.com/Dam0k1es/wakeywakey/actions/workflows/ci.yml/badge.svg)](https://github.com/Dam0k1es/wakeywakey/actions/workflows/ci.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 Welcome to Wakey Wakey, an innovative alarm clock app designed for individuals with irregular sleep patterns. Whether you work shifts, travel frequently, or simply have trouble waking up, Wakey Wakey has features tailored to your needs.
 
 ## Features
@@ -12,6 +15,17 @@ Welcome to Wakey Wakey, an innovative alarm clock app designed for individuals w
 
 - **Flutter:** For cross-platform development.
 - **Figma:** For design and wireframing.
+
+## Supported Platforms
+
+- **Android** is the actual target platform. `minSdk` 24 (Android 7.0), `targetSdk` 36 (Android 16).
+- **Linux desktop** builds and runs, but only as a fast local dev/debug loop - it is not a
+  supported deployment target. Calendar integration always no-ops there (no Linux implementation
+  of the calendar plugin exists), by design.
+- **iOS** has project scaffolding but has never actually been built or run - treat it as
+  unverified, not supported, until someone with a Mac/Xcode does that work.
+- Windows and macOS scaffolding (leftover from the initial `flutter create`) has been removed, as
+  neither was ever a real target.
 
 ## Installation Instructions
 
@@ -56,24 +70,35 @@ dart run flutter_launcher_icons
 
 ### Quality Checks
 
-Before committing or opening a pull request, run:
+All of the following run automatically on every push/PR via [GitHub Actions](.github/workflows/ci.yml).
+To run them locally before committing or opening a pull request:
 
 ```sh
 flutter analyze                # static analysis / lints
 flutter test                   # unit tests
 bash scripts/security-scan.sh  # analyze + dependency vulnerability scan (osv-scanner) + secret scan (trufflehog)
-flutter build linux --debug    # verify the Linux desktop build
+flutter build linux --debug    # verify the Linux dev/debug build (see "Supported Platforms")
 flutter build apk --debug      # verify the Android build
 ```
 
 `scripts/security-scan.sh` requires [osv-scanner](https://github.com/google/osv-scanner) and
-[trufflehog](https://github.com/trufflesecurity/trufflehog) on `PATH`. All of the above are plain
-shell/Flutter commands with no repository-specific setup, so they can be dropped into a CI
-pipeline (e.g. GitHub Actions) as-is once one is set up.
+[trufflehog](https://github.com/trufflesecurity/trufflehog) on `PATH`.
+
+Signed release APKs are built by a separate [release workflow](.github/workflows/release.yml),
+triggered by pushing a `v*.*.*` tag.
 
 Note: `flutter` commands that need to create plugin symlinks (`analyze`, `build`, `test`, `run`,
 `pub get`) will fail with a `PathAccessException` on a checkout living on a filesystem without
 symlink support (e.g. a VirtualBox/vboxsf shared folder) - use a checkout on a native filesystem.
+
+### Testing status
+
+- Automated: a Flutter widget smoke test (`flutter test`) plus the static analysis/scans above.
+- **No build has been installed or run on an actual Android device or emulator** as part of this
+  project's verification so far - Android is currently checked by build success and static
+  analysis only. If you're picking this project up, installing a build on a real device and
+  walking through the core alarm flow (create → ring → deactivate, with and without a QR
+  deactivation code) is the highest-value next testing step.
 
 ### Contributing
 
