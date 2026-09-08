@@ -18,6 +18,8 @@
 // data - see that field's doc comment and docs/quality-baseline-2026-09.md
 // for why.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -141,13 +143,16 @@ void main() {
       final appState = await pumpFreshApp(tester);
       appState.deactivationCode = DeactivationCode(payload: testPayload);
 
-      // Inject the "scanned" barcode before the alarm fires, so it's ready
-      // the moment QrScanner mounts.
-      QrScanner.debugBarcodeStreamOverride = Stream.value(
-        BarcodeCapture(barcodes: [
-          Barcode(rawValue: testPayload, format: BarcodeFormat.qrCode),
-        ]),
-      );
+      // A single-subscription controller, not Stream.value: QrScanner
+      // subscribes to this in initState and _handleBarcode validates +
+      // pops synchronously-ish on the very next event, so if the barcode
+      // were queued up before QrScanner mounts (as Stream.value would),
+      // the whole mount-validate-pop cycle can finish inside one
+      // pumpUntilFound polling gap and never be observed as "found" at
+      // all. Waiting to add the event until after QrScanner is confirmed
+      // mounted removes that race entirely.
+      final barcodeController = StreamController<BarcodeCapture>();
+      QrScanner.debugBarcodeStreamOverride = barcodeController.stream;
 
       await createManualAlarmOneMinuteFromNow(tester);
 
@@ -157,6 +162,10 @@ void main() {
         timeout: const Duration(minutes: 2),
       );
 
+      barcodeController.add(BarcodeCapture(barcodes: [
+        Barcode(rawValue: testPayload, format: BarcodeFormat.qrCode),
+      ]));
+
       // _handleBarcode validates the injected code and pops the scanner
       // automatically - just wait for it to close.
       await pumpUntilGone(
@@ -165,6 +174,7 @@ void main() {
         timeout: const Duration(seconds: 15),
       );
       await tester.pumpAndSettle();
+      await barcodeController.close();
 
       expect(find.byType(QrScanner), findsNothing);
       expect(find.byType(ScreenAlarms), findsOneWidget);

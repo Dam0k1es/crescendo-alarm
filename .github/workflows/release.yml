@@ -171,6 +171,10 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     permissions:
+      # Declaring `permissions:` on a job replaces the whole default set, not
+      # just adds to it - contents: read is needed too, or actions/checkout
+      # fails with a redacted "Repository not found" (this repo is private).
+      contents: read
       actions: write
     steps:
       - uses: actions/checkout@v4
