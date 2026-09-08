@@ -64,28 +64,12 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: |
-            adb wait-for-device
-
-            # flutter test builds, installs, and runs the app - grant the
-            # permissions PermissionsManager.requestPermissions() will ask
-            # for as soon as the package actually appears, in the background,
-            # so the real run never hits an OS permission dialog.
-            (
-              for i in $(seq 1 120); do
-                if adb shell pm list packages | grep -q com.wakeywakey.wakeywakey; then
-                  adb shell pm grant com.wakeywakey.wakeywakey android.permission.CAMERA || true
-                  adb shell pm grant com.wakeywakey.wakeywakey android.permission.READ_CALENDAR || true
-                  adb shell pm grant com.wakeywakey.wakeywakey android.permission.WRITE_CALENDAR || true
-                  adb shell pm grant com.wakeywakey.wakeywakey android.permission.POST_NOTIFICATIONS || true
-                  adb shell appops set com.wakeywakey.wakeywakey SCHEDULE_EXACT_ALARM allow || true
-                  break
-                fi
-                sleep 2
-              done
-            ) &
-
-            flutter test integration_test/app_test.dart -d emulator-5554
+          # A single line, not an inline multi-line script: this action
+          # appears to run each line of a multi-line `script:` value as its
+          # own separate `sh -c` call, which breaks any real multi-line shell
+          # construct (a background subshell here) - see the script itself
+          # for what actually runs.
+          script: bash .github/scripts/run_e2e_tests.sh
 
   build-signed-release:
     name: Build & sign release APK
