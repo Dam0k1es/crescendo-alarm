@@ -30,6 +30,20 @@ jobs:
           restore-keys: pub-
       - run: flutter pub get
 
+      - name: Enable KVM group perms
+        # /dev/kvm exists on GitHub's Linux runners but isn't accessible to
+        # the runner user by default - without this, android-emulator-runner
+        # silently falls back to `-accel off` (full software CPU emulation),
+        # and the emulator then takes far longer to boot than its own
+        # boot-wait timeout allows. See docs/quality-baseline-2026-09.md's VM
+        # recommendations for why real KVM access matters this much - this
+        # project has hit the software-emulation failure mode before, just on
+        # a different (nested-virtualization) root cause.
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Run E2E tests on a real emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -38,9 +52,6 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          # KVM works directly on GitHub's Linux runners (unlike a nested-virt
-          # VM) - see docs/quality-baseline-2026-09.md's VM recommendations
-          # for why that distinction matters.
           script: |
             adb wait-for-device
 
