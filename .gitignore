@@ -432,8 +432,9 @@ fabric.properties
 
 # Point-in-time notes and reports generated during Claude-assisted work
 # sessions (quality/security audits, release-readiness reports, etc.) - not
-# meant to live in version control as the codebase moves on. CLAUDE.md itself
-# (project conventions for future AI-assisted sessions) is intentionally NOT
-# covered by this and stays tracked.
-docs/
+# meant to live in version control as the codebase moves on. Everything else
+# under docs/ (requirements, personas, use cases, diagrams, ...) is real
+# project documentation and stays tracked, as does CLAUDE.md.
+docs/quality-baseline-*.md
+docs/release-readiness-*.md
 

@@ -24,8 +24,8 @@ Welcome to Wakey Wakey, an innovative alarm clock app designed for individuals w
   of the calendar plugin exists), by design.
 - **iOS** has project scaffolding but has never actually been built or run - treat it as
   unverified, not supported, until someone with a Mac/Xcode does that work.
-- Windows and macOS scaffolding (leftover from the initial `flutter create`) has been removed, as
-  neither was ever a real target.
+- Windows, macOS, and web scaffolding (leftover from the initial `flutter create`) has been
+  removed, as none of them was ever a real target.
 
 ## Installation Instructions
 
@@ -72,15 +72,19 @@ dart run flutter_launcher_icons
 
 CI runs via [GitHub Actions](.github/workflows/ci.yml) and scales with the branch:
 
-- **`dev`**: fast feedback only - `flutter analyze` + `flutter test`.
+- **`dev`**: fast feedback (`flutter analyze` + `flutter test`) plus a debug **development** APK,
+  uploaded as a downloadable build artifact on the run.
 - **`master`** (and PRs into it): the full pipeline - analyze, test, dependency vulnerability scan
   ([osv-scanner](https://github.com/google/osv-scanner)), secret scan
   ([trufflehog](https://github.com/trufflesecurity/trufflehog)), Android source SAST
-  ([mobsfscan](https://github.com/MobSF/mobsfscan)), an Android debug build, and a full
-  [MobSF](https://mobsf.github.io/docs/) static scan of that build. Only Android is actually built
-  in CI - see "Supported Platforms" above for why Linux/iOS aren't.
-- Signed release APKs are built by a separate [release workflow](.github/workflows/release.yml),
-  triggered by pushing a `v*.*.*` tag, and attached to a GitHub Release.
+  ([mobsfscan](https://github.com/MobSF/mobsfscan)), a signed **production** release APK build, and
+  a full [MobSF](https://mobsf.github.io/docs/) static scan of that build. The production APK is
+  uploaded as a build artifact on every run. Only Android is actually built in CI - see "Supported
+  Platforms" above for why Linux/iOS aren't.
+- Tagged releases: pushing a `v*.*.*` tag runs a separate
+  [release workflow](.github/workflows/release.yml) that builds the same signed production APK and
+  attaches it to a formal GitHub Release (with generated release notes) - use this for actual
+  version bumps; the per-push artifact above is for grabbing "whatever's on master right now."
 
 To run the same checks locally before committing:
 
@@ -103,6 +107,12 @@ symlink support (e.g. a VirtualBox/vboxsf shared folder) - use a checkout on a n
   analysis only. If you're picking this project up, installing a build on a real device and
   walking through the core alarm flow (create → ring → deactivate, with and without a QR
   deactivation code) is the highest-value next testing step.
+
+### Project Documentation
+
+See `docs/` for personas, use cases, technology choices, a UML diagram, and - most importantly -
+[`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md), the essential requirements that must be met (or
+have their current status honestly stated) before any push to `master`.
 
 ### Contributing
 

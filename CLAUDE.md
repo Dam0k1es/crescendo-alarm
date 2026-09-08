@@ -17,8 +17,9 @@ names, emails, or locations to tracked files - see "PII policy" below.
   handling).
 - **iOS** has project scaffolding but has never been built or run in this environment (no Mac/Xcode
   available here) - treat it as unverified, not "supported."
-- **Windows and macOS scaffolding were removed** (they existed from the original `flutter create`
-  template but were never a real target and added maintenance surface for no benefit).
+- **Windows, macOS, and web scaffolding were removed** (they existed from the original
+  `flutter create` template but were never a real target and added maintenance surface for no
+  benefit).
 
 ## Critical gotcha: build from a native filesystem, not a shared folder
 
@@ -125,3 +126,12 @@ A point-in-time SAST/SCA/PII/security assessment and an end-to-end test plan liv
 `docs/quality-baseline-2026-09.md`. Treat it as a snapshot, not a living document - re-run
 `scripts/security-scan.sh` and `flutter analyze` for current status rather than trusting the
 numbers in that file as still accurate.
+
+## Project documentation
+
+`docs/` also holds `REQUIREMENTS.md` (essential pre-`master` requirements - check this before any
+production push), `personas.md`, `use-cases.md`, `choice-of-technologies.md`, and a UML diagram
+(`UML_WakeyWakey.drawio`) from the original project planning. The persona/use-case/tech-choice
+docs predate the finished app and have been annotated where they describe features that were
+planned but never implemented (e.g. NFC-tag deactivation, Do Not Disturb) - don't assume everything
+in them shipped.

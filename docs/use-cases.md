@@ -1,10 +1,14 @@
+> Note (2026-09): items marked **not implemented** below were planned but
+> didn't make it into the shipped app. Everything else reflects real,
+> implemented features.
+
 # FEATURES
 
 - Alarm (Core feature)
 
 - Dynamic Schedule
 
-- Deactivation Code (QR Code, NFC Tag, ...)
+- Deactivation Code (QR Code; NFC Tag was considered, **not implemented**)
 
 - Sleep Habit Configuration
 
@@ -48,7 +52,7 @@
 - Duration to get ready (between getting up and setting off)
 - Reminder Feature (Reminders for bedtime to encourage a regular sleep schedule)
 - Gentle Wake Feature
-- Do Not Disturb Feature
+- Do Not Disturb Feature (**not implemented**)
   - Turn off notifications
   - Turn off calls
 
@@ -62,8 +66,8 @@
 - Remove Deactivation Codes
 - Print Deactivation Code as QR Code (="QR Code")
 - Scan QR Code
-- Optional: Write Deactivation Code to NFC Tag (="Deactivation Tag")
-- Optional: Read Deactivation Tag
+- Optional: Write Deactivation Code to NFC Tag (="Deactivation Tag") - **not implemented**
+- Optional: Read Deactivation Tag - **not implemented**
 
 
 
