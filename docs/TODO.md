@@ -116,10 +116,10 @@ Conventions:
 - **Resolution so far:** `build-android-release` in `ci.yml` now declares
   `needs: [analyze-and-test, sca-and-secrets, mobsfscan, e2e-tests]` - a failure in any of those
   now prevents the job from running at all, per GitHub Actions' own `needs:` semantics (not
-  demonstrated live against this repo, to avoid deliberately sabotaging a real pipeline run;
-  verified structurally instead - `actionlint` accepts the dependency graph, and it matches the
-  same pattern `mobsf-full-scan`'s existing `needs: build-android-release` already used). MobSF
-  itself (needs the built APK, so it structurally cannot gate the build that produces it) now
+  demonstrated live with a deliberately-failing check, to avoid sabotaging a real pipeline run for
+  the sake of a test; confirmed instead by a real green run where `build-android-release` correctly
+  waited for, and only ran after, all four `needs:` had passed - see T-37's verification note).
+  MobSF itself (needs the built APK, so it structurally cannot gate the build that produces it) now
   actively revokes the artifact after the fact instead of just marking the run red - see T-11.
 - **Still open:** the "deliberately failing check" demonstration itself.
 - **Requirement:** R1
@@ -421,10 +421,12 @@ Conventions:
   ./.github/workflows/e2e-tests.yml`) - in `ci.yml`, scoped to `master` pushes and PRs into it, same
   as the other heavier checks, to keep `dev` pushes fast per the "consider the runtime cost"
   guidance here. `build-android-release` in `ci.yml` now also depends on it (see T-06).
-- **Verification note:** the *inline* `e2e-tests` job (pre-refactor) was confirmed passing all 3
-  scenarios on a real emulator; the `workflow_call` mechanism itself is validated structurally
-  (`actionlint`, YAML parse) but not yet by an actual triggered run - the next `ci.yml` push or
-  `release.yml` dispatch after this commit is that real-world check.
+- **Verification note:** confirmed by a real run - pushing the commit that made this change
+  triggered `ci.yml` on `master`, and its `E2E tests (real emulator) / E2E tests (real emulator)`
+  job (the `workflow_call` naming convention, confirming the reusable workflow is genuinely being
+  invoked, not just parsed) completed successfully, followed by `build-android-release` actually
+  running (all its `needs:` had passed) and `mobsf-full-scan` passing with the expected accepted
+  exceptions applied (see T-11).
 
 ### T-38 · The QR gate has unconditional bypasses
 
