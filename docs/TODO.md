@@ -280,16 +280,26 @@ Conventions:
   plainly that the doc it names is gitignored and only useful if you happen to have a local copy.
 - **Requirement:** R1, R2, R6, R11
 
-### T-13 · The tag → GitHub Release path has never run and would fail
+### T-13 · The tag → GitHub Release path has never run and would fail — RESOLVED (2026-09-09)
 
-- [ ] Give the release-attach step the permission it needs and dry-run the tag path once.
-- **Why:** the documented release ritual is untested. No tag and no release exist, the attach step
-  is skipped in every run so far, and the repository's default workflow token is read-only while
-  `release.yml` declares `permissions:` only on its cleanup job — so the first real `v*.*.*` tag
-  would fail on permissions.
-- **Evidence:** `gh api …/tags` and `…/releases` both empty; `default_workflow_permissions: read`;
-  `.github/workflows/release.yml:153-158` (attach step) with no `contents: write` on its job.
-- **Done when:** a throwaway pre-release tag produces a GitHub Release with the APK attached.
+- [x] Give the release-attach step the permission it needs and dry-run the tag path once.
+- **Why:** the documented release ritual was untested. No tag and no release existed, the attach
+  step was skipped in every run so far, and the repository's default workflow token is read-only
+  while `release.yml` declared `permissions:` only on its cleanup job — so the first real
+  `v*.*.*` tag would have failed on permissions.
+- **Evidence (before this fix):** `gh api …/tags` and `…/releases` both empty;
+  `default_workflow_permissions: read`; `.github/workflows/release.yml`'s `build-signed-release`
+  job had no `contents: write`.
+- **Resolution:** added `permissions: {contents: write}` to `build-signed-release` (write implies
+  read for the same scope, so no separate `contents: read` entry is needed). Dry-run tag
+  `v0.0.0-throwaway-test` was pushed for real; its `release.yml` run's E2E job failed on an
+  unrelated, already-known flake (T-23's minute-boundary race - the fail-fast check added
+  earlier tonight caught it correctly: "Expected the created alarm to fire in ~1 minute, but it is
+  scheduled for [next day] (1439 minutes from now)"), so the tag was deleted and retried as
+  `v0.0.0-throwaway-test2`. That run passed end-to-end: `gh release view v0.0.0-throwaway-test2`
+  confirmed a real GitHub Release with `app-release.apk` attached. Both the release and the tag
+  were then deleted (`gh release delete ... --cleanup-tag`) to avoid leaving permanent clutter;
+  `gh api .../releases` and `.../tags` both confirmed back to empty afterward.
 
 ### T-14 · Per-weekday repeat is inert
 
