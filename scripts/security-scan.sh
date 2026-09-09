@@ -5,6 +5,11 @@
 #   2. osv-scanner              - known vulnerabilities in pubspec.lock dependencies
 #   3. trufflehog                - secret scanning of the working tree
 #
+# This covers 3 of R1's 5 tools (see docs/REQUIREMENTS.md) - it does not run
+# mobsfscan or a full MobSF scan (both need the built APK and, for MobSF, a
+# local Docker instance - see .github/workflows/ci.yml if you need to run
+# those too).
+#
 # Requires: flutter (on PATH), osv-scanner, trufflehog
 #   https://github.com/google/osv-scanner
 #   https://github.com/trufflesecurity/trufflehog
@@ -41,7 +46,7 @@ echo "== 3/3: trufflehog (filesystem) =="
 exclude_file="$(mktemp)"
 trap 'rm -f "$exclude_file"' EXIT
 printf 'build/\n.dart_tool/\n' > "$exclude_file"
-trufflehog filesystem --exclude-paths="$exclude_file" .
+trufflehog filesystem --results=verified,unknown --fail --exclude-paths="$exclude_file" .
 status=$?
 [ "$status" -ne 0 ] && overall_status=1
 

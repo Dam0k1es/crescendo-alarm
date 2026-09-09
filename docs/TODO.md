@@ -103,18 +103,25 @@ Conventions:
   R8/R9 are corrected to match reality.
 - **Requirement:** R8, R9
 
-### T-06 · The signed release APK is built and published with no quality gate
+### T-06 · The signed release APK is built and published with no quality gate — PARTIALLY RESOLVED (2026-09-09)
 
-- [ ] Gate the release build on the checks that are supposed to protect it.
-- **Why:** in `ci.yml` the release-build job declares no `needs:`, so it runs regardless of whether
-  analyze, tests, SCA, secret scanning or SAST failed; `release.yml` runs no SCA/secret/SAST job at
-  all. A red run still produces a downloadable, signed, signature-verified APK that the README
-  presents as the production artifact.
-- **Evidence:** `.github/workflows/ci.yml:123` (no `needs:`), `:183` (the only `needs:` in the
-  file); a real run concluded Analyze **failure**, SCA **failure**, mobsfscan **failure**, MobSF
-  **failure** and still uploaded three artifacts.
-- **Done when:** the release build depends on analyze/test/SCA/secret/SAST, and a deliberately
-  failing check demonstrably prevents an APK from being published.
+- [ ] Demonstrate, with a real deliberately-failing check, that the release build actually stops.
+- **Why:** in `ci.yml` the release-build job declared no `needs:`, so it ran regardless of whether
+  analyze, tests, SCA, secret scanning or SAST failed; `release.yml` ran no SCA/secret/SAST job at
+  all. A red run still produced a downloadable, signed, signature-verified APK that the README
+  presented as the production artifact.
+- **Evidence (before this fix):** `.github/workflows/ci.yml:123` (no `needs:`), `:183` (the only
+  `needs:` in the file); a real run concluded Analyze **failure**, SCA **failure**, mobsfscan
+  **failure**, MobSF **failure** and still uploaded three artifacts.
+- **Resolution so far:** `build-android-release` in `ci.yml` now declares
+  `needs: [analyze-and-test, sca-and-secrets, mobsfscan, e2e-tests]` - a failure in any of those
+  now prevents the job from running at all, per GitHub Actions' own `needs:` semantics (not
+  demonstrated live against this repo, to avoid deliberately sabotaging a real pipeline run;
+  verified structurally instead - `actionlint` accepts the dependency graph, and it matches the
+  same pattern `mobsf-full-scan`'s existing `needs: build-android-release` already used). MobSF
+  itself (needs the built APK, so it structurally cannot gate the build that produces it) now
+  actively revokes the artifact after the fact instead of just marking the run red - see T-11.
+- **Still open:** the "deliberately failing check" demonstration itself.
 - **Requirement:** R1
 
 ### T-32 · The background rescheduling R2 requires does not exist
@@ -221,24 +228,35 @@ Conventions:
   value is now fully captured in the real test.
 - **Requirement:** R2
 
-### T-11 · Two of R1's five security tools cannot fail a run — PARTIALLY RESOLVED (2026-09-08)
+### T-11 · Two of R1's five security tools cannot fail a run — RESOLVED (2026-09-09)
 
-- [ ] Make the pipeline itself enforce this (un-excepted HIGH findings must fail the run).
-- **Why:** R1 asserted "no high-or-above finding — met", but `mobsfscan` runs with `--no-fail` and
-  the MobSF step only prints counts with no threshold. The current MobSF report on master carries
+- [x] Make the pipeline itself enforce this (un-excepted HIGH findings must fail the run).
+- **Why:** R1 asserted "no high-or-above finding — met", but `mobsfscan` ran with `--no-fail` and
+  the MobSF step only printed counts with no threshold. The current MobSF report on master carried
   one HIGH (installable on Android 7.0 / `minSdk=24`) and a security score of 51 while the job
-  concludes success. The task-hijacking finding R1 cited as a known false positive had its
+  concluded success. The task-hijacking finding R1 cited as a known false positive had its
   rationale written down nowhere.
-- **Evidence:** `.github/workflows/ci.yml:115` (`--no-fail`), `scripts/mobsf_summary.py` (prints
-  only); MobSF report from the newest master run: `HIGH: 1`, `WARNING: 14`, `security_score: 51`;
-  `grep -rniE "strandhogg|task.?hijack"` found only the two places that *cited* the rationale
-  without recording it.
-- **Resolution so far (documentation only):** `docs/REQUIREMENTS.md` R1 rewritten to say plainly
-  which three tools actually gate the pipeline and which two do not, and now carries the accepted
-  rationale for both outstanding findings (the `mobsfscan` task-hijacking pattern and the MobSF
-  `minSdk=24` HIGH) directly, in a tracked file, for the first time.
-- **Still open (code):** un-excepted HIGH findings still cannot fail the run - `--no-fail` and the
-  threshold-free MobSF summary are unchanged.
+- **Evidence (before this fix):** `.github/workflows/ci.yml:115` (`--no-fail`),
+  `scripts/mobsf_summary.py` (prints only); MobSF report from the newest master run: `HIGH: 1`,
+  `WARNING: 14`, `security_score: 51`; `grep -rniE "strandhogg|task.?hijack"` found only the two
+  places that *cited* the rationale without recording it.
+- **Resolution:** `docs/REQUIREMENTS.md` R1 documents which three tools gate the pipeline and which
+  two don't, with the accepted rationale for both outstanding findings recorded in a tracked file
+  for the first time. New `.github/security-exceptions.json` makes that rationale
+  machine-readable, keyed by `mobsfscan` rule ID and `mobsf` finding title, each with a dated
+  reason. New `scripts/mobsfscan_check.py` reads it against `mobsfscan`'s own JSON report and fails
+  if any ERROR-severity, actually-triggered finding isn't excepted (tested locally: passes against
+  the real current report with the accepted `android_task_hijacking2` exception in place; fails
+  against an empty exceptions file with the same report). `scripts/mobsf_summary.py` similarly now
+  takes the exceptions file and fails on an un-excepted HIGH (tested locally against synthetic
+  reports: passes with the known exception, fails without it, fails when a second, unaccepted HIGH
+  is added). `mobsfscan` keeps `--no-fail` deliberately - the new check script is what decides
+  pass/fail now, distinguishing accepted from new findings, which a bare exit code couldn't. Since
+  `mobsf-full-scan` structurally runs *after* `build-android-release` (it needs the built APK to
+  scan), it can't have prevented that job's artifact upload - it now deletes the
+  `app-production-apk` artifact via the Artifacts API if it fails, so a red MobSF result actually
+  revokes the release rather than just marking the run red (see T-06).
+- **Requirement:** R1
 - **Requirement:** R1
 
 ### T-12 · The evidence several requirements cite is not in the repository — RESOLVED (2026-09-09)
@@ -388,17 +406,25 @@ Conventions:
 - **Done when:** a user can read the licence and third-party notices from inside the app.
 - **Requirement:** R9
 
-### T-37 · The E2E suite runs on no routine trigger
+### T-37 · The E2E suite runs on no routine trigger — RESOLVED (2026-09-09)
 
-- [ ] Run the integration tests on pushes/PRs, not only on a tag or a manual dispatch.
-- **Why:** the E2E gate is the project's strongest quality evidence, but `ci.yml` does not reference
-  the integration tests at all — they exist only in `release.yml`, which fires on a `v*.*.*` tag or
-  manual dispatch. Since no tag has ever been pushed, the gate has never protected a normal change;
-  every commit so far reached `master` without it.
-- **Evidence:** `grep -c integration_test .github/workflows/ci.yml` → 0;
+- [x] Run the integration tests on pushes/PRs, not only on a tag or a manual dispatch.
+- **Why:** the E2E gate is the project's strongest quality evidence, but `ci.yml` did not reference
+  the integration tests at all — they existed only in `release.yml`, which fires on a `v*.*.*` tag
+  or manual dispatch. Since no tag had ever been pushed, the gate had never protected a normal
+  change; every commit so far reached `master` without it.
+- **Evidence (before this fix):** `grep -c integration_test .github/workflows/ci.yml` → 0;
   `.github/workflows/release.yml:3-7` (triggers).
-- **Done when:** a change that breaks an E2E scenario is caught before it lands, not only when
-  someone cuts a release. Consider the runtime cost and gate it on `master` only if needed.
+- **Resolution:** the `e2e-tests` job was extracted out of `release.yml` into a reusable workflow
+  (`.github/workflows/e2e-tests.yml`, triggered via `workflow_call`), so its ~80 lines of emulator
+  setup exist in one place. Both `release.yml` and `ci.yml` now call it (`uses:
+  ./.github/workflows/e2e-tests.yml`) - in `ci.yml`, scoped to `master` pushes and PRs into it, same
+  as the other heavier checks, to keep `dev` pushes fast per the "consider the runtime cost"
+  guidance here. `build-android-release` in `ci.yml` now also depends on it (see T-06).
+- **Verification note:** the *inline* `e2e-tests` job (pre-refactor) was confirmed passing all 3
+  scenarios on a real emulator; the `workflow_call` mechanism itself is validated structurally
+  (`actionlint`, YAML parse) but not yet by an actual triggered run - the next `ci.yml` push or
+  `release.yml` dispatch after this commit is that real-world check.
 
 ### T-38 · The QR gate has unconditional bypasses
 
@@ -425,7 +451,7 @@ Conventions:
   or the limitation is documented as accepted.
 - **Requirement:** R4
 
-### T-40 · No CI check is actually enforceable
+### T-40 · No CI check is actually enforceable — BLOCKED ON A MAINTAINER DECISION (2026-09-09)
 
 - [ ] Decide how the "must pass before master" rule is enforced, given the repository's plan.
 - **Why:** the requirements register says its checks must be guaranteed "before any push to
@@ -435,6 +461,10 @@ Conventions:
   necessary but not sufficient while nothing can block a push.
 - **Evidence:** `gh api …/branches/master/protection` and `…/rulesets` both return 403
   ("Upgrade to GitHub Pro or make this repository public"); `gh pr list --state all` is empty.
+- **Not actioned tonight, deliberately:** both routes to "done" here - making the repository public,
+  or upgrading its GitHub plan - are account/visibility decisions with real consequences (a private
+  repo becoming publicly readable, or a billing change) that only the maintainer should make. This
+  item is intentionally left for a maintainer decision rather than resolved unilaterally.
 - **Done when:** either the repository is public/upgraded and protection is on, or the register says
   plainly that enforcement is by maintainer discipline.
 - **Requirement:** R1
@@ -547,48 +577,74 @@ Conventions:
   still be missed in principle. Not touched in this pass because no currently-reproducing failure
   needs it; revisit if one appears.
 
-### T-24 · Stop evidence collection from degrading silently, and keep failure evidence
+### T-24 · Stop evidence collection from degrading silently, and keep failure evidence — RESOLVED (2026-09-09)
 
-- [ ] Report what was actually collected, and retain the newest failure as well as the newest
+- [x] Report what was actually collected, and retain the newest failure as well as the newest
       success.
 - **Why:** the evidence artifact is the only human-inspectable proof of on-device behaviour, and it
-  is both incomplete-by-silence and unread. In the last green run 7 of 12 recording segments were
+  was both incomplete-by-silence and unread. In the last green run 7 of 12 recording segments were
   lost to "Operation not permitted" without affecting the job result, because both `screenrecord`
-  and `adb pull` are followed by `|| true`; an entirely empty directory would only warn. The
-  retention script keeps only the newest run and the newest *successful* run, so it deleted the
-  evidence of both earlier failed runs — the project's own "2 passed, 1 failed" claims can no
+  and `adb pull` were followed by `|| true`; an entirely empty directory would only warn. The
+  retention script kept only the newest run and the newest *successful* run, so it deleted the
+  evidence of both earlier failed runs — the project's own "2 passed, 1 failed" claims could no
   longer be re-derived from artifacts.
-- **Evidence:** `.github/scripts/run_e2e_tests.sh:48-49` (`|| true`),
+- **Evidence (before this fix):** `.github/scripts/run_e2e_tests.sh:48-49` (`|| true`),
   `.github/workflows/release.yml:93` (`if-no-files-found: warn`),
   `.github/scripts/cleanup_old_artifacts.sh:22-25` (success-only keep); artifact listings for the
-  two earlier E2E runs now return `total_count: 0`.
-- **Done when:** a missing segment is visible in the job summary, the script prints a manifest of
-  collected files, and the retention rule also keeps the most recent failed run.
+  two earlier E2E runs returned `total_count: 0`.
+- **Resolution:** `run_e2e_tests.sh`'s `record_segments` now checks `screenrecord`'s and `adb
+  pull`'s real exit status and logs every segment's outcome (collected / screenrecord failed / pull
+  failed) to a new `manifest.log` inside the evidence artifact, instead of swallowing both with
+  `|| true`. `stop_evidence_collection` now writes a summary - what's in `$EVIDENCE_DIR`, plus the
+  manifest if non-empty - to `$GITHUB_STEP_SUMMARY`, so a missing segment is visible on the run's
+  summary page without opening the artifact or the logs. Because `README.md` and `manifest.log` are
+  now always created regardless of recording success, the evidence directory can no longer be
+  entirely empty, which was the case `if-no-files-found: warn` existed to catch.
+  `cleanup_old_artifacts.sh` now also computes `KEEP_FAILURE_RUN_ID` (the most recent *other* failed
+  release.yml run) alongside the existing success-keep logic, so a run's evidence survives pruning
+  if it is the newest of either outcome.
 
-### T-25 · Investigate the system ANR during E2E runs
+### T-25 · Investigate the system ANR during E2E runs — PARTIALLY RESOLVED (2026-09-09)
 
-- [ ] Find out why `system_server` is not responding on the CI emulator, and reduce it.
-- **Why:** the evidence video of the green run shows an Android "Process system isn't responding"
+- [ ] Determine the actual root cause (resource pressure vs. something else) and, if resource
+      pressure, size the fix without guessing at unverified emulator flags.
+- **Why:** the evidence video of the green run showed an Android "Process system isn't responding"
   dialog in every sampled frame, across the whole test window. The tests pass anyway because
   `integration_test` drives the widget tree rather than the visible screen — which means the suite
   is insensitive to a system-level dialog that a real user would face, and it weakens how much
   weight "it works on a device" carries.
 - **Evidence:** `e2e-evidence` recordings from the newest release run (dialog present in 22 of 22
   sampled frames, alongside the app's genuine "Your alarm is ringing" notification).
-- **Done when:** the cause is known (emulator resources, boot timing, or the app's own startup
-  work), and either the ANR is gone or the run records it explicitly instead of hiding it in a
-  video nobody opens.
+- **Investigation:** the most plausible, evidence-backed hypothesis is memory/CPU pressure -
+  `docs/quality-baseline-2026-09.md`'s VM notes recorded 7.7 GB RAM as sufficient for building but
+  not for also running the emulator, and `run_e2e_tests.sh` runs `flutter build apk --debug`
+  (a heavy Gradle/JVM process) *while the emulator is already booted and alive*, on a
+  `ubuntu-latest` GitHub-hosted runner with a fixed, similarly modest RAM budget. Deliberately not
+  acted on tonight: `reactivecircus/android-emulator-runner`'s exact handling of a hand-set
+  `emulator-options` value (whether it's appended to, or replaces, the flags it already applies by
+  default - which the prior evidence log showed included `-no-window -gpu swiftshader_indirect
+  -no-snapshot -noaudio -no-boot-anim`) isn't confirmed from documentation on hand, and guessing
+  wrong risks silently breaking a currently-working emulator boot during an unattended run.
+- **Resolution (the safe half - explicit recording):** `run_e2e_tests.sh` now captures
+  `ActivityManager` logcat output for the whole run into `activity_manager.log`, and
+  `stop_evidence_collection` greps it for `"ANR in"` and reports the count prominently in
+  `$GITHUB_STEP_SUMMARY` ("ANR detected: N occurrence(s)" or "No ANR detected") - satisfying the
+  "or" branch of this item's own acceptance bar even without yet eliminating the ANR.
 
-### T-26 · `scripts/security-scan.sh` can report a false all-clear
+### T-26 · `scripts/security-scan.sh` can report a false all-clear — RESOLVED (2026-09-09)
 
-- [ ] Add trufflehog's `--fail` flag and describe the script's real coverage.
-- **Why:** it is the only pre-commit gate contributors are told to run, and its header promises a
-  non-zero exit on findings — but the trufflehog step omits the `--fail` that CI uses, so the script
-  can print "All checks completed cleanly" while findings exist. It also covers two of R1's five
-  tools and excludes paths CI scans.
-- **Evidence:** `scripts/security-scan.sh:44` vs `.github/workflows/ci.yml:98`.
-- **Done when:** the local script fails on the same findings CI fails on, and its header states
-  which of R1's tools it does and does not cover.
+- [x] Add trufflehog's `--fail` flag and describe the script's real coverage.
+- **Why:** it is the only pre-commit gate contributors are told to run, and its header promised a
+  non-zero exit on findings — but the trufflehog step omitted the `--fail` that CI uses, so the
+  script could print "All checks completed cleanly" while findings existed. It also covers two of
+  R1's five tools and excludes paths CI scans.
+- **Evidence (before this fix):** `scripts/security-scan.sh:44` vs `.github/workflows/ci.yml:98`.
+- **Resolution:** added `--results=verified,unknown --fail` to the trufflehog invocation, matching
+  CI's flags exactly. Added a header note stating this script covers 3 of R1's 5 tools and does not
+  run mobsfscan or MobSF (both need the built APK; MobSF also needs a local Docker instance).
+  Verified locally: `bash scripts/security-scan.sh` still exits 0 and reports "All checks completed
+  cleanly" against this repo's current, clean state (`flutter analyze`: no issues; `osv-scanner`:
+  131 packages, no issues; `trufflehog`: 0 verified/unverified secrets).
 - **Requirement:** R1
 
 ### T-27 · The global volume setting never reaches calendar-derived alarms

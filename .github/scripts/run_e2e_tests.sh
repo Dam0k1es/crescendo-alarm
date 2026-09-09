@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the E2E integration tests against the emulator started by
-# reactivecircus/android-emulator-runner in .github/workflows/release.yml,
+# reactivecircus/android-emulator-runner in .github/workflows/e2e-tests.yml,
 # while collecting evidence of the run: a segmented screen recording (video,
 # no audio - see EVIDENCE.md note below), a coarse audio-focus timeline, and
 # the raw test output. Everything lands in $EVIDENCE_DIR, which the workflow
@@ -15,6 +15,8 @@ set -uo pipefail
 PACKAGE=com.wakeywakey.wakeywakey
 EVIDENCE_DIR="${EVIDENCE_DIR:-e2e_evidence}"
 mkdir -p "$EVIDENCE_DIR"
+MANIFEST="$EVIDENCE_DIR/manifest.log"
+: > "$MANIFEST"
 
 cat > "$EVIDENCE_DIR/README.md" <<'EOF'
 # E2E run evidence
@@ -32,9 +34,23 @@ cat > "$EVIDENCE_DIR/README.md" <<'EOF'
   sound really would have played", since the recording itself carries no
   audio.
 - `test_output.log`: the raw `flutter test` output for this run.
+- `manifest.log`: what evidence collection actually managed to capture,
+  including any segments that failed - segment failures don't fail the job
+  (evidence gaps shouldn't block a real test result), so this is the only
+  record of them; check it before trusting "the recording" as complete.
+- `activity_manager.log`: raw `ActivityManager` logcat output for the whole
+  run. A prior run's evidence video showed a system "Process system isn't
+  responding" dialog throughout the test window (docs/TODO.md T-25) that the
+  tests themselves never noticed (`integration_test` drives the widget tree,
+  not the visible screen) - this makes that condition explicit instead of
+  something only visible by scrubbing through a video nobody opens. The job
+  summary reports whether an ANR was detected in this log.
 EOF
 
 adb wait-for-device
+adb logcat -c # clear any backlog so this only captures the run below
+adb logcat 'ActivityManager:I' '*:S' >"$EVIDENCE_DIR/activity_manager.log" 2>&1 &
+LOGCAT_PID=$!
 
 # --- Start background evidence collection ---
 
@@ -45,8 +61,17 @@ record_segments() {
   local n=0
   while [ ! -e "$STOP_FILE" ]; do
     local device_path="/sdcard/recording_$n.mp4"
-    adb shell screenrecord --time-limit 170 --bit-rate 4000000 "$device_path" || true
-    adb pull "$device_path" "$EVIDENCE_DIR/recording_$n.mp4" >/dev/null 2>&1 || true
+    if ! adb shell screenrecord --time-limit 170 --bit-rate 4000000 "$device_path"; then
+      echo "recording_$n.mp4: screenrecord failed (device likely not ready yet)" >>"$MANIFEST"
+      adb shell rm -f "$device_path" || true
+      n=$((n + 1))
+      continue
+    fi
+    if adb pull "$device_path" "$EVIDENCE_DIR/recording_$n.mp4" >/dev/null 2>&1; then
+      echo "recording_$n.mp4: collected" >>"$MANIFEST"
+    else
+      echo "recording_$n.mp4: screenrecord succeeded but adb pull failed" >>"$MANIFEST"
+    fi
     adb shell rm -f "$device_path" || true
     n=$((n + 1))
   done
@@ -72,6 +97,36 @@ stop_evidence_collection() {
   wait "$RECORD_PID" 2>/dev/null || true
   wait "$AUDIO_PID" 2>/dev/null || true
   rm -f "$STOP_FILE"
+  kill "$LOGCAT_PID" 2>/dev/null || true
+  wait "$LOGCAT_PID" 2>/dev/null || true
+
+  local anr_count=0
+  if [ -f "$EVIDENCE_DIR/activity_manager.log" ]; then
+    anr_count=$(grep -c "ANR in" "$EVIDENCE_DIR/activity_manager.log" || true)
+  fi
+
+  # Make what was actually collected visible without opening the artifact -
+  # both in the plain job log and, more prominently, the run's summary page.
+  {
+    echo "## E2E evidence collected"
+    echo
+    if [ "$anr_count" -gt 0 ]; then
+      echo "**ANR detected: $anr_count occurrence(s) in activity_manager.log** (docs/TODO.md T-25)"
+    else
+      echo "No ANR detected in activity_manager.log."
+    fi
+    echo
+    echo '```'
+    ls -la "$EVIDENCE_DIR" 2>/dev/null
+    echo '```'
+    if [ -s "$MANIFEST" ]; then
+      echo
+      echo "Recording manifest:"
+      echo '```'
+      cat "$MANIFEST"
+      echo '```'
+    fi
+  } | tee -a "$GITHUB_STEP_SUMMARY" >/dev/null 2>&1 || true
 }
 trap stop_evidence_collection EXIT
 

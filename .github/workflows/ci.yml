@@ -97,6 +97,14 @@ jobs:
       - name: trufflehog (secrets)
         run: trufflehog filesystem --results=verified,unknown --fail .
 
+  e2e-tests:
+    name: E2E tests (real emulator)
+    # Runs the same real-emulator suite as release.yml (docs/TODO.md T-37) -
+    # so a broken scenario is caught on the next master push/PR, not only
+    # when someone cuts a release, which had never happened before this.
+    if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
+    uses: ./.github/workflows/e2e-tests.yml
+
   mobsfscan:
     name: mobsfscan (Android source)
     if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
@@ -108,11 +116,13 @@ jobs:
           python-version: "3.12"
       - run: pip install mobsfscan
       - name: Run mobsfscan
-        # --no-fail: findings here are informational (see docs/REQUIREMENTS.md R1 - the one real
-        # hit, a StrandHogg task-hijacking warning, is a documented tool limitation/false-positive
-        # that doesn't account for the Gradle-resolved targetSdk). The JSON report is still
-        # uploaded below for review. See docs/TODO.md T-11 for making this actually gate.
+        # --no-fail: mobsfscan's own exit code doesn't distinguish accepted
+        # from un-accepted findings, so it never gates directly - the
+        # following step does that, against .github/security-exceptions.json
+        # (see docs/REQUIREMENTS.md R1).
         run: mobsfscan --no-fail --json -o mobsfscan-report.json android/
+      - name: Check for un-excepted findings
+        run: python3 scripts/mobsfscan_check.py mobsfscan-report.json .github/security-exceptions.json
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
@@ -123,6 +133,7 @@ jobs:
   build-android-release:
     name: Build Android (production)
     if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
+    needs: [analyze-and-test, sca-and-secrets, mobsfscan, e2e-tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -181,6 +192,12 @@ jobs:
     if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     needs: build-android-release
+    permissions:
+      # Declaring permissions: on a job replaces the whole default set, not
+      # just adds to it - contents: read is needed too, or actions/checkout
+      # fails with a redacted "Repository not found" (this repo is private).
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -210,13 +227,31 @@ jobs:
             -H "Authorization: $API_KEY" \
             -F "hash=$HASH" -F "scan_type=apk" -F "file_name=app-release.apk" \
             -o mobsf-report.json
-          python3 "$GITHUB_WORKSPACE/scripts/mobsf_summary.py" mobsf-report.json
+          python3 "$GITHUB_WORKSPACE/scripts/mobsf_summary.py" mobsf-report.json \
+            "$GITHUB_WORKSPACE/.github/security-exceptions.json"
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mobsf-report
           path: mobsf-report.json
+      - name: Revoke the release artifact
+        # A HIGH finding here can't have prevented build-android-release from
+        # already uploading app-production-apk (this job needs that artifact
+        # to scan it, so it necessarily runs after). Delete it retroactively
+        # instead of leaving an un-vetted APK downloadable from a red run.
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" \
+            --jq '.artifacts[] | select(.name=="app-production-apk") | .id' | head -1)
+          if [ -n "$ARTIFACT_ID" ]; then
+            echo "Deleting app-production-apk artifact ($ARTIFACT_ID) - MobSF found an un-accepted HIGH finding."
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID"
+          else
+            echo "app-production-apk artifact not found (already deleted, or never uploaded)."
+          fi
       - name: Stop MobSF
         if: always()
         run: docker rm -f mobsf || true

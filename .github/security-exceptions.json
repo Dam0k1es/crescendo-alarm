@@ -1,0 +1,9 @@
+{
+  "_comment": "Accepted SAST findings that are allowed to remain outstanding. Each entry needs a dated, reasoned rationale - see docs/REQUIREMENTS.md R1, which this file backs. Adding an entry here silences scripts/mobsfscan_check.py / scripts/mobsf_summary.py for that specific finding only; it does not disable the underlying scan.",
+  "mobsfscan": {
+    "android_task_hijacking2": "2026-09-09: known tool limitation, not a real vulnerability - mobsfscan flags a task-affinity/launch-mode pattern generically, without the runtime context to distinguish it from this app's actual (safe) configuration. See docs/REQUIREMENTS.md R1."
+  },
+  "mobsf": {
+    "App can be installed on a vulnerable unpatched Android version 7.0, [minSdk=24]": "2026-09-09: restates this project's own deliberate minSdk=24 choice, not a new risk - lowering minSdk further is not currently planned. See CLAUDE.md's toolchain table and docs/REQUIREMENTS.md R1."
+  }
+}

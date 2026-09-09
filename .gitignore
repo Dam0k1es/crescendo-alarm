@@ -441,3 +441,7 @@ docs/release-readiness-*.md
 
 # Maintainer's local device-test feedback intake; formulated TODOs live in docs/TODO.md
 tasks.txt
+
+# Python bytecode cache (scripts/*.py, e.g. mobsfscan_check.py, mobsf_summary.py)
+__pycache__/
+*.pyc
