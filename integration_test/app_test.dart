@@ -21,6 +21,7 @@
 
 import 'dart:async';
 
+import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -98,7 +99,16 @@ Future<AppState> pumpFreshApp(WidgetTester tester) async {
 /// Creates a manual alarm ~1 minute from now via the real UI flow (the "add
 /// alarm" dialog defaults to now+1 minute, so no time-picker interaction is
 /// needed) and returns to the Alarms tab.
-Future<void> createManualAlarmOneMinuteFromNow(WidgetTester tester) async {
+///
+/// Fails fast with a clear message if the alarm that was actually scheduled
+/// lands far from "now + 1 minute": the dialog's default is minute-truncated
+/// (`DateTime.now().add(Duration(minutes: 1))` -> hour/minute only), so a
+/// Save that crosses a minute boundary can silently schedule the alarm 24
+/// hours out - without this check, a caller's `pumpUntilFound
+/// (ScreenAlarmActive)` would instead time out after 2 minutes with a
+/// misleading "the alarm never rang" failure (docs/TODO.md T-23).
+Future<void> createManualAlarmOneMinuteFromNow(
+    WidgetTester tester, AppState appState) async {
   expect(find.byType(ScreenAlarms), findsOneWidget);
 
   await tester.tap(find.byIcon(Icons.add));
@@ -106,20 +116,51 @@ Future<void> createManualAlarmOneMinuteFromNow(WidgetTester tester) async {
 
   await tester.tap(find.text('Save'));
   await tester.pumpAndSettle();
+
+  final createdAlarm = appState.manualAlarms.single;
+  final scheduledAlarms = await Alarm.getAlarms();
+  AlarmSettings? nativeAlarm;
+  for (final alarm in scheduledAlarms) {
+    if (alarm.id == createdAlarm.id) {
+      nativeAlarm = alarm;
+      break;
+    }
+  }
+  if (nativeAlarm == null) {
+    fail('Alarm ${createdAlarm.id} was created in AppState but never reached '
+        'the native alarm plugin (Alarm.getAlarms() has no matching entry).');
+  }
+  final difference = nativeAlarm.dateTime.difference(DateTime.now()).abs();
+  if (difference > const Duration(minutes: 2)) {
+    fail('Expected the created alarm to fire in ~1 minute, but it is '
+        'scheduled for ${nativeAlarm.dateTime} (${difference.inMinutes} '
+        'minutes from now) - likely the minute-truncated "now + 1 minute" '
+        'dialog default landed on the wrong side of a minute boundary '
+        '(docs/TODO.md T-23).');
+  }
 }
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  tearDown(() {
+  // Each scenario creates exactly one alarm; stopping everything before and
+  // after every test keeps them independent regardless of how the previous
+  // one ended, so one failure can't cascade into a false failure in the next
+  // (docs/TODO.md T-23).
+  setUp(() async {
+    await Alarm.stopAll();
+  });
+
+  tearDown(() async {
     QrScanner.debugBarcodeStreamOverride = null;
+    await Alarm.stopAll();
   });
 
   testWidgets(
     'manual alarm fires and is dismissed via the default overlay',
     (tester) async {
-      await pumpFreshApp(tester);
-      await createManualAlarmOneMinuteFromNow(tester);
+      final appState = await pumpFreshApp(tester);
+      await createManualAlarmOneMinuteFromNow(tester, appState);
 
       await pumpUntilFound(
         tester,
@@ -132,6 +173,9 @@ void main() {
 
       expect(find.byType(ScreenAlarmActive), findsNothing);
       expect(find.byType(ScreenAlarms), findsOneWidget);
+      // Not just "the screen went away" - the alarm itself must actually
+      // have stopped (docs/TODO.md T-09).
+      expect(await Alarm.getAlarms(), isEmpty);
     },
     timeout: const Timeout(Duration(minutes: 3)),
   );
@@ -154,14 +198,25 @@ void main() {
       // mounted removes that race entirely.
       final barcodeController = StreamController<BarcodeCapture>();
       QrScanner.debugBarcodeStreamOverride = barcodeController.stream;
+      addTearDown(barcodeController.close);
 
-      await createManualAlarmOneMinuteFromNow(tester);
+      await createManualAlarmOneMinuteFromNow(tester, appState);
 
       await pumpUntilFound(
         tester,
         find.byType(QrScanner),
         timeout: const Duration(minutes: 2),
       );
+
+      // T-08: the "guaranteed wake-up" gate's one job is refusing a wrong
+      // code - a mismatching scan must never dismiss it.
+      barcodeController.add(BarcodeCapture(barcodes: [
+        Barcode(rawValue: 'not-the-right-code', format: BarcodeFormat.qrCode),
+      ]));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(QrScanner), findsOneWidget);
+      expect(await Alarm.getAlarms(), isNotEmpty);
 
       barcodeController.add(BarcodeCapture(barcodes: [
         Barcode(rawValue: testPayload, format: BarcodeFormat.qrCode),
@@ -175,10 +230,12 @@ void main() {
         timeout: const Duration(seconds: 15),
       );
       await tester.pumpAndSettle();
-      await barcodeController.close();
 
       expect(find.byType(QrScanner), findsNothing);
       expect(find.byType(ScreenAlarms), findsOneWidget);
+      // Not just "the screen went away" - the alarm itself must actually
+      // have stopped (docs/TODO.md T-09).
+      expect(await Alarm.getAlarms(), isEmpty);
     },
     timeout: const Timeout(Duration(minutes: 3)),
   );
@@ -186,8 +243,8 @@ void main() {
   testWidgets(
     'a created alarm survives being reloaded from on-device storage',
     (tester) async {
-      await pumpFreshApp(tester);
-      await createManualAlarmOneMinuteFromNow(tester);
+      final appState = await pumpFreshApp(tester);
+      await createManualAlarmOneMinuteFromNow(tester, appState);
 
       // Don't wait for it to ring - just confirm it's really on disk by
       // constructing a completely fresh AppState (as a real app restart

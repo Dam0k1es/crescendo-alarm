@@ -12,6 +12,22 @@ import 'package:wakeywakey/screens/scan_code/scanner_button_widgets.dart';
 import 'package:wakeywakey/screens/scan_code/scanner_error_widget.dart';
 import 'package:wakeywakey/screens/scan_code/scanner_overlay.dart';
 
+/// Pure comparison at the heart of the "guaranteed wake-up" gate: does the
+/// scanned payload match the stored deactivation code? Extracted out of
+/// [_QrScannerState] so it's unit-testable without a device - see
+/// test/qr_scanner_validation_test.dart.
+///
+/// When [storedCode] is null there is nothing to validate against; this
+/// fails open (returns true) to match the app's existing "illegal state"
+/// behavior, which prioritizes not locking a user in behind a scanner over
+/// enforcing a code that was never actually set.
+bool isDeactivationCodeValid(DeactivationCode? storedCode, String? scannedPayload) {
+  if (storedCode == null) {
+    return true;
+  }
+  return storedCode.payload == scannedPayload;
+}
+
 class QrScanner extends StatefulWidget {
   final bool displayExitButton;
 
@@ -134,26 +150,28 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
   }
 
   Future<bool> _validateDeactivationCode(Barcode barcode) async {
-    if (_appState.deactivationCode == null) {
-      debugPrint('=====qrValidator: ILLEGAL STATE!!!');
-      // in case this state is reached, return true to prevent user from being locked in ScanCode View
-      return true;
-    }
-
     // Validate the scanned code BEFORE stopping any alarms, so a wrong or
     // arbitrary QR code can never silently disarm the alarm.
-    final data = barcode.rawValue;
-    if (_appState.deactivationCode!.payload != data) {
+    if (!isDeactivationCodeValid(_appState.deactivationCode, barcode.rawValue)) {
       return false;
     }
 
-    debugPrint('=====qrValidator: Scanned QR code data: $data; VALIDATED!');
+    if (_appState.deactivationCode == null) {
+      // in case this state is reached, isDeactivationCodeValid already
+      // returned true above to prevent the user being locked in ScanCode
+      // View - nothing to stop, so there's nothing more to do here.
+      debugPrint('=====qrValidator: ILLEGAL STATE!!!');
+      return true;
+    }
+
+    debugPrint(
+        '=====qrValidator: Scanned QR code data: ${barcode.rawValue}; VALIDATED!');
 
     try {
       List<AlarmSettings> alarmsSettings = await Alarm.getAlarms();
       for (AlarmSettings alarmSetting in alarmsSettings) {
         try {
-          Alarm.stop(alarmSetting.id);
+          await Alarm.stop(alarmSetting.id);
           Handler.onAlarmHandled(_appState, alarmSetting.id);
         } catch (e) {
           debugPrint("=====ScreenAlarmActiveState: Failed to stop alarm: $e");
@@ -163,7 +181,15 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
       debugPrint('=====validateDeactivationCode: Error stopping alarms: $e');
     }
 
-    return true;
+    // Only close the scanner if nothing is still ringing - a stop failure
+    // above (an exception, or a native stop that silently returns false)
+    // must never look identical to success from here.
+    final bool stillRinging = await Alarm.isRinging();
+    if (stillRinging) {
+      debugPrint(
+          '=====validateDeactivationCode: An alarm is still ringing after stop attempts!');
+    }
+    return !stillRinging;
   }
 
   @override

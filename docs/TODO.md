@@ -149,48 +149,76 @@ Conventions:
 - **Done when:** the overlay closes on any path that stops the alarm, and the ringing-stream
   handler covers the notification-dismissal case.
 
-### T-08 · The QR deactivation gate has no negative test
+### T-08 · The QR deactivation gate has no negative test — PARTIALLY RESOLVED (2026-09-09)
 
-- [ ] Test the failing direction, and the two null-code bypasses.
-- **Why:** this is the app's differentiating security property, and only the *correct* payload is
-  ever injected — deleting the payload comparison entirely would keep CI green. Untested too:
+- [ ] Cover the remaining bypass: the first scanned code being silently adopted as the deactivation
+      code when none is set.
+- **Why:** this is the app's differentiating security property, and only the *correct* payload was
+  ever injected — deleting the payload comparison entirely would have kept CI green. Also untested:
   validation returns `true` when no code is stored, and the first scanned code is silently adopted
   as the deactivation code.
-- **Evidence:** `integration_test/app_test.dart:141,165-167` (correct payload only), `:179-180`
-  (assertions); `lib/screens/scan_code/qr_scanner.dart:146-148` (the comparison), `:137-141` and
+- **Evidence:** `integration_test/app_test.dart:141,165-167` (correct payload only, before this fix),
+  `:179-180`; `lib/screens/scan_code/qr_scanner.dart:146-148` (the comparison), `:137-141` and
   `:112-119` (the bypasses).
-- **Done when:** a wrong payload leaves the scanner mounted and the alarm ringing; the null-code
-  branches have unit tests (extract the predicate so it is testable without a device).
+- **Resolution so far (TDD - test written first):** extracted the pure comparison into a top-level
+  `isDeactivationCodeValid(DeactivationCode?, String?)` in `qr_scanner.dart`, unit-tested in the new
+  `test/qr_scanner_validation_test.dart` (6 cases, including the null-stored-code fail-open branch
+  and a wrong/prefix/null scanned payload). `integration_test/app_test.dart`'s QR scenario now
+  injects a wrong payload first and asserts `QrScanner` stays mounted and `Alarm.getAlarms()` is
+  still non-empty, before injecting the correct payload.
+- **Still open:** the *other* null-code bypass - `_handleBarcode`'s "import this code if none is
+  set" branch (`qr_scanner.dart:126-133`) - is stateful (mutates `_appState` directly inside
+  `setState`) and was not extracted or tested in this pass.
 - **Requirement:** R4
 
-### T-09 · The dismissal tests assert navigation, not that the alarm stopped
+### T-09 · The dismissal tests assert navigation, not that the alarm stopped — RESOLVED (2026-09-09)
 
-- [ ] Assert alarm state, not screen state — and stop swallowing stop failures in production.
-- **Why:** both tests only check that a screen disappeared, and both production paths navigate away
-  even when stopping the alarm throws. No test queries the alarm plugin at all, so an alarm that
-  keeps ringing behind a dismissed overlay passes.
-- **Evidence:** `integration_test/app_test.dart:132-133`, `:179-180`;
-  `lib/screens/alarms/screen_active_alarm.dart:125-135` (pop outside the `try`);
-  `lib/screens/scan_code/qr_scanner.dart:152-166` (catch → `return true`);
-  `grep -rn "Alarm\." integration_test/` finds no plugin query.
-- **Done when:** each dismissal asserts the alarm is absent from `Alarm.getAlarms()` / no longer
-  ringing, and a stop failure surfaces instead of silently popping.
+- [x] Assert alarm state, not screen state — and stop swallowing stop failures in production.
+- **Why:** both tests only checked that a screen disappeared, and both production paths navigated
+  away even when stopping the alarm threw. No test queried the alarm plugin at all, so an alarm that
+  kept ringing behind a dismissed overlay would have passed.
+- **Evidence:** `integration_test/app_test.dart:132-133`, `:179-180` (before this fix);
+  `lib/screens/alarms/screen_active_alarm.dart:125-135` (pop outside the `try`, before this fix);
+  `lib/screens/scan_code/qr_scanner.dart:152-166` (catch → `return true` regardless, before this
+  fix); `grep -rn "Alarm\." integration_test/` found no plugin query.
+- **Resolution:** both dismissal paths now check the actual outcome instead of discarding it.
+  `screen_active_alarm.dart`'s Stop button now checks `Alarm.stop`'s returned `bool` (previously
+  discarded entirely) - on failure it shows a `SnackBar` and does not pop, rather than leaving the
+  user behind a closed screen with a live alarm. `qr_scanner.dart`'s `_validateDeactivationCode` now
+  `await`s `Alarm.stop` (it previously fired-and-forgot, so its own `catch` could never actually
+  catch an async failure) and only closes the scanner if `Alarm.isRinging()` confirms nothing is
+  still ringing afterward. `integration_test/app_test.dart` now asserts
+  `expect(await Alarm.getAlarms(), isEmpty)` after both dismissals, not just that the screen
+  changed.
 
-### T-10 · The scheduling engine has no real tests
+### T-10 · The scheduling engine has no real tests — RESOLVED (2026-09-09)
 
-- [ ] Make the production scheduling functions testable and port the existing cases onto them;
+- [x] Make the production scheduling functions testable and port the existing cases onto them;
       retire the forked scripts.
 - **Why:** `flutter test` discovers only `test/**/*_test.dart`, so `test/adjustTime/` and
-  `test/getEarliestAlarm/` never run. They also do not import the app — and `test/adjustTime/`
-  implements helpers (`isBeforeTime`, `isAfterTime`, `isAtSameMomentAsTime`) and a two-pass
-  algorithm that exist nowhere in `lib/`. Converting them as-is would test a fork, not the shipped
-  scheduler. The 17 `getEarliestAlarm` cases are worth keeping; their harness prints results and
-  exits 0 either way.
-- **Evidence:** `grep -rn "isBeforeTime" lib/` → 0 hits; neither script imports
-  `package:wakeywakey`; `test/getEarliestAlarm/main.dart:15-19` sets no exit code.
-- **Done when:** `_getEarliestEvent` / `_adjustAlarmTimes` / `_getStartTimeForDate` are reachable
-  from tests, the ported cases run under `flutter test`, and `test/adjustTime/` is deleted or
-  clearly quarantined as a historical experiment.
+  `test/getEarliestAlarm/` never ran. They also did not import the app — and `test/adjustTime/`
+  implemented helpers (`isBeforeTime`, `isAfterTime`, `isAtSameMomentAsTime`) and a two-pass
+  algorithm that existed nowhere in `lib/`. Converting them as-is would have tested a fork, not the
+  shipped scheduler. The 17 `getEarliestAlarm` cases were worth keeping; their harness printed
+  results and exited 0 either way, so before porting them, this pass actually *ran* that harness
+  (`dart run main.dart`) to confirm which of its own 17 cases it considered passing, rather than
+  trusting the "expected" values in its `cases.dart` blindly.
+- **Evidence (before this fix):** `grep -rn "isBeforeTime" lib/` → 0 hits; neither script imported
+  `package:wakeywakey`; `test/getEarliestAlarm/main.dart:15-19` set no exit code.
+- **Resolution:** `_getEarliestEvent`, `_adjustAlarmTimes` and `_getStartTimeForDate` were extracted
+  out of `Scheduler` into top-level functions (`getEarliestEvent`, `adjustAlarmTimes`,
+  `getStartTimeForDate` in `lib/models/scheduling/scheduling.dart`) taking plain values
+  (`int sleepGoalMinutes`, `DateTime earliestAlarm`, `Duration wakeUpOffset`, `List<Meeting>`)
+  instead of a whole `AppState`, so they're unit-testable without one. `Scheduler.scheduleAlarms`
+  now calls these directly. New `test/scheduling_test.dart` (TDD - written and confirmed failing to
+  compile before the extraction) has 26 cases: the 17 ported `getEarliestEvent` cases (corrected for
+  a real unit mismatch the old script had - it took `sleepGoal` in whole hours and multiplied by 60
+  internally, while production's `sleepGoal` parameter is already in minutes; passing the same
+  scenarios with `sleepGoal` pre-converted to minutes exercises the identical comparison and expects
+  the identical, verified results), plus new cases for `getStartTimeForDate` and `adjustAlarmTimes`
+  (including one that pins down, rather than silently fixes, the T-02 date-dominated-comparison
+  behavior). `test/adjustTime/` and `test/getEarliestAlarm/` are deleted, not quarantined - their
+  value is now fully captured in the real test.
 - **Requirement:** R2
 
 ### T-11 · Two of R1's five security tools cannot fail a run — PARTIALLY RESOLVED (2026-09-08)
@@ -494,21 +522,30 @@ Conventions:
 - **Done when:** the README reads as a description of the app for someone evaluating or using it,
   with contributor-only detail moved or dropped.
 
-### T-23 · Remove the known flake mechanisms from the E2E harness
+### T-23 · Remove the known flake mechanisms from the E2E harness — PARTIALLY RESOLVED (2026-09-09)
 
-- [ ] Fail fast on a mis-scheduled alarm, add teardown, and stop asserting on transient states.
+- [ ] Reduce reliance on 500 ms widget-presence sampling itself (the third mechanism below).
 - **Why:** three mechanisms produce red runs that misdescribe their own cause: state is sampled once
   per 500 ms so short-lived screens can be missed; the "now + 1 minute" default is minute-truncated,
   so a save crossing a minute boundary schedules the alarm 24 hours out and the test reports "alarm
   never rang"; and no teardown stops leftover alarms, so one failure cascades into the next
   scenario.
-- **Evidence:** `integration_test/app_test.dart:38-52,56-70` (sampling), `:104` (save after
-  `pumpAndSettle`); `lib/screens/alarms/screen_alarms.dart:266-268` (truncation),
-  `lib/app_state.dart:455-459` (`isBefore(now)` → `+1 day`);
-  `integration_test/app_test.dart:113-115` (teardown nulls the override only).
-- **Done when:** the helper reads back the created alarm and fails immediately with a clear message
-  if it is more than ~2 minutes out; `setUp`/`tearDown` stop all alarms; assertions target durable
-  state rather than a widget present at a sampling instant.
+- **Evidence (before this fix):** `integration_test/app_test.dart:38-52,56-70` (sampling), `:104`
+  (save after `pumpAndSettle`); `lib/screens/alarms/screen_alarms.dart:266-268` (truncation),
+  `lib/app_state.dart:455-459` (`isBefore(now)` → `+1 day`); `integration_test/app_test.dart:113-115`
+  (teardown nulled the override only).
+- **Resolution:** `createManualAlarmOneMinuteFromNow` now reads back the created alarm via
+  `Alarm.getAlarms()` and fails immediately with a clear message (naming the actual scheduled time
+  and how far off it is) if it's more than ~2 minutes from now, instead of letting a later
+  `pumpUntilFound` time out with a misleading "never rang" failure. `setUp`/`tearDown` now call
+  `Alarm.stopAll()` around every test, so one test's leftover alarm can't affect the next.
+  `barcodeController.close()` moved into `addTearDown`, so it runs even if an earlier assertion
+  throws. Final correctness assertions now also check `Alarm.getAlarms()` (durable state, see T-09)
+  alongside the widget-presence checks.
+- **Still open:** `pumpUntilFound`/`pumpUntilGone` themselves are unchanged - they still sample
+  widget presence once per 500 ms, so a screen that mounts and unmounts within one polling gap could
+  still be missed in principle. Not touched in this pass because no currently-reproducing failure
+  needs it; revisit if one appears.
 
 ### T-24 · Stop evidence collection from degrading silently, and keep failure evidence
 

@@ -123,12 +123,31 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
                     ),
                   ),
                   onPressed: () async {
+                    bool stopped = false;
                     try {
-                      await Alarm.stop(widget.alarmId);
-                      Handler.onAlarmHandled(_appState, widget.alarmId);
+                      stopped = await Alarm.stop(widget.alarmId);
+                      if (stopped) {
+                        Handler.onAlarmHandled(_appState, widget.alarmId);
+                      }
                     } catch (e) {
                       debugPrint(
                           "=====ScreenAlarmActiveState: Failed to stop alarm: $e");
+                    }
+                    if (!stopped) {
+                      // Don't silently leave: the alarm is still ringing.
+                      // canPop is false, so staying here (rather than
+                      // popping anyway) is the only option that doesn't
+                      // strand the user behind a closed screen with a live
+                      // alarm.
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('Failed to stop the alarm - please try again.'),
+                          ),
+                        );
+                      }
+                      return;
                     }
                     if (context.mounted) {
                       Navigator.pop(context);

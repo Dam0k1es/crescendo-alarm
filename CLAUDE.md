@@ -146,14 +146,19 @@ individually, including AI-assistant chat history that can leak real usernames a
   project and failed on every run (`ProviderNotFoundException`) - if `flutter test` ever goes red
   again on this file, that's a real regression, not a flaky leftover.
 - `test/handler_stale_alarm_test.dart`: real `package:test` unit tests for the stale-alarm predicate
-  in `lib/models/alarms/handler.dart`. `flutter test` runs 6 tests total (1 widget + 5 here), not
-  just the one widget smoke test.
-- `test/adjustTime/` and `test/getEarliestAlarm/`: standalone interactive scripts (`main.dart`, uses
-  `print`, and in `adjustTime/`'s case also `stdin.readLineSync()`), not `package:test` tests -
-  `flutter test` does not run them. Do not convert them as-is: neither imports
-  `package:wakeywakey`, and `test/adjustTime/`'s algorithm no longer matches the production
-  scheduler in `lib/models/scheduling/scheduling.dart` - see `docs/TODO.md` (T-10) for what porting
-  them properly requires. The scheduling engine itself currently has no automated coverage at all.
+  in `lib/models/alarms/handler.dart`.
+- `test/scheduling_test.dart`: real unit tests for the scheduling engine's core functions
+  (`getEarliestEvent`, `getStartTimeForDate`, `adjustAlarmTimes` in
+  `lib/models/scheduling/scheduling.dart`), which were extracted from private `Scheduler` instance
+  methods into top-level functions taking plain values instead of an `AppState`, specifically so
+  they could be unit-tested without one. The `getEarliestEvent` cases are ported from the old
+  `test/adjustTime`/`test/getEarliestAlarm` standalone scripts (deleted - they were never run by
+  `flutter test`, didn't import `package:wakeywakey`, and `adjustTime`'s algorithm didn't match
+  production at all), corrected for a real unit mismatch those scripts had (sleep goal in hours vs.
+  minutes) and verified against the scripts' own output before porting.
+- `test/qr_scanner_validation_test.dart`: real unit tests for `isDeactivationCodeValid`
+  (`lib/screens/scan_code/qr_scanner.dart`), the pure comparison at the heart of the "guaranteed
+  wake-up" gate, similarly extracted so it's testable without a device.
 - `integration_test/app_test.dart`: real end-to-end tests, driven against an actual Android
   emulator in `.github/workflows/release.yml`'s `e2e-tests` job, gating the signed release build.
   Three scenarios are covered and currently pass: a manual alarm firing and being dismissed via the
