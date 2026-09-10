@@ -5,6 +5,65 @@ scheduling, gentle wake-up (gradual volume ramp), and a "guaranteed wake-up" mod
 scanning a physical QR code to deactivate the alarm. Fully offline - no network calls anywhere in
 `lib/`.
 
+## Scheduling engine (`lib/models/scheduling/`)
+
+Calendar-derived wake times come from **scheduling-v2**, specified in
+`docs/scheduling-v2-spec.md` (FR-1 … FR-18) and implemented test-first against that spec. The old
+engine (`scheduling.dart`'s `Scheduler`/`getEarliestEvent`/`adjustAlarmTimes`/`getStartTimeForDate`)
+was **removed** in Phase 6 (2026-09, `docs/TODO.md` T-64/T-86) - don't reintroduce a second
+scheduling path, and don't look for `Scheduler` in older docs' terms.
+
+Layering, outermost first:
+
+| File | Role |
+|---|---|
+| `checkpoint.dart` | **The** entry point: `runSchedulingCheckpoint({trigger})` / `runCheckpointSafely(...)`. Serialized against itself, and runs the full sequence (offset → replan → FR-6/9/12 notifications → bedtime reminder). Every platform trigger goes through here with a `CheckpointTrigger`; nothing else composes that sequence by hand. |
+| `replan.dart` | `replan()` (reads the calendar uncached, walks the day-advance for FR-9/FR-12, calls the domain layer, applies FR-18) and `runTimezoneCheckpoint2()` (FR-16's second checkpoint, which runs in a background isolate and therefore talks to `SharedPreferences` directly). |
+| `scheduling_v2.dart` | Pure domain logic - plain values only, no `AppState`, no plugins, no `BuildContext`. Directly unit-testable without mocks. |
+| `apply_alarms.dart` | FR-18: turns the computed week into real `ScheduledAlarm`s (`planAlarmSync` pure, `applyPlannedAlarms` the applier). |
+| `replan_notifications.dart`, `next_wake_up.dart` | FR-6/9/12 warnings (once per episode); the next expected wake-up across plan **and** manual alarms. |
+| `day_marker.dart`, `stored_values.dart` | The two things that kept getting re-derived wrongly: calendar day arithmetic, and the two legitimate readings of a stored value. **Read both files' doc comments before touching any date/time handling here** - the recurring bug class in this engine is frame confusion (`docs/TODO.md` T-61, T-76, T-83). |
+
+Two rules that are load-bearing and easy to break by "cleaning up":
+
+- **Never add a second entry point.** The five that used to exist differed in four orthogonal
+  dimensions and produced the same class of bug three times (T-67, T-71, T-80). Add a
+  `CheckpointTrigger` value instead.
+- **Every domain value is an absolute instant, UTC-tagged**, while `wunschzeit` is a bare
+  device-local `TimeOfDay` and everything leaving the layer (alarm plugin, notifications, UI, alarm
+  titles) is read as **local wall clock**. Use `instantFromStored`/`localFromStored` and
+  `alarmPlatformTime` at those boundaries; don't "unify" them.
+
+## Diagnostics log (`lib/utils/diag/diag_log.dart`)
+
+A local, PII-free event log, readable under Settings > Diagnostics and exportable via the
+clipboard. It exists because an installed **release** build returned nothing at all: every
+diagnostic went through `debugPrint`, which `main.dart` replaces with an empty function in release.
+
+The load-bearing property, and the one thing not to "clean up": **the recording API takes no
+String parameter anywhere**. There is therefore no channel through which a calendar title, an
+account name, an exception message or the QR deactivation code could enter it - what cannot be
+represented cannot leak. `test/diag_log_api_test.dart` enforces this against the source (no String
+parameters, no `debugPrint`/`print`, no clock reads, no int parameter with a clock-shaped name),
+and `test/no_pii_in_logs_test.dart` forbids the *channel* in `lib/` generally - including bare
+`$e`, because `FormatException.toString()` echoes a slice of its source string.
+
+Consequences to respect when adding an event:
+
+- **No clock values.** Days are relative (via `dayDistance`, so the logger does not rebuild T-76
+  inside itself); moments appear only as *bucketed differences*; the absolute UTC offset is never
+  recorded, only the shape of a change. A history of wake times plus offsets is a sleep pattern and
+  a travel trace - identifying without any name.
+- **Exceptions go in as `runtimeType`** through an identity table to an int; `toString()` is never
+  called on a `Type` (R8 obfuscation is then irrelevant).
+- **The background isolate has its own ring buffer.** FR-16's Checkpoint 2 runs in a separate
+  isolate, so there are two `SharedPreferences` keys and a merge on read - the same trap as T-69,
+  one level down. `Diag.init` belongs at the isolate's *entry point*
+  (`onNotificationCreatedMethod`), never inside the checkpoint: it mutates global state.
+- Persisted via `shared_preferences`, not a file via `path_provider`, precisely because that
+  isolate already talks to it directly - a file logger would depend on plugin-channel availability
+  there, which is the failure class T-79 was.
+
 License: GNU GPLv3 (see `LICENSE`). Author/copyright holder: Dam0k1es. Do not add other personal
 names, emails, or locations to tracked files - see "PII policy" below.
 
@@ -19,9 +78,6 @@ names, emails, or locations to tracked files - see "PII policy" below.
   proceeding with none, by design.
 - **iOS** has project scaffolding but has never been built or run in this environment (no Mac/Xcode
   available here) - treat it as unverified, not "supported."
-- **Windows, macOS, and web scaffolding were removed** (they existed from the original
-  `flutter create` template but were never a real target and added maintenance surface for no
-  benefit).
 
 ## Critical gotcha: build from a native filesystem, not a shared folder
 
@@ -62,25 +118,47 @@ dart run flutter_launcher_icons
 
 ## CI/CD pipeline
 
-Two workflows under `.github/workflows/`:
+Four workflows under `.github/workflows/`:
 
-- **`ci.yml`** runs on every push and PR, scaled by branch: `dev` gets fast feedback only
-  (`flutter analyze` + `flutter test`, plus a debug development APK uploaded as an artifact).
-  `master` (and PRs into it) additionally runs `osv-scanner` (SCA) and `trufflehog` (secrets) - both
-  of which can fail the run - plus `mobsfscan` and a full MobSF static scan, which currently cannot
-  (see `docs/TODO.md` T-11), and builds+uploads a signed production release APK, currently
-  regardless of whether the checks above passed (T-06 - `build-android-release` has no `needs:`).
-- **`release.yml`** runs `integration_test/app_test.dart` against a real Android emulator and gates
-  its own signed release build on that suite passing; triggered by a `v*.*.*` tag (which additionally
-  attaches the APK to a formal GitHub Release with generated notes) or manually via
-  `workflow_dispatch`. Run the same E2E suite locally with a connected device or running emulator:
-  `flutter test integration_test/app_test.dart -d <device-id>`.
-- `scripts/security-scan.sh` mirrors part of the `master` pipeline locally (`flutter analyze` +
-  `osv-scanner` + `trufflehog`) but is narrower than CI - no `mobsfscan`/MobSF, and its secret-scan
-  step currently can't fail on a finding the way CI's does (`docs/TODO.md` T-26).
+- **`ci.yml`** runs on every push and PR, scaled by branch. `dev` gets fast feedback only
+  (analyze + tests, plus a debug development APK as an artifact). `master` (and PRs into it)
+  additionally runs the security gate and the E2E suite, and builds a signed production release
+  APK - **gated**: `build-android-release` has
+  `needs: [analyze-and-test, security-gate, e2e-tests]`.
+- **`e2e-tests.yml`** (reusable, `workflow_call`) runs `integration_test/` against a real Android
+  emulator with KVM acceleration, collecting video, an audio-focus timeline and ActivityManager
+  logs as an evidence artifact. Called by both `ci.yml` and `release.yml`.
+- **`security-gate.yml`** (reusable, `workflow_call`) is the SCA/secret/SAST gate: `osv-scanner`,
+  `trufflehog --fail`, and `mobsfscan` filtered through `.github/security-exceptions.json`. It
+  lives in its own file because the **tag-triggered release path used to have no security gate at
+  all** (`docs/TODO.md` T-92) - a signed APK could be attached to a GitHub Release with a
+  vulnerable dependency that the same commit on `master` would have been rejected for.
+- **`release.yml`** is triggered by a `v*.*.*` tag or `workflow_dispatch` and gates its signed
+  build on **both** `e2e-tests` and `security-gate`.
 
-The tag → GitHub Release path has never actually been exercised (no tag has been pushed yet) - see
-`docs/TODO.md` T-13 before relying on it.
+Two things about the test job that are easy to undo by accident:
+
+- It is a **matrix over six timezones** (`docs/TODO.md` T-92), not a single run. The dominant bug
+  class in this project is frame confusion, and three real bugs (T-61, T-74d, T-76) were
+  *structurally invisible* at UTC+0 - which is where both the dev machine and GitHub's runners sit.
+  The half- and three-quarter-hour offsets (St. John's, Chatham, Lord Howe) are deliberate: digit
+  arithmetic fails there first. `fail-fast: false`, because with a frame bug the *pattern* across
+  zones is the diagnosis.
+- Coverage runs in the UTC leg only, as an artifact, with **no percentage gate**. An arbitrary
+  threshold would reward the wrong thing here: trivial getter tests raise it, while frame and
+  structural errors are not captured by line coverage at all.
+
+`.github/scripts/run_e2e_tests.sh` sets the emulator's timezone to `Europe/Berlin` before the app
+first runs - injecting `deviceUtcOffset` in a test is **not** a substitute, because that value only
+travels through the domain layer while `alarmPlatformTime` reads the real device zone. It also runs
+`check_alarm_survival.sh` (reboot/force-stop evidence via `dumpsys alarm`, deliberately
+non-gating until it has been green once - `docs/TODO.md` T-93).
+
+`scripts/security-scan.sh` mirrors part of the pipeline locally (analyze + osv-scanner +
+trufflehog) but is narrower than CI - no mobsfscan/MobSF.
+
+Run the E2E suite locally with a connected device or running emulator:
+`flutter test integration_test/app_test.dart -d <device-id>`.
 
 ## Toolchain versions (as verified working, September 2026)
 
@@ -108,10 +186,14 @@ asked for `build-tools;28.0.3` historically; AGP may also pull a newer one autom
 `android/build.gradle.kts` forces every Android library subproject to `compileSdk = 36` via an
 `afterEvaluate` hook, registered **before** `evaluationDependsOn(":app")` (registering it after
 throws `Cannot run Project.afterEvaluate(Action) when the project is already evaluated`). This
-exists because `awesome_notifications_core` (last published Feb 2025, `compileSdkVersion 33`
-hardcoded, no update since) fails AAR-metadata checks against its own newer AndroidX transitive
-dependencies otherwise. If a future dependency bump makes this override redundant, it's safe to
-remove - but check `flutter build apk` still succeeds first.
+existed because `awesome_notifications_core` (last published Feb 2025, `compileSdkVersion 33`
+hardcoded) failed AAR-metadata checks against its own newer AndroidX transitive dependencies.
+
+**Removed in the 2026-09-10 hygiene pass** (`docs/TODO.md` T-97): `awesome_notifications` 0.12.1
+does not depend on `awesome_notifications_core` at all - that entry in `pubspec.yaml` was leftover
+cruft from the 0.9.x/0.10.x era, when the main package still required it. Dropping the dependency
+removed the offending AAR from the build, so the workaround lost its reason. Verified by a
+`flutter clean` release build, not just an incremental one.
 
 ### Pinned/overridden Dart dependencies (`pubspec.yaml` `dependency_overrides`)
 
@@ -140,6 +222,39 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
+`flutter test` currently runs **209 tests across 24 files**, and CI runs them six times over -
+once per timezone in the matrix described above.
+
+A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
+(each test file spawns its own `flutter_tester`, and an interrupted run leaves a ~500 MB
+`frontend_server` behind). On an 8 GB box that shows up as *rotating* "did not complete" / "Bad
+state: Cannot add event while adding stream" failures that look like flaky tests but are the
+harness losing a device. If that happens: `pkill -f "frontend_serve[r]"` (note the character class -
+without it `pkill` matches its own command line and kills the shell), then run the suite in a
+couple of file groups. Every file passes on its own; a rotating failure is an environment signal,
+not a test signal. The same resource exhaustion can deadlock Gradle (JVMs in `futex_do_wait`, no
+file changes under `build/`) - see `docs/TODO.md` T-94, which also records that running two
+emulators on this VM left kernel threads stuck in D-state until a reboot. The list below covers the
+pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the authoritative list.
+
+- The diagnostics suite (`diag_log_test.dart`, `diag_log_api_test.dart`,
+  `no_pii_in_logs_test.dart`) guards the PII-free logger described above. Two of the three are
+  *source-reading* tests on purpose - they forbid a channel, not a value, because a value-based
+  test would only ever catch the leaks already known.
+
+- The scheduling-v2 suite (`scheduling_v2_test.dart`, `scheduling_v2_offset_test.dart`,
+  `scheduling_v2_tz_test.dart`, `scheduling_v2_dst_test.dart`, `replan_test.dart`,
+  `checkpoint_test.dart`, `apply_alarms_test.dart`, `next_wake_up_test.dart`,
+  `replan_notifications_test.dart`, `app_state_scheduling_v2_test.dart`, `day_marker_test.dart`,
+  `stored_values_test.dart`, `handler_replan_wiring_test.dart`,
+  `handler_on_alarm_handled_test.dart`, `sleep_reminder_always_scheduled_test.dart`) is written
+  test-first against `docs/scheduling-v2-spec.md`, with at least one `test()` per FR. Several files
+  are named after the `docs/TODO.md` item whose regression they pin down - keep that convention,
+  it is how a finding stays fixed. Note in particular that timezone/DST tests build their fixtures
+  as `tz.TZDateTime`, **not** `DateTime.utc`: the dev VM runs at UTC+0, so UTC-tagged fixtures
+  silently cannot reproduce the frame and DST bug classes at all (that is exactly how the first
+  attempts at T-61 and T-74d passed while the bug was still there).
+
 - `test/widget_test.dart`: a real, passing smoke test (builds `MyApp` under its required
   `ChangeNotifierProvider<AppState>`, mocks `SharedPreferences`, checks the splash screen renders).
   It replaced a stale `flutter create` counter-app placeholder that had never been adapted to this
@@ -147,28 +262,30 @@ individually, including AI-assistant chat history that can leak real usernames a
   again on this file, that's a real regression, not a flaky leftover.
 - `test/handler_stale_alarm_test.dart`: real `package:test` unit tests for the stale-alarm predicate
   in `lib/models/alarms/handler.dart`.
-- `test/scheduling_test.dart`: real unit tests for the scheduling engine's core functions
-  (`getEarliestEvent`, `getStartTimeForDate`, `adjustAlarmTimes` in
-  `lib/models/scheduling/scheduling.dart`), which were extracted from private `Scheduler` instance
-  methods into top-level functions taking plain values instead of an `AppState`, specifically so
-  they could be unit-tested without one. The `getEarliestEvent` cases are ported from the old
-  `test/adjustTime`/`test/getEarliestAlarm` standalone scripts (deleted - they were never run by
-  `flutter test`, didn't import `package:wakeywakey`, and `adjustTime`'s algorithm didn't match
-  production at all), corrected for a real unit mismatch those scripts had (sleep goal in hours vs.
-  minutes) and verified against the scripts' own output before porting.
+- `test/scheduling_test.dart` **no longer exists**: it tested only the old engine's functions and
+  was deleted with them in Phase 6. Its historical note is worth keeping in mind, though - its
+  cases had been ported from two standalone scripts (`test/adjustTime`, `test/getEarliestAlarm`)
+  that `flutter test` never ran, didn't import `package:wakeywakey`, and whose algorithm didn't
+  match production at all. Don't add "tests" outside the `flutter test` suite.
 - `test/qr_scanner_validation_test.dart`: real unit tests for `isDeactivationCodeValid`
   (`lib/screens/scan_code/qr_scanner.dart`), the pure comparison at the heart of the "guaranteed
   wake-up" gate, similarly extracted so it's testable without a device.
 - `integration_test/app_test.dart`: real end-to-end tests, driven against an actual Android
   emulator in `.github/workflows/release.yml`'s `e2e-tests` job, gating the signed release build.
-  Three scenarios are covered and currently pass: a manual alarm firing and being dismissed via the
-  default overlay, one being dismissed via an injected QR scan result, and a created alarm being
-  read back after app state is rebuilt (see `docs/TODO.md` T-04 for why that last one proves less
-  than its name suggests). Not covered by this suite or anything else: alarm survival across a
-  reboot or force-stop, audio playback and the gentle-wake volume ramp (the CI emulator runs with
-  audio disabled and gentle wake defaults to off), real camera QR decoding, and calendar-derived
-  scheduling (the CI emulator has no calendar accounts). See `docs/TODO.md` for the complete,
-  current list of test-quality and coverage gaps.
+  Seven scenarios are covered. Three predate scheduling-v2: a manual alarm firing and being
+  dismissed via the default overlay, one dismissed via an injected QR scan result, and a created
+  alarm read back after app state is rebuilt (see `docs/TODO.md` T-04 for why that last one proves
+  less than its name suggests). Four exercise the new engine (T-91), each bound to a real finding:
+  an injected calendar event becoming registered platform alarms (T-63), the registered alarm
+  carrying the *local* reading of the planned instant (T-61), tone/volume/gentle-wake reaching the
+  plugin (T-84/T-96), and a dismiss leaving the planned week registered (T-64).
+  `integration_test/arm_alarm_test.dart` is a one-test prelude for the reboot-survival evidence
+  script (T-93). **None of the four new scenarios has ever run** - they need a device or emulator.
+  Still not covered by anything: alarm survival across a reboot or force-stop (T-93 has the
+  procedure, no result yet), audible playback and the gentle-wake ramp (the CI emulator runs with
+  audio disabled), real camera QR decoding, and the real `device_calendar` boundary - every engine
+  scenario injects its events through `fetchEvents`, so the chain that produced T-61 stays
+  untested. `docs/device-trial-checklist.md` is the manual counterpart for exactly those gaps.
 - A real on-device run now happens on every release build - do not describe Android verification as
   "build success plus static analysis only" going forward; that was true before the E2E work below
   and no longer is.

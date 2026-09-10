@@ -34,17 +34,29 @@ The scheduling algorithm must always produce a new alarm in the background when 
 days ahead are currently scheduled, without requiring the app to be open or the user to interact
 with the calendar screen.
 
-- **Checked by:** code review of `lib/models/scheduling/scheduling.dart`,
-  `lib/utils/utils.dart` and every call site of `scheduleAlarms`/`preloadCalendarData`.
-- **Status: not met - and more fundamentally than "unverified".** There is no background mechanism
-  at all: `scheduleAlarms` is reachable only from UI call sites in
-  `lib/screens/sleep_habits/screen_sleephabits.dart` and `lib/screens/alarms/screen_alarms.dart`,
-  plus from `Handler` when an alarm actually fires; the calendar preload runs once, at app startup.
-  There is no periodic worker and no "fewer than 7 days scheduled" trigger anywhere. Separately,
-  `_adjustAlarmTimes` discards most days' real calendar-derived times once a schedule spans more
-  than one day, and can silently schedule nothing at all after seven adjustments. See
-  `docs/TODO.md` T-01, T-02 and T-32 for the concrete, code-level work this requirement is
-  currently blocked on.
+- **Checked by:** code review of `lib/models/scheduling/` (`checkpoint.dart`, `replan.dart`,
+  `scheduling_v2.dart`, `apply_alarms.dart`) and every call site of `runSchedulingCheckpoint` /
+  `runCheckpointSafely`; plus `test/checkpoint_test.dart`, `test/replan_test.dart`,
+  `test/apply_alarms_test.dart` and `test/scheduling_v2_test.dart`.
+- **Status: met in substance since the scheduling-v2 rebuild (2026-09), with one caveat.** The
+  requirement was written against the old engine, which really had no mechanism at all. What exists
+  now (`docs/scheduling-v2-spec.md`, FR-1–FR-18):
+  - Every checkpoint plans a **full 7-day window** from scratch and applies it to real alarms
+    (FR-8 + FR-18), so "fewer than 7 days ahead are scheduled" cannot persist past one checkpoint.
+    Days without a calendar appointment are no longer discarded: they are smoothed towards the
+    user's preferred wake-up time (FR-4/FR-6), which is what replaced the old
+    `_adjustAlarmTimes`' "discard most days and possibly schedule nothing" behaviour.
+  - Checkpoints do **not** need the app to be open or the calendar screen visited: the primary one
+    runs when an alarm actually rings (FR-8), in the process the alarm itself started. A second one
+    hangs off the bedtime notification (FR-16 Checkpoint 2, timezone check only), and a third runs
+    on app foreground as recovery after a reboot or force-quit (FR-17).
+  - There is deliberately **no** periodic background worker - `docs/choice-of-technologies.md` and
+    FR-16 both argue against one (battery, OEM-specific background limits); every checkpoint hangs
+    off an event that is already scheduled anyway.
+- **Remaining caveat (honest):** the chain is self-sustaining only while it keeps ringing. If the
+  chain is ever fully broken *and* the app is never opened - the realistic case being a reboot that
+  loses the platform alarms (that is R3, still unverified) - nothing re-plans until the next app
+  start. FR-9's safety valve can no longer cause this (`docs/TODO.md` T-78).
 
 ## R3 - The app is always ready to trigger an alarm
 
@@ -63,6 +75,23 @@ set).
   entirely rather than degrade to defaults (`docs/TODO.md` T-45). Needs a real-device test:
   schedule an alarm, force-stop the app, reboot the device, and confirm it still fires.
 
+
+- **Verfahren steht jetzt bereit (2026-09-10, `docs/TODO.md` T-93):**
+  `.github/scripts/check_alarm_survival.sh` beantwortet die Frage über `dumpsys alarm` statt über
+  ein echtes Klingeln - damit ist "Alarm ist registriert" von "kein Alarm registriert"
+  unterscheidbar, ohne Wartezeit. Es läuft im E2E-Job, **noch nicht gatend**, weil das Verhalten auf
+  diesem Emulator-Image nie gemessen wurde und ein unverifiziertes Bein keinen Release blockieren
+  darf. `docs/device-trial-checklist.md` Abschnitt C führt dieselbe Prüfung für ein echtes Gerät.
+- **Aus dem Code bereits ableitbar:** die App hat **keinen** eigenen `BootReceiver`; das
+  `alarm`-Plugin registriert einen und armiert die gespeicherten Alarme nach dem Boot per
+  `setExactAndAllowWhileIdle(RTC_WAKEUP, …)` neu. Reboot-Überleben ist dort implementiert, der
+  Beleg fehlt nur.
+- **Wichtige Abgrenzung, die diese Anforderung noch nicht macht:** bei `am force-stop` löscht
+  Android plattformseitig alle AlarmManager-Alarme des Pakets, und ein force-gestoppter Prozess
+  empfängt danach kein `BOOT_COMPLETED` mehr, bis der Nutzer die App erneut startet. "Force-Stop
+  überleben" ist damit kein erreichbares Ziel, sondern eine Plattformgrenze - R3 sollte das als
+  Grenze führen und nicht als Defizit. Was die App leisten kann und laut FR-17 leistet: beim
+  nächsten App-Öffnen alles neu setzen.
 ## R4 - All alarm-ringing prerequisites are met before an alarm fires
 
 Before an alarm rings, the app must have: working volume control, the ability to play the
@@ -195,11 +224,12 @@ manual intervention/override should always remain possible (no fully opaque auto
 
 ---
 
-**Summary of open gaps (R1 partial, R2, R3, R4 partial, R8, R9):** R2, R3 and part of R4 are no
-longer explained by "no build has ever run on a device or emulator" - that build now happens on
-every release and has surfaced what's actually still missing: no background rescheduling
-mechanism (R2), no reboot/force-stop survival test (R3), and no coverage of audio/the gentle-wake
-ramp or a camera-isolated QR test (R4). R1's remaining gap is about two non-gating security tools,
+**Summary of open gaps (R1 partial, R3, R4 partial, R8, R9):** R2 is **no longer** among them - the
+scheduling-v2 rebuild (2026-09) replaced the old engine wholesale and is covered by unit tests; see
+R2 above for the one remaining caveat, which is really R3. R3 and part of R4 are no longer explained
+by "no build has ever run on a device or emulator" - that build now happens on every release and has
+surfaced what's actually still missing: no reboot/force-stop survival test (R3), and no coverage of
+audio/the gentle-wake ramp or a camera-isolated QR test (R4). R1's remaining gap is about two non-gating security tools,
 not about whether checks run at all. R8 and R9 are a separate, newly-identified licensing conflict
 (Syncfusion and Google/ML Kit are not open-source, and GPLv3 obligations for the distributed APK
 are unaddressed) - unrelated to device testing and requiring a licensing decision, not more

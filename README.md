@@ -14,7 +14,6 @@ Welcome to Wakey Wakey, an innovative alarm clock app designed for individuals w
 ## Technologies Used
 
 - **Flutter:** For cross-platform development.
-- **Figma:** For design and wireframing.
 
 ## Supported Platforms
 
@@ -53,13 +52,25 @@ Ensure you have the following installed:
 
 - Open Wakey Wakey on your mobile device.
 - Allow the app to sync with your calendar.
-- Set up your alarm preferences and add necessary QR codes in remote locations.
+- Set up your alarm preferences
+- Optionally add QR codes in remote locations.
 - Enjoy a more reliable and interactive waking experience.
+
+### Alarm scheduling
+
+Wake-up times are derived from the calendar by a purpose-built engine, specified up front in
+[`docs/scheduling-v2-spec.md`](docs/scheduling-v2-spec.md) as 18 functional requirements and then
+implemented test-first against it. In short: the earliest non-all-day appointment of a day sets an
+upper bound ("be up by then"), days without appointments drift gradually towards a preferred
+wake-up time instead of jumping, and a wake-up time that has to move a long way is spread evenly
+over the days leading up to it rather than dumped on one night. Re-planning happens at events that
+are scheduled anyway - when an alarm rings, at the bedtime reminder, when the app is opened, and
+when a relevant setting changes - so there is no battery-draining background worker.
 
 ### Quality & Testing
 
 Every change is automatically checked (static analysis, dependency/secret scanning) and tested,
-including end-to-end tests on a real Android emulator that must pass before a signed release build
+including somd end-to-end tests on a real Android emulator that must pass before a signed release build
 is produced. See [`CLAUDE.md`](CLAUDE.md) for exactly which checks run where, how to run them
 locally, and the current, honest testing status - and [`docs/TODO.md`](docs/TODO.md) for the known
 gaps in that coverage.
@@ -69,11 +80,13 @@ gaps in that coverage.
 All known gaps are tracked as prioritised TODOs in [`docs/TODO.md`](docs/TODO.md) - device
 feedback and audit findings in one list, with evidence and an acceptance criterion per item.
 
-The ones that currently block a production push: Sleep-Habits durations are not subtracted from the
-derived alarm time; calendar-derived times are discarded for most days; the background rescheduling
-the requirements demand does not exist; the per-alarm enable switch does not stop an alarm; alarm
-survival across a reboot or force-stop is unverified; a direct dependency is not open source (a
-GPLv3 conflict); and the signed release APK is built with no quality gate.
+The ones that currently block a production push: the per-alarm enable switch does not stop an alarm;
+alarm survival across a reboot or force-stop is unverified; a direct dependency is not open source
+(a GPLv3 conflict); and the signed release APK is built with no quality gate.
+
+Three items that used to be on this list are done: the Sleep-Habits durations, the discarded
+calendar-derived days and the missing background rescheduling were all symptoms of the old
+scheduling engine, which has been replaced (see "Alarm scheduling" above).
 
 ### Project Documentation
 

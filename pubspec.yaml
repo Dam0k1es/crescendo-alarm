@@ -33,17 +33,18 @@ dependencies:
 
     # TODO syncfusion_flutter_* 25.2.5 break support for sdk <= 3.19
   flutter_launcher_icons: ^0.14.4
-  cupertino_icons: ^1.0.6 #iOS style icons
 
+  # syncfusion_flutter_core und _datepicker sind bewusst NICHT mehr direkt
+  # aufgefuehrt: syncfusion_flutter_calendar fordert beide selbst
+  # (^34.2.6 in dessen eigener pubspec.yaml), die direkten Eintraege waren
+  # reine Redundanz. An der Lizenzfrage (docs/REQUIREMENTS.md R8/R9) aendert
+  # das nichts - die Pakete kommen transitiv weiterhin mit.
   syncfusion_flutter_calendar: ^34.2.6
-  syncfusion_flutter_core: ^34.2.6
-  syncfusion_flutter_datepicker: ^34.2.6
   device_calendar: ^4.3.2
 
   provider: ^6.1.2
   shared_preferences: ^2.2.3
 
-  flutter_spinkit: ^5.2.1
   permission_handler: ^13.0.2
 
   alarm: ^5.12.0
@@ -52,7 +53,6 @@ dependencies:
   qr_flutter: ^4.1.0
 
   uuid: ^4.4.0
-  flutter_lints: ^6.0.0
 
   mobile_scanner: ^7.4.0
   image_picker: ^1.1.1
@@ -64,14 +64,19 @@ dependencies:
 
   flutter_markdown_plus: ^1.0.12
 
-  awesome_notifications_core: ^0.10.1
-  awesome_notifications: any
+  # `any` war eine offene Flanke: eine bruchhafte Version haette still
+  # hereinkommen koennen. Gepinnt auf die ohnehin aufgeloeste Version.
+  awesome_notifications: ^0.12.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   integration_test:
     sdk: flutter
+  # Gehoert hierher, nicht zu `dependencies`: flutter_lints liefert
+  # ausschliesslich Analyse-Regeln (siehe analysis_options.yaml) und wird zur
+  # Laufzeit nie importiert.
+  flutter_lints: ^6.0.0
 
 # device_calendar (even its latest release, 4.3.3) still pins `timezone: ^0.9.0`,
 # while syncfusion_flutter_calendar >=29.2.7 requires `timezone: ^0.11.0` -
@@ -108,7 +113,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - assets/icons/icon.png
+    # assets/icons/icon.png ist bewusst NICHT gebuendelt: es ist nur die
+    # Quelle fuer `dart run flutter_launcher_icons` (Pfad steht unten in
+    # dessen Konfiguration) und wird von der Platte gelesen. Zur Laufzeit laedt
+    # es niemand - im APK waere es toter Ballast. Die Datei bleibt im Repo.
     - assets/icons/icon_no_shadow.png
     - assets/sounds/lollipop.mp3
     - assets/text/Privacy.md
