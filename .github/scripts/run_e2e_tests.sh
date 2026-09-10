@@ -145,6 +145,23 @@ trap stop_evidence_collection EXIT
 # `flutter test` below re-installs the same already-built APK over this one
 # (adb install -r, not an uninstall+reinstall), which preserves permissions
 # granted here.
+# docs/TODO.md T-92: die Geraetezeitzone auf eine Zone MIT Sommerzeit und
+# ganzstuendigem Versatz stellen, bevor die App das erste Mal laeuft.
+#
+# Der Grund ist die dominante Fehlerklasse dieses Projekts: drei echte Bugs
+# (docs/TODO.md T-61, T-74d, T-76) waren auf UTC+0 PRINZIPIELL unsichtbar, und
+# der Emulator laeuft standardmaessig auf UTC. Ohne diesen Schritt beweist das
+# Szenario "T-61: the registered alarm carries the local reading of the planned
+# instant" nichts - es waere trivial wahr.
+#
+# `deviceUtcOffset` im Test zu injizieren reicht dafuer ausdruecklich NICHT:
+# dieser Wert wandert nur durch die Domaenenschicht, waehrend
+# `alarmPlatformTime` (lib/utils/utils.dart) die echte Geraetezone liest.
+adb shell settings put global auto_time_zone 0 || true
+adb shell setprop persist.sys.timezone "Europe/Berlin" || true
+echo "device timezone now: $(adb shell getprop persist.sys.timezone)" \
+  | tee -a "$EVIDENCE_DIR/manifest.log"
+
 flutter build apk --debug
 adb install -r -g build/app/outputs/flutter-apk/app-debug.apk
 
@@ -154,6 +171,24 @@ adb shell appops set "$PACKAGE" SCHEDULE_EXACT_ALARM allow || true
 
 flutter test integration_test/app_test.dart -d emulator-5554 2>&1 | tee "$EVIDENCE_DIR/test_output.log"
 TEST_EXIT_CODE=${PIPESTATUS[0]}
+
+# docs/TODO.md T-93 / docs/REQUIREMENTS.md R3: Ueberlebt ein gesetzter Alarm
+# einen Reboot? Bis heute unverifiziert - und es ist die letzte offene Frage
+# des Produktversprechens "garantiertes Aufwachen".
+#
+# Der Trick, der das billig und deterministisch macht: NICHT auf ein Klingeln
+# warten, sondern `dumpsys alarm` auswerten. Damit ist pruefbar, OB ein Alarm
+# registriert ist, ohne Zeit zu verbrauchen.
+#
+# Bewusst NICHT gatend (kein Einfluss auf TEST_EXIT_CODE): das Verhalten ist
+# auf diesem Emulator-Image noch nie gemessen worden, und ein unverifiziertes
+# Bein darf keinen Release blockieren. Es sammelt zuerst Beweise; sobald es
+# einmal reproduzierbar gruen war, gehoert es scharf gestellt.
+# Erst einen Alarm scharf stellen und STEHEN lassen - app_test.dart raeumt in
+# tearDown konsequent auf, aus ihm heraus bleibt also nichts registriert.
+flutter test integration_test/arm_alarm_test.dart -d emulator-5554 \
+  2>&1 | tee "$EVIDENCE_DIR/arm_alarm.log" || true
+bash .github/scripts/check_alarm_survival.sh "$PACKAGE" "$EVIDENCE_DIR" || true
 
 # stop_evidence_collection runs via the EXIT trap regardless, but explicitly
 # exiting with the real test result here (rather than trusting whatever

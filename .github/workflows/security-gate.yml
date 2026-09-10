@@ -1,0 +1,68 @@
+name: Security gate (reusable)
+# Aufgerufen von ci.yml (master-Pushes und PRs) UND von release.yml.
+#
+# Warum wiederverwendbar und nicht zweimal hingeschrieben: der Tag-getriggerte
+# Release-Pfad hatte ueberhaupt kein SCA-, Secret- und SAST-Tor - release.yml
+# fuhr nur `flutter analyze`, `flutter test` und die E2E-Suite. Ein per Tag
+# gebautes, signiertes und an ein GitHub-Release angehaengtes APK konnte also
+# eine verwundbare Abhaengigkeit oder ein eingechecktes Geheimnis enthalten,
+# obwohl derselbe Commit auf `master` daran gescheitert waere. Genau die Art
+# Luecke, die zweimal formulierter Zustand erzeugt - deshalb steht das Tor
+# jetzt genau einmal hier.
+#
+# Was hier rot werden kann, ist echtes Tor:
+#   osv-scanner    - bekannte Verwundbarkeiten in pubspec.lock
+#   trufflehog     - verifizierte und unbekannte Geheimnisse (--fail)
+#   mobsfscan      - Android-SAST, gegen .github/security-exceptions.json
+#                    gefiltert (mobsfscans eigener Exit-Code unterscheidet
+#                    akzeptierte nicht von neuen Befunden, deshalb --no-fail
+#                    plus der eigene Prueflauf danach)
+
+on:
+  workflow_call:
+
+jobs:
+  sca-and-secrets:
+    name: SCA & Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install osv-scanner
+        run: |
+          curl -sSfL -o /usr/local/bin/osv-scanner \
+            "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64"
+          chmod +x /usr/local/bin/osv-scanner
+      - name: Install trufflehog
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
+            | sh -s -- -b /usr/local/bin
+      - name: osv-scanner (SCA)
+        run: osv-scanner --lockfile=pubspec.lock
+      - name: trufflehog (secrets)
+        run: trufflehog filesystem --results=verified,unknown --fail .
+
+  mobsfscan:
+    name: mobsfscan (Android source)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install mobsfscan
+      - name: Run mobsfscan
+        # --no-fail: mobsfscan's own exit code doesn't distinguish accepted
+        # from un-accepted findings, so it never gates directly - the
+        # following step does that, against .github/security-exceptions.json
+        # (see docs/REQUIREMENTS.md R1).
+        run: mobsfscan --no-fail --json -o mobsfscan-report.json android/
+      - name: Check for un-excepted findings
+        run: python3 scripts/mobsfscan_check.py mobsfscan-report.json .github/security-exceptions.json
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobsfscan-report
+          path: mobsfscan-report.json

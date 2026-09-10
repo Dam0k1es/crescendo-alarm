@@ -22,8 +22,40 @@ env:
 
 jobs:
   analyze-and-test:
-    name: Analyze & Test
+    # Der Name bleibt, weil release.yml und die needs: unten darauf verweisen.
+    # Inhaltlich ist das jetzt eine Matrix ueber Zeitzonen - siehe unten.
+    name: Analyze & Test (TZ=${{ matrix.tz }})
     runs-on: ubuntu-latest
+    strategy:
+      # Ein Fehlschlag in einer Zone soll die anderen Zonen noch zu Ende
+      # laufen lassen: bei einem Frame-Fehler ist das MUSTER ueber die Zonen
+      # die eigentliche Diagnose (nur Halbstunden-Offsets? nur Sommerzeit?).
+      fail-fast: false
+      matrix:
+        # Die dominante Fehlerklasse dieses Projekts ist Frame-Verwirrung
+        # (Instant gegen Wanduhrzeit). Drei echte Bugs - docs/TODO.md T-61,
+        # T-74d, T-76 - waren auf der Entwicklungsmaschine PRINZIPIELL
+        # unsichtbar, weil die auf UTC+0 laeuft; GitHubs Runner auch. Die
+        # Zonen sind deshalb nach Fehlerpotenzial gewaehlt, nicht nach
+        # Bekanntheit:
+        #   Europe/Berlin      Sommerzeitumstellung (T-74d/T-76)
+        #   Asia/Tokyo         grosser Versatz, KEINE Sommerzeit
+        #   America/St_Johns   -03:30 und Sommerzeit
+        #   Pacific/Chatham    +12:45, jenseits der Datumsgrenze
+        #   Australia/Lord_Howe +10:30 mit halbstuendiger Umstellung
+        # An den Halb- und Dreiviertelstunden faellt Ziffernarithmetik am
+        # ehesten auf. Verifiziert (2026-09-10), dass die TZ-Variable Darts
+        # DateTime im flutter-test-Prozess wirklich erreicht - die Matrix ist
+        # kein Vakuum. Kosten: rund eine Minute pro Zone.
+        tz:
+          - UTC
+          - Europe/Berlin
+          - Asia/Tokyo
+          - America/St_Johns
+          - Pacific/Chatham
+          - Australia/Lord_Howe
+    env:
+      TZ: ${{ matrix.tz }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -36,8 +68,33 @@ jobs:
           key: pub-${{ hashFiles('pubspec.lock') }}
           restore-keys: pub-
       - run: flutter pub get
-      - run: flutter analyze
-      - run: flutter test
+      - name: Confirm the runner really is in this timezone
+        # Ohne diesen Beweis koennte die Matrix sechsmal dasselbe pruefen und
+        # niemandem auffallen. `date` zeigt den Versatz, den auch Dart sieht.
+        run: date +"%Z %z (%Y-%m-%d %H:%M)"
+      - name: Analyze
+        # Frame-unabhaengig, deshalb nur im UTC-Bein - sechsmal waere
+        # Verschwendung ohne zusaetzliche Aussage.
+        if: matrix.tz == 'UTC'
+        run: flutter analyze
+      - name: Test
+        run: flutter test --concurrency 2
+      - name: Test with coverage
+        if: matrix.tz == 'UTC'
+        # Bewusst KEIN Prozent-Gate: eine willkuerliche Schwelle belohnt hier
+        # das Falsche - triviale Getter-Tests heben sie, waehrend die
+        # Fehlerklasse dieses Projekts (Frame- und Strukturfehler) von
+        # Zeilenabdeckung ueberhaupt nicht erfasst wird. Die lcov-Datei ist
+        # ein Artefakt zum Nachsehen, kein Tor.
+        run: flutter test --coverage --concurrency 2
+      - name: Upload coverage
+        if: matrix.tz == 'UTC'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: warn
+          retention-days: 14
 
   build-dev-apk:
     name: Build Android (development)
@@ -75,27 +132,12 @@ jobs:
   # Everything below only runs for the full pipeline (master pushes and PRs into master) -
   # not for plain dev-branch pushes.
 
-  sca-and-secrets:
-    name: SCA & Secret Scan
+  security-gate:
+    # Das SCA-/Secret-/SAST-Tor liegt in einer wiederverwendbaren Datei, damit
+    # der Tag-getriggerte Release-Pfad (release.yml) dasselbe Tor durchlaeuft -
+    # vorher hatte er ueberhaupt keins.
     if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Install osv-scanner
-        run: |
-          curl -sSfL -o /usr/local/bin/osv-scanner \
-            "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64"
-          chmod +x /usr/local/bin/osv-scanner
-      - name: Install trufflehog
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
-            | sh -s -- -b /usr/local/bin
-      - name: osv-scanner (SCA)
-        run: osv-scanner --lockfile=pubspec.lock
-      - name: trufflehog (secrets)
-        run: trufflehog filesystem --results=verified,unknown --fail .
+    uses: ./.github/workflows/security-gate.yml
 
   e2e-tests:
     name: E2E tests (real emulator)
@@ -105,35 +147,10 @@ jobs:
     if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     uses: ./.github/workflows/e2e-tests.yml
 
-  mobsfscan:
-    name: mobsfscan (Android source)
-    if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install mobsfscan
-      - name: Run mobsfscan
-        # --no-fail: mobsfscan's own exit code doesn't distinguish accepted
-        # from un-accepted findings, so it never gates directly - the
-        # following step does that, against .github/security-exceptions.json
-        # (see docs/REQUIREMENTS.md R1).
-        run: mobsfscan --no-fail --json -o mobsfscan-report.json android/
-      - name: Check for un-excepted findings
-        run: python3 scripts/mobsfscan_check.py mobsfscan-report.json .github/security-exceptions.json
-      - name: Upload report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobsfscan-report
-          path: mobsfscan-report.json
-
   build-android-release:
     name: Build Android (production)
     if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
-    needs: [analyze-and-test, sca-and-secrets, mobsfscan, e2e-tests]
+    needs: [analyze-and-test, security-gate, e2e-tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
