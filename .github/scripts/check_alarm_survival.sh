@@ -28,8 +28,32 @@ OUT="$EVIDENCE_DIR/alarm_survival.log"
 note() { echo "$@" | tee -a "$OUT"; }
 
 # Zaehlt die AlarmManager-Eintraege, die diesem Paket zugeordnet sind.
+#
+# docs/TODO.md T-99: die erste Fassung suchte nur nach dem Paketnamen und fand
+# NULL, obwohl `arm_alarm_test.dart` im selben Lauf nachweislich einen Alarm
+# gesetzt hatte ("1 test passed"). Die erwartete dumpsys-Signatur war also
+# falsch geraten. Deshalb mehrere Muster - und `dump_alarms` schreibt den
+# Rohauszug in die Beweisdatei, damit der naechste Lauf zeigt, wie die
+# Eintraege wirklich aussehen, statt wieder nur "0" zu melden.
 count_alarms() {
-  adb shell dumpsys alarm 2>/dev/null | grep -c "$PACKAGE" || true
+  adb shell dumpsys alarm 2>/dev/null \
+    | grep -cE "$PACKAGE|AlarmReceiver|com\.gdelataillade\.alarm" || true
+}
+
+# Roher Kontext fuer die Diagnose: die Abschnitte von `dumpsys alarm`, in denen
+# App-Alarme ueberhaupt auftauchen koennen.
+dump_alarms() {
+  local label="$1"
+  {
+    echo "--- dumpsys alarm ($label) ---"
+    adb shell dumpsys alarm 2>/dev/null \
+      | grep -iE "$PACKAGE|AlarmReceiver|gdelataillade|RTC_WAKEUP|Batch|Pending alarm" \
+      | head -40
+    echo "--- app-uid alarms ($label) ---"
+    local uid
+    uid=$(adb shell dumpsys package "$PACKAGE" 2>/dev/null | grep -m1 "userId=" | tr -d '\r')
+    echo "  $uid"
+  } >>"$OUT" 2>&1
 }
 
 note "=== alarm survival evidence ($(date -u +%Y-%m-%dT%H:%M:%SZ)) ==="
@@ -37,12 +61,16 @@ note "package: $PACKAGE"
 
 BEFORE=$(count_alarms)
 note "registered alarm lines before reboot: $BEFORE"
-adb shell dumpsys alarm 2>/dev/null | grep "$PACKAGE" | head -20 >>"$OUT" || true
+dump_alarms "before reboot"
 
 if [[ "$BEFORE" == "0" ]]; then
-  note "RESULT: inconclusive - no alarm was registered to begin with."
-  note "(The E2E scenarios stop all alarms in tearDown, so this script needs"
-  note " an alarm of its own to be meaningful - see the TODO note below.)"
+  note "RESULT: inconclusive - no matching alarm line found."
+  note "Note that this is NOT the same as 'no alarm was set': in the first run"
+  note "with this script, arm_alarm_test.dart had demonstrably registered one"
+  note "('1 test passed') while this count was still 0 - the grep patterns were"
+  note "wrong (docs/TODO.md T-99). The raw dumpsys excerpt above is there to"
+  note "show what the entries actually look like, so the patterns can be fixed"
+  note "from evidence instead of guessed again."
   exit 0
 fi
 

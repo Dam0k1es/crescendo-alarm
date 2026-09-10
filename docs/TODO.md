@@ -1297,6 +1297,53 @@ Conventions:
   belegt mit dem realen Fall: nach einem Dismiss war der Alarm für morgen weg (0 statt 1).
   Damit sind auch T-02 und T-32 gegenstandslos.
 
+### T-98 · E2E-Zeitlimit war auf den Stand vor den Engine-Szenarien zugeschnitten — BEHOBEN (2026-09-10)
+
+- [x] Limit anheben.
+- [ ] Nach ein paar gemessenen Laeufen wieder eng setzen (dann mit Zahlen statt Schaetzung).
+- **Why:** `e2e-tests.yml` hatte `timeout-minutes: 25`, passend zu den 19m53s, die der Job vor den
+  neuen Szenarien brauchte. Dazu kamen vier Engine-Szenarien (eines wartet auf ein echtes
+  Klingeln), ein zweiter `flutter test`-Aufruf fuer `arm_alarm_test.dart` und der Reboot-Nachweis
+  mit bis zu 240s Bootwartezeit. Der erste Lauf danach (34532845207) lief prompt in den Timeout und
+  wurde **cancelled**, wodurch Release-Build und MobSF-Scan uebersprungen wurden - obwohl inhaltlich
+  alles in Ordnung war. Ein Zeitlimit soll einen haengenden Job abschneiden, nicht einen langsamen.
+- **Status:** provisorisch 60 Minuten. Wichtig fuer die naechste Diagnose: `timeout-minutes` wird
+  beim **Start** eines Laufs gelesen - eine Aenderung waehrend eines laufenden Jobs wirkt nicht mehr.
+
+### T-99 · Zwei Beweismittel im E2E-Job waren blind — TEILWEISE BEHOBEN (2026-09-10)
+
+- [x] Beide Stellen diagnosefaehig machen.
+- [ ] Aus dem naechsten Lauf die echten `dumpsys alarm`-Muster ablesen und die Zaehlung darauf
+      festziehen; danach das Survival-Bein scharf stellen (T-93).
+- [ ] Bestaetigen, dass `adb root` die Zeitzone auf dem CI-Image wirklich setzt.
+- **Why:** der Lauf 34532845207 hat beides zutage gebracht - beides Dinge, die ich vorher nur
+  **angenommen** hatte, und der Aufklaerungsdurchgang hatte sie ausdruecklich als unverifiziert
+  markiert:
+  1. **Der Reboot-Nachweis fand nichts.** `arm_alarm_test.dart` hat im selben Lauf nachweislich
+     einen Alarm gesetzt ("🎉 1 test passed", `TimeOfDay(23:55)`), aber
+     `dumpsys alarm | grep -c com.wakeywakey.wakeywakey` lieferte **0**. Die erwartete
+     dumpsys-Signatur war falsch geraten. "inconclusive" ist damit nicht "kein Alarm gesetzt",
+     sondern "mein Muster passt nicht".
+  2. **Die Emulator-Zeitzone hat nicht gegriffen.** `manifest.log` sagt `Etc/UTC` -
+     `adb shell setprop persist.sys.timezone` wirkt als normaler Shell-Nutzer nicht. Folge: das
+     T-61-Szenario lief **trivial wahr** durch. Es stand gruen im Bericht, hat aber nichts bewiesen -
+     genau der Vorbehalt, der in seinem eigenen Testkommentar steht.
+- **Status:**
+  - `check_alarm_survival.sh` prueft jetzt mehrere Muster (Paketname, `AlarmReceiver`,
+    `com.gdelataillade.alarm`) und schreibt bei jedem Lauf einen **Rohauszug** aus `dumpsys alarm`
+    plus die App-UID in die Beweisdatei. Damit lassen sich die Muster beim naechsten Mal aus
+    Belegen festziehen, statt sie erneut zu raten. Die "inconclusive"-Meldung sagt jetzt
+    ausdruecklich, dass sie nicht "kein Alarm" bedeutet.
+  - `run_e2e_tests.sh` versucht `adb root` vor dem `setprop`, liest den Wert zurueck und gibt bei
+    Abweichung eine sichtbare `::warning::` aus - inklusive des Hinweises, dass das T-61-Szenario
+    in diesem Lauf dann nichts beweist. Bewusst **kein** Abbruch: die Suite bleibt auf UTC gueltig,
+    nur eben in diesem Punkt aussagelos. Das gehoert in den Beweis, nicht ins Verschweigen.
+- **Was der Lauf dagegen wirklich belegt hat (T-91 ist eingeloest):** `🎉 7 tests passed` auf einem
+  echten Emulator, inklusive aller vier Engine-Szenarien. Im Log sichtbar:
+  `applyPlannedAlarms: removed 0, added 7` - aus einem injizierten Termin entstehen genau die
+  sieben Alarme, die das Fixture vorhersagt, und ein Dismiss laesst sie stehen (T-64). Das ist die
+  erste Bestaetigung von FR-18 bis zum Alarm-Plugin auf einem Geraet.
+
 ### T-97 · Projekthygiene: Altlasten in pubspec, Build und Doku — BEHOBEN (2026-09-10)
 
 - [x] Nicht genutzte direkte Abhaengigkeiten entfernen.

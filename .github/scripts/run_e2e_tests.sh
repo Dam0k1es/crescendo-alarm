@@ -157,10 +157,26 @@ trap stop_evidence_collection EXIT
 # `deviceUtcOffset` im Test zu injizieren reicht dafuer ausdruecklich NICHT:
 # dieser Wert wandert nur durch die Domaenenschicht, waehrend
 # `alarmPlatformTime` (lib/utils/utils.dart) die echte Geraetezone liest.
+# `setprop persist.sys.timezone` als normaler Shell-Nutzer wirkt nicht - im
+# ersten Lauf mit dieser Zeile stand danach weiterhin `Etc/UTC` im Beweis
+# (docs/TODO.md T-99). Auf einem google_apis-Image (kein playstore) laesst sich
+# das per `adb root` beheben; die Rueckmeldung unten sagt, ob es geklappt hat.
+adb root >/dev/null 2>&1 || true
+adb wait-for-device
 adb shell settings put global auto_time_zone 0 || true
-adb shell setprop persist.sys.timezone "Europe/Berlin" || true
-echo "device timezone now: $(adb shell getprop persist.sys.timezone)" \
-  | tee -a "$EVIDENCE_DIR/manifest.log"
+adb shell su 0 setprop persist.sys.timezone "Europe/Berlin" 2>/dev/null \
+  || adb shell setprop persist.sys.timezone "Europe/Berlin" || true
+DEVICE_TZ=$(adb shell getprop persist.sys.timezone | tr -d '\r')
+echo "device timezone now: $DEVICE_TZ" | tee -a "$EVIDENCE_DIR/manifest.log"
+if [[ "$DEVICE_TZ" != "Europe/Berlin" ]]; then
+  # Bewusst nur eine Warnung, kein Abbruch: die Suite ist auch auf UTC
+  # gueltig - nur beweist das T-61-Szenario dort nichts, weil seine Zusicherung
+  # trivial wahr wird. Das muss im Beweis stehen, statt still zu passieren.
+  echo "WARNING: device timezone is '$DEVICE_TZ', not Europe/Berlin - the T-61" \
+    "scenario is VACUOUS in this run (see docs/TODO.md T-99)." \
+    | tee -a "$EVIDENCE_DIR/manifest.log"
+  echo "::warning::Emulator timezone is $DEVICE_TZ, not Europe/Berlin - the T-61 frame scenario proves nothing in this run."
+fi
 
 flutter build apk --debug
 adb install -r -g build/app/outputs/flutter-apk/app-debug.apk
