@@ -842,7 +842,9 @@ Conventions:
 
 ### T-30 · Annotate or retire the planning artifacts — PARTIALLY RESOLVED (2026-09-08)
 
-- [ ] Annotate the UML diagram and risk graphic themselves (or retire them).
+- [x] ~~Annotate the risk graphic~~ - **ersetzt** statt annotiert: `docs/risk.png` ist seit
+      2026-09-10 ein echtes Threat Model, erzeugt aus `docs/threat-model.svg` (siehe T-101).
+- [ ] Annotate the UML diagram (or retire it) - das steht noch aus.
 - **Why:** the descriptive documents miss the app in both directions: the README's three headline
   features understate the shipped surface, while `personas.md`, the UML diagram and `risk.png`
   still model features and classes that were never built and carry no annotation saying so.
@@ -1296,6 +1298,49 @@ Conventions:
   `test/handler_on_alarm_handled_test.dart` hält den Befund fest und war gegen den alten Code rot -
   belegt mit dem realen Fall: nach einem Dismiss war der Alarm für morgen weg (0 statt 1).
   Damit sind auch T-02 und T-32 gegenstandslos.
+
+### T-101 · risk.png war ein Planungsbild, jetzt ein Threat Model — BEHOBEN (2026-09-10)
+
+- [x] `docs/risk.png` durch ein echtes Threat Model ersetzen.
+- [x] Aus einer wartbaren Quelle erzeugen, nicht als blosses Binaerbild ablegen.
+- **Why:** `risk.png` stammte aus der Planungsphase, modellierte teils nie gebaute Funktionen und
+  trug keinen Hinweis darauf (T-30). Ein Risikobild, das man nicht gegen den Code halten kann, ist
+  schlimmer als keines - es suggeriert Pruefung, wo keine stattfand.
+- **Status:** neu als Datenfluss-Diagramm mit Vertrauensgrenzen und STRIDE-Bewertung. Quelle ist
+  `docs/threat-model.svg` (Text, diffbar); `docs/risk.png` wird daraus gerendert mit
+  `rsvg-convert -w 1400 -b white docs/threat-model.svg -o docs/risk.png`. Bewusst **keine**
+  zusaetzliche `threat-model.md`: die Analyse steht vollstaendig im Diagramm, und zwei Quellen
+  driften auseinander - genau das Problem, das dieser Durchgang mehrfach reparieren musste.
+- **Der inhaltliche Kern, der es von einer Standard-Checkliste unterscheidet:** das
+  schuetzenswerte Gut ist hier zuerst die **Verfuegbarkeit**. Bei einer Weckerapp heisst
+  "Ausfall" Verschlafen, Denial of Service ist damit die schwerste Kategorie und nicht die
+  laestigste - und die zwei gravierendsten Befunde des Projekts (T-64, T-78) waren genau das:
+  selbstverschuldete Wecker-Abschaltungen. Zweitens ist der Angreifer im
+  "garantierten Aufwachen" teils der **Nutzer selbst**, der sein eigenes Gate aushebeln will; das
+  kehrt die ueblichen Annahmen um. Drittens ist "kein Netzzugriff in lib/" eine tragende
+  Gegenmassnahme und keine Fussnote - sie streicht eine ganze Bedrohungsklasse.
+- **Was das Modell als offen benennt:** R8/R9 (nicht-freie Abhaengigkeiten - Lizenz- UND
+  Kontrollproblem), R3 (Reboot-Ueberleben unbelegt), Ueberberechtigung im Manifest
+  (`WRITE_CALENDAR`, `READ_EXTERNAL_STORAGE` ohne Codepfad), keine dynamische Analyse, und das
+  Restrisiko, dass der QR-Code per Design kopierbar ist.
+
+### T-100 · Artefaktspeicher lief auf das 2,75-fache des Kontingents — BEHOBEN (2026-09-10)
+
+- [x] Alte Artefakte entfernen.
+- [x] Ursache abstellen.
+- **Why:** **1375 MB** nicht abgelaufene Actions-Artefakte bei einem 500-MB-Kontingent (privates
+  Repo, Free-Plan). Ursache: `ci.yml` laedt bei jedem `master`-Push ein Release-APK (~39 MB) und
+  ein Debug-APK (~94 MB) hoch, und **keiner** der Uploads hatte `retention-days` - es griff also
+  GitHubs Standard von 90 Tagen. `cleanup_old_artifacts.sh` existiert, prunt aber ausschliesslich
+  `release.yml`-Laeufe; die CI-Laeufe hat nie etwas aufgeraeumt. Aufschluesselung:
+  `app-production-apk` 19x/748 MB, `app-debug-apk` 3x/281 MB, `app-development-apk` 2x/188 MB,
+  `app-release-apk` 2x/79 MB, `mobsf-report` 22x/51 MB, `e2e-evidence` 7x/29 MB.
+- **Status:** 70 Artefakte aus alten Laeufen geloescht, **1282 MB** frei - Rest 11 Artefakte / 93 MB.
+  Behalten wurden die beiden neuesten CI-Laeufe und der neueste Release-Lauf; Artefakte sind aus
+  dem Commit reproduzierbar, die Beweise des Laufs 34532845207 ("7 tests passed") liegen zusaetzlich
+  dauerhaft ausserhalb von `/tmp`. Jeder Upload hat jetzt ein ausdrueckliches `retention-days`
+  (Entwicklungs-APK 5 Tage, Release-APK und Berichte 30) - damit kann es nicht wieder anlaufen,
+  ohne dass jemand ein Aufraeumskript pflegt.
 
 ### T-98 · E2E-Zeitlimit war auf den Stand vor den Engine-Szenarien zugeschnitten — BEHOBEN (2026-09-10)
 

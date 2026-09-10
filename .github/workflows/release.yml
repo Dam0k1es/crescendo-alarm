@@ -91,6 +91,10 @@ jobs:
         with:
           name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          # docs/TODO.md T-100: ein Tag-Release haengt sein APK dauerhaft an
+          # die GitHub-Release-Seite - das Actions-Artefakt daneben ist nur
+          # fuer den Weg dorthin da und muss nicht 90 Tage Speicher belegen.
+          retention-days: 30
 
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')

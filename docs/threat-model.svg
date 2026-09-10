@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1090" viewBox="0 0 1400 1090" font-family="DejaVu Sans, Arial, sans-serif">
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+  </defs>
+  <style>
+    .b   { fill:none; stroke:#888; stroke-width:2; stroke-dasharray:9 5; }
+    .bl  { font-size:15px; fill:#555; font-weight:bold; letter-spacing:.5px; }
+    .ext { fill:#eef2f7; stroke:#5b7ea8; stroke-width:1.6; }
+    .app { fill:#e8f3ea; stroke:#4a8759; stroke-width:1.6; }
+    .st  { fill:#fdf3e0; stroke:#c08a2e; stroke-width:1.6; }
+    .n   { font-size:14px; fill:#111; }
+    .ns  { font-size:12px; fill:#444; }
+    .f   { stroke:#333; stroke-width:1.6; fill:none; marker-end:url(#a); }
+    .fl  { font-size:11px; fill:#333; }
+    .t   { font-size:11.5px; fill:#b00; }
+    .th  { fill:#fdecec; stroke:#b00; stroke-width:1.3; }
+    .ok  { font-size:11.5px; fill:#0a6b2e; }
+    .h   { font-size:22px; font-weight:bold; fill:#111; }
+    .sub { font-size:13px; fill:#555; }
+  </style>
+
+  <text x="24" y="34" class="h">WakeyWakey - Threat Model (Datenfluss, STRIDE)</text>
+  <text x="24" y="56" class="sub">Das schuetzenswerte Gut ist hier zuerst die VERFUEGBARKEIT: dass der Wecker klingelt. Erst danach Geheimnis und Vertraulichkeit.</text>
+  <text x="24" y="74" class="sub">Rot = Bedrohung, gruen = wirksame Gegenmassnahme. T-Nummern -> docs/TODO.md, FR-Nummern -> docs/scheduling-v2-spec.md.</text>
+
+  <!-- ROW 1: physical world -->
+  <rect x="24" y="94" width="900" height="92" rx="8" class="b"/>
+  <text x="36" y="114" class="bl">VERTRAUENSGRENZE - physische Welt</text>
+  <rect x="44" y="126" width="180" height="46" rx="6" class="ext"/>
+  <text x="56" y="145" class="n">Gedruckter QR-Code</text>
+  <text x="56" y="162" class="ns">liegt ausserhalb des Betts</text>
+  <rect x="252" y="126" width="180" height="46" rx="6" class="ext"/>
+  <text x="264" y="145" class="n">Dritte in Reichweite</text>
+  <text x="264" y="162" class="ns">Lockscreen, Kamerabild</text>
+  <rect x="460" y="126" width="180" height="46" rx="6" class="ext"/>
+  <text x="472" y="145" class="n">Nutzer</text>
+  <text x="472" y="162" class="ns">will geweckt werden</text>
+  <rect x="944" y="94" width="432" height="92" rx="5" class="th"/>
+  <text x="956" y="114" class="t">S/T: Der Code wird vom Bildschirm fotografiert oder</text>
+  <text x="956" y="130" class="t">nachgedruckt - das "garantierte Aufwachen" ist ausgehebelt.</text>
+  <text x="956" y="150" class="ok">Gemildert: der gescannte Rohwert wird nicht mehr angezeigt</text>
+  <text x="956" y="166" class="ok">und nicht geloggt (T-89). Restrisiko bleibt: ein Code auf</text>
+  <text x="956" y="182" class="ok">Papier ist per Design kopierbar.</text>
+
+  <!-- ROW 2: three boundaries -->
+  <rect x="24" y="206" width="330" height="238" rx="8" class="b"/>
+  <text x="36" y="226" class="bl">VERTRAUENSGRENZE - Android-OS</text>
+  <rect x="44" y="240" width="140" height="44" rx="6" class="ext"/>
+  <text x="56" y="258" class="n">Kalender-Provider</text>
+  <text x="56" y="274" class="ns">nur lesend</text>
+  <rect x="200" y="240" width="140" height="44" rx="6" class="ext"/>
+  <text x="212" y="258" class="n">Kamera</text>
+  <text x="212" y="274" class="ns">nur beim Scannen</text>
+  <rect x="44" y="300" width="140" height="44" rx="6" class="ext"/>
+  <text x="56" y="318" class="n">AlarmManager</text>
+  <text x="56" y="334" class="ns">RTC_WAKEUP, exakt</text>
+  <rect x="200" y="300" width="140" height="44" rx="6" class="ext"/>
+  <text x="212" y="318" class="n">Notifications</text>
+  <text x="212" y="334" class="ns">Full-Screen-Intent</text>
+  <rect x="44" y="360" width="296" height="70" rx="6" class="ext"/>
+  <text x="56" y="378" class="n">Systemuhr / Zeitzone</text>
+  <text x="56" y="394" class="ns">FR-16 vergleicht den Versatz</text>
+  <text x="56" y="410" class="ns">an zwei Checkpoints</text>
+  <text x="56" y="426" class="ns">(Klingeln, Bettzeit)</text>
+
+  <rect x="378" y="206" width="546" height="238" rx="8" class="b"/>
+  <text x="390" y="226" class="bl">ANWENDUNG (Prozess)</text>
+  <rect x="398" y="240" width="240" height="44" rx="6" class="app"/>
+  <text x="410" y="258" class="n">UI / Einstellungen</text>
+  <text x="410" y="274" class="ns">Alarme, Schlafgewohnheiten</text>
+  <rect x="656" y="240" width="250" height="44" rx="6" class="app"/>
+  <text x="668" y="258" class="n">QR-Gate</text>
+  <text x="668" y="274" class="ns">einziger Weg, den Alarm zu stoppen</text>
+  <rect x="398" y="300" width="240" height="60" rx="6" class="app"/>
+  <text x="410" y="318" class="n">scheduling-v2</text>
+  <text x="410" y="334" class="ns">checkpoint -&gt; replan -&gt; FR-18</text>
+  <text x="410" y="350" class="ns">serialisiert (T-77)</text>
+  <rect x="656" y="300" width="250" height="60" rx="6" class="app"/>
+  <text x="668" y="318" class="n">Hintergrund-Isolate</text>
+  <text x="668" y="334" class="ns">FR-16 Checkpoint 2, eigener</text>
+  <text x="668" y="350" class="ns">Speicher - interne Grenze</text>
+  <rect x="398" y="376" width="508" height="54" rx="6" class="app"/>
+  <text x="410" y="396" class="n" font-weight="bold">Kein Netzzugriff in lib/ - bewusst, die Privacy-Policy stuetzt sich darauf.</text>
+  <text x="410" y="418" class="ns">Damit entfaellt die ganze Klasse "Daten verlassen unbemerkt das Geraet".</text>
+
+  <rect x="948" y="206" width="428" height="238" rx="8" class="b"/>
+  <text x="960" y="226" class="bl">SPEICHER (app-privat)</text>
+  <rect x="968" y="240" width="388" height="58" rx="6" class="st"/>
+  <text x="980" y="258" class="n">SharedPreferences</text>
+  <text x="980" y="274" class="ns">Alarme, Wochenplan, Wunschzeit, Zeitzonen-Versatz</text>
+  <text x="980" y="290" class="ns">Diagnose-Log (512 Ereignisse, PII-frei)</text>
+  <rect x="968" y="312" width="388" height="44" rx="6" class="st"/>
+  <text x="980" y="330" class="n">deactivationCode</text>
+  <text x="980" y="346" class="ns">Klartext, base64 aus 16 Zufallsbytes</text>
+  <rect x="968" y="370" width="388" height="60" rx="5" class="th"/>
+  <text x="978" y="388" class="t">I/T: auf einem gerooteten Geraet lesbar - der Code ist</text>
+  <text x="978" y="404" class="t">ersetzbar, ein Schlafmuster ableitbar.</text>
+  <text x="978" y="422" class="ok">Gemildert: allowBackup="false", Log ohne String-Kanal.</text>
+
+  <!-- flows: nur die tragenden, so gelegt, dass nichts kreuzt -->
+  <path d="M134,172 L134,240" class="f"/>
+  <text x="140" y="205" class="fl">Termine</text>
+  <path d="M270,172 L270,240" class="f"/>
+  <text x="276" y="205" class="fl">Scan</text>
+  <path d="M550,172 L518,240" class="f"/>
+  <text x="556" y="205" class="fl">Einstellungen</text>
+  <path d="M114,284 L114,292 L398,292 L398,306" class="f"/>
+  <text x="180" y="289" class="fl">FR-2 hardFloor</text>
+  <path d="M410,360 L410,352 L114,352 L114,344" class="f"/>
+  <text x="180" y="349" class="fl">FR-18 setzt Alarme</text>
+  <path d="M906,266 L968,266" class="f"/>
+  <path d="M906,330 L968,330" class="f"/>
+  <path d="M781,284 L781,300" class="f"/>
+
+  <!-- ROW 2b: DoS threat, eigene Zeile damit nichts ueberlappt -->
+  <rect x="24" y="458" width="1352" height="92" rx="5" class="th"/>
+  <text x="36" y="478" class="t">D - die schwerste Kategorie hier, weil "Ausfall" Verschlafen heisst: Doze, Batteriesparen und OEM-Prozesskiller koennen den Alarm verhindern. Ein</text>
+  <text x="36" y="494" class="t">Force-Stop loescht alle AlarmManager-Alarme des Pakets (Plattformverhalten, keine Schwaeche der App). Zwei eigene Fehler dieser Art sind behoben:</text>
+  <text x="36" y="510" class="t">FR-9s Sicherheitsventil war eine Einbahnstrasse in einen dauerhaft toten Wecker (T-78); der alte Motor loeschte erst alle Alarme und brach dann ab (T-64).</text>
+  <text x="36" y="526" class="ok">Beide sind durch Regressionstests festgenagelt, T-64 zusaetzlich auf einem echten Geraet belegt. Offen bleibt R3: dass ein gesetzter Alarm einen</text>
+  <text x="36" y="542" class="ok">Reboot uebersteht, ist unbelegt - T-93 hat das Verfahren, aber noch kein Ergebnis. FR-17 setzt beim naechsten App-Start ohnehin alles neu.</text>
+
+  <!-- ROW 3: supply chain -->
+  <rect x="24" y="570" width="1352" height="180" rx="8" class="b"/>
+  <text x="36" y="590" class="bl">VERTRAUENSGRENZE - Lieferkette</text>
+  <rect x="44" y="604" width="170" height="44" rx="6" class="ext"/>
+  <text x="56" y="622" class="n">Quellcode-Repo</text>
+  <text x="56" y="638" class="ns">privat, GitHub</text>
+  <rect x="242" y="604" width="180" height="44" rx="6" class="ext"/>
+  <text x="254" y="622" class="n">Abhaengigkeiten</text>
+  <text x="254" y="638" class="ns">pub.dev, Maven</text>
+  <rect x="450" y="604" width="200" height="44" rx="6" class="ext"/>
+  <text x="462" y="622" class="n">CI-Gate</text>
+  <text x="462" y="638" class="ns">SCA, Secrets, SAST, E2E</text>
+  <rect x="678" y="604" width="190" height="44" rx="6" class="ext"/>
+  <text x="690" y="622" class="n">Signaturschluessel</text>
+  <text x="690" y="638" class="ns">GitHub Secret</text>
+  <rect x="896" y="604" width="190" height="44" rx="6" class="ext"/>
+  <text x="908" y="622" class="n">Signierte APK</text>
+  <text x="908" y="638" class="ns">Artefakt / Release</text>
+  <path d="M214,626 L242,626" class="f"/>
+  <path d="M422,626 L450,626" class="f"/>
+  <path d="M650,626 L678,626" class="f"/>
+  <path d="M868,626 L896,626" class="f"/>
+  <rect x="44" y="662" width="1312" height="74" rx="5" class="th"/>
+  <text x="56" y="680" class="t">T: eine kompromittierte Abhaengigkeit erreicht ueber den Build unmittelbar das APK. Zwei direkte Abhaengigkeiten sind nicht frei (Syncfusion,</text>
+  <text x="56" y="696" class="t">Google/ML Kit) - das ist zugleich der offene GPLv3-Konflikt aus R8/R9, also kein reines Lizenz-, sondern auch ein Kontrollproblem.</text>
+  <text x="56" y="714" class="ok">Gemildert: osv-scanner, trufflehog und mobsfscan koennen den Lauf rot machen, und seit T-92 gilt dasselbe Tor auch auf dem Tag-Pfad - vorher</text>
+  <text x="56" y="730" class="ok">konnte ein signiertes Release-APK voellig ungeprueft entstehen. Offen: R8/R9 (Lizenz) und dynamische Analyse (es gibt keine).</text>
+
+  <!-- ROW 4: legend -->
+  <rect x="24" y="770" width="1352" height="298" rx="8" fill="#fafafa" stroke="#ccc"/>
+  <text x="36" y="792" class="bl">STRIDE - Abdeckung und Restrisiko</text>
+  <text x="36" y="818" class="n">S  Spoofing</text>
+  <text x="230" y="818" class="ns">Ein kopierter QR-Code hebelt das Gate aus. Per Design kopierbar - die App kann das nicht verhindern, nur nicht erleichtern.</text>
+  <text x="36" y="846" class="n">T  Tampering</text>
+  <text x="230" y="846" class="ns">Klartext-Code und Wochenplan auf gerootetem Geraet; Uhr-/Zeitzonenmanipulation; kompromittierte Abhaengigkeit.</text>
+  <text x="230" y="864" class="ns">FR-16 behandelt legitime Zeitzonenwechsel, gegen Vorsatz hilft es nicht.</text>
+  <text x="36" y="892" class="n">R  Repudiation</text>
+  <text x="230" y="892" class="ns">Nicht anwendbar und bewusst nicht modelliert: ein Nutzer, kein Mehrparteien-Vorgang, keine Nachweispflicht.</text>
+  <text x="36" y="920" class="n">I  Info-Disclosure</text>
+  <text x="230" y="920" class="ns">Logs und Lockscreen behoben (T-89: QR-Code, Kalendername, Termintitel, Exception-Inhalte, Debug-Notifications).</text>
+  <text x="230" y="938" class="ns">Restrisiko: aus dem gespeicherten Plan laesst sich auf einem kompromittierten Geraet ein Schlafmuster ableiten.</text>
+  <text x="36" y="966" class="n">D  Denial of Service</text>
+  <text x="230" y="966" class="ns">Die schwerste Kategorie hier - siehe die eigene Zeile oben. T-64 und T-78 behoben, R3 (Reboot) unbelegt.</text>
+  <text x="36" y="994" class="n">E  Elevation</text>
+  <text x="230" y="994" class="ns">Ueberberechtigung im Manifest: WRITE_CALENDAR und READ_EXTERNAL_STORAGE ohne zugehoerigen Codepfad -</text>
+  <text x="230" y="1012" class="ns">der Kalender wird nur gelesen, das Schreiben ist auskommentiert. Aufzuraeumen, kein Datenabfluss.</text>
+  <text x="36" y="1046" class="ns" font-style="italic">Quelle dieses Bildes: docs/threat-model.svg. Neu rendern mit:  rsvg-convert -w 1400 -b white docs/threat-model.svg -o docs/risk.png</text>
+</svg>

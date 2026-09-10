@@ -306,11 +306,27 @@ snapshot file as still accurate.
 `docs/` also holds `REQUIREMENTS.md` (essential pre-`master` requirements - check this before any
 production push), `TODO.md` (every known open task, prioritised, with evidence and an acceptance
 criterion - the living record of what's actually wrong or missing, as opposed to the two frozen
-snapshots above), `personas.md`, `use-cases.md`, `choice-of-technologies.md`, a risk/dataflow
-diagram (`risk.png`) and a UML diagram (`UML_WakeyWakey.drawio`) from the original project
-planning. `use-cases.md`, `personas.md` and `choice-of-technologies.md` predate the finished app
-and have been annotated inline where they describe features that were planned but never
-implemented (e.g. NFC-tag deactivation, Do Not Disturb) or claims that no longer hold - don't assume
-everything in them shipped as described. `risk.png` and the UML diagram are images from the same
-planning phase and carry no such annotation; cross-check them against `docs/TODO.md` (T-30) before
-trusting what they model.
+snapshots above), `device-trial-checklist.md` (the manual counterpart to the E2E suite, with a
+result field per line), `scheduling-v2-spec.md` (FR-1 … FR-18), plus `personas.md`,
+`use-cases.md`, `choice-of-technologies.md` and a UML diagram (`UML_WakeyWakey.drawio`) from the
+original project planning. Those three markdown documents predate the finished app and have been
+annotated inline where they describe features that were planned but never implemented (e.g.
+NFC-tag deactivation, Do Not Disturb) or claims that no longer hold - don't assume everything in
+them shipped as described. The UML diagram carries no such annotation; cross-check it against
+`docs/TODO.md` (T-30) before trusting what it models.
+
+**`docs/risk.png` is generated, not hand-drawn.** It used to be a planning-phase risk graphic
+modelling features that were never built; since 2026-09-10 it is a real threat model
+(`docs/TODO.md` T-101). Edit `docs/threat-model.svg` - which is text, and therefore diffable and
+reviewable - and re-render with:
+
+```sh
+rsvg-convert -w 1400 -b white docs/threat-model.svg -o docs/risk.png
+```
+
+Two things about it are worth knowing before extending it. The primary asset here is
+**availability**: for an alarm clock, "outage" means oversleeping, so denial of service is the
+heaviest STRIDE category rather than the most annoying one - and the project's two worst findings
+(T-64, T-78) were exactly that, self-inflicted alarm shutdowns. And in the guaranteed-wake-up
+feature the adversary is partly **the user**, trying to defeat their own gate, which inverts the
+usual assumptions.

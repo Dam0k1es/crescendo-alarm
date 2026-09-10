@@ -128,6 +128,12 @@ jobs:
         with:
           name: app-development-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
+          # docs/TODO.md T-100: ohne dieses Feld greift GitHubs Standard von
+          # 90 Tagen. Bei ~94 MB je Debug-APK und einem Push pro Arbeitsschritt
+          # waren so 1375 MB Artefaktspeicher aufgelaufen - beim 500-MB-
+          # Kontingent eines privaten Repos das 2,75-fache. Ein Entwicklungs-APK
+          # ist nach wenigen Tagen wertlos, weil der naechste Push es ersetzt.
+          retention-days: 5
 
   # Everything below only runs for the full pipeline (master pushes and PRs into master) -
   # not for plain dev-branch pushes.
@@ -203,6 +209,11 @@ jobs:
         with:
           name: app-production-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          # Laenger als das Entwicklungs-APK, weil das gegatete Release-Artefakt
+          # der Sache nach das ist, was man verprobt oder verteilt - aber nicht
+          # 90 Tage (docs/TODO.md T-100). Ein Tag-Release haengt sein APK
+          # ohnehin dauerhaft an die GitHub-Release-Seite.
+          retention-days: 30
 
   mobsf-full-scan:
     name: MobSF (full static scan of production APK)
@@ -252,6 +263,7 @@ jobs:
         with:
           name: mobsf-report
           path: mobsf-report.json
+          retention-days: 30
       - name: Revoke the release artifact
         # A HIGH finding here can't have prevented build-android-release from
         # already uploading app-production-apk (this job needs that artifact

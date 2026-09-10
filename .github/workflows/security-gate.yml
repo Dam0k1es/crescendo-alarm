@@ -66,3 +66,4 @@ jobs:
         with:
           name: mobsfscan-report
           path: mobsfscan-report.json
+          retention-days: 30
