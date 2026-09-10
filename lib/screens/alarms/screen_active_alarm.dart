@@ -131,7 +131,7 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
                       }
                     } catch (e) {
                       debugPrint(
-                          "=====ScreenAlarmActiveState: Failed to stop alarm: $e");
+                          "=====ScreenAlarmActiveState: Failed to stop alarm: ${e.runtimeType}");
                     }
                     if (!stopped) {
                       // Don't silently leave: the alarm is still ringing.

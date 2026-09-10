@@ -11,6 +11,7 @@ class ManualAlarm extends MyAlarm {
     super.title,
     super.enabled,
     super.gentlewake,
+    super.gentleWakeDuration,
     super.tone,
     super.id,
     super.volume = 0.8,
@@ -34,6 +35,9 @@ class ManualAlarm extends MyAlarm {
       title: data['title'],
       enabled: data['enabled'],
       gentlewake: data['gentlewake'],
+      gentleWakeDuration: data['gentleWakeSeconds'] == null
+          ? null
+          : Duration(seconds: data['gentleWakeSeconds'] as int),
       tone: data['tone'],
       volume: (data['volume'] as num).toDouble(),
       repeatOnDays: repeatOnDays,
@@ -48,6 +52,7 @@ class ManualAlarm extends MyAlarm {
       'title': title,
       'enabled': enabled,
       'gentlewake': gentlewake,
+      'gentleWakeSeconds': gentleWakeDuration.inSeconds,
       'tone': tone,
       'volume': volume,
       'repeatOnDays':
@@ -68,6 +73,7 @@ class ManualAlarm extends MyAlarm {
           title == other.title &&
           enabled == other.enabled &&
           gentlewake == other.gentlewake &&
+          gentleWakeDuration == other.gentleWakeDuration &&
           tone == other.tone &&
           volume == other.volume &&
           id == other.id &&

@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+/// Zeigt **nur**, dass ein Code erkannt wurde - niemals dessen Wert.
+///
+/// docs/TODO.md T-89: der Rohwert ist das Deaktivierungsgeheimnis, mit dem sich
+/// der "garantierte" Wecker aushebeln laesst. Dieses Label wird im
+/// Alarm-Modus angezeigt (qr_scanner.dart:298-300, `displayExitButton == false`),
+/// also gross auf dem Bildschirm eines klingelnden Geraets - wer daneben steht
+/// oder ein Foto macht, haette den Code sonst dauerhaft.
 class ScannedBarcodeLabel extends StatelessWidget {
   const ScannedBarcodeLabel({
     super.key,
@@ -24,10 +31,10 @@ class ScannedBarcodeLabel extends StatelessWidget {
           );
         }
 
-        return Text(
-          scannedBarcodes.first.displayValue ?? 'No display value.',
+        return const Text(
+          'QR Code detected',
           overflow: TextOverflow.fade,
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: Colors.white),
         );
       },
     );

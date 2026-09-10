@@ -7,7 +7,7 @@ import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/models/alarms/manual_alarm.dart';
 import 'package:wakeywakey/models/alarms/myalarm.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
-import 'package:wakeywakey/models/scheduling/scheduling.dart';
+import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
 class ScreenAlarms extends StatefulWidget {
@@ -24,7 +24,6 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late TabController _tabController;
   late final AppState _appState;
-  late final Scheduler _scheduler;
 
   @override
   bool get wantKeepAlive => true;
@@ -33,7 +32,6 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
   initState() {
     super.initState();
     _appState = Provider.of<AppState>(context, listen: false);
-    _scheduler = Scheduler();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabChange);
   }
@@ -182,12 +180,12 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
             fontWeight: FontWeight.bold,
           ),
         ),
+        // Phase 6 (docs/TODO.md T-64/FR-11): ein Tab-Wechsel plant NICHTS neu.
+        // Vorher warf er den alten Scheduler an, der dabei alle geplanten
+        // Alarme löschen und ohne Ersatz abbrechen konnte. Kalenderänderungen
+        // haben bewusst keinen eigenen Auslöser (FR-11) - sie wirken beim
+        // nächsten Checkpoint, den das App-Öffnen ohnehin auslöst (FR-17).
         bottom: TabBar(
-          onTap: (index) {
-            if (index == ScreenAlarms.scheduledTabIndex) {
-              _scheduler.scheduleAlarms(_appState);
-            }
-          },
           controller: _tabController,
           labelColor: Theme.of(context).colorScheme.onSurface,
           unselectedLabelColor: Theme.of(context).colorScheme.onSurface,
@@ -228,7 +226,11 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
           : FloatingActionButton(
               tooltip: 'Sync Alarms',
               backgroundColor: Theme.of(context).colorScheme.surface,
-              onPressed: () => _scheduler.scheduleAlarms(_appState),
+              // Die ausdrückliche Nutzeraktion "jetzt neu abgleichen" -
+              // umgeht FR-17s Tagessperre absichtlich (Phase 6, T-64: vorher
+              // lief hier der alte Scheduler).
+              onPressed: () => runCheckpointSafely(_appState,
+                  trigger: CheckpointTrigger.manualSync),
               child: Icon(Icons.sync,
                   color: context.watch<AppState>().accentColor),
             ),
@@ -261,6 +263,13 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
       alarm?.title = titleController.text;
     });
     bool gentleWake = alarm?.gentlewake ?? _appState.gentleWakeUpEnabled;
+    // docs/TODO.md T-96: dieselbe Vorbelegung wie fuer gentlewake, volume und
+    // tone daneben. Fehlte sie, benutzte ein manueller Alarm stur MyAlarms
+    // Default von einer Minute und ignorierte die Einstellung des Nutzers -
+    // die Fehlerklasse aus T-84 (eine Einstellung mit UI, die den Alarm nie
+    // erreicht).
+    Duration gentleWakeDuration =
+        alarm?.gentleWakeDuration ?? _appState.gentleWakeUpDuration;
     double volume = alarm?.volume ?? _appState.selectedVolume;
     String selectedTone = alarm?.tone ?? _appState.selectedTone;
     DateTime nowDT = DateTime.now().add(const Duration(minutes: 1));
@@ -504,6 +513,7 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                       title: titleController.text,
                       enabled: alarm?.enabled ?? true,
                       gentlewake: gentleWake,
+                      gentleWakeDuration: gentleWakeDuration,
                       tone: selectedTone,
                       repeatOnDays: repeatOnDays,
                       volume: volume,

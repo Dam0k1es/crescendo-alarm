@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import 'package:wakeywakey/app_state.dart';
+import 'package:wakeywakey/utils/diag/diag_log.dart';
 import 'package:wakeywakey/models/alarms/handler.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
 import 'package:wakeywakey/screens/scan_code/scanned_barcode_label.dart';
@@ -31,9 +32,18 @@ bool isDeactivationCodeValid(DeactivationCode? storedCode, String? scannedPayloa
 class QrScanner extends StatefulWidget {
   final bool displayExitButton;
 
+  /// docs/TODO.md T-74e: the id of the alarm that is actually ringing. Without
+  /// it this screen had to `Alarm.stop` **every** saved alarm to silence the
+  /// ringing one, which cancelled unrelated future alarms at the platform
+  /// level while leaving `AppState`'s lists untouched - a divergence FR-18's
+  /// sync could not see (it models "existing" from `AppState`). `null` keeps
+  /// the old stop-everything behaviour as a fallback.
+  final int? alarmId;
+
   const QrScanner({
     super.key,
     this.displayExitButton = false,
+    this.alarmId,
   });
 
   /// Test-only seam: when set, this stream is used by every `QrScanner`
@@ -86,14 +96,14 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
     try {
       unawaited(controller.stop());
     } catch (e) {
-      debugPrint('=====initState: Error stopping scanner: $e');
+      debugPrint('=====initState: Error stopping scanner: ${e.runtimeType}');
     }
 
     // Finally, start the scanner itself.
     try {
       unawaited(controller.start());
     } catch (e) {
-      debugPrint('=====initState: Error starting scanner: $e');
+      debugPrint('=====initState: Error starting scanner: ${e.runtimeType}');
     }
   }
 
@@ -127,7 +137,12 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
       // IMPORT QR CODE IF NONE IS SET
       if (_appState.deactivationCode == null) {
         final data = _barcode!.rawValue;
-        debugPrint('=====qrScanner: Imported QR code data: $data');
+        // docs/TODO.md T-89: der Payload ist das Deaktivierungsgeheimnis -
+        // wer diese Logzeile hat, kann den "garantierten" Wecker beliebig
+        // aushebeln. Geloggt wird nur, DASS importiert wurde.
+        debugPrint('=====qrScanner: Imported a deactivation code '
+            '(${data == null ? 'empty' : 'non-empty'})');
+        Diag.qrGate(outcome: QrOutcome.imported, codeWasSet: false);
         final newDeactivationCode = DeactivationCode(payload: data);
         setState(() {
           _appState.deactivationCode = newDeactivationCode;
@@ -140,7 +155,7 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
           validationSuccessful = await _validateDeactivationCode(_barcode!);
         } catch (e) {
           debugPrint(
-              '=====handleBarcode: Error validating Deactivation Code: $e');
+              '=====handleBarcode: Error validating Deactivation Code: ${e.runtimeType}');
         }
         if (validationSuccessful) {
           _closeView();
@@ -164,21 +179,35 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
       return true;
     }
 
-    debugPrint(
-        '=====qrValidator: Scanned QR code data: ${barcode.rawValue}; VALIDATED!');
+    // docs/TODO.md T-89: nur das Ergebnis, nie der Wert. Diese Zeile feuert
+    // genau dann, wenn der Nutzer morgens den Alarm abschaltet - also
+    // zuverlaessig jeden Tag.
+    debugPrint('=====qrValidator: scanned code VALIDATED');
+    // Kein Parameter fuer den Payload - auch keiner fuer dessen Laenge oder
+    // Hash, beides waere ein Rueckweg zum Geheimnis.
+    Diag.qrGate(outcome: QrOutcome.accepted, codeWasSet: true);
 
     try {
-      List<AlarmSettings> alarmsSettings = await Alarm.getAlarms();
-      for (AlarmSettings alarmSetting in alarmsSettings) {
+      // docs/TODO.md T-74e: stop exactly the ringing alarm when we know which
+      // one it is, instead of every saved alarm.
+      final ringingId = widget.alarmId;
+      final List<int> idsToStop;
+      if (ringingId != null) {
+        idsToStop = [ringingId];
+      } else {
+        final alarmsSettings = await Alarm.getAlarms();
+        idsToStop = alarmsSettings.map((a) => a.id).toList();
+      }
+      for (final id in idsToStop) {
         try {
-          await Alarm.stop(alarmSetting.id);
-          Handler.onAlarmHandled(_appState, alarmSetting.id);
+          await Alarm.stop(id);
+          Handler.onAlarmHandled(_appState, id);
         } catch (e) {
-          debugPrint("=====ScreenAlarmActiveState: Failed to stop alarm: $e");
+          debugPrint("=====ScreenAlarmActiveState: Failed to stop alarm: ${e.runtimeType}");
         }
       }
     } catch (e) {
-      debugPrint('=====validateDeactivationCode: Error stopping alarms: $e');
+      debugPrint('=====validateDeactivationCode: Error stopping alarms: ${e.runtimeType}');
     }
 
     // Only close the scanner if nothing is still ringing - a stop failure
@@ -337,7 +366,7 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
     try {
       await Alarm.stopAll();
     } catch (e) {
-      debugPrint('=====qrScanner: Failed to stop all alarms: $e');
+      debugPrint('=====qrScanner: Failed to stop all alarms: ${e.runtimeType}');
     }
     _closeView();
   }

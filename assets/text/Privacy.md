@@ -18,6 +18,16 @@ The App collects the following data, all of it stored locally on your device:
   locally-generated deactivation code (if you choose to set one up) are stored on your device to
   make the App work.
 
+- Diagnostics Log: the App keeps a short technical record of what its alarm scheduler did - for
+  example how many days it planned, whether a calendar read succeeded, and how many alarms it
+  registered. It is stored on your device only, is limited to the most recent few hundred entries,
+  and can be switched off, viewed and deleted under Settings > Diagnostics. It deliberately
+  contains **no** wake-up times, no dates or times of day, no calendar entries, no calendar or
+  account names, and not your deactivation code: the code that writes this record has no way to
+  store text at all, only counters and fixed categories. Nothing is ever transmitted - the only way
+  it leaves your device is if you copy it yourself from that screen and choose to send it
+  somewhere.
+
 The App does not collect your name, email address, contact information, or your device's location.
 
 The installed app declares an internet-access permission, brought in by a bundled software

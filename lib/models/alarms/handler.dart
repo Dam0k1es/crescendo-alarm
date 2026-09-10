@@ -1,15 +1,17 @@
+import 'dart:async';
+
 import 'package:alarm/alarm.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/manual_alarm.dart';
-import 'package:wakeywakey/models/alarms/myalarm.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
-import 'package:wakeywakey/models/scheduling/scheduling.dart';
+import 'package:wakeywakey/models/scheduling/checkpoint.dart';
+import 'package:wakeywakey/models/scheduling/replan.dart';
+import 'package:wakeywakey/utils/diag/diag_log.dart';
 import 'package:wakeywakey/screens/alarms/screen_active_alarm.dart';
 import 'package:wakeywakey/screens/scan_code/qr_scanner.dart';
 import 'package:wakeywakey/utils/notifications.dart';
+import 'package:wakeywakey/utils/sleep_reminder.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
 /// Whether an alarm's scheduled [eventDateTime] is already in the past
@@ -28,66 +30,80 @@ bool isAlarmStale(DateTime eventDateTime, DateTime now) {
 class Handler {
   final BuildContext _context;
   late final AppState _appState;
+  final Future<ReplanResult?> Function(AppState appState) _runCheckpoint;
 
-  Handler(this._context) {
+  /// [runCheckpoint] is injectable (defaults to the real ring checkpoint)
+  /// purely for testability - see test/handler_replan_wiring_test.dart's
+  /// regression test, which needs full control over when/whether it completes.
+  Handler(this._context,
+      {Future<ReplanResult?> Function(AppState)? runCheckpoint})
+      : _runCheckpoint = runCheckpoint ?? _ringCheckpoint {
     _appState = Provider.of<AppState>(_context, listen: false);
   }
 
-  Future<void> handleAlarm(AlarmSettings event) async {
-    Notifications notifications = Notifications();
-
-    if (kDebugMode) {
-      try {
-        String alarmType = "Unknown";
-        MyAlarm? appStateAlarm;
-
-        // Get alarm type for debug purposes
-        try {
-          appStateAlarm = _appState.getAlarm(event.id);
-          if (appStateAlarm is ManualAlarm) {
-            alarmType = "Manual";
-          }
-          if (appStateAlarm is ScheduledAlarm) {
-            alarmType = "Scheduled";
-          }
-        } catch (e) {
-          debugPrint("=====handleAlarm: Error determining alarm type: $e");
-        }
-
-        // Notification with event data for debug purposes
-        try {
-          notifications.scheduleNotification(
-              title: 'WakeyWakey - Event Data',
-              body:
-                  "Alarm Type: $alarmType, DateTime ${event.dateTime}, ID ${event.id}, Vibrate ${event.vibrate}, Notification on kill ${event.warningNotificationOnKill}");
-        } catch (e) {
-          debugPrint(
-              "=====handleAlarm: Debug notification with event data failed: $e");
-        }
-
-        // Notification with appState data for debug purposes
-        if (appStateAlarm != null) {
-          try {
-            notifications.scheduleNotification(
-                title: 'WakeyWakey - AppState Data',
-                body:
-                    "Alarm Type: $alarmType, Time ${appStateAlarm.time}, ID ${appStateAlarm.id}");
-          } catch (e) {
-            debugPrint(
-                "=====handleAlarm: Debug notification with appState data failed: $e");
-          }
-        }
-      } catch (e) {
-        debugPrint("=====handleAlarm: Debug message notification failed $e");
-      }
-
-      try {
-        debugPrint(
-            "=====handleAlarm: Alarm with ${event.id} was triggered on ${DateTime.now()} (set on ${event.dateTime})");
-      } catch (e) {
-        debugPrint("=====handleAlarm: Failed to get alarm settings: $e");
-      }
+  /// FR-8: the actual ring is scheduling-v2's daily replanning trigger -
+  /// "feuert immer", regardless of how the rest of [handleAlarm] resolves
+  /// (dismissed via overlay, via the 3s-timeout fallback, whatever). Fired
+  /// via `unawaited` and wrapped in its own try/catch so a slow or failing
+  /// checkpoint (a real calendar-plugin call) can never delay or break
+  /// showing the alarm overlay / the 3s-fallback stop-all below - both of
+  /// those must keep working exactly as before regardless of this call's
+  /// outcome (docs/scheduling-v2-spec.md, Phase 5 step 19's regression test).
+  void _fireReplanCheckpoint(AlarmSettings event) {
+    // docs/TODO.md T-73: only a ringing ScheduledAlarm may advance the
+    // ScheduledAlarm chain. Alarm.ringing fires for every alarm, and letting a
+    // ManualAlarm drive it would count today as concluded (FR-9), freeze
+    // today's not-yet-rung scheduled value as the anchor, and suppress FR-17
+    // for the rest of the day - FR-15 forbids manual alarms influencing this
+    // chain's state.
+    final ringing = _appState.getAlarm(event.id);
+    // docs/TODO.md T-89: der Alarmtyp geht als Type-Code ein, nie als Name -
+    // und ohne jeden Zeitstempel. Eine Historie exakter Weckzeitpunkte waere
+    // ein Schlafmuster und damit identifizierend ohne jeden Namen.
+    Diag.alarmRang(
+      alarmType: ringing.runtimeType,
+      knownToAppState: ringing != null,
+      stale: isAlarmStale(event.dateTime, DateTime.now()),
+      deactivationCodeSet: _appState.deactivationCode != null,
+      checkpointFired: ringing is ScheduledAlarm,
+    );
+    if (ringing is! ScheduledAlarm) {
+      debugPrint(
+          "=====handleAlarm: ringing alarm ${event.id} is not a ScheduledAlarm - no replan checkpoint");
+      return;
     }
+    unawaited(_runReplanCheckpointSafely());
+  }
+
+  /// docs/TODO.md T-87: the whole sequence (offset, replan, FR-6/9/12
+  /// reporting, bedtime reminder) now lives in one place, serialized against
+  /// every other trigger - this is just the ring's way in.
+  static Future<ReplanResult?> _ringCheckpoint(AppState appState) =>
+      runSchedulingCheckpoint(appState,
+          trigger: CheckpointTrigger.alarmRing);
+
+  Future<void> _runReplanCheckpointSafely() async {
+    try {
+      await _runCheckpoint(_appState);
+    } catch (e) {
+      debugPrint("=====handleAlarm: ring checkpoint failed: ${e.runtimeType}");
+    }
+  }
+
+  Future<void> handleAlarm(AlarmSettings event) async {
+    _fireReplanCheckpoint(event);
+
+    // docs/TODO.md T-89: hier stand ein kDebugMode-Diagnoseblock, der zwei
+    // echte Notifications mit Alarmtyp, Weckzeit und Alarm-ID erzeugte. Sie
+    // waren nur durch kDebugMode geschuetzt, nicht durch main.darts
+    // debugPrint-Abschaltung - landeten also im Notification-Shade und damit
+    // auf dem LOCKSCREEN jedes Testers mit einem Debug-APK (ci.yml laedt fuer
+    // `dev` genau so eines als Artefakt hoch). Eine Historie daraus ist ein
+    // Schlafprofil. Dazu loggte er die exakte Aufwachzeit im Klartext.
+    //
+    // Dieselbe Diagnose - und mehr - liefert jetzt der PII-freie
+    // Ereignis-Logger unten (Diag.alarmRang): Alarmtyp als Type-Code, kein
+    // Zeitstempel, keine ID.
 
     bool stoppingAlarmPossible = true;
 
@@ -98,7 +114,7 @@ class Handler {
         alarmSetBeforeNow = isAlarmStale(event.dateTime, DateTime.now());
       } catch (e) {
         debugPrint(
-            "=====handleAlarm: Failed to check if alarm is set in the past: $e");
+            "=====handleAlarm: Failed to check if alarm is set in the past: ${e.runtimeType}");
       }
 
       // If the event is in the past, stop it
@@ -107,7 +123,7 @@ class Handler {
         try {
           Alarm.stop(event.id);
         } catch (e) {
-          debugPrint("=====handleAlarm: Failed to stop alarm: $e");
+          debugPrint("=====handleAlarm: Failed to stop alarm: ${e.runtimeType}");
           stoppingAlarmPossible = false;
         }
 
@@ -118,7 +134,7 @@ class Handler {
             return;
           }
         } catch (e) {
-          debugPrint("=====handleAlarm: Failed to get alarms list: $e");
+          debugPrint("=====handleAlarm: Failed to get alarms list: ${e.runtimeType}");
         }
       }
 
@@ -130,7 +146,7 @@ class Handler {
         isDeactivationCodeSet = _appState.deactivationCode != null;
       } catch (e) {
         debugPrint(
-            "=====handleAlarm: Failed to check if deactivation code is set: $e");
+            "=====handleAlarm: Failed to check if deactivation code is set: ${e.runtimeType}");
       }
 
       // If the deactivation code is not set, show the alarm overlay
@@ -143,7 +159,7 @@ class Handler {
           showFullScreenOverlay(_context, ScreenAlarmActive(alarmId: event.id));
         } catch (e) {
           debugPrint(
-              "=====handleAlarm: showFullScreenOverlay (ScreenAlarmActive) failed: $e");
+              "=====handleAlarm: showFullScreenOverlay (ScreenAlarmActive) failed: ${e.runtimeType}");
           stoppingAlarmPossible = false;
         }
       }
@@ -154,15 +170,15 @@ class Handler {
           if (!_context.mounted) {
             throw StateError('Context is no longer mounted');
           }
-          showFullScreenOverlay(_context, const QrScanner());
+          showFullScreenOverlay(_context, QrScanner(alarmId: event.id));
         } catch (e) {
           debugPrint(
-              "=====handleAlarm: showFullScreenOverlay (QrScanner) failed: $e");
+              "=====handleAlarm: showFullScreenOverlay (QrScanner) failed: ${e.runtimeType}");
           stoppingAlarmPossible = false;
         }
       }
     } catch (e) {
-      debugPrint("=====handleAlarm: Error handling alarm: $e");
+      debugPrint("=====handleAlarm: Error handling alarm: ${e.runtimeType}");
     }
 
     // If no overlay can be shown, stop all alarms after 3 seconds (to ring in any case)
@@ -171,56 +187,39 @@ class Handler {
         await Future.delayed(const Duration(seconds: 3));
         Alarm.stopAll();
       } catch (e) {
-        debugPrint("=====handleAlarm: Failed to stop all alarms: $e");
+        debugPrint("=====handleAlarm: Failed to stop all alarms: ${e.runtimeType}");
       }
     }
   }
 
-  static void onAlarmHandled(AppState appState, int alarmID) {
-    // Reschedule alarms if rescheduleOnAlarm is set. The setting itself has no
-    // UI to change it yet - see docs/TODO.md T-42.
-    try {
-      Scheduler scheduler = Scheduler();
-      if (appState.rescheduleOnAlarm) {
-        // Iterate over a copy: scheduleAlarms() removes every entry from
-        // appState.scheduledAlarms (the live backing list) as part of
-        // rescheduling, which would otherwise throw a
-        // ConcurrentModificationError on this very loop.
-        List<ScheduledAlarm> scheduledAlarmsSnapshot =
-            List<ScheduledAlarm>.from(appState.scheduledAlarms);
-        for (ScheduledAlarm alarm in scheduledAlarmsSnapshot) {
-          if (alarmID == alarm.id) {
-            scheduler.scheduleAlarms(appState);
-            break;
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint("=====handleAlarm: scheduleAlarms failed: $e");
-    }
-
-// Reschedule sleep time reminder if reminderEnabled is set
-    try {
-      if (appState.reminderEnabled) {
-        DateTime dateTime = Scheduler.nextAlarmTime(appState);
-        dateTime = dateTime.subtract(durationFromTimeOfDay(appState.sleepGoal));
-        dateTime =
-            dateTime.subtract(durationFromTimeOfDay(appState.reminderDuration));
-        try {
-          Notifications notifications = Notifications();
-          notifications.scheduleNotification(
-              title: 'Sleep time',
-              body: "It's time to go to sleep",
-              scheduledDate: dateTime);
-        } catch (e) {
-          debugPrint(
-              "=====handleAlarm: scheduleNotification failed for sleep reminder: $e");
-        }
-      } else {
-        debugPrint("=====handleAlarm: reminder disabled");
-      }
-    } catch (e) {
-      debugPrint("=====handleAlarm: Error rescheduling sleep reminder: $e");
-    }
+  /// Reschedules the sleep-time reminder after an alarm was handled - and
+  /// nothing else.
+  ///
+  /// Always, regardless of [AppState.reminderEnabled] (FR-16
+  /// "Voraussetzung", docs/scheduling-v2-spec.md): Checkpoint 2 needs a
+  /// notification hook even when the visible reminder itself is disabled;
+  /// `scheduleSleepReminder()`/`sleepReminderContent()` decide
+  /// visible-vs-silent, not whether to schedule at all. Fire-and-forget (not
+  /// awaited), matching this method's callers (qr_scanner.dart,
+  /// screen_active_alarm.dart), neither of which awaits it either.
+  ///
+  /// **Phase 6 (docs/TODO.md T-64):** this used to also call the old
+  /// `Scheduler.scheduleAlarms()` behind `rescheduleOnAlarm` - which deletes
+  /// every ScheduledAlarm first and then aborts without re-setting any of them
+  /// whenever `appState.meetings` is empty (the normal state in a process the
+  /// alarm itself started). A dismiss therefore left the user with **no alarms
+  /// at all**; `test/handler_on_alarm_handled_test.dart` pins that down. There
+  /// is nothing to replace it with here: the ring already ran the full
+  /// scheduling checkpoint via `handleAlarm()`'s `_fireReplanCheckpoint()`,
+  /// which re-plans the week and applies it (FR-8/FR-18).
+  ///
+  /// [notifications] is injectable (defaults to a real [Notifications])
+  /// purely for testability - see
+  /// test/sleep_reminder_always_scheduled_test.dart's regression test, which
+  /// needs to observe the scheduled title/body without touching the real
+  /// `awesome_notifications` plugin channel.
+  static void onAlarmHandled(AppState appState, int alarmID,
+      {Notifications? notifications}) {
+    scheduleSleepReminder(appState, notifications: notifications);
   }
 }

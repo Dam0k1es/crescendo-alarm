@@ -4,6 +4,7 @@ import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/screens/settings/page_aboutpage.dart';
 import 'package:wakeywakey/screens/settings/page_alarmtones.dart';
 import 'package:wakeywakey/screens/settings/page_appearance.dart';
+import 'package:wakeywakey/screens/settings/page_diagnostics.dart';
 
 class ScreenSettings extends StatefulWidget {
   const ScreenSettings({super.key});
@@ -19,7 +20,7 @@ class _ScreenSettingsState extends State<ScreenSettings>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -62,6 +63,14 @@ class _ScreenSettingsState extends State<ScreenSettings>
                   color: context.watch<AppState>().accentColor),
               text: 'About Page',
             ),
+            // docs/TODO.md T-89: die Einsicht in das PII-freie Ereignis-Log.
+            // Sichtbar und nicht versteckt, weil der Nutzer sehen koennen
+            // muss, was er beim Kopieren weitergibt.
+            Tab(
+              icon: Icon(Icons.bug_report,
+                  color: context.watch<AppState>().accentColor),
+              text: 'Diagnostics',
+            ),
           ],
         ),
       ),
@@ -71,6 +80,7 @@ class _ScreenSettingsState extends State<ScreenSettings>
           PageAlarmTones(),
           PageAppearance(),
           PageAboutpage(),
+          PageDiagnostics(),
         ],
       ),
     );

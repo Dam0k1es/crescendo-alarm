@@ -8,6 +8,7 @@ import 'package:wakeywakey/models/alarms/myalarm.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:wakeywakey/utils/diag/diag_log.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
 class AppState extends ChangeNotifier {
@@ -36,16 +37,34 @@ class AppState extends ChangeNotifier {
   // Sleep Goal Configuration variables
   TimeOfDay _sleepGoal = const TimeOfDay(hour: 8, minute: 0);
   TimeOfDay _durationToWakeUp = const TimeOfDay(hour: 0, minute: 30);
-  TimeOfDay _wakeUpSteps = const TimeOfDay(hour: 1, minute: 0);
   TimeOfDay _durationToGetReady = const TimeOfDay(hour: 1, minute: 0);
 
   bool _reminderEnabled = false;
   TimeOfDay _reminderDuration = const TimeOfDay(hour: 0, minute: 30);
   bool _gentleWakeUpEnabled = false;
-  bool _doNotDisturbEnabled = false;
-  bool _turnOffNotifications = false;
-  bool _turnOffCalls = false;
-  bool _rescheduleOnAlarm = true;
+  Duration _gentleWakeUpDuration = _gentleWakeUpDurationMinimum;
+
+  // Scheduling-v2 variables (docs/scheduling-v2-spec.md FR-3/FR-9/FR-16/FR-17)
+  int _gapDayCounter = 0;
+  int _lastCheckedUtcOffsetMinutes = 0;
+  DateTime? _lastReplanDate;
+  DateTime? _lastProcessedConcludedDay;
+  Map<String, int?> _pendingDayValues = {};
+  Map<String, bool> _pendingDayInstantAnchored = {};
+  bool _overrunNotificationSent = false;
+  bool _safetyValveNotificationSent = false;
+  bool _diagnosticsEnabled = true;
+  TimeOfDay? _wunschzeit;
+  Duration _maxDailyDelta = const Duration(minutes: 15);
+
+  static const _maxDailyDeltaMinimum = Duration(minutes: 15);
+
+  /// docs/TODO.md T-96: das Alarm-Plugin hat `assert(fadeDuration > Duration.zero)`
+  /// (`VolumeSettings.fade`), und der hh:mm-Picker auf dem Sleep-Habits-Schirm
+  /// laesst 00:00 zu. Im Release-Build sind Assertions aus, eine Null kaeme dort
+  /// also ungebremst an - deshalb eine harte Untergrenze. Eine Minute ist
+  /// zugleich der Wert, der vor T-96 festverdrahtet war.
+  static const _gentleWakeUpDurationMinimum = Duration(minutes: 1);
 
   // Theming variables
   bool _darkMode = false;
@@ -58,7 +77,6 @@ class AppState extends ChangeNotifier {
   // State variables
   bool _permissionsGranted = false;
   bool _isReadingCalendarMutex = false;
-  bool _isPreloadingCalendarMutex = false;
   bool _firstUpdateOfCalendar = true;
 
   AppState() {
@@ -74,13 +92,9 @@ class AppState extends ChangeNotifier {
 
   bool get gentleWakeUpEnabled => _gentleWakeUpEnabled;
 
-  bool get doNotDisturbEnabled => _doNotDisturbEnabled;
-
-  bool get turnOffNotifications => _turnOffNotifications;
-
-  bool get turnOffCalls => _turnOffCalls;
-
-  bool get rescheduleOnAlarm => _rescheduleOnAlarm;
+  /// Wie lange die Gentle-Wake-Rampe braucht, bis die volle Lautstaerke
+  /// erreicht ist - also wie lange der Alarm leise bleibt (docs/TODO.md T-96).
+  Duration get gentleWakeUpDuration => _gentleWakeUpDuration;
 
   bool get calendarsInitialized => _calendarsInitialized;
 
@@ -93,8 +107,6 @@ class AppState extends ChangeNotifier {
   TimeOfDay get sleepGoal => _sleepGoal;
 
   TimeOfDay get durationToWakeUp => _durationToWakeUp;
-
-  TimeOfDay get wakeUpSteps => _wakeUpSteps;
 
   // TODO durationToGetReady per Weekday - 0x399
   TimeOfDay get durationToGetReady => _durationToGetReady;
@@ -109,6 +121,71 @@ class AppState extends ChangeNotifier {
 
   List<ManualAlarm> get manualAlarms => _manualAlarms;
 
+  // Scheduling-v2 (docs/scheduling-v2-spec.md FR-3/FR-9/FR-16/FR-17)
+  int get gapDayCounter => _gapDayCounter;
+
+  Duration get lastCheckedUtcOffset =>
+      Duration(minutes: _lastCheckedUtcOffsetMinutes);
+
+  /// FR-17's daily guard **only**: "has a checkpoint already run today?".
+  /// Deliberately no longer doubles as the day-advance progress marker - see
+  /// [lastProcessedConcludedDay] (`docs/TODO.md` T-75).
+  DateTime? get lastReplanDate => _lastReplanDate;
+
+  /// The last calendar day that has actually been *concluded and processed* by
+  /// a replan - i.e. counted by FR-9's `gapDayCounter` and checked by FR-12.
+  ///
+  /// Split out from [lastReplanDate] (`docs/TODO.md` T-75): since T-71 the day
+  /// a replan may treat as concluded depends on its trigger (the ring
+  /// checkpoint concludes today, FR-17's recovery and a settings change do
+  /// not), while "a checkpoint ran today" is true for all of them. Sharing one
+  /// field meant a perfectly normal early-morning recovery replan consumed the
+  /// marker without advancing it, and the real ring later that day then found
+  /// nothing left to process - that day was lost for good, so FR-9 under-counted
+  /// (its safety valve could never trip) and FR-12 never reported for it.
+  DateTime? get lastProcessedConcludedDay => _lastProcessedConcludedDay;
+
+  /// Raw `ISO-Datum -> millisecondsSinceEpoch|null` map, deliberately kept in
+  /// this exact shape (not e.g. `Map<DateTime, DateTime?>`) because FR-16
+  /// Checkpoint 2 reads/writes the same `SharedPreferences` key from a
+  /// background isolate with no `AppState`/`Provider` access at all - the
+  /// stored format must be decodable without any AppState-side model.
+  Map<String, int?> get pendingDayValues => _pendingDayValues;
+
+  /// Per planned day: was its value taken directly from a real `hardFloor`
+  /// (`true`, instant-anchored - a fixed real moment) or computed from
+  /// `wunschzeit`/the smoothing curve (`false`, wall-clock-anchored)? FR-16's
+  /// Checkpoint 2 runs in a background isolate without calendar access and
+  /// cannot re-derive this, so it is persisted next to [pendingDayValues] in
+  /// the same directly-decodable shape.
+  Map<String, bool> get pendingDayInstantAnchored => _pendingDayInstantAnchored;
+
+  /// FR-6 requires the overrun warning "einmalig" - remembers that it was
+  /// already sent for the currently running overrun episode
+  /// (`docs/TODO.md` T-74a).
+  bool get overrunNotificationSent => _overrunNotificationSent;
+
+  /// FR-9's counterpart to [overrunNotificationSent] (`docs/TODO.md` T-81):
+  /// the safety-valve warning had no such throttle, while
+  /// `safetyValveTriggered` is re-derived by `computeWeekPlan` on *every*
+  /// replan - so the warning repeated on every app open and every settings
+  /// change for as long as the valve stayed engaged. Which, before T-78, was
+  /// forever: with no alarms left there is no ring checkpoint to reset it.
+  bool get safetyValveNotificationSent => _safetyValveNotificationSent;
+
+  /// Ob der PII-freie Ereignis-Logger aufzeichnet (`docs/TODO.md` T-89).
+  ///
+  /// Standardmaessig an: das Log verlaesst das Geraet nur, wenn der Nutzer es
+  /// in den Einstellungen ausdruecklich kopiert, und es kann konstruktiv keine
+  /// personenbezogenen Daten enthalten - die Aufzeichnungs-API nimmt keinen
+  /// einzigen String. Der Schalter existiert trotzdem, weil "an, aber
+  /// abschaltbar und einsehbar" die einzige ehrliche Voreinstellung ist.
+  bool get diagnosticsEnabled => _diagnosticsEnabled;
+
+  TimeOfDay? get wunschzeit => _wunschzeit;
+
+  Duration get maxDailyDelta => _maxDailyDelta;
+
   List<ScheduledAlarm> get scheduledAlarms => _scheduledAlarms;
 
   Color get accentColor => _accentColor;
@@ -116,8 +193,6 @@ class AppState extends ChangeNotifier {
   bool get isReadingCalendarMutex => _isReadingCalendarMutex;
 
   String get currentTimeZone => _currentTimeZone;
-
-  bool get isPreloadingCalendarMutex => _isPreloadingCalendarMutex;
 
   bool get permissionsGranted => _permissionsGranted;
 
@@ -151,27 +226,98 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  set doNotDisturbEnabled(bool value) {
-    _doNotDisturbEnabled = value;
-    _prefs.setBool('doNotDisturbEnabled', _doNotDisturbEnabled);
+  set gentleWakeUpDuration(Duration value) {
+    // Nach unten geklammert (docs/TODO.md T-96): das Alarm-Plugin verlangt
+    // `fadeDuration > Duration.zero`, der hh:mm-Picker laesst aber 00:00 zu -
+    // und im Release-Build wuerde die Assertion nicht greifen.
+    _gentleWakeUpDuration =
+        value < _gentleWakeUpDurationMinimum ? _gentleWakeUpDurationMinimum : value;
+    _prefs.setInt('gentleWakeUpSeconds', _gentleWakeUpDuration.inSeconds);
     notifyListeners();
   }
 
-  set turnOffNotifications(bool value) {
-    _turnOffNotifications = value;
-    _prefs.setBool('turnOffNotifications', _turnOffNotifications);
+
+
+
+
+  set gapDayCounter(int value) {
+    _gapDayCounter = value;
+    _prefs.setInt('gapDayCounter', _gapDayCounter);
     notifyListeners();
   }
 
-  set turnOffCalls(bool value) {
-    _turnOffCalls = value;
-    _prefs.setBool('turnOffCalls', _turnOffCalls);
+  set lastCheckedUtcOffset(Duration value) {
+    _lastCheckedUtcOffsetMinutes = value.inMinutes;
+    _prefs.setInt(
+        'lastCheckedUtcOffsetMinutes', _lastCheckedUtcOffsetMinutes);
     notifyListeners();
   }
 
-  set rescheduleOnAlarm(bool value) {
-    _rescheduleOnAlarm = value;
-    _prefs.setBool('rescheduleOnAlarm', _rescheduleOnAlarm);
+  set lastReplanDate(DateTime? value) {
+    _lastReplanDate = value;
+    if (value == null) {
+      _prefs.remove('lastReplanDate');
+    } else {
+      _prefs.setString('lastReplanDate', value.toIso8601String());
+    }
+    notifyListeners();
+  }
+
+  set lastProcessedConcludedDay(DateTime? value) {
+    _lastProcessedConcludedDay = value;
+    if (value == null) {
+      _prefs.remove('lastProcessedConcludedDay');
+    } else {
+      _prefs.setString('lastProcessedConcludedDay', value.toIso8601String());
+    }
+    notifyListeners();
+  }
+
+  set pendingDayValues(Map<String, int?> value) {
+    _pendingDayValues = value;
+    _prefs.setString('pendingDayValues', jsonEncode(value));
+    notifyListeners();
+  }
+
+  set pendingDayInstantAnchored(Map<String, bool> value) {
+    _pendingDayInstantAnchored = value;
+    _prefs.setString('pendingDayInstantAnchored', jsonEncode(value));
+    notifyListeners();
+  }
+
+  set diagnosticsEnabled(bool value) {
+    _diagnosticsEnabled = value;
+    _prefs.setBool('diagnosticsEnabled', _diagnosticsEnabled);
+    Diag.setEnabled(value);
+    notifyListeners();
+  }
+
+  set safetyValveNotificationSent(bool value) {
+    _safetyValveNotificationSent = value;
+    _prefs.setBool('safetyValveNotificationSent', _safetyValveNotificationSent);
+    notifyListeners();
+  }
+
+  set overrunNotificationSent(bool value) {
+    _overrunNotificationSent = value;
+    _prefs.setBool('overrunNotificationSent', _overrunNotificationSent);
+    notifyListeners();
+  }
+
+  set wunschzeit(TimeOfDay? value) {
+    _wunschzeit = value;
+    if (value == null) {
+      _prefs.remove('wunschzeit');
+    } else {
+      _prefs.setString('wunschzeit', '${value.hour}:${value.minute}');
+    }
+    notifyListeners();
+  }
+
+  set maxDailyDelta(Duration value) {
+    _maxDailyDelta =
+        value < _maxDailyDeltaMinimum ? _maxDailyDeltaMinimum : value;
+    _prefs.setInt('maxDailyDeltaMinutes', _maxDailyDelta.inMinutes);
     notifyListeners();
   }
 
@@ -188,12 +334,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  set wakeUpSteps(TimeOfDay value) {
-    _wakeUpSteps = value;
-    _prefs.setString(
-        'wakeUpSteps', '${_wakeUpSteps.hour}:${_wakeUpSteps.minute}');
-    notifyListeners();
-  }
 
   set durationToGetReady(TimeOfDay value) {
     _durationToGetReady = value;
@@ -277,11 +417,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  set isPreloadingCalendarMutex(bool value) {
-    _isPreloadingCalendarMutex = value;
-    // No persistence needed
-    notifyListeners();
-  }
 
   set permissionsGranted(bool value) {
     _permissionsGranted = value;
@@ -318,6 +453,7 @@ class AppState extends ChangeNotifier {
           title: alarm.title,
           enabled: alarm.enabled,
           gentlewake: alarm.gentlewake,
+          gentleWakeDuration: alarm.gentleWakeDuration,
           tone: alarm.tone,
           volume: alarm.volume,
           repeatOnDays: alarm.repeatOnDays);
@@ -339,10 +475,11 @@ class AppState extends ChangeNotifier {
       ScheduledAlarm newAlarm = ScheduledAlarm(
           id: alarm.id,
           time: alarm.time,
-          title: alarm.title,
           enabled: alarm.enabled,
           gentlewake: alarm.gentlewake,
-          tone: alarm.tone);
+          gentleWakeDuration: alarm.gentleWakeDuration,
+          tone: alarm.tone,
+          volume: alarm.volume);
       if (_scheduledAlarms.contains(alarm)) {
         debugPrint(
             'ScheduledAlarm with id ${alarm.id} is already in list! Removing it.');
@@ -428,7 +565,7 @@ class AppState extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint("=====getAlarm: $e");
+      debugPrint("=====getAlarm: ${e.runtimeType}");
     }
     try {
       for (MyAlarm alarm in _scheduledAlarms) {
@@ -437,35 +574,30 @@ class AppState extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint("=====getAlarm: $e");
+      debugPrint("=====getAlarm: ${e.runtimeType}");
     }
     return null;
   }
 
-  DateTime _getAlarmTime(MyAlarm alarm) {
+  /// Resolves a [ManualAlarm]'s bare [TimeOfDay] to its next occurrence.
+  ///
+  /// Only [ManualAlarm]s: a `ScheduledAlarm` already carries an absolute
+  /// instant and is handed straight to `_setAlarm`, which converts it properly
+  /// (`alarmPlatformTime`). The former `ScheduledAlarm` branch here was
+  /// unreachable - both call sites sit inside a `ManualAlarm` check - **and** a
+  /// latent T-61 trap: it rebuilt `DateTime(alarm.time.year, ...)` from the
+  /// instant's raw fields, reinterpreting UTC digits as device-local time.
+  /// Deleted rather than fixed (docs/TODO.md T-86).
+  DateTime _getAlarmTime(ManualAlarm alarm) {
     DateTime now = DateTime.now();
-    DateTime alarmDateTime = now;
-
-    if (alarm is ManualAlarm) {
-      debugPrint(
-          "=====getAlarmTime: ${alarm.id} is a manual alarm set on ${alarm.time}");
-      // Initalize with alarm.time as TimeOfDay
-      alarmDateTime = DateTime(
-          now.year, now.month, now.day, alarm.time.hour, alarm.time.minute);
-      // Only alarms in the future are allowed to be set
-      if (alarmDateTime.isBefore(now)) {
-        alarmDateTime = alarmDateTime.add(const Duration(days: 1));
-      }
+    debugPrint(
+        "=====getAlarmTime: ${alarm.id} is a manual alarm set on ${alarm.time}");
+    DateTime alarmDateTime = DateTime(
+        now.year, now.month, now.day, alarm.time.hour, alarm.time.minute);
+    // Only alarms in the future are allowed to be set
+    if (alarmDateTime.isBefore(now)) {
+      alarmDateTime = alarmDateTime.add(const Duration(days: 1));
     }
-
-    if (alarm is ScheduledAlarm) {
-      debugPrint(
-          "=====getAlarmTime: ${alarm.id} is a scheduled alarm set on ${alarm.time}");
-      // Initalize with alarm.time as DateTime
-      alarmDateTime = DateTime(alarm.time.year, alarm.time.month,
-          alarm.time.day, alarm.time.hour, alarm.time.minute);
-    }
-
     return alarmDateTime;
   }
 
@@ -473,18 +605,18 @@ class AppState extends ChangeNotifier {
     // Set the alarm with the proper settings
     final alarmSettings = AlarmSettings(
       id: alarm.id,
-      dateTime: DateTime(
-        alarmDateTime.year,
-        alarmDateTime.month,
-        alarmDateTime.day,
-        alarmDateTime.hour,
-        alarmDateTime.minute,
-      ),
+      // docs/TODO.md T-61: converts the instant to local time first instead of
+      // reinterpreting its raw digits as local (see alarmPlatformTime).
+      dateTime: alarmPlatformTime(alarmDateTime),
       assetAudioPath: alarm.tone,
+      // docs/TODO.md T-96: die Rampendauer kam bisher als festverdrahtete
+      // `Duration(seconds: 60)` von hier. Jetzt traegt sie der Alarm selbst,
+      // damit `planAlarmSync` eine Aenderung als Abweichung erkennen und den
+      // Alarm ersetzen kann (die Lehre aus T-84).
       volumeSettings: alarm.gentlewake
           ? VolumeSettings.fade(
               volume: alarm.volume,
-              fadeDuration: const Duration(seconds: 60),
+              fadeDuration: alarm.gentleWakeDuration,
             )
           : VolumeSettings.fixed(volume: alarm.volume),
       notificationSettings: NotificationSettings(
@@ -526,7 +658,7 @@ class AppState extends ChangeNotifier {
       return decodedAlarms;
     } catch (e) {
       debugPrint(
-          "=====_loadScheduledAlarms: Error loading scheduled alarms: $e");
+          "=====_loadScheduledAlarms: Error loading scheduled alarms: ${e.runtimeType}");
       return null;
     }
   }
@@ -541,7 +673,66 @@ class AppState extends ChangeNotifier {
           .toList();
       return decodedAlarms;
     } catch (e) {
-      debugPrint("=====_loadManualAlarms: Error loading manual alarms: $e");
+      debugPrint("=====_loadManualAlarms: Error loading manual alarms: ${e.runtimeType}");
+      return null;
+    }
+  }
+
+  DateTime? _loadStoredDate(String key) {
+    try {
+      final data = _prefs.getString(key);
+      if (data == null) return null;
+      return DateTime.parse(data);
+    } catch (e) {
+      debugPrint("=====_loadStoredDate: Error loading $key: ${e.runtimeType}");
+      return null;
+    }
+  }
+
+  DateTime? _loadLastReplanDate() => _loadStoredDate('lastReplanDate');
+
+  /// docs/TODO.md T-75. Falls back to the old `lastReplanDate` key when the
+  /// new one is absent: on an app that was installed before the two markers
+  /// were split, `lastReplanDate` *was* the day-advance progress marker, so
+  /// reusing it here is the correct migration - starting the new field at
+  /// `null` instead would make the next replan re-process (and re-count, FR-9)
+  /// a day that had already concluded.
+  DateTime? _loadLastProcessedConcludedDay() =>
+      _loadStoredDate('lastProcessedConcludedDay') ?? _loadLastReplanDate();
+
+  Map<String, int?>? _loadPendingDayValues() {
+    try {
+      final data = _prefs.getString('pendingDayValues');
+      if (data == null) return null;
+      final decoded = jsonDecode(data) as Map<String, dynamic>;
+      return decoded.map((key, value) => MapEntry(key, value as int?));
+    } catch (e) {
+      debugPrint(
+          "=====_loadPendingDayValues: Error loading pendingDayValues: ${e.runtimeType}");
+      return null;
+    }
+  }
+
+  TimeOfDay? _loadWunschzeit() {
+    try {
+      final data = _prefs.getString('wunschzeit');
+      if (data == null) return null;
+      return timeOfDayFromString(data);
+    } catch (e) {
+      debugPrint("=====_loadWunschzeit: Error loading wunschzeit: ${e.runtimeType}");
+      return null;
+    }
+  }
+
+  Map<String, bool>? _loadPendingDayInstantAnchored() {
+    try {
+      final data = _prefs.getString('pendingDayInstantAnchored');
+      if (data == null) return null;
+      final decoded = jsonDecode(data) as Map<String, dynamic>;
+      return decoded.map((key, value) => MapEntry(key, value as bool));
+    } catch (e) {
+      debugPrint(
+          "=====_loadPendingDayInstantAnchored: Error loading pendingDayInstantAnchored: ${e.runtimeType}");
       return null;
     }
   }
@@ -559,7 +750,7 @@ class AppState extends ChangeNotifier {
       return decodedDeactivationCode;
     } catch (e) {
       debugPrint(
-          "=====_loadDeactivationCode: Error loading deactivation code: $e");
+          "=====_loadDeactivationCode: Error loading deactivation code: ${e.runtimeType}");
       return null;
     }
   }
@@ -570,7 +761,7 @@ class AppState extends ChangeNotifier {
       if (data == null) return null;
       return timeOfDayFromString(data);
     } catch (e) {
-      debugPrint("=====_loadSleepGoal: Error loading sleep goal: $e");
+      debugPrint("=====_loadSleepGoal: Error loading sleep goal: ${e.runtimeType}");
       return null;
     }
   }
@@ -582,21 +773,11 @@ class AppState extends ChangeNotifier {
       return timeOfDayFromString(data);
     } catch (e) {
       debugPrint(
-          "=====_loadDurationToWakeUp: Error loading durationToWakeUp: $e");
+          "=====_loadDurationToWakeUp: Error loading durationToWakeUp: ${e.runtimeType}");
       return null;
     }
   }
 
-  TimeOfDay? _loadWakeUpSteps() {
-    try {
-      final data = _prefs.getString('wakeUpSteps');
-      if (data == null) return null;
-      return timeOfDayFromString(data);
-    } catch (e) {
-      debugPrint("=====_loadWakeUpSteps: Error loading wakeUpSteps: $e");
-      return null;
-    }
-  }
 
   TimeOfDay? _loadDurationToGetReady() {
     try {
@@ -605,7 +786,7 @@ class AppState extends ChangeNotifier {
       return timeOfDayFromString(data);
     } catch (e) {
       debugPrint(
-          "=====_loadDurationToGetReady: Error loading durationToGetReady: $e");
+          "=====_loadDurationToGetReady: Error loading durationToGetReady: ${e.runtimeType}");
       return null;
     }
   }
@@ -617,7 +798,7 @@ class AppState extends ChangeNotifier {
       return timeOfDayFromString(data);
     } catch (e) {
       debugPrint(
-          "=====_loadReminderDuration: Error loading reminderDuration: $e");
+          "=====_loadReminderDuration: Error loading reminderDuration: ${e.runtimeType}");
       return null;
     }
   }
@@ -646,13 +827,37 @@ class AppState extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint("=====isCalendarWeekFetched: $e");
+      debugPrint("=====isCalendarWeekFetched: ${e.runtimeType}");
       return false;
     }
 
     debugPrint(
         "=====updateCalendarData: ${appState.visibleDate} has not been fetched. (See ${appState.fetchedCalendarWeeks})");
     return false;
+  }
+
+  /// docs/TODO.md T-69: re-reads the scheduling-v2 fields that FR-16's
+  /// Checkpoint 2 may have written straight to `SharedPreferences` from a
+  /// background isolate, where this (main-isolate) instance never saw the
+  /// change. Called at the start of every `replan()` so a plan is never merged
+  /// on top of a stale in-memory copy.
+  Future<void> reloadSchedulingStateFromPreferences() async {
+    try {
+      await _prefs.reload();
+      _gapDayCounter = _prefs.getInt('gapDayCounter') ?? _gapDayCounter;
+      _lastCheckedUtcOffsetMinutes =
+          _prefs.getInt('lastCheckedUtcOffsetMinutes') ??
+              _lastCheckedUtcOffsetMinutes;
+      _lastReplanDate = _loadLastReplanDate() ?? _lastReplanDate;
+      _lastProcessedConcludedDay =
+          _loadLastProcessedConcludedDay() ?? _lastProcessedConcludedDay;
+      _pendingDayValues = _loadPendingDayValues() ?? _pendingDayValues;
+      _pendingDayInstantAnchored =
+          _loadPendingDayInstantAnchored() ?? _pendingDayInstantAnchored;
+    } catch (e) {
+      debugPrint(
+          "=====reloadSchedulingStateFromPreferences: Error reloading: ${e.runtimeType}");
+    }
   }
 
   // only overrides values not being already set
@@ -670,14 +875,12 @@ class AppState extends ChangeNotifier {
       _reminderEnabled = _prefs.getBool('reminderEnabled') ?? _reminderEnabled;
       _gentleWakeUpEnabled =
           _prefs.getBool('gentleWakeUpEnabled') ?? _gentleWakeUpEnabled;
-      _doNotDisturbEnabled =
-          _prefs.getBool('doNotDisturbEnabled') ?? _doNotDisturbEnabled;
-      _turnOffNotifications =
-          _prefs.getBool('turnOffNotifications') ?? _turnOffNotifications;
-      _turnOffCalls = _prefs.getBool('turnOffCalls') ?? _turnOffCalls;
+      final gentleWakeUpSeconds = _prefs.getInt('gentleWakeUpSeconds');
+      if (gentleWakeUpSeconds != null) {
+        _gentleWakeUpDuration = Duration(seconds: gentleWakeUpSeconds);
+      }
       _sleepGoal = _loadSleepGoal() ?? _sleepGoal;
       _durationToWakeUp = _loadDurationToWakeUp() ?? _durationToWakeUp;
-      _wakeUpSteps = _loadWakeUpSteps() ?? _wakeUpSteps;
       _durationToGetReady = _loadDurationToGetReady() ?? _durationToGetReady;
       _reminderDuration = _loadReminderDuration() ?? _reminderDuration;
       _scheduledAlarms = _loadScheduledAlarms() ?? _scheduledAlarms;
@@ -690,8 +893,30 @@ class AppState extends ChangeNotifier {
       _deactivationCode = _loadDeactivationCode();
       // Set Monday as the first day of the week by default:
       _startOfWeekDay = _prefs.getInt('startOfWeekDay') ?? _startOfWeekDay;
+      _gapDayCounter = _prefs.getInt('gapDayCounter') ?? _gapDayCounter;
+      _lastCheckedUtcOffsetMinutes =
+          _prefs.getInt('lastCheckedUtcOffsetMinutes') ??
+              _lastCheckedUtcOffsetMinutes;
+      _lastReplanDate = _loadLastReplanDate() ?? _lastReplanDate;
+      _lastProcessedConcludedDay =
+          _loadLastProcessedConcludedDay() ?? _lastProcessedConcludedDay;
+      _pendingDayValues = _loadPendingDayValues() ?? _pendingDayValues;
+      _pendingDayInstantAnchored =
+          _loadPendingDayInstantAnchored() ?? _pendingDayInstantAnchored;
+      _overrunNotificationSent =
+          _prefs.getBool('overrunNotificationSent') ?? _overrunNotificationSent;
+      _safetyValveNotificationSent =
+          _prefs.getBool('safetyValveNotificationSent') ??
+              _safetyValveNotificationSent;
+      _diagnosticsEnabled =
+          _prefs.getBool('diagnosticsEnabled') ?? _diagnosticsEnabled;
+      _wunschzeit = _loadWunschzeit();
+      final maxDailyDeltaMinutes = _prefs.getInt('maxDailyDeltaMinutes');
+      if (maxDailyDeltaMinutes != null) {
+        _maxDailyDelta = Duration(minutes: maxDailyDeltaMinutes);
+      }
     } catch (e) {
-      debugPrint("=====_loadFromPreferences: Error loading preferences: $e");
+      debugPrint("=====_loadFromPreferences: Error loading preferences: ${e.runtimeType}");
     }
     notifyListeners();
   }

@@ -31,10 +31,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/main.dart';
+import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
 import 'package:wakeywakey/screens/alarms/screen_active_alarm.dart';
 import 'package:wakeywakey/screens/alarms/screen_alarms.dart';
 import 'package:wakeywakey/screens/scan_code/qr_scanner.dart';
+import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:wakeywakey/utils/notifications.dart';
+import 'package:wakeywakey/utils/utils.dart';
 
 /// Repeatedly pumps [tester] until [finder] matches something, or [timeout]
 /// elapses. Unlike `pumpAndSettle`, this is safe to use while waiting on a
@@ -139,6 +143,83 @@ Future<void> createManualAlarmOneMinuteFromNow(
         '(docs/TODO.md T-23).');
   }
 }
+
+
+/// Nimmt Benachrichtigungen still entgegen. Ohne das wuerde jedes
+/// Engine-Szenario echte Notifications auf dem Testgeraet erzeugen (und die
+/// Bettzeit-Notification aus FR-16s Voraussetzung feuert bei jedem
+/// Checkpoint).
+class _SilentNotifications implements Notifications {
+  @override
+  Future<int> scheduleNotification({
+    String? title,
+    String? body,
+    DateTime? scheduledDate,
+    int? id,
+  }) async =>
+      id ?? 1;
+
+  @override
+  Future<void> cancelAllNotifications() async {}
+
+  @override
+  Future<void> cancelNotification(int id) async {}
+
+  @override
+  Future<void> init() async {}
+}
+
+/// Bringt die Engine mit **einem** injizierten Kalendertermin in einen exakt
+/// vorhersagbaren Zustand und gibt dessen `hardFloor` (= den Terminbeginn)
+/// zurueck.
+///
+/// Warum das deterministisch ist: mit `durationToWakeUp` und
+/// `durationToGetReady` auf null ist der `hardFloor` genau der Terminbeginn
+/// (FR-2), und ohne `wunschzeit` und ohne Vorgeschichte greift FR-10s
+/// Kaltstart - der erste Tag mit echtem `hardFloor` bekommt **exakt** diesen
+/// Wert, die Folgetage halten dieselbe Wanduhrzeit (FR-4 ohne Ziel). Aus einem
+/// Termin entstehen so mehrere Alarme, was fuer die T-64-Pruefung sogar
+/// gebraucht wird: es muss "die anderen Alarme" geben, die ein Dismiss nicht
+/// loeschen darf.
+///
+/// `manualSync` als Auslöser ist wesentlich: FR-17s Tagessperre hat beim
+/// App-Start schon zugeschlagen (main.dart fuhr einen appForeground-Checkpoint
+/// gegen den leeren Geraetekalender), ein zweiter appForeground waere also ein
+/// reines No-op. `manualSync` unterliegt der Sperre nicht und behandelt heute
+/// nicht als abgeschlossen, das Fenster beginnt damit **heute**.
+Future<DateTime> planOneCalendarEvent(
+  AppState appState, {
+  Duration leadTime = const Duration(hours: 2),
+}) async {
+  appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
+  appState.durationToGetReady = const TimeOfDay(hour: 0, minute: 0);
+  appState.wunschzeit = null;
+
+  // Ein echter Zukunftszeitpunkt ist Pflicht: AppState.addAlarm verwirft einen
+  // ScheduledAlarm, dessen Zeit nicht nach dem ECHTEN DateTime.now() liegt -
+  // nicht nach einem injizierten "now".
+  final eventStart = DateTime.now().toUtc().add(leadTime);
+
+  await runSchedulingCheckpoint(
+    appState,
+    trigger: CheckpointTrigger.manualSync,
+    notifications: _SilentNotifications(),
+    fetchEvents: (start, end) async => <Meeting>[
+      Meeting(
+        from: eventStart,
+        to: eventStart.add(const Duration(hours: 1)),
+        isAllDay: false,
+        startTimeZone: 'Etc/UTC',
+        endTimeZone: 'Etc/UTC',
+      ),
+    ],
+  );
+
+  return eventStart;
+}
+
+Set<DateTime> platformAlarmTimes(List<AlarmSettings> alarms) =>
+    alarms.map((a) => a.dateTime).toSet();
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -257,4 +338,128 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 1)),
   );
+
+  // ------------------------------------------------------------------------
+  // scheduling-v2 auf dem Geraet (docs/TODO.md T-91).
+  //
+  // Warum das hier hingehoert und nicht in die Unit-Suite: KEIN Unit-Test
+  // mockt den Kanal des `alarm`-Plugins. In `flutter test` wirft
+  // `Alarm.set()`/`Alarm.getAlarms()` und wird geschluckt (apply_alarms.dart) -
+  // die Unit-Suite prueft also ausschliesslich AppState-Listen. Alles zwischen
+  // `appState.addAlarm` und einem wirklich registrierten Alarm war bis hier
+  // unbelegt, und Phase 6 hat gerade den alten Motor geloescht.
+
+  testWidgets(
+      'T-63: an injected calendar event becomes real, registered alarms',
+      (tester) async {
+    final appState = await pumpFreshApp(tester);
+
+    final eventStart = await planOneCalendarEvent(appState);
+
+    // Der Plan ist in AppState angekommen ...
+    expect(appState.scheduledAlarms, isNotEmpty,
+        reason: 'FR-18 muss aus dem berechneten Plan echte ScheduledAlarms '
+            'machen - genau das fehlte in T-63 vollstaendig.');
+    // ... UND auf der Plattform. Das ist die Aussage, die kein Unit-Test
+    // treffen kann.
+    final onPlatform = await Alarm.getAlarms();
+    for (final alarm in appState.scheduledAlarms) {
+      expect(onPlatform.map((a) => a.id), contains(alarm.id),
+          reason: 'ScheduledAlarm ${alarm.id} steht in AppState, aber nicht '
+              'im Alarm-Plugin - genau die Divergenz aus T-74e.');
+    }
+    // Der Termintag selbst traegt exakt den hardFloor (FR-2 als Obergrenze,
+    // hier mit Vorlaufzeiten von null also der Terminbeginn).
+    expect(platformAlarmTimes(onPlatform), contains(alarmPlatformTime(eventStart)),
+        reason: 'erwartet einen Alarm auf ${alarmPlatformTime(eventStart)}, '
+            'bekommen ${platformAlarmTimes(onPlatform)}');
+  });
+
+  testWidgets(
+      'T-61: the registered alarm carries the local reading of the planned instant',
+      (tester) async {
+    // Die Frame-Grenze, an der T-61 sass: ein Planwert ist ein UTC-getaggter
+    // Instant, `AlarmSettings.dateTime` wird vom Plugin als lokale Wanduhrzeit
+    // gelesen. Wurden die UTC-Ziffern einfach als lokal uebernommen, klingelte
+    // der Alarm um den Geraeteversatz falsch.
+    //
+    // Diese Zusicherung hat nur Aussagekraft, wenn das Geraet NICHT auf UTC
+    // steht - deshalb setzt .github/scripts/run_e2e_tests.sh die
+    // Emulator-Zeitzone auf Europe/Berlin. Auf einem UTC-Geraet ist der Test
+    // trivial wahr; die Zeitzone wird darum mitgemeldet.
+    final appState = await pumpFreshApp(tester);
+
+    final eventStart = await planOneCalendarEvent(appState);
+    final expected = alarmPlatformTime(eventStart);
+    final onPlatform = await Alarm.getAlarms();
+
+    expect(
+      platformAlarmTimes(onPlatform),
+      contains(expected),
+      reason: 'Geraetezone: ${DateTime.now().timeZoneName} '
+          '(${DateTime.now().timeZoneOffset}). Der geplante Instant '
+          '$eventStart entspricht lokal $expected; das Plugin hat '
+          '${platformAlarmTimes(onPlatform)}. Weichen die um genau den '
+          'Geraeteversatz ab, ist T-61 zurueck.',
+    );
+    // Und der Wert ist wirklich ein lokaler, kein UTC-getaggter.
+    expect(expected.isUtc, isFalse);
+  });
+
+  testWidgets(
+      'T-84: tone, volume and gentle wake reach the alarm plugin',
+      (tester) async {
+    final appState = await pumpFreshApp(tester);
+    appState.selectedTone = 'assets/sounds/annoying_alarm.mp3';
+    appState.selectedVolume = 0.35;
+    appState.gentleWakeUpEnabled = true;
+
+    await planOneCalendarEvent(appState);
+
+    final onPlatform = await Alarm.getAlarms();
+    final ids = appState.scheduledAlarms.map((a) => a.id).toSet();
+    final ours = onPlatform.where((a) => ids.contains(a.id)).toList();
+    expect(ours, isNotEmpty);
+    for (final alarm in ours) {
+      expect(alarm.assetAudioPath, 'assets/sounds/annoying_alarm.mp3');
+      expect(alarm.volumeSettings.volume, closeTo(0.35, 0.001),
+          reason: 'ScheduledAlarm hatte vor T-84 gar kein volume-Feld - alle '
+              'geplanten Alarme klangen mit dem Default 0.6 und ignorierten '
+              'appState.selectedVolume, obwohl es dafuer eine UI gibt.');
+    }
+  });
+
+  testWidgets(
+      'T-64: dismissing a ringing alarm leaves the planned week registered',
+      (tester) async {
+    // Der schwerste Befund des Konsistenz-Durchgangs, hier auf dem Geraet:
+    // `onAlarmHandled` rief den alten Scheduler, der zuerst ALLE
+    // ScheduledAlarms loeschte und dann ohne Ersatz abbrach, weil
+    // `appState.meetings` leer war. Nach einem Dismiss stand der Nutzer ohne
+    // jeden Alarm da.
+    final appState = await pumpFreshApp(tester);
+    await planOneCalendarEvent(appState);
+
+    final plannedIds = appState.scheduledAlarms.map((a) => a.id).toSet();
+    expect(plannedIds, isNotEmpty);
+
+    // Ein manueller Alarm klingelt und wird ueber das Overlay abgeschaltet -
+    // derselbe Pfad, der `Handler.onAlarmHandled` aufruft.
+    await createManualAlarmOneMinuteFromNow(tester, appState);
+    await pumpUntilFound(tester, find.byType(ScreenAlarmActive));
+    await tester.tap(find.text('Stop'));
+    await tester.pumpAndSettle();
+    await pumpUntilGone(tester, find.byType(ScreenAlarmActive));
+
+    // Die geplanten Alarme muessen samt und sonders noch da sein - in
+    // AppState UND auf der Plattform.
+    expect(appState.scheduledAlarms.map((a) => a.id).toSet(), plannedIds,
+        reason: 'ein Dismiss darf die geplante Woche nicht antasten (T-64)');
+    final stillOnPlatform = (await Alarm.getAlarms()).map((a) => a.id).toSet();
+    for (final id in plannedIds) {
+      expect(stillOnPlatform, contains(id),
+          reason: 'ScheduledAlarm $id ist nach dem Dismiss von der Plattform '
+              'verschwunden - genau der Ausgang, den T-64 beschreibt.');
+    }
+  });
 }

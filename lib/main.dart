@@ -9,11 +9,16 @@ import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/models/alarms/handler.dart';
+import 'package:wakeywakey/models/alarms/manual_alarm.dart';
+import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
+import 'package:wakeywakey/models/scheduling/day_marker.dart';
+import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/screens/alarms/screen_alarms.dart';
 import 'package:wakeywakey/screens/scan_code/screen_scancode.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 import 'package:wakeywakey/screens/settings/screen_settings.dart';
 import 'package:wakeywakey/screens/sleep_habits/screen_sleephabits.dart';
+import 'package:wakeywakey/utils/diag/diag_log.dart';
 import 'package:wakeywakey/utils/notifications.dart';
 import 'package:wakeywakey/utils/permissions.dart';
 import 'package:wakeywakey/utils/utils.dart';
@@ -184,23 +189,101 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       _previousRingingAlarms = ringingAlarms;
     });
 
-    // Initialize notifications
-    Notifications().init();
     notifications = Notifications();
 
     // Set the local timezone
     tzdata.initializeTimeZones();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // docs/TODO.md T-79: awaited, and BEFORE the checkpoint below. init()
+      // runs Alarm.init(), AwesomeNotifications().initialize() and
+      // setListeners(); the checkpoint immediately calls Alarm.getAlarms() /
+      // Alarm.set() (FR-18) and schedules FR-16's notification. Fired without
+      // awaiting, those landed inside the init window, where the catch blocks
+      // silently degrade: the T-74e platform reconciliation turns itself off
+      // and per-alarm Alarm.set errors are swallowed - so the sync could be a
+      // no-op on exactly FR-17's post-reboot recovery path. A notification
+      // created before setListeners() would likewise never wake Checkpoint 2.
+      try {
+        await notifications.init();
+      } catch (e) {
+        debugPrint("=====initState: Notifications().init() failed: ${e.runtimeType}");
+      }
+
+      // docs/TODO.md T-89: den Ereignis-Logger scharf stellen, bevor der
+      // erste Checkpoint laeuft - sonst faellt genau der Kaltstart aus dem
+      // Protokoll, also der Zustand, den FR-17s Erholungspfad reparieren
+      // soll. Registriert ausserdem die Alarmtypen, damit der Logger sie als
+      // stabilen Zahlencode fuehren kann statt als Namen (unter
+      // R8-Obfuskierung waere ein Name ohnehin Muell).
+      try {
+        Diag.registerType(ScheduledAlarm, 1);
+        Diag.registerType(ManualAlarm, 2);
+        await Diag.init(enabled: _appState.diagnosticsEnabled);
+        Diag.boot(
+          coldStart: _appState.lastReplanDate == null,
+          notificationsInitAwaited: true,
+          scheduledAlarmCount: _appState.scheduledAlarms.length,
+          manualAlarmCount: _appState.manualAlarms.length,
+          pendingValueCount: _appState.pendingDayValues.length,
+          daysSinceLastReplan: _appState.lastReplanDate == null
+              ? -1
+              : dayDistance(DateTime.now(), _appState.lastReplanDate!),
+        );
+      } catch (e) {
+        debugPrint("=====initState: Diag.init failed: ${e.runtimeType}");
+      }
+
       final String localTimeZone = DateTime.now().timeZoneName;
       final tz.Location location = getLocationFromAbbreviation(localTimeZone);
       _appState.currentTimeZone = location.name;
-      debugPrint(
-          "=====initState: Current timezone is ${_appState.currentTimeZone}");
+      // docs/TODO.md T-89: der Zonenname ist regional identifizierend - eine
+      // Historie daraus ist eine Reisespur. Nur die Tatsache loggen.
+      debugPrint("=====initState: timezone resolved");
+
+      // FR-17 (docs/scheduling-v2-spec.md): a conditional third Checkpoint-1
+      // trigger, running "sofort, vor jeder UI-Interaktion" whenever
+      // lastReplanDate is stale (catches a reboot, a force-quit, or simply a
+      // missed daily ring) - a no-op otherwise. Runs before the calendar
+      // preload below since it's the higher-priority recovery path.
+      // The checkpoint schedules FR-16's sleep-time notification itself, in
+      // every case (docs/TODO.md T-80) - so a cold start gets its Checkpoint-2
+      // hook here even when nothing needs replanning.
+      await runCheckpointSafely(_appState,
+          trigger: CheckpointTrigger.appForeground);
 
       // TODO user configurable preload range - 0x39A
       // Load calendar data after setting timezone
       await preloadCalendarData(_appState, pastWeeks: 2, futureWeeks: 1);
     });
+  }
+
+  /// FR-17 (docs/TODO.md T-68): the checkpoint must also run on a real
+  /// foreground transition, not only when this widget is first mounted.
+  /// `initState`'s post-frame call covers a cold start (reboot, force-quit);
+  /// this covers resuming a warm process, which is the normal case on Android
+  /// and the third gap FR-17 explicitly names ("ein App-Öffnen zwischendurch
+  /// ist ein zusätzlicher, günstiger Gelegenheits-Neuread"). Idempotent by
+  /// FR-17's own guard: the checkpoint is a no-op when today has already been
+  /// replanned - and it is serialized against the ring checkpoint that the
+  /// full-screen intent bringing us to the foreground has just started
+  /// (docs/TODO.md T-77).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      unawaited(runCheckpointSafely(_appState,
+          trigger: CheckpointTrigger.appForeground));
+    }
+    // docs/TODO.md T-89: beim Verlassen der App den Ereignis-Puffer
+    // persistieren. Der Checkpoint tut das am Ende seiner Sequenz selbst;
+    // dieser Aufruf faengt alles, was seither dazugekommen ist (Klingeln,
+    // QR-Gate, Kalenderzugriffe) - sonst waere es beim naechsten Prozesstod
+    // verloren, und genau die Ereignisse rund um einen Alarm sind die
+    // interessanten.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      unawaited(Diag.flush());
+    }
   }
 
   @override

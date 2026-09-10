@@ -11,7 +11,7 @@ Future initCalendars(AppState appState) async {
   try {
     result = await _deviceCalendarPlugin.retrieveCalendars();
   } catch (e) {
-    debugPrint("=====initCalendars: Error retrieving calendars: $e");
+    debugPrint("=====initCalendars: Error retrieving calendars: ${e.runtimeType}");
   }
 
   for (ResultError error in result.errors) {
@@ -21,9 +21,10 @@ Future initCalendars(AppState appState) async {
 
   if (result.isSuccess) {
     calendars = result.data;
-    for (Calendar calendar in calendars) {
-      debugPrint("======initCalendars: Found calendar ${calendar.name}");
-    }
+    // docs/TODO.md T-89: device_calendar liefert fuer Google-/Exchange-Konten
+    // den Kontonamen als Calendar.name, also regelmaessig die echte
+    // Mailadresse des Nutzers. Nur die Anzahl loggen.
+    debugPrint("======initCalendars: Found ${calendars.length} calendar(s)");
     if (calendars.isNotEmpty) {
       appState.calendarsInitialized = true;
     }
@@ -68,11 +69,13 @@ Future<List<Meeting>> getCalendarEntries(
           if (!appState.meetings.contains(meeting)) {
             meetingCollection.add(meeting);
           } else {
+            // docs/TODO.md T-89: eventName ist der Termintitel aus dem
+            // Geraetekalender ("Onkologie Nachsorge"). Nie loggen.
             debugPrint(
-                "=====getCalendarEntries: Meeting ${meeting.eventName} already exists in list, skipping");
+                "=====getCalendarEntries: meeting already in list, skipping");
           }
         } catch (e) {
-          debugPrint("=====getCalendarEntries: Error add meeting to list: $e");
+          debugPrint("=====getCalendarEntries: Error add meeting to list: ${e.runtimeType}");
         }
       }
     }
@@ -82,6 +85,85 @@ Future<List<Meeting>> getCalendarEntries(
       "=====getCalendarEntries: Read ${meetingCollection.length} meetings from OS");
 
   return meetingCollection;
+}
+
+/// docs/TODO.md T-61/T-60: fetches events for `[start, end)` directly from
+/// `_deviceCalendarPlugin`, bypassing both `_fetchedCalendarWeeks`
+/// (`isCalendarWeekFetched`/`updateCalendarData`'s cache, T-60) and
+/// `getCalendarEntries`'s own dedup-against-`appState.meetings` check -
+/// scheduling-v2's `replan()` (`lib/models/scheduling/replan.dart`) needs the
+/// true, complete current calendar state every time it replans, never a diff
+/// against what a previous replan already saw (FR-11/FR-12 both depend on
+/// that). `startTimeZone`/`endTimeZone` are left blank: nothing in the
+/// scheduling-v2 domain layer (`scheduling_v2.dart`) ever reads those fields,
+/// only `.from`/`.to`/`.isAllDay`.
+Future<List<Meeting>> fetchMeetingsUncached(
+    AppState appState, DateTime start, DateTime end) async {
+  // The module-level `calendars` list is otherwise only ever populated via
+  // loadCalendarData()/preloadCalendarData() - i.e. by the schedule screen or
+  // the startup preload. A scheduling-v2 replan can run BEFORE either of those
+  // (the FR-17 foreground checkpoint fires from initState() ahead of the
+  // preload, and a ring checkpoint in a freshly-started process may run
+  // without the schedule screen ever having been opened), in which case this
+  // would silently return zero events and the whole week would be planned as
+  // if the calendar were empty. Initializing here on demand fixes that for
+  // every call path at once rather than depending on a particular call order.
+  final clock = Stopwatch()..start();
+  var lazyInit = false;
+  if (calendars.isEmpty) {
+    debugPrint(
+        "=====fetchMeetingsUncached: Calendars not initialized yet - initializing on demand");
+    lazyInit = true;
+    await initCalendars(appState);
+  }
+
+  // docs/TODO.md T-70: `end` is exclusive here (unlike getCalendarEntries'
+  // inclusive-day convention, which this used to copy). Subtracting a whole
+  // day meant the last day of FR-8's 7-day window ended at its own midnight,
+  // so nothing on that day was ever returned and hardFloor(window[6]) was
+  // always null - the window effectively covered 6 days of data, not 7.
+  final params = RetrieveEventsParams(
+    startDate: start,
+    endDate: end.subtract(const Duration(milliseconds: 1)),
+  );
+
+  final meetings = <Meeting>[];
+  var perCalendarErrors = 0;
+  for (final calendar in calendars) {
+    final result = await _deviceCalendarPlugin.retrieveEvents(calendar.id, params);
+    for (final error in result.errors) {
+      perCalendarErrors++;
+      debugPrint(
+          '======fetchMeetingsUncached: Error retrieving events: ${error.errorCode} ${error.errorMessage}');
+    }
+    if (!result.isSuccess) continue;
+    for (final event in result.data ?? []) {
+      meetings.add(eventToMeeting(event, Color(calendar.color!), '', ''));
+    }
+  }
+
+  // docs/TODO.md T-89: nur Anzahlen und ein Ergebnis-Enum - niemals ein
+  // Termintitel, ein Ort oder ein Kalendername (Letzterer ist auf Android
+  // regelmaessig die Konto-Mailadresse des Nutzers).
+  //
+  // Diagnostischer Wert: `calendarCount == 0` erklaert auf einen Blick eine
+  // ganze Woche leerer Plaene - genau der Zustand, in dem der alte Motor
+  // stillschweigend alle Alarme loeschte (T-64), und der auf dem CI-Emulator
+  // der Normalfall ist.
+  Diag.calendarRead(
+    outcome: calendars.isEmpty
+        ? CalendarOutcome.noCalendars
+        : (perCalendarErrors > 0
+            ? CalendarOutcome.partialErrors
+            : CalendarOutcome.ok),
+    calendarCount: calendars.length,
+    eventCount: meetings.length,
+    allDayEventCount: meetings.where((m) => m.isAllDay).length,
+    lazyInitTriggered: lazyInit,
+    took: bucketMillis(clock.elapsedMilliseconds),
+  );
+
+  return meetings;
 }
 
 // For future development

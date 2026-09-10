@@ -11,6 +11,7 @@ import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/utils/utils.dart';
+import 'package:wakeywakey/utils/diag/diag_log.dart';
 
 part 'appointment_editor.dart';
 
@@ -155,7 +156,7 @@ class _ScreenScheduleState extends State<ScreenSchedule>
       updateCalendarData(appState, const Duration(days: 7));
     } catch (e) {
       debugPrint(
-          "=====onCalendarViewChanged: Error updating the calendar data: $e");
+          "=====onCalendarViewChanged: Error updating the calendar data: ${e.runtimeType}");
     }
   }
 
@@ -249,7 +250,7 @@ Future<void> loadCalendarData(AppState appState, Duration timeToFetch,
       updateCalendarData(appState, timeToFetch, backwards, specificDate);
     }
   } catch (e) {
-    debugPrint("=====loadCalendarData: Error loading app state: $e");
+    debugPrint("=====loadCalendarData: Error loading app state: ${e.runtimeType}");
   }
 }
 
@@ -263,7 +264,7 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
   try {
     appState.isReadingCalendarMutex = true;
   } catch (e) {
-    debugPrint("=====updateCalendarData: Error setting mutex: $e");
+    debugPrint("=====updateCalendarData: Error setting mutex: ${e.runtimeType}");
     return; // Return early on error
   }
 
@@ -285,7 +286,7 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
       }
     } catch (e) {
       debugPrint(
-          "=====updateCalendarData: Error loading list of fetched calendar entries: $e");
+          "=====updateCalendarData: Error loading list of fetched calendar entries: ${e.runtimeType}");
     }
 
     if (appState.firstUpdateOfCalendar) {
@@ -304,7 +305,7 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
             startOfWeek.subtract(backwards), startOfWeek.add(timeToFetch));
       } catch (e) {
         debugPrint(
-            "=====updateCalendarData: Error reading calendar data from OS: $e");
+            "=====updateCalendarData: Error reading calendar data from OS: ${e.runtimeType}");
       }
       appState.meetings += meetings;
       appState.fetchedCalendarWeeks.add(appState.visibleDate);
@@ -317,7 +318,7 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
       }
     }
   } catch (e) {
-    debugPrint("=====updateCalendarData: Error loading app state: $e");
+    debugPrint("=====updateCalendarData: Error loading app state: ${e.runtimeType}");
   }
 
   try {
@@ -327,13 +328,13 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
     _events.appointments?.addAll(appState.meetings);
     _events.notifyListeners(CalendarDataSourceAction.reset, meetings);
   } catch (e) {
-    debugPrint("=====updateCalendarData: Error updating data source: $e");
+    debugPrint("=====updateCalendarData: Error updating data source: ${e.runtimeType}");
   }
 
   // Release the mutex
   try {
     appState.isReadingCalendarMutex = false;
   } catch (e) {
-    debugPrint("=====updateCalendarData: Error loading app state: $e");
+    debugPrint("=====updateCalendarData: Error loading app state: ${e.runtimeType}");
   }
 }

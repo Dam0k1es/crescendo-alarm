@@ -84,7 +84,7 @@ Future<void> preloadCalendarData(AppState appState,
   try {
     appState.firstUpdateOfCalendar = false;
   } catch (e) {
-    debugPrint("=====updateCalendarData: Error loading app state: $e");
+    debugPrint("=====updateCalendarData: Error loading app state: ${e.runtimeType}");
   }
 
   int pastDays = pastWeeks * 7;
@@ -115,6 +115,18 @@ DateTime getStartOfWeek(AppState appState, DateTime dateTime) {
   } else {
     return dateTime;
   }
+}
+
+/// docs/TODO.md T-61 (FR-18's boundary to the alarm plugin): a planned value
+/// is an absolute **instant** (FR-1, typically UTC-tagged), while
+/// `Alarm.set`/`AlarmSettings.dateTime` is handed a plain local wall-clock
+/// `DateTime`. Building that from the instant's raw fields reinterpreted UTC
+/// digits as device-local time, so on any device outside UTC+0 the alarm rang
+/// off by the offset. Converting first keeps the real moment; the truncation
+/// to whole minutes matches what the plugin schedules anyway.
+DateTime alarmPlatformTime(DateTime instant) {
+  final local = instant.toLocal();
+  return DateTime(local.year, local.month, local.day, local.hour, local.minute);
 }
 
 Duration durationFromTimeOfDay(TimeOfDay time) {

@@ -4,6 +4,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:wakeywakey/app_state.dart';
+import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 
 class PageAlarmTones extends StatefulWidget {
   const PageAlarmTones({super.key});
@@ -50,7 +51,7 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
           _stopAudio();
         });
       } catch (e) {
-        debugPrint("Error playing audio: $e");
+        debugPrint("Error playing audio: ${e.runtimeType}");
       }
     }
   }
@@ -127,6 +128,12 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
                 onChanged: (value) {
                   if (value) {
                     _appState.selectedTone = path;
+                    // docs/TODO.md T-84: die geplanten Alarme tragen den Ton
+                    // als eigene Eigenschaft - ohne Checkpoint würde die
+                    // Änderung erst greifen, wenn ein Tag ohnehin neu geplant
+                    // wird (also unter Umständen nie).
+                    runCheckpointSafely(_appState,
+                        trigger: CheckpointTrigger.settingsChanged);
                   }
                 },
                 activeThumbColor: context
@@ -157,6 +164,12 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
               value: _appState.selectedVolume,
               onChanged: (value) {
                 _appState.selectedVolume = value;
+              },
+              // Erst beim Loslassen neu planen, nicht bei jedem Rasterschritt
+              // während des Ziehens (docs/TODO.md T-84).
+              onChangeEnd: (value) {
+                runCheckpointSafely(_appState,
+                    trigger: CheckpointTrigger.settingsChanged);
               },
               min: 0.0,
               max: 1.0,
