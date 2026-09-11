@@ -1,0 +1,12 @@
+  56 pending alarms: 
+    RTC_WAKEUP #11: Alarm{2a8b6b4 type 0 origWhen 1789110000000 whenElapsed 4299319 android}
+      type=RTC_WAKEUP origWhen=2026-09-11 07:00:00.000 window=0 exactAllowReason=policy_permission repeatInterval=0 count=0 flags=0x9
+    RTC_WAKEUP #12: Alarm{45d8523 type 0 origWhen 1789110000000 whenElapsed 4299319 com.android.settings}
+      type=RTC_WAKEUP origWhen=2026-09-11 07:00:00.000 window=0 exactAllowReason=policy_permission repeatInterval=0 count=0 flags=0x9
+    RTC_WAKEUP #24: Alarm{d5ea2fe type 0 origWhen 1789164000000 whenElapsed 58299318 com.google.android.gms}
+      type=RTC_WAKEUP origWhen=2026-09-11 22:00:00.000 window=0 exactAllowReason=allow-listed repeatInterval=0 count=0 flags=0x21
+    RTC_WAKEUP #33: Alarm{347b361 type 0 origWhen 1789192161908 whenElapsed 86461227 android}
+      type=RTC_WAKEUP origWhen=2026-09-12 05:49:21.908 window=0 exactAllowReason=policy_permission repeatInterval=0 count=0 flags=0x9
+      tag=*alarm*:com.google.android.apps.wallpaper/com.android.wallpaper.module.DailyLoggingAlarmReceiver
+  Pending alarms per uid: [1000:13, 1002:1, 1073:3, u0a89:1, u0a121:1, u0a128:35, u0a132:1, u0a161:1]
+      *alarm*:com.google.android.apps.wallpaper/com.android.wallpaper.module.DailyLoggingAlarmReceiver

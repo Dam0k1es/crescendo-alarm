@@ -1328,6 +1328,49 @@ Conventions:
   belegt mit dem realen Fall: nach einem Dismiss war der Alarm für morgen weg (0 statt 1).
   Damit sind auch T-02 und T-32 gegenstandslos.
 
+### T-103 · Die Alarm-Ueberlebensmessung meldete ein FAIL, das sie nicht belegen konnte — BEHOBEN (2026-09-11)
+
+- [x] Das Zaehlmuster auf vollstaendig qualifizierte Bezeichner umstellen.
+- [x] Einen Selbsttest gegen aufgezeichnete `dumpsys`-Ausgabe, der ohne Emulator laeuft.
+- **Why:** `check_alarm_survival.sh` faellt ein Urteil ueber die zentrale Produktzusage
+  ("garantiertes Aufwachen"). Im ersten Lauf mit dem Skript (T-99) fand das Muster **nichts**,
+  obwohl `arm_alarm_test.dart` nachweislich einen Alarm gesetzt hatte. Die Reaktion darauf war,
+  **mehr** Muster zu ergaenzen - darunter die blosse Teilzeichenkette `AlarmReceiver`. Im zweiten
+  Lauf (34566962847) traf genau die Googles
+  `com.android.wallpaper.module.DailyLoggingAlarmReceiver`, zweimal. Der Zaehler stand damit auf
+  2 statt 0, das Skript lief an seinem eigenen `BEFORE == 0`-Waechter vorbei und schrieb
+  `RESULT reboot: FAIL - no alarm survived the reboot` in die Beweisdatei. Diese Zeile belegt
+  nichts: der eigene Alarm war in **keiner** der beiden Messungen je gefunden worden.
+- **Evidence:** `alarm_survival.log` aus Lauf 34566962847 — `registered alarm lines before
+  reboot: 2`, waehrend der Rohauszug darunter ausschliesslich fremde Eintraege zeigt
+  (`android`, `com.android.settings`, `com.google.android.gms`, `…apps.wallpaper`) und der
+  Abschnitt `app-uid alarms` leer bleibt. Die Datei liegt woertlich als
+  `.github/scripts/fixtures/dumpsys_alarm_foreign.txt` im Repo und ist die Negativ-Fixture des
+  Selbsttests. Nachgestellt: `grep -cE "com.wakeywakey.wakeywakey|AlarmReceiver|…"` liefert
+  darauf **2**, korrekt waeren **0**.
+- **Resolution:** die Zaehlung liest jetzt die Summenzeile
+  `Pending alarms per uid: [… u0a161:2 …]` — den kernel-eigenen Zaehler pro uid, ganz ohne
+  Textmustersuche —, und faellt nur ersatzweise auf Eintragszeilen mit dem **Paketnamen** zurueck.
+  Die uid wird ueber `pm list packages -U` aufgeloest, mit `userId=`/`appId=` als Rueckfallweg
+  (`userId=` allein blieb im echten Lauf leer). Generische Wortteile sind verboten, und das uid-
+  Token ist ziffernbegrenzt, damit `u0a16` nicht `u0a161` trifft.
+  Vor allem aber: **das Instrument beweist sich jetzt selbst, bevor es misst.**
+  `check_alarm_survival.sh --self-test` prueft die Erkennung gegen zwei Fixtures (die echte
+  Fremd-Aufzeichnung muss 0 ergeben, ein eigener Alarm muss gefunden werden — sonst waere der
+  Negativtest trivial durch ein Muster zu erfuellen, das gar nichts trifft), laeuft ohne Emulator
+  in CIs UTC-Bein und bricht die Messung ab, wenn er fehlschlaegt. Beide Mutationen (generisches
+  `AlarmReceiver` zurueck; uid-Token ohne Ziffernbegrenzung) wurden ausprobiert und gehen rot.
+- **Was weiterhin offen ist:** wie ein eigener Alarm in `dumpsys alarm` **wirklich** aussieht, ist
+  nach wie vor nie beobachtet worden. `dumpsys_alarm_own.txt` ist deshalb ausdruecklich
+  **konstruiert** und als solche gekennzeichnet (`fixtures/README.md`). Der naechste Lauf muss
+  zeigen, ob die Erkennung in der Realitaet greift; findet sie wieder nichts, meldet das Skript
+  jetzt **inconclusive** statt FAIL und nennt die drei Stellen, an denen zu suchen ist.
+- **Lehre, allgemein:** ein blindes Beweismittel, das "nichts gefunden" meldet, ist harmlos - man
+  merkt es. Eines, das etwas Falsches findet, ist gefaehrlich: es sieht aus wie ein Ergebnis. Wer
+  ein Muster erweitert, weil es nichts trifft, muss im selben Zug pruefen, was es **zusaetzlich**
+  trifft.
+- **Requirement:** R3
+
 ### T-102 · Der Gradle-Cache hat den Release-Build erschlagen — BEHOBEN (2026-09-11)
 
 - [x] Cache auf das verschmaelern, was sich lohnt.
@@ -1747,7 +1790,13 @@ Conventions:
 ### T-93 · Alarm-Ueberleben nach Reboot ist unverifiziert (R3) — BEWEISSAMMLUNG EINGERICHTET (2026-09-10)
 
 - [x] Ein Verfahren, das die Frage ohne Wartezeit beantwortet.
-- [ ] Das Ergebnis eines echten Laufs eintragen und das Bein dann scharf stellen.
+- [x] Das Verfahren einmal wirklich laufen lassen (Lauf 34566962847, 2026-09-11).
+- [ ] Ein **verwertbares** Ergebnis eintragen und das Bein dann scharf stellen.
+- **Stand nach dem ersten echten Lauf:** unbrauchbar, und zwar messtechnisch, nicht inhaltlich.
+  Das Zaehlmuster traf fremde Alarme und meldete ein unbegruendetes FAIL - siehe T-103, wo das
+  aufgearbeitet und behoben ist. Die Frage "ueberlebt ein Alarm den Reboot?" ist damit weiterhin
+  **unbeantwortet**; sie ist jetzt nur messbar geworden. Scharf stellen erst, wenn ein Lauf den
+  eigenen Alarm vor dem Reboot ueberhaupt sieht.
 - **Why:** R3 ist die letzte offene Frage des Produktversprechens "garantiertes Aufwachen" und war
   nie gemessen. Ein Klingel-Test kostet pro Durchgang eine Minute Echtzeit und passt nicht ins
   E2E-Zeitbudget.

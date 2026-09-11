@@ -1,0 +1,8 @@
+  56 pending alarms: 
+    RTC_WAKEUP #7: Alarm{9c1f2a0 type 0 origWhen 1789117980000 whenElapsed 12279319 com.wakeywakey.wakeywakey}
+      type=RTC_WAKEUP origWhen=2026-09-11 10:13:00.000 window=0 exactAllowReason=policy_permission repeatInterval=0 count=0 flags=0x9
+      operation=PendingIntent{a1b2c3: PendingIntentRecord{d4e5f6 com.wakeywakey.wakeywakey broadcastIntent}}
+      tag=*alarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+    RTC_WAKEUP #8: Alarm{7e3d1b5 type 0 origWhen 1789204380000 whenElapsed 98679319 u0a161}
+      type=RTC_WAKEUP origWhen=2026-09-12 10:13:00.000 window=0 exactAllowReason=policy_permission repeatInterval=0 count=0 flags=0x9
+  Pending alarms per uid: [1000:13, 1002:1, u0a128:35, u0a161:2]

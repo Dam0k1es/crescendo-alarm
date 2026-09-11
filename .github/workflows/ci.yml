@@ -72,6 +72,16 @@ jobs:
         # Ohne diesen Beweis koennte die Matrix sechsmal dasselbe pruefen und
         # niemandem auffallen. `date` zeigt den Versatz, den auch Dart sieht.
         run: date +"%Z %z (%Y-%m-%d %H:%M)"
+      # Die Alarm-Ueberlebensmessung faellt ein Urteil ("hat den Reboot
+      # ueberlebt" / "nicht"), also muss ihr Messinstrument selbst geprueft
+      # sein. Zweimal hat es hier danebengelegen: erst fand das Muster nichts,
+      # dann zaehlte es fremde Alarme mit und meldete ein unbegruendetes FAIL
+      # (docs/TODO.md T-99, T-102). Der Selbsttest laeuft gegen aufgezeichnete
+      # dumpsys-Ausgabe, braucht also keinen Emulator - und gehoert deshalb in
+      # die schnelle Spur, nicht erst in den E2E-Job.
+      - name: Alarm-survival detection self-test
+        if: matrix.tz == 'UTC'
+        run: bash .github/scripts/check_alarm_survival.sh --self-test
       - name: Analyze
         # Frame-unabhaengig, deshalb nur im UTC-Bein - sechsmal waere
         # Verschwendung ohne zusaetzliche Aussage.

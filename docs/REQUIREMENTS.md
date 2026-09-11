@@ -85,6 +85,13 @@ set).
   unterscheidbar, ohne Wartezeit. Es läuft im E2E-Job, **noch nicht gatend**, weil das Verhalten auf
   diesem Emulator-Image nie gemessen wurde und ein unverifiziertes Bein keinen Release blockieren
   darf. `docs/device-trial-checklist.md` Abschnitt C führt dieselbe Prüfung für ein echtes Gerät.
+- **Erster echter Lauf (34566962847, 2026-09-11): messtechnisch unbrauchbar.** Das Zählmuster traf
+  fremde Alarme (Googles `DailyLoggingAlarmReceiver` über die Teilzeichenkette `AlarmReceiver`) und
+  gab daraufhin ein FAIL aus, das nichts belegt — der eigene Alarm war nie gefunden worden. Das ist
+  aufgearbeitet (`docs/TODO.md` T-103): die Zählung liest jetzt den uid-Zähler von `dumpsys` statt
+  Text zu raten, und das Skript prüft sich vor jeder Messung selbst gegen aufgezeichnete Ausgabe.
+  **Die Frage bleibt damit unbeantwortet** — sie ist nur messbar geworden. Wer den Status dieser
+  Anforderung liest: nicht "Reboot fällt durch", sondern "noch immer nicht gemessen".
 - **Aus dem Code bereits ableitbar:** die App hat **keinen** eigenen `BootReceiver`; das
   `alarm`-Plugin registriert einen und armiert die gespeicherten Alarme nach dem Boot per
   `setExactAndAllowWhileIdle(RTC_WAKEUP, …)` neu. Reboot-Überleben ist dort implementiert, der

@@ -157,6 +157,23 @@ non-gating until it has been green once - `docs/TODO.md` T-93).
 `scripts/security-scan.sh` mirrors part of the pipeline locally (analyze + osv-scanner +
 trufflehog) but is narrower than CI - no mobsfscan/MobSF.
 
+**Validate workflow changes locally before pushing: `actionlint` is installed on the dev VM** and
+checks all four workflows (plus shellcheck over every `run:` block) in under a second. Invalid
+workflow YAML does not fail loudly on GitHub - the run starts, executes *no step*, and concludes
+as a failure in a few seconds, which reads like an infrastructure blip rather than a syntax error.
+Three runs were burned that way on one commit (a duplicated `restore-keys:` inside one `with:`
+mapping) before the cause was found.
+
+`.github/scripts/check_alarm_survival.sh --self-test` is the other cheap local check: it runs the
+alarm-detection logic against recorded `dumpsys alarm` output in `.github/scripts/fixtures/`, needs
+no emulator, and runs in CI's UTC leg. It exists because that script produces a *verdict* ("the
+alarm survived the reboot" / "it did not") and got it wrong twice - first matching nothing, then
+matching a foreign app's `DailyLoggingAlarmReceiver` through a bare `AlarmReceiver` substring and
+reporting a confident, unfounded FAIL (`docs/TODO.md` T-99, T-103). The counting now reads the
+per-uid summary line `Pending alarms per uid: [... u0a161:2 ...]` rather than pattern-matching
+entry text, and the self-test's negative fixture is the real recording from the run that got it
+wrong. Never put a generic substring back into that pattern.
+
 Run the E2E suite locally with a connected device or running emulator:
 `flutter test integration_test/app_test.dart -d <device-id>`.
 
