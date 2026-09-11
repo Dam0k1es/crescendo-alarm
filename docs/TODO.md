@@ -1456,6 +1456,112 @@ Conventions:
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-119 · OFFENE SPEC-ENTSCHEIDUNG: eine Sommerzeit-Umstellung INNERHALB des 7-Tage-Fensters
+
+- [ ] Entscheiden, ob die Tageszuordnung den Versatz des jeweiligen Fenstertages verwenden muss.
+- **Lage:** der Geraete-Versatz wird als **eine Zahl** zum Checkpoint-Zeitpunkt gelesen und fuer
+  alle sieben Fenstertage benutzt. Liegt eine Umstellung im Fenster, ist diese Zahl fuer die Tage
+  danach um die Umstellungsdifferenz falsch, und Termine, deren Ortszeit naeher als diese Differenz
+  an Mitternacht liegt, landen auf dem **Nachbartag**.
+- **Reproduziert:** Herbstumstellung Europe/Berlin, ein Termin am 27.10. um 23:30 Ortszeit und
+  einer am 28.10. um 08:00. Der erste rutscht auf den 28.10., verdraengt dort als *fruehester*
+  Termin (FR-13) den echten Morgentermin - und am Morgen des 28.10. klingelt **gar nichts**. Der
+  Wochenplan kippt zusaetzlich auf Abendwerte. In der Fruehjahrsrichtung zeigt der Fehler
+  spiegelbildlich einen Tag zu frueh, ist also kein blosses "immer eine Stunde daneben".
+- **Warum es keine reine Fehlerbehebung ist:** FR-2 sagt woertlich "die Geraete-Zeitzone **zum
+  Auswertungszeitpunkt**" - der Status quo ist damit spec-konform. Der Spec-Text kennt nur *einen*
+  Versatz und hat nicht bedacht, dass das Fenster in die Zukunft reicht und eine Umstellung
+  ueberspringen kann.
+- **Der eigentliche Befund ist ein anderer:** FR-16s ausdruecklich akzeptierte Grenze am
+  Umstellungstag behauptet, echte Termine seien nicht betroffen. Das stimmt nicht - genau ein
+  solcher wird hier verschluckt. Diese Passage ist in jedem Fall zu korrigieren, unabhaengig davon,
+  wie die Frage unten entschieden wird.
+- **Zu entscheiden:** *Muss die Tageszuordnung eines Fenstertages den Versatz verwenden, der an
+  DIESEM Tag gilt?* Dann braucht FR-2 eine Zonenregel-Vorausschau, die FR-16 bewusst nicht kennt.
+  Die Alternative waere, die Zuordnung ueber die lokalen Kalenderfelder des `tz.TZDateTime` zu
+  machen, das `device_calendar` ohnehin liefert - das braucht keine Vorausschau, aendert aber die
+  Herkunft der Zone, und genau die legt FR-2 fest.
+- **Bereits abgesichert (T-118a):** die Tageszuordnung nahe Mitternacht bei **konstantem** Versatz.
+- **Requirement:** R2
+
+### T-120 · OFFENE SPEC-ENTSCHEIDUNG: welchem Tag gehoert ein Weckwert, der ueber Mitternacht zurueckfaellt?
+
+- [ ] Entscheiden, DANN testgetrieben umsetzen.
+- **Lage:** ein Termin kurz nach Mitternacht schiebt `hardFloor` durch die Vorlaufzeiten auf den
+  **Vortag**. Der Wert eines Tages liegt dann auf einem anderen Kalendertag als sein Schluessel -
+  und wird anschliessend zum Anker der Fortschreibung.
+- **Reproduziert:** ein einziger Termin am 12.03. um 00:30 (Vorlaeufe je 30min) ergibt zwei
+  Weckzeiten am 11.03. (03:15 und 23:30) und **keine** am 12.03.; danach haelt FR-4 die Weckzeit
+  dauerhaft bei 23:30 - der Nutzer wird ab da jeden Abend geweckt, und die Kette findet ohne
+  `wunschzeit` nicht mehr heraus. Dazu eine FR-6-Warnung, die den Effekt als "Anpassung wegen
+  eines Termins" erklaert.
+- **Zusatzfund, der die Tragweite erhoeht:** in dieser Lage greift FR-11s "fuer immer fix" **nicht**.
+  Die Absicherung (T-106/T-114: das Fenster beginnt hinter `lastConcludedDay`) traegt genau so
+  lange, wie der Wert eines Tages auf dem eigenen Kalendertag liegt. Probe: der 23:30-Wert klingelt,
+  der Termin war abends abgesagt worden - der soeben ausgeloeste Wert wird ueberschrieben und fuer
+  03:15 **derselben Nacht** ein neuer Alarm gesetzt, 3:45 Stunden nach dem Wecker, der eben lief.
+- **Warum keine Umsetzung ohne Entscheidung:** kein einzelner FR-Satz wird verletzt. Verletzt wird
+  eine Grundannahme, die die Spec nirgends ausspricht - dass Wert-Datum und Tagesschluessel
+  zusammenfallen.
+- **Zu entscheiden:** *Was ist der Tagesschluessel eines Weckwertes, wenn `hardFloor` ueber
+  Mitternacht zurueckfaellt?*
+  - **"Wert bleibt beim Termin-Tag" (Status quo):** FR-2 woertlich, der Termin wird zuverlaessig
+    nicht verpasst. Preis: zwei Weckzeiten an einem Tag, keine am Termintag, FR-4 macht den
+    23:30-Wert zum Dauer-Anker, und FR-11 ist fuer diesen Wert nicht durchsetzbar. Dann muessten
+    FR-3, FR-4 und FR-11 den Fall ausdruecklich aufnehmen.
+  - **"`hardFloor` ist ein einmaliger Deckel, kein Anker":** die Kette schreibt danach am vorherigen
+    Anker weiter. Preis: FR-4 braucht einen zweiten Ankerbegriff ("letzter *regulaerer* Wert"), den
+    die Spec heute bewusst nicht hat.
+  - **"Wert wird auf seinen eigenen Tag geklammert":** einfach, aber sie verletzt FR-2s Kernaussage
+    und der 00:30-Termin wuerde garantiert verpasst. Aus Pruefersicht ausgeschlossen.
+- **Bereits abgesichert (T-118b):** dass `hardFloor` vor Mitternacht des eigenen Tages liegen darf -
+  die Voraussetzung jeder dieser Lesarten.
+- **Requirement:** R2
+
+### T-121 · OFFENE SPEC-ENTSCHEIDUNG: die Asymmetrie von FR-9s Ventil
+
+- [ ] Entscheiden, ob ein Termin im Fenster das Ventil auch fuer die Tage NACH ihm aufhebt.
+- **Lage:** das Ventil nimmt Tage **vor** einem realen Termin im Fenster aus (`remaining.isEmpty`),
+  Tage **nach** ihm aber nicht. Nach dem ersten wieder auftauchenden Termin verliert der Nutzer
+  also saemtliche Alarme fuer die Tage danach - und bekommt die Meldung "automatische
+  Fortschreibung gestoppt", waehrend fuer morgen frueh ein terminabgeleiteter Wecker auf dem
+  Bildschirm steht.
+- **Der Zustand heilt** beim Klingeln dieses Alarms (dann ist der Tag abgeschlossen und der Zaehler
+  geht auf 0) - aber nur, wenn er klingelt.
+- **Zu entscheiden:** *Setzt ein im Fenster sichtbarer realer `hardFloor` das Ventil auch fuer die
+  Tage nach ihm ausser Kraft?*
+  - **"nein" (Status quo):** woertlich FR-9-konform, aber die Asymmetrie gehoert dann ausdruecklich
+    in FR-9 - sonst liest sie sich wie ein Versehen.
+  - **"ja":** die Bedingung waere "kein realer `hardFloor` irgendwo im Fenster", und das ist
+    zugleich genau die Formulierung, die FR-9s **eigene drei Testfaelle** beschreiben ("kein
+    `hardFloor` im Fenster") - insofern die kleinere Aenderung am Spec-Text.
+- **Bereits abgesichert (T-118c):** beide heute vorhandenen Einschraenkungen.
+- **Requirement:** R2, R3
+
+### T-122 · OFFENE SPEC-ENTSCHEIDUNG: Verankerung nach Herkunft oder nach Bedeutung?
+
+- [ ] Entscheiden; die vollstaendige Loesung ist eine Erweiterung von FR-3, kein Bugfix.
+- **Lage:** ein Kurvenwert, der *exakt* auf dem eigenen `hardFloor` landet, gilt als
+  **ziffern**-verankert (weil die Kurve ihn berechnet hat) und wandert bei einem Zeitzonenwechsel
+  mit - ausgerechnet am Termintag. Der Wert ist aber zugleich der Termin-Deckel.
+- **Groesser als der Gleichheitsfall:** FR-16s Checkpoint 2 kann FR-2s Obergrenze **grundsaetzlich**
+  nicht einhalten, weil er den Kalender nicht lesen darf. Probe: nach einem Versatzwechsel landet
+  ein Wert 8 Stunden **nach** dem Termin, fuer den er geplant war.
+- **Zu entscheiden:** *Entscheidet ueber `pendingDayInstantAnchored` die Herkunft (die Kurve hat den
+  Wert berechnet) oder die Bedeutung (der Wert ist zugleich der Termin-Deckel)? Und darf Checkpoint
+  2 einen ziffern-verankerten Wert ueber einen `hardFloor` hinausschieben?*
+  - **"Herkunft" (Status quo):** kein Codeaenderungsbedarf, aber FR-2s Obergrenze gilt dann
+    ausdruecklich nur **bis zum naechsten Zeitzonenwechsel**, und das gehoert in FR-2 und FR-16
+    hineingeschrieben. Die Folge ist real: ein echter Termin kann nach einer Reise nach Westen
+    verpasst werden, obwohl der Alarm fuer ihn geplant war.
+  - **"Bedeutung":** eine Ein-Zeilen-Aenderung (`ownHardFloor != null &&
+    !candidate.value.isBefore(ownHardFloor)`), loest aber nur den Gleichheitsfall.
+  - **Vollstaendig:** Checkpoint 2 duerfte einen Wert nur bis zum jeweiligen `hardFloor`
+    verschieben - dafuer muesste dieser mitpersistiert werden (eine dritte Karte neben Werten und
+    Ankern), weil Checkpoint 2 den Kalender nicht lesen darf. Erweiterung von FR-3.
+- **Bereits abgesichert (T-118d):** der Kappungsfall.
+- **Requirement:** R2, R3
+
 ### T-118 · Vier entschiedene Eigenschaften waren ungedeckt — BEHOBEN (2026-09-11)
 
 - [x] Absicherungen fuer die Teile, die keine Spec-Entscheidung brauchen.
