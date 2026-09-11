@@ -1456,6 +1456,41 @@ Conventions:
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-118 · Vier entschiedene Eigenschaften waren ungedeckt — BEHOBEN (2026-09-11)
+
+- [x] Absicherungen fuer die Teile, die keine Spec-Entscheidung brauchen.
+- **Why:** vier der neuen Testfaelle haben als *Kern* eine offene Spec-Entscheidung (T-119 bis
+  T-122). Jeder enthaelt aber einen Teil, den die Spec sehr wohl entscheidet, der heute richtig
+  umgesetzt ist - und der von keinem Test gedeckt war. Diese Teile sind jetzt festgenagelt; sie
+  sind zugleich die Grundlage, gegen die eine spaetere Entscheidung ueberhaupt formuliert werden
+  kann.
+- **(a) FR-2, Tageszuordnung an der Mitternachtsgrenze** (bei konstantem Versatz eindeutig): lokal
+  23:30 gehoert zum laufenden Tag, lokal 00:30 zum Folgetag. Mutation `add(deviceUtcOffset)` ->
+  `subtract(...)` in `eventsForDay` wird rot; sie war in `scheduling_v2_test`, `_dst_test` und
+  `_tz_test` unsichtbar, weil der vorhandene FR-2-Zeitzonentest die *Herkunft* des Versatzes
+  prueft, nie dessen Vorzeichen und nie eine Tagesgrenze (sein Termin liegt um 18:00 UTC).
+- **(b) FR-2, `hardFloor` darf vor Mitternacht des eigenen Tages liegen.** Die Formel kennt keine
+  Klammerung; eine solche waere genau der von FR-2 benannte Schadensfall. Mutation "Ergebnis auf
+  Mitternacht klammern" wird rot - sie war in vier Testdateien unsichtbar und ist genau die Art
+  "Aufraeumen", die jemand fuer eine Selbstverstaendlichkeit halten koennte.
+- **(c) FR-9, das Ventil loescht nie einen Tag, der etwas zu tun hat** - weder einen mit eigenem
+  realem `hardFloor` (ein `null` dort hiesse, den Termin garantiert zu verpassen, und FR-18
+  entfernte den Alarm) noch einen, vor dem noch ein realer Punkt im Fenster liegt (FR-5/FR-7:
+  darauf ist ein Run zu planen). Beide Teilbedingungen waren ungedeckt, weil **jeder** vorhandene
+  Ventiltest mit leerem Kalender faehrt - dort sind sie nie falsch. Schuetzt gegen die
+  Vereinfachung auf "Zaehler >= 7 -> alles null", die woertlichste Lesart von FR-9 und damit die
+  wahrscheinlichste Aufraeum-Aenderung; ihr Wegfall waere ein stummer Wecker an einem Tag mit
+  echtem Termin.
+- **(d) FR-3, ein am eigenen `hardFloor` gekappter Tag ist instant-verankert** - er darf bei einem
+  Zeitzonenwechsel nicht ziffernweise mitwandern. Der Kappungszweig war in `test/` nie ausgefuehrt:
+  die einzige positive Zusicherung zu `instantAnchoredDays` betrifft einen Tag aus dem
+  `remaining.isEmpty`-Zweig, und der einzige Nachbartest prueft ausdruecklich den Gegenfall.
+- **Methodischer Hinweis, der Zeit spart:** zwei meiner ersten fuenf Mutationen griffen gar nicht
+  (Zeichenkette traf nicht), was wie "der Test faengt sie nicht" aussah. Eine Mutation, deren
+  Einbau nicht belegt ist, beweist nichts - der Einbau gehoert mitgeprueft, bevor man aus einem
+  gruenen Lauf etwas schliesst.
+- **Requirement:** R2, R3
+
 ### T-117 · Die Naht zwischen "Plan berechnet" und "Alarm registriert" war ungedeckt — BEHOBEN (2026-09-11)
 
 - [x] Zusichern, dass `replan()` den berechneten Plan tatsaechlich anwendet.

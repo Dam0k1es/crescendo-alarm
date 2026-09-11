@@ -333,4 +333,224 @@ void main() {
       expect(result, _utc(19, 31, day: 2));
     });
   });
+
+  // ---------------------------------------------------------------------
+  // Absicherungen (T-118): Eigenschaften, die heute RICHTIG sind, von der
+  // Spec eindeutig entschieden werden - und von keinem Test gedeckt waren.
+  //
+  // Jede einzelne stammt aus einem Fall, dessen Kern eine offene
+  // Spec-Entscheidung ist (T-119 bis T-122). Der jeweils entschiedene Teil
+  // laesst sich trotzdem festnageln, und das ist die Grundlage, gegen die
+  // eine spaetere Entscheidung ueberhaupt formuliert werden kann.
+  //
+  // Fuer jede ist eine Mutation belegt, die sie rot macht und die heute in
+  // der uebrigen Suite unsichtbar bleibt.
+  // ---------------------------------------------------------------------
+
+  group('FR-2: Tageszuordnung an der Mitternachtsgrenze (T-118a)', () {
+    // FR-2: "Die Geraete-Zeitzone zum Auswertungszeitpunkt - niemals die Zone
+    // des Termins selbst - entscheidet, welchem Kalendertag der Instant
+    // zugeordnet wird."
+    //
+    // Bei KONSTANTEM Versatz ist das eindeutig entschieden. Der vorhandene
+    // FR-2-Zeitzonentest prueft die *Herkunft* des Versatzes, nie dessen
+    // Vorzeichen und nie eine Tagesgrenze: sein Termin liegt um 18:00 UTC, wo
+    // +/- eine Stunde auf keinen anderen Tag faellt.
+    //
+    // Mutation, die das faengt: in `eventsForDay` `add(deviceUtcOffset)` ->
+    // `subtract(deviceUtcOffset)`. Sie ist heute in scheduling_v2_test,
+    // _dst_test und _tz_test unsichtbar.
+
+    const offset = Duration(hours: 2); // Juli, Europe/Berlin
+
+    test('23:30 Ortszeit gehoert zum laufenden Tag', () {
+      final result = hardFloor(
+        day: DateTime.utc(2026, 7, 15),
+        allEvents: [_meetingAt(DateTime.utc(2026, 7, 15, 21, 30))],
+        deviceUtcOffset: offset,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+      );
+
+      expect(result, DateTime.utc(2026, 7, 15, 21, 30));
+    });
+
+    test('00:30 Ortszeit gehoert zum FOLGETAG, nicht zum laufenden', () {
+      final event = _meetingAt(DateTime.utc(2026, 7, 15, 22, 30));
+
+      expect(
+        hardFloor(
+          day: DateTime.utc(2026, 7, 15),
+          allEvents: [event],
+          deviceUtcOffset: offset,
+          durationToWakeUp: Duration.zero,
+          durationToGetReady: Duration.zero,
+        ),
+        isNull,
+        reason: 'lokal 00:30 am 16.07. - nicht der 15.07.',
+      );
+      expect(
+        hardFloor(
+          day: DateTime.utc(2026, 7, 16),
+          allEvents: [event],
+          deviceUtcOffset: offset,
+          durationToWakeUp: Duration.zero,
+          durationToGetReady: Duration.zero,
+        ),
+        DateTime.utc(2026, 7, 15, 22, 30),
+      );
+    });
+  });
+
+  group('FR-2: hardFloor darf vor Mitternacht des eigenen Tages liegen (T-118b)',
+      () {
+    // FR-2s Formel kennt keine Klammerung an den eigenen Tag:
+    //
+    //   hardFloor(Tag) = fruehester nicht-ganztaegiger Termin an diesem Tag
+    //                    - durationToWakeUp - durationToGetReady
+    //
+    // Eine Klammerung waere genau der von FR-2 benannte Schadensfall ("ein
+    // spaeterer Wert bedeutet, einen echten Termin zu verpassen"): bei einem
+    // Termin um 00:30 wuerde erst um Mitternacht geweckt, also 30 Minuten vor
+    // einem Termin, fuer den eine Stunde Vorlauf eingestellt ist.
+    //
+    // Mutation, die das faengt: das Ergebnis auf Mitternacht des eigenen Tages
+    // klammern. Heute unsichtbar in scheduling_v2_test, _dst_test,
+    // _audit_test und replan_test.
+    //
+    // Der Test haelt zugleich fest, dass Wert-Datum und Tagesschluessel
+    // auseinanderfallen KOENNEN - die Voraussetzung jeder Entscheidung zu
+    // T-120.
+
+    test('Termin um 00:30 mit je 30min Vorlauf -> Weckwert am Vortag', () {
+      final result = hardFloor(
+        day: DateTime.utc(2026, 3, 12),
+        allEvents: [_meetingAt(DateTime.utc(2026, 3, 12, 0, 30))],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: const Duration(minutes: 30),
+        durationToGetReady: const Duration(minutes: 30),
+      );
+
+      expect(result, DateTime.utc(2026, 3, 11, 23, 30));
+      expect(result!.day, 11, reason: 'der Wert liegt auf dem VORTAG');
+    });
+  });
+
+  group('FR-9: das Ventil loescht nie einen Tag, der etwas zu tun hat (T-118c)',
+      () {
+    // FR-9s "gestoppt" betrifft die FORTSCHREIBUNG. Zusammen mit FR-2
+    // ("niemals spaeter … ein spaeterer Wert bedeutet, einen echten Termin zu
+    // verpassen") und FR-5/FR-7 (auf einen kuenftigen realen Punkt ist ein Run
+    // zu planen) ergibt das zwei Einschraenkungen, die beide heute in der
+    // Ventilbedingung stehen und beide ungedeckt waren.
+    //
+    // Unsichtbar, weil jeder vorhandene Ventiltest mit LEEREM Kalender faehrt:
+    // dort sind `ownHardFloor` immer null und `remaining` immer leer, die
+    // beiden Teilbedingungen also nie falsch.
+    //
+    // Wogegen sie schuetzen: gegen jede Vereinfachung auf "Zaehler >= 7 ->
+    // alles null" - die woertlichste Lesart von FR-9 und damit die
+    // wahrscheinlichste Aufraeum-Aenderung. Ihr Wegfall waere ein stummer
+    // Wecker an einem Tag mit echtem Termin.
+
+    test('ein Tag mit eigenem Termin behaelt seinen Wert', () {
+      final window = List.generate(5, (i) => _utc(0, 0, day: 11 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(7, 0, day: 10),
+        allEvents: [_meetingAt(_utc(8, 0, day: 11))],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: null,
+        maxDailyDelta: const Duration(minutes: 60),
+        gapDayCounter: 42,
+      );
+
+      expect(result.valuesByDay[window[0]], isNotNull,
+          reason: 'null hiesse, den Termin garantiert zu verpassen');
+      expect(result.valuesByDay[window[0]], _utc(8, 0, day: 11));
+    });
+
+    test('Tage VOR einem Termin im Fenster behalten ihren Wert', () {
+      final window = List.generate(5, (i) => _utc(0, 0, day: 11 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(7, 0, day: 10),
+        allEvents: [_meetingAt(_utc(6, 0, day: 15))],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: null,
+        maxDailyDelta: const Duration(minutes: 60),
+        gapDayCounter: 42,
+      );
+
+      for (var i = 0; i < window.length; i++) {
+        expect(result.valuesByDay[window[i]], isNotNull,
+            reason: 'ein Run auf den Termin am letzten Fenstertag laeuft');
+      }
+    });
+
+    test('ohne jeden Termin greift das Ventil weiterhin', () {
+      // Gegenprobe gegen eine Ueberkorrektur.
+      final window = List.generate(5, (i) => _utc(0, 0, day: 11 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(7, 0, day: 10),
+        allEvents: const [],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: null,
+        maxDailyDelta: const Duration(minutes: 60),
+        gapDayCounter: 42,
+      );
+
+      expect(result.safetyValveTriggered, isTrue);
+      expect(result.valuesByDay.values.every((v) => v == null), isTrue);
+    });
+  });
+
+  group('FR-2/FR-3: ein gekappter Tag ist instant-verankert (T-118d)', () {
+    // Wird ein Kurvenwert am eigenen `hardFloor` gekappt, kommt der Wert
+    // danach unstrittig "direkt aus einem echten hardFloor" (FR-3) - er ist
+    // also instant-verankert und darf bei einem Zeitzonenwechsel NICHT
+    // ziffernweise mitwandern.
+    //
+    // Der Zweig war nie ausgefuehrt: die einzige positive Zusicherung zu
+    // `instantAnchoredDays` in der Suite betrifft einen Tag, der seinen
+    // hardFloor ueber den `remaining.isEmpty`-Zweig bekommt, und der einzige
+    // Nachbartest prueft ausdruecklich den GEGENfall (die Kurve gewinnt, kein
+    // Reset). Mutation: `if (clampedToOwnHardFloor) instantAnchoredDays.add(day);`
+    // entfernen - heute unsichtbar in fuenf Testdateien.
+
+    test('Kurvenwert ueber dem eigenen hardFloor wird gekappt und verankert',
+        () {
+      final window = List.generate(5, (i) => _utc(0, 0, day: 11 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(9, 0, day: 10),
+        allEvents: [
+          _meetingAt(_utc(8, 0, day: 11)),
+          _meetingAt(_utc(8, 30, day: 15)),
+        ],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: null,
+        maxDailyDelta: const Duration(minutes: 60),
+        gapDayCounter: 0,
+      );
+
+      expect(result.valuesByDay[window[0]], _utc(8, 0, day: 11),
+          reason: 'FR-2s Obergrenze kappt den Kurvenwert');
+      expect(result.instantAnchoredDays, contains(window[0]),
+          reason: 'der gekappte Wert kommt aus einem echten hardFloor');
+    });
+  });
 }
