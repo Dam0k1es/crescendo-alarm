@@ -126,21 +126,44 @@ AlarmSyncPlan planAlarmSync({
 
   /// An existing alarm is only "good enough to keep" if it is planned, still
   /// present on the platform, and carries the properties the plan calls for.
-  bool keepable(ScheduledAlarm alarm) =>
+  bool matchesPlan(ScheduledAlarm alarm) =>
       desiredMinutes.contains(_toMinute(alarm.time)) &&
       onPlatform(alarm) &&
       propertiesMatch(alarm);
 
-  final toRemove = existingScheduledAlarms.where((alarm) {
-    if (!_toMinute(alarm.time).isAfter(nowMinute)) return false;
-    return !keepable(alarm);
-  }).toList();
+  // Jeder geplante Wert kann von hoechstens EINEM Alarm belegt werden
+  // (docs/TODO.md T-116).
+  //
+  // Vorher war das eine blosse Mengenzugehoerigkeit: liegen zwei Alarme auf
+  // derselben Minute, galten *beide* als behaltenswert, keiner als
+  // ueberzaehlig - und weil damit auch `toAdd` leer blieb, war der Zustand ein
+  // stabiler Fixpunkt: jede weitere Neuplanung bestaetigte das Duplikat, der
+  // Nutzer wurde dauerhaft zweimal geweckt. FR-18s Kopfsatz verlangt aber eine
+  // Aussage ueber die MENGE ("angeglichen, dass sie **genau** den geplanten
+  // Werten entspricht"), und dieser Funktion eigener Vertrag sagt "matches
+  // [pendingDayValues] **exactly**".
+  //
+  // Reihenfolge-abhaengig und das mit Absicht: der erste passende Alarm belegt
+  // den Wert, jeder weitere faellt weg. Entfernt wird ueber die Alarm-ID
+  // (`applyPlannedAlarms` -> `appState.removeAlarm`), deshalb ist wichtig, dass
+  // der Ueberlebende gerade NICHT in `toRemove` steht - sonst stoppte das
+  // Entfernen ihn auf der Plattform gleich mit.
+  final claimedMinutes = <DateTime>{};
+  final toRemove = <ScheduledAlarm>[];
+  for (final alarm in existingScheduledAlarms) {
+    final minute = _toMinute(alarm.time);
+    // FR-18, sicherheitskritisch: ein Alarm in der Vergangenheit wird NIE
+    // entfernt - er koennte gerade klingeln, und `Alarm.stop()` wuerde das
+    // garantierte Aufwachen aushebeln. Er belegt deshalb auch keinen Wert:
+    // `desired` enthaelt ohnehin nur Zeitpunkte nach jetzt.
+    if (!minute.isAfter(nowMinute)) continue;
+    if (matchesPlan(alarm) && claimedMinutes.add(minute)) continue;
+    toRemove.add(alarm);
+  }
 
-  final keptMinutes =
-      existingScheduledAlarms.where(keepable).map((a) => _toMinute(a.time)).toSet();
-
-  final toAdd =
-      desired.where((value) => !keptMinutes.contains(_toMinute(value))).toList();
+  final toAdd = desired
+      .where((value) => !claimedMinutes.contains(_toMinute(value)))
+      .toList();
 
   return AlarmSyncPlan(toRemove: toRemove, toAdd: toAdd);
 }

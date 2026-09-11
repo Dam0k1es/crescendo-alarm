@@ -501,4 +501,117 @@ void main() {
       expect(appState.scheduledAlarms.single.id, afterFirst.single.id);
     });
   });
+
+  group('FR-18: zwei Alarme auf derselben Minute (T-116)', () {
+    final now = DateTime(2026, 3, 10, 6, 0);
+
+    // FR-18s Kopfsatz ist eine Nachbedingung ueber die MENGE:
+    //
+    //   "Nach jeder Neuplanung wird die Menge der `ScheduledAlarm`s so
+    //    angeglichen, dass sie **genau den geplanten Werten entspricht**"
+    //
+    // und FR-18s eigener Testfall formuliert dasselbe Ziel:
+    // "passender Alarm existiert bereits -> kein Duplikat, keine Entfernung
+    // (idempotent)".
+    //
+    // Die zweite Spiegelstrich-Regel ("ein Alarm, der KEINEM geplanten Wert
+    // entspricht, wird entfernt") ist dagegen eine Bedingung pro Alarm, und
+    // auf ein Duplikat trifft sie bei keinem der beiden zu. Massgeblich ist
+    // der Kopfsatz: er nennt das Ziel, die Spiegelstriche die Mittel.
+    //
+    // Unabhaengig von jeder Spec-Auslegung verfehlt die Funktion hier ihren
+    // EIGENEN dokumentierten Vertrag: "computes what has to change so the set
+    // of ScheduledAlarms matches pendingDayValues **exactly**".
+
+    test('ein geplanter Wert, zwei passende Alarme -> genau einer bleibt', () {
+      final planned = DateTime(2026, 3, 11, 7, 30);
+      final plan = planAlarmSync(
+        pendingDayValues: {_iso(planned): planned.millisecondsSinceEpoch},
+        existingScheduledAlarms: [
+          _alarmAt(planned, id: 1),
+          _alarmAt(planned, id: 2),
+        ],
+        platformAlarmIds: const {1, 2},
+        now: now,
+      );
+
+      expect(plan.toRemove.length, 1, reason: 'genau das Duplikat faellt weg');
+      expect(plan.toAdd, isEmpty, reason: 'der ueberlebende deckt den Wert ab');
+      // Der Ueberlebende muss eine ANDERE id tragen als der Entfernte:
+      // `applyPlannedAlarms` entfernt ueber die id, ein Entfernen derselben id
+      // wuerde den Ueberlebenden auf der Plattform mitstoppen.
+      expect(plan.toRemove.single.id, isNot(1));
+    });
+
+    test('nach dem Aufraeumen ist der naechste Lauf ein Fixpunkt', () {
+      final planned = DateTime(2026, 3, 11, 7, 30);
+      final plan = planAlarmSync(
+        pendingDayValues: {_iso(planned): planned.millisecondsSinceEpoch},
+        existingScheduledAlarms: [_alarmAt(planned, id: 1)],
+        platformAlarmIds: const {1},
+        now: now,
+      );
+
+      expect(plan.toRemove, isEmpty);
+      expect(plan.toAdd, isEmpty);
+    });
+
+    test('drei auf derselben Minute -> zwei fallen weg', () {
+      final planned = DateTime(2026, 3, 11, 7, 30);
+      final plan = planAlarmSync(
+        pendingDayValues: {_iso(planned): planned.millisecondsSinceEpoch},
+        existingScheduledAlarms: [
+          _alarmAt(planned, id: 1),
+          _alarmAt(planned, id: 2),
+          _alarmAt(planned, id: 3),
+        ],
+        platformAlarmIds: const {1, 2, 3},
+        now: now,
+      );
+
+      expect(plan.toRemove.length, 2);
+      expect(plan.toAdd, isEmpty);
+    });
+
+    test('ein Duplikat in der VERGANGENHEIT wird nie entfernt', () {
+      // FR-18s sicherheitskritische Regel bleibt unberuehrt: "Ein
+      // ScheduledAlarm in der Vergangenheit wird NIE entfernt (er koennte
+      // gerade klingeln; Alarm.stop() wuerde das garantierte Aufwachen
+      // aushebeln)."
+      final past = DateTime(2026, 3, 10, 5, 55);
+      final planned = DateTime(2026, 3, 11, 7, 30);
+      final plan = planAlarmSync(
+        pendingDayValues: {_iso(planned): planned.millisecondsSinceEpoch},
+        existingScheduledAlarms: [
+          _alarmAt(past, id: 1),
+          _alarmAt(past, id: 2),
+          _alarmAt(planned, id: 3),
+        ],
+        platformAlarmIds: const {1, 2, 3},
+        now: now,
+      );
+
+      expect(plan.toRemove, isEmpty,
+          reason: 'beide Vergangenheits-Alarme bleiben unangetastet');
+      expect(plan.toAdd, isEmpty);
+    });
+
+    test('zwei Alarme auf VERSCHIEDENEN Minuten bleiben beide', () {
+      // Gegenprobe gegen eine Ueberkorrektur.
+      final a = DateTime(2026, 3, 11, 7, 30);
+      final b = DateTime(2026, 3, 12, 7, 30);
+      final plan = planAlarmSync(
+        pendingDayValues: {
+          _iso(a): a.millisecondsSinceEpoch,
+          _iso(b): b.millisecondsSinceEpoch,
+        },
+        existingScheduledAlarms: [_alarmAt(a, id: 1), _alarmAt(b, id: 2)],
+        platformAlarmIds: const {1, 2},
+        now: now,
+      );
+
+      expect(plan.toRemove, isEmpty);
+      expect(plan.toAdd, isEmpty);
+    });
+  });
 }

@@ -1456,6 +1456,37 @@ Conventions:
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-116 · Zwei Alarme auf derselben Minute waren ein stabiler Fixpunkt — BEHOBEN (2026-09-11)
+
+- [x] Pro geplantem Wert darf hoechstens ein Alarm ueberleben.
+- **Why:** `planAlarmSync` entschied ueber `desiredMinutes.contains(...)` - eine blosse
+  **Mengenzugehoerigkeit**, keine Zuordnung. Liegen zwei `ScheduledAlarm`s auf derselben Minute,
+  galten damit **beide** als behaltenswert und keiner als ueberzaehlig; weil `keptMinutes`
+  anschliessend die Minute enthielt, blieb auch `toAdd` leer. Der Zustand war damit ein **stabiler
+  Fixpunkt**: jede weitere Neuplanung bestaetigte das Duplikat. Der Nutzer wird dauerhaft zweimal
+  geweckt, und nichts in der Engine raeumt das je wieder auf.
+- **Warum das kein Auslegungsstreit ist:** FR-18s Kopfsatz ist eine Nachbedingung ueber die MENGE
+  ("angeglichen, dass sie **genau den geplanten Werten entspricht**"), und FR-18s eigener Testfall
+  nennt dasselbe Ziel ("passender Alarm existiert bereits -> **kein Duplikat**, keine Entfernung
+  (idempotent)"). Die zweite Spiegelstrich-Regel ist dagegen eine Bedingung *pro Alarm* und trifft
+  auf ein Duplikat bei keinem der beiden zu - massgeblich ist der Kopfsatz: er nennt das Ziel, die
+  Spiegelstriche die Mittel. Unabhaengig von jeder Spec-Auslegung verfehlt die Funktion ausserdem
+  ihren **eigenen** dokumentierten Vertrag: "computes what has to change so the set of
+  `ScheduledAlarm`s matches [pendingDayValues] **exactly**".
+- **Evidence:** `planAlarmSync` mit einem geplanten Wert und zwei identischen Alarmen auf dessen
+  Minute liefert `toRemove=[] toAdd=[]` - in beiden Betriebsarten, mit und ohne Plattformwissen.
+- **Fix:** der erste passende Alarm belegt den Wert, jeder weitere faellt weg. Bewusst
+  reihenfolge-abhaengig, und der Ueberlebende steht gerade **nicht** in `toRemove` - entfernt wird
+  ueber die Alarm-ID, ein Entfernen derselben ID wuerde ihn auf der Plattform mitstoppen. Das war
+  der Hinweis des Gegenpruefers, nicht des urspruenglichen Vorschlags.
+- **Unberuehrt bleibt FR-18s sicherheitskritische Regel:** ein Alarm in der Vergangenheit wird nie
+  entfernt (er koennte gerade klingeln). Eigener Testfall mit zwei Duplikaten in der
+  Vergangenheit.
+- **Test:** `test/apply_alarms_test.dart`, Gruppe T-116 - zwei und drei Alarme auf derselben
+  Minute, der Fixpunkt danach, das Vergangenheits-Duplikat und zwei Alarme auf verschiedenen
+  Minuten als Gegenprobe gegen eine Ueberkorrektur.
+- **Requirement:** R2, R3
+
 ### T-115 · OFFENE SPEC-ENTSCHEIDUNG: was gilt bei einem Abstand von exakt 12 Stunden?
 
 - [x] Die beiden Werte NEBEN der Schwelle absichern (das geht ohne Entscheidung).
