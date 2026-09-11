@@ -260,4 +260,99 @@ void main() {
           reason: 'die Woche muss trotzdem geplant werden');
     });
   });
+
+  group('FR-18: replan() wendet den Plan wirklich an (T-117)', () {
+    // Der schwerwiegendste Einzelbefund der Pruefung 2026-09-11, und er
+    // betrifft nicht das Verhalten, sondern die Abdeckung: die Naht zwischen
+    // "Plan berechnet" und "Alarm registriert" war in der GESAMTEN Suite
+    // ungedeckt.
+    //
+    // `apply_alarms_test.dart` prueft `planAlarmSync` rein und
+    // `applyPlannedAlarms` direkt - aber nichts prueft, dass `replan()` sie
+    // ueberhaupt aufruft. Entfernt man den Aufruf, bleiben neun Testdateien
+    // gruen (replan, apply_alarms, checkpoint, replan_audit, checkpoint_audit,
+    // handler_replan_wiring, handler_on_alarm_handled, next_wake_up,
+    // app_state_scheduling_v2). Die Bindung existierte nur als Kommentar.
+    //
+    // Und es ist keine hypothetische Regression: genau so war die
+    // scheduling-v2-Implementierung schon einmal vollstaendig wirkungslos -
+    // die Woche wurde korrekt berechnet und nie zu einem Alarm (T-63). Der
+    // Kommentar an der Aufrufstelle nennt sie beim Namen; ab jetzt nennt sie
+    // ein Test.
+    //
+    // Bewusst mit ECHTEN Zukunftszeiten: `AppState.addAlarm` vergleicht gegen
+    // `DateTime.now()` und nimmt einen vergangenen Zeitpunkt gar nicht erst
+    // auf - ein injizierter Vergangenheits-"now" wuerde hier also nichts
+    // beweisen.
+
+    Set<DateTime> minutesOf(Iterable<DateTime> times) =>
+        times.map((t) => DateTime(t.year, t.month, t.day, t.hour, t.minute)).toSet();
+
+    // FR-18 woertlich: "Fuer jeden geplanten Wert **nach jetzt** ohne
+    // passenden Alarm wird genau einer angelegt." Der heutige Fenstertag liegt
+    // zur Testlaufzeit je nach Uhrzeit schon hinter uns - er gehoert dann
+    // korrekterweise NICHT in die Alarmmenge, und FR-18 sagt genau das.
+    Set<DateTime> plannedFutureMinutes(AppState appState, DateTime now) =>
+        minutesOf(appState.pendingDayValues.values
+            .whereType<int>()
+            .map(DateTime.fromMillisecondsSinceEpoch)
+            .where((t) => t.isAfter(now)));
+
+    test('die geplanten Werte werden zu registrierten Alarmen', () async {
+      final appState = await _freshAppState();
+      final now = DateTime.now();
+      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+
+      await replan(
+        appState,
+        now: () => now,
+        deviceUtcOffset: now.timeZoneOffset,
+        fetchEvents: (start, end) async => [],
+      );
+
+      expect(appState.pendingDayValues.values.whereType<int>(), isNotEmpty,
+          reason: 'Vorbedingung: es wurde ueberhaupt etwas geplant');
+      expect(appState.scheduledAlarms, isNotEmpty,
+          reason: 'FR-18: aus jedem geplanten Wert nach jetzt wird ein Alarm');
+
+      expect(minutesOf(appState.scheduledAlarms.map((a) => a.time)),
+          plannedFutureMinutes(appState, now),
+          reason: 'die Alarmmenge entspricht genau den geplanten Werten '
+              'nach jetzt');
+    });
+
+    test('eine geaenderte Planung zieht die registrierten Alarme nach',
+        () async {
+      // FR-16s entscheidbare Haelfte: "keine vollstaendige Neuberechnung der
+      // Segmente/Runs - die folgt erst beim NAECHSTEN regulaeren
+      // Planungslauf." Dass dieser naechste Lauf die bereits registrierten
+      // Alarme mitzieht, ist damit zugesichert - und war ebenfalls ungedeckt.
+      final appState = await _freshAppState();
+      final now = DateTime.now();
+      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+
+      await replan(
+        appState,
+        now: () => now,
+        deviceUtcOffset: now.timeZoneOffset,
+        fetchEvents: (start, end) async => [],
+      );
+      final before = minutesOf(appState.scheduledAlarms.map((a) => a.time));
+      expect(before, isNotEmpty);
+
+      appState.wunschzeit = const TimeOfDay(hour: 9, minute: 30);
+      await replan(
+        appState,
+        now: () => now,
+        deviceUtcOffset: now.timeZoneOffset,
+        fetchEvents: (start, end) async => [],
+      );
+
+      final after = minutesOf(appState.scheduledAlarms.map((a) => a.time));
+      expect(after, isNot(before),
+          reason: 'der naechste Planungslauf zieht die Alarme nach');
+
+      expect(after, plannedFutureMinutes(appState, now));
+    });
+  });
 }

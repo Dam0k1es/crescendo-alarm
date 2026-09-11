@@ -1456,6 +1456,35 @@ Conventions:
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-117 · Die Naht zwischen "Plan berechnet" und "Alarm registriert" war ungedeckt — BEHOBEN (2026-09-11)
+
+- [x] Zusichern, dass `replan()` den berechneten Plan tatsaechlich anwendet.
+- **Why:** kein Verhaltensfehler, sondern eine Abdeckungsluecke - und die gefaehrlichste, die diese
+  Pruefung gefunden hat. `test/apply_alarms_test.dart` prueft `planAlarmSync` rein und
+  `applyPlannedAlarms` direkt; **nichts** prueft, dass `replan()` sie ueberhaupt aufruft. Die
+  Bindung existierte nur als Kommentar an der Aufrufstelle.
+- **Evidence:** entfernt man `await applyPlannedAlarms(appState, now: nowFn);` aus `replan()`,
+  bleiben **neun** Testdateien vollstaendig gruen: `replan_test` (21/21), `apply_alarms_test`
+  (32/32), `checkpoint_test` (20/20), `replan_audit_test` (die uebrigen 6/6),
+  `checkpoint_audit_test` (4/4), `handler_replan_wiring_test` (4/4),
+  `handler_on_alarm_handled_test` (3/3), `next_wake_up_test` (8/8),
+  `app_state_scheduling_v2_test` (12/12). Vom Pruefer gemeldet und von mir nachgestellt.
+- **Warum das keine hypothetische Regression ist:** genau so war scheduling-v2 schon einmal
+  **vollstaendig wirkungslos** - die Woche wurde korrekt berechnet und nie zu einem Alarm (T-63).
+  Der Kommentar an der Aufrufstelle nennt die Gefahr beim Namen ("that way no code path can
+  compute a plan and forget to apply it, which is exactly how the whole engine ended up
+  functionally inert before"); ab jetzt nennt sie ein Test.
+- **Zwei Zusicherungen:** die Alarmmenge nach `replan()` entspricht genau den geplanten Werten
+  **nach jetzt** (FR-18s Wortlaut), und ein *geaenderter* Plan zieht die bereits registrierten
+  Alarme im naechsten Lauf nach. Letzteres ist zugleich FR-16s entscheidbare Haelfte ("keine
+  vollstaendige Neuberechnung … die folgt erst beim naechsten regulaeren Planungslauf") - die
+  andere Haelfte ist T-113.
+- **Bewusst mit echten Zukunftszeiten:** `AppState.addAlarm` vergleicht gegen `DateTime.now()` und
+  nimmt einen vergangenen Zeitpunkt gar nicht erst auf; ein injizierter Vergangenheits-"now"
+  wuerde hier nichts beweisen. Der heutige Fenstertag faellt je nach Laufzeit heraus - korrekt,
+  und der Test rechnet das aus FR-18s "nach jetzt" heraus, statt es hinzunehmen.
+- **Requirement:** R2, R3
+
 ### T-116 · Zwei Alarme auf derselben Minute waren ein stabiler Fixpunkt — BEHOBEN (2026-09-11)
 
 - [x] Pro geplantem Wert darf hoechstens ein Alarm ueberleben.
