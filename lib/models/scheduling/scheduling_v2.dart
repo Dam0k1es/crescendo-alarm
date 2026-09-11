@@ -369,6 +369,34 @@ GapOrRunStartResult planGapOrRunStartDay({
     maxDailyDelta: maxDailyDelta,
   );
   final f = grouped.value;
+
+  // FR-2, und das ist der ganze Sinn des Wortes "Obergrenze"
+  // (docs/TODO.md T-132): ein `hardFloor`, der NICHT frueher liegt als der
+  // heutige Wert, fordert nichts. Wer um 06:45 aufsteht, erfuellt einen Termin
+  // um 11:00 laengst - es gibt keinen Grund, dafuer auszuschlafen, und schon
+  // gar keinen, dafuer `maxDailyDelta` zu reissen.
+  //
+  //   FR-2: "Der geplante Wert darf frueher liegen (IMMER erlaubt), aber
+  //          niemals spaeter."
+  //   FR-5: "`hardFloor` ist ausschliesslich eine Obergrenze (FR-2), NIE eine
+  //          Richtungsvorgabe."
+  //
+  // Genau dagegen lief der Run: er behandelte jeden Punkt als Ziel, auch einen
+  // spaeteren, und zog die Weckzeit zu ihm hinauf. Auf einem echten Kalender
+  // sah das so aus: 06:45 -> 08:00 -> 11:00, bei `maxDailyDelta` von 30
+  // Minuten und einer `wunschzeit` von 07:00.
+  //
+  // Nach spaet bewegt die Weckzeit ausschliesslich FR-4s Drift zur
+  // `wunschzeit`, begrenzt durch `maxDailyDelta`. Die Tagesobergrenze wirkt
+  // weiter - aber als Deckel (die Kappung in `computeWeekPlan`), nicht als
+  // Zugseil.
+  //
+  // FR-5s Warnung vor einem "Richtungsfilter" bleibt gewahrt: die Punkte
+  // werden NICHT aus `remainingPoints` entfernt, nehmen also weiter an
+  // `groupTarget`s Verletzungspruefung teil. Nur als *Ziel* kommen sie nicht in
+  // Frage.
+  if (_wallClockDelta(v, f) >= Duration.zero) return gapDay();
+
   // FR-7: N_Rest = N_F - i. `grouped.dayOffset` is v-relative (the genuine
   // calendar-day distance from `v` to F - groupTarget/distribute need it that
   // way for correct date placement, see groupTarget's doc comment), i.e. it
@@ -667,13 +695,18 @@ WeekPlanResult computeWeekPlan({
     }
 
     if (remaining.isEmpty) {
-      final value = ownHardFloor ??
-          applyGapDayDrift(
-              v: anchor!,
-              wunschzeit: wunschzeit,
-              maxDailyDelta: maxDailyDelta,
-              deviceUtcOffset: deviceUtcOffset);
-      if (ownHardFloor != null) {
+      // Auch hier ist FR-2s Obergrenze ein Deckel, kein Ziel (docs/TODO.md
+      // T-132): frueher wurde der eigene `hardFloor` unbesehen zugewiesen,
+      // also auch dann, wenn er SPAETER lag als der heutige Wert - der Nutzer
+      // haette ohne jeden Anlass ausgeschlafen.
+      final drifted = applyGapDayDrift(
+          v: anchor!,
+          wunschzeit: wunschzeit,
+          maxDailyDelta: maxDailyDelta,
+          deviceUtcOffset: deviceUtcOffset);
+      final bindsToday = ownHardFloor != null && drifted.isAfter(ownHardFloor);
+      final value = bindsToday ? ownHardFloor : drifted;
+      if (bindsToday) {
         instantAnchoredDays.add(day);
         // FR-6's reporting duty, which this branch used to skip entirely
         // (docs/TODO.md T-105). Assigning a day its own hardFloor is a
@@ -686,7 +719,7 @@ WeekPlanResult computeWeekPlan({
         // Same formula as `distribute` uses, so the two paths cannot drift
         // apart: ΔT/N > maxDailyDelta, expressed without a division.
         final n = dayDistance(day, anchorDay);
-        final delta = _wallClockDelta(anchor!, value).abs();
+        final delta = _wallClockDelta(anchor, value).abs();
         if (n >= 1 && delta.inMicroseconds > maxDailyDelta.inMicroseconds * n) {
           overrunNotificationNeeded = true;
         }

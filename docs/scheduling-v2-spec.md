@@ -166,6 +166,30 @@ Die folgenden Tests prüfen **isoliert** die Drift-Regel selbst, ohne FR-7s Deck
 Reale `hardFloor`-Punkte im Fenster: `t1, t2, …, tn`, chronologisch. Ausgehend vom aktuellen Anker
 `A` (Tag 0):
 
+**Vorbedingung: nur ein bindender Punkt kann Ziel sein.** Als Ziel `t_m` kommt ausschließlich ein
+Punkt in Frage, dessen Uhrzeit **früher** liegt als `A` (ΔT nach FR-6s Klarstellung, also rein über
+die Uhrzeit-Komponenten). Ein Punkt, der gleich oder später liegt, fordert nichts: wer um 06:45
+aufsteht, erfüllt einen Termin um 11:00 längst. Für einen solchen Tag gilt FR-4 (Drift zur
+`wunschzeit`, begrenzt durch `maxDailyDelta`), und der `hardFloor` wirkt nur noch als **Deckel**
+(FR-2s Obergrenze), nie als Zugseil.
+
+Das folgt unmittelbar aus FR-2 („Der geplante Wert darf früher liegen - **immer erlaubt**") und aus
+Schritt 1s eigenem Satz („`hardFloor` ist ausschließlich eine Obergrenze, nie eine
+Richtungsvorgabe"), stand aber bis 2026-09-11 nirgends als Verfahrensregel - mit der Folge, dass
+jeder Punkt zum Ziel wurde, auch ein späterer. Auf einem echten Kalender lief die Weckzeit dadurch
+von 06:45 über 08:00 auf 11:00, bei `maxDailyDelta` = 30 min und `wunschzeit` = 07:00
+(`docs/TODO.md` T-132).
+
+Wichtig zur Abgrenzung: die Punkte werden dadurch **nicht** aus der Liste entfernt. Sie nehmen
+weiterhin an Schritt 1s Verletzungsprüfung teil - genau davor warnt Schritt 1s Absatz über den
+verworfenen „Richtungsfilter". Ausgeschlossen sind sie nur als *Ziel*.
+
+- **Test:** `A=06:45`, `t1(Tag 1)=08:00`, `t2(Tag 2)=11:00`, `wunschzeit=07:00`,
+  `maxDailyDelta=30min` → jeder Tag **07:00** (FR-4 erreicht die `wunschzeit` am ersten Tag und
+  hält), **keine** Overrun-Meldung. Nicht 08:00/11:00.
+- **Test:** derselbe Anker, ein einzelner Termin `05:00` in vier Tagen → Run nach früh:
+  `06:18 / 05:52 / 05:26 / 05:00`, danach Drift zurück zur `wunschzeit`.
+
 1. Bestimme den am weitesten in der Zukunft liegenden Punkt `t_m` (m ≥ 1), sodass die gleichmäßige
    Verteilung `A→t_m` (FR-6) **keinen** Zwischenpunkt `t1…t_{m-1}` über seinen eigenen `hardFloor`
    hinaus verschiebt. Ist das für den nächstmöglichen `t_m` verletzt, wird `m` verkleinert, bis

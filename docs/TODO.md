@@ -1504,6 +1504,52 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-132 · Ein Termin zog die Weckzeit nach SPAET — BEHOBEN (2026-09-11)
+
+- [x] Ein `hardFloor` kann nur noch Ziel sein, wenn er frueher liegt als der heutige Wert.
+- **Woher:** Geraeterueckmeldung des Maintainers, erster Lauf gegen einen **echten** Kalender. Die
+  Weckzeit lief von **06:45 ueber 08:00 auf 11:00** - "deutlich mehr als drift und als noetig, auch
+  nicht nahe an der praeferierten zeit. die 11 uhr scheinen komplett grundlos".
+- **Reproduziert** (Anker 06:45, `wunschzeit` 07:00, `maxDailyDelta` 30min, Termine 08:00 und
+  11:00 an den Folgetagen): exakt `08:00`, dann `11:00`. Und der zweite Teil der Meldung
+  ("reagiert extrem auf freie tage") ebenso: ein **einzelner** Termin um 11:00 in vier Tagen, sonst
+  alles frei, ergab `07:48 / 08:52 / 09:56 / 11:00` - die freien Tage wurden als Rampe benutzt, um
+  auf einen spaeten Termin hinaufzuklettern.
+- **Ursache:** `hardFloor` ist ein **Termin-Deckel**, die Engine hat ihn aber als **Kurvenziel**
+  behandelt - in beide Richtungen. Ein Punkt, der spaeter liegt als die bisherige Weckzeit, wurde
+  damit zum Ziel eines Runs, und der Run zog die Weckzeit zu ihm hinauf; `maxDailyDelta` war dabei
+  ausgehebelt, weil FR-6 fuer `N=1` den vollen Sprung erlaubt.
+- **Die Spec sagt zweimal das Gegenteil,** nur nicht als Verfahrensregel:
+  - FR-2: "`hardFloor` ist eine **Obergrenze** ('nicht spaeter als'). Der geplante Wert darf
+    frueher liegen (**immer erlaubt**), aber niemals spaeter."
+  - FR-5, Schritt 1: "`hardFloor` ist ausschliesslich eine Obergrenze (FR-2), **nie eine
+    Richtungsvorgabe**."
+  Deshalb ist das **keine** der offenen Entscheidungsfragen, sondern ein Fehler mit eindeutiger
+  Grundlage: wer um 06:45 aufsteht, erfuellt einen Termin um 11:00 laengst. Nach spaet bewegt die
+  Weckzeit ausschliesslich FR-4s Drift zur `wunschzeit`.
+- **Fix an zwei Stellen:** `planGapOrRunStartDay` startet keinen Run, wenn das gruppierte Ziel
+  nicht frueher liegt als der Anker; und `computeWeekPlan`s Zweig ohne Folgepunkte driftet jetzt
+  und **deckelt** danach, statt den eigenen `hardFloor` unbesehen zuzuweisen. FR-5s Warnung vor
+  einem "Richtungsfilter" bleibt gewahrt: die Punkte werden nicht aus der Liste entfernt und nehmen
+  weiter an der Verletzungspruefung teil - sie kommen nur als *Ziel* nicht mehr in Frage.
+- **Ergebnis nach dem Fix,** dieselben Eingaben: jeder Tag **07:00**, keine Overrun-Meldung. Ein
+  **frueher** Termin (05:00 in vier Tagen) wird weiterhin geglaettet herangefuehrt
+  (`06:18 / 05:52 / 05:26 / 05:00`) und danach zur `wunschzeit` zurueckgefuehrt - der eigentliche
+  Zweck von FR-5/FR-6 bleibt also unberuehrt.
+- **Spec nachgezogen:** FR-5 hat die Vorbedingung jetzt als eigenen Absatz samt zwei
+  durchgerechneten Testfaellen. Ohne sie baut das jemand zurueck.
+- **Ein bestehender Test musste neu hergeleitet werden:** `T-118c`s Nebenzusicherung stand auf
+  `08:00` und hat damit genau den Fehler festgeschrieben. Richtig sind `07:00` (ohne `wunschzeit`
+  haelt FR-4 beim Anker, und FR-2 erlaubt jeden frueheren Wert ausdruecklich). Die tragende
+  Zusicherung dieses Tests - dass FR-9s Ventil einen Termintag nicht auf `null` setzt - ist
+  unveraendert.
+- **Was das ueber die Testlage sagt:** 267 Tests, zwei unabhaengige Pruefrunden und eine
+  Zeitzonen-Matrix haben das nicht gefunden - der erste Lauf gegen einen echten Kalender schon.
+  Alle Suite-Fixtures bewegten die Weckzeit entweder nach frueh oder liessen sie halten; der Fall
+  "Termin liegt spaeter als die bisherige Weckzeit" kam in keinem einzigen vor, obwohl er der
+  Alltagsfall ist.
+- **Requirement:** R2
+
 ### T-131 · Das Reboot-Verfahren kann strukturell nichts messen: `flutter test` deinstalliert die App
 
 - [x] Die Ursache benennen, statt sie ein drittes Mal als Musterfrage zu verbuchen.

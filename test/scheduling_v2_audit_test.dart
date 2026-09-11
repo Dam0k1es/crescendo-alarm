@@ -471,7 +471,13 @@ void main() {
 
       expect(result.valuesByDay[window[0]], isNotNull,
           reason: 'null hiesse, den Termin garantiert zu verpassen');
-      expect(result.valuesByDay[window[0]], _utc(8, 0, day: 11));
+      // Der Wert ist 07:00, nicht 08:00 (docs/TODO.md T-132): ohne
+      // `wunschzeit` haelt FR-4 bei der Uhrzeit des Ankers, und FR-2s
+      // Obergrenze von 08:00 erlaubt jeden frueheren Wert ausdruecklich
+      // ("immer erlaubt"). Bis 2026-09-11 stand hier 08:00 - das war der
+      // Fehler, den eine Geraeterueckmeldung sichtbar gemacht hat: der
+      // `hardFloor` wurde als Ziel behandelt statt als Deckel.
+      expect(result.valuesByDay[window[0]], _utc(7, 0, day: 11));
     });
 
     test('Tage VOR einem Termin im Fenster behalten ihren Wert', () {
@@ -658,6 +664,108 @@ void main() {
             reason: 'FR-2: niemals spaeter als der eigene hardFloor '
                 '(${isoDate(day)}: Wert $value, Obergrenze $floor)');
       }
+    });
+  });
+
+  group('FR-2: ein hardFloor zieht nur nach FRUEH, nie nach spaet (T-132)', () {
+    // Geraeterueckmeldung vom 2026-09-11, echter Kalender: die Weckzeit lief
+    // von 06:45 ueber 08:00 auf 11:00 - "deutlich mehr als drift und als
+    // noetig, auch nicht nahe an der praeferierten zeit".
+    //
+    // FR-2 ist dazu eindeutig:
+    //
+    //   "`hardFloor` ist eine **Obergrenze** ("nicht spaeter als"). Der
+    //    geplante Wert darf frueher liegen (IMMER ERLAUBT), aber niemals
+    //    spaeter (ein spaeterer Wert bedeutet, einen echten Termin zu
+    //    verpassen)."
+    //
+    // und FR-5 sagt denselben Satz noch einmal von der anderen Seite:
+    //
+    //   "`hardFloor` ist ausschliesslich eine Obergrenze (FR-2), NIE EINE
+    //    RICHTUNGSVORGABE."
+    //
+    // Wer um 06:45 aufsteht, erfuellt einen Termin um 11:00 laengst. Es gibt
+    // keinen Grund, dafuer auszuschlafen - und schon gar keinen, dafuer
+    // `maxDailyDelta` zu reissen. Nach spaet bewegt die Weckzeit ausschliesslich
+    // die `wunschzeit` (FR-4), begrenzt durch `maxDailyDelta`.
+
+    test('zwei spaetere Termine ziehen die Weckzeit nicht hoch', () {
+      final window = List.generate(7, (i) => _utc(0, 0, day: 12 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(6, 45, day: 11),
+        allEvents: [
+          _meetingAt(_utc(8, 0, day: 12)),
+          _meetingAt(_utc(11, 0, day: 13)),
+        ],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        maxDailyDelta: const Duration(minutes: 30),
+        gapDayCounter: 0,
+      );
+
+      // FR-4: 06:45 -> 07:00 ist ein Schritt von 15min, innerhalb der Grenze,
+      // und die wunschzeit wird exakt getroffen (kein Ueberschiessen).
+      expect(result.valuesByDay[window[0]], _utc(7, 0, day: 12));
+      // Danach halten - der 11-Uhr-Termin fordert nichts.
+      expect(result.valuesByDay[window[1]], _utc(7, 0, day: 13));
+      for (final day in window) {
+        expect(result.valuesByDay[day], isNotNull);
+        expect(result.valuesByDay[day]!.hour, lessThanOrEqualTo(7),
+            reason: 'kein Tag darf ueber die wunschzeit hinaus nach hinten');
+      }
+    });
+
+    test('ein einzelner spaeter Termin verbraucht nicht die freien Tage davor',
+        () {
+      // Der zweite Teil der Rueckmeldung ("reagiert extrem auf freie Tage"):
+      // die Tage vor einem spaeten Termin wurden als Rampe benutzt, um auf ihn
+      // hinaufzuklettern - 07:48, 08:52, 09:56, 11:00.
+      final window = List.generate(7, (i) => _utc(0, 0, day: 12 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(6, 45, day: 11),
+        allEvents: [_meetingAt(_utc(11, 0, day: 15))],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        maxDailyDelta: const Duration(minutes: 30),
+        gapDayCounter: 0,
+      );
+
+      for (final day in window) {
+        expect(result.valuesByDay[day], _utc(7, 0, day: day.day),
+            reason: 'alle Tage ruhen auf der wunschzeit');
+      }
+    });
+
+    test('nach FRUEH wird weiterhin geglaettet - unveraendert', () {
+      // Gegenprobe, und der eigentliche Zweck von FR-5/FR-6: ein Termin, der
+      // frueher liegt als die bisherige Weckzeit, ist bindend, und der Weg
+      // dorthin wird ueber die Tage verteilt statt auf eine Nacht geworfen.
+      final window = List.generate(7, (i) => _utc(0, 0, day: 12 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(7, 0, day: 11),
+        allEvents: [_meetingAt(_utc(5, 0, day: 15))],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: null,
+        maxDailyDelta: const Duration(minutes: 30),
+        gapDayCounter: 0,
+      );
+
+      expect(result.valuesByDay[window[0]], _utc(6, 30, day: 12));
+      expect(result.valuesByDay[window[1]], _utc(6, 0, day: 13));
+      expect(result.valuesByDay[window[2]], _utc(5, 30, day: 14));
+      expect(result.valuesByDay[window[3]], _utc(5, 0, day: 15));
     });
   });
 }
