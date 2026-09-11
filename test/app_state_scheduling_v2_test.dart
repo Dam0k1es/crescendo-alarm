@@ -166,4 +166,72 @@ void main() {
       expect(second.maxDailyDelta, const Duration(minutes: 15));
     });
   });
+
+  group('FR-3-Felder ohne Rundreise-Test (T-108)', () {
+    // Die Pruefung 2026-09 fand drei der zehn FR-3-Felder ohne
+    // Persistenz-Rundreise. Funktional benutzt werden sie in replan_test,
+    // checkpoint_test und replan_notifications_test - aber keiner davon baut
+    // AppState neu auf, prueft also nie, ob der Wert einen App-Neustart
+    // ueberlebt. Beide bool-Merker tragen FR-6s bzw. FR-9s "einmalig"-Zusage
+    // ueber genau diese Grenze.
+
+    test('lastProcessedConcludedDay (FR-9, T-75)', () async {
+      SharedPreferences.setMockInitialValues({});
+      final first = AppState();
+      await first.initialized;
+      expect(first.lastProcessedConcludedDay, isNull);
+
+      final day = DateTime.utc(2026, 3, 10);
+      first.lastProcessedConcludedDay = day;
+
+      final second = AppState();
+      await second.initialized;
+      expect(second.lastProcessedConcludedDay, day);
+    });
+
+    test('lastProcessedConcludedDay ist von lastReplanDate unabhaengig (T-75)',
+        () async {
+      // Der eigentliche Punkt von T-75: die beiden duerfen sich nicht wieder
+      // zu einem Wert verschmelzen.
+      SharedPreferences.setMockInitialValues({});
+      final first = AppState();
+      await first.initialized;
+
+      first.lastProcessedConcludedDay = DateTime.utc(2026, 3, 10);
+      first.lastReplanDate = DateTime.utc(2026, 3, 11);
+
+      final second = AppState();
+      await second.initialized;
+      expect(second.lastProcessedConcludedDay, DateTime.utc(2026, 3, 10));
+      expect(second.lastReplanDate, DateTime.utc(2026, 3, 11));
+    });
+
+    test('overrunNotificationSent (FR-6, T-74a)', () async {
+      SharedPreferences.setMockInitialValues({});
+      final first = AppState();
+      await first.initialized;
+      expect(first.overrunNotificationSent, isFalse);
+
+      first.overrunNotificationSent = true;
+
+      final second = AppState();
+      await second.initialized;
+      expect(second.overrunNotificationSent, isTrue,
+          reason: 'FR-6 "einmalig" muss einen Neustart ueberdauern');
+    });
+
+    test('safetyValveNotificationSent (FR-9, T-81)', () async {
+      SharedPreferences.setMockInitialValues({});
+      final first = AppState();
+      await first.initialized;
+      expect(first.safetyValveNotificationSent, isFalse);
+
+      first.safetyValveNotificationSent = true;
+
+      final second = AppState();
+      await second.initialized;
+      expect(second.safetyValveNotificationSent, isTrue,
+          reason: 'FR-9 "einmalig" muss einen Neustart ueberdauern');
+    });
+  });
 }

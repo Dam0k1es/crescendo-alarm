@@ -525,6 +525,16 @@ class WeekPlanResult {
 /// [gapDayCounter] must already reflect every already-concluded day up to
 /// today (FR-9) - this function never increments it for days still being
 /// planned, only ever consults it.
+/// FR-9s Schwelle: "Erreicht der Zaehler **>= 7**, wird automatische
+/// Fortschreibung gestoppt und der Nutzer benachrichtigt."
+///
+/// Benannt, weil sie an zwei Stellen geprueft wird (mit und ohne Anker) und
+/// die beiden nicht auseinanderlaufen duerfen - eine stille Aenderung auf 6
+/// wuerde den Wecker einen Tag zu frueh abschalten, und bis 2026-09 haette
+/// kein Test das bemerkt: die Suite rief `computeWeekPlan` nur mit 0, 7 und 42
+/// auf, nie mit 6 (docs/TODO.md T-107).
+const int gapDayValveThreshold = 7;
+
 WeekPlanResult computeWeekPlan({
   required List<DateTime> window,
   required DateTime? lastEffectiveWakeTime,
@@ -581,7 +591,27 @@ WeekPlanResult computeWeekPlan({
             wunschzeit: wunschzeit,
             deviceUtcOffset: deviceUtcOffset),
         overrunNotificationNeeded: false,
-        safetyValveTriggered: false,
+        // FR-9's valve reports from this branch too (docs/TODO.md T-107).
+        //
+        // It used to be hardcoded `false` here, which quietly ended the
+        // episode after exactly one day: once the valve has nulled the whole
+        // window, the next checkpoint finds `lastEffectiveWakeTime == null`
+        // and lands right here - counter still climbing, still nothing
+        // planned, but the result claims there is no valve condition.
+        // `reportReplanNotifications` reads that as "episode over" and clears
+        // `safetyValveNotificationSent`, so a notification that failed on day
+        // one is never retried: a permanently silent alarm clock with no
+        // message at all, which FR-9's own rationale calls "der falsche
+        // Ausgang".
+        //
+        // The same expression also covers the case where no anchor ever
+        // existed (fresh install, calendar permission granted but no
+        // appointments, no wunschzeit): FR-9 states exactly one exception to
+        // "Zaehler >= 7 -> gestoppt und benachrichtigt", namely a set
+        // `wunschzeit`. FR-10 governs only the *values* in this branch
+        // ("Ohne: kein Alarm geplant"), never the notification.
+        safetyValveTriggered:
+            gapDayCounter >= gapDayValveThreshold && wunschzeit == null,
         instantAnchoredDays: const {},
       );
     }
@@ -617,7 +647,7 @@ WeekPlanResult computeWeekPlan({
 
     if (remaining.isEmpty &&
         ownHardFloor == null &&
-        gapDayCounter >= 7 &&
+        gapDayCounter >= gapDayValveThreshold &&
         // FR-9 "Ausnahme: gesetzte wunschzeit" (docs/TODO.md T-78): the valve
         // guards against *blind* extrapolation. A wunschzeit is an explicit
         // target - FR-4 drifts towards it and stops exactly on it, so the

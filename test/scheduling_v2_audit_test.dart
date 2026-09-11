@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wakeywakey/models/scheduling/scheduling_v2.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
@@ -187,6 +188,103 @@ void main() {
       );
 
       expect(result.overrunNotificationNeeded, isFalse);
+    });
+  });
+
+  group('FR-9: das Ventil meldet sich, solange sein Zustand besteht (T-107)', () {
+    // FR-9:
+    //
+    //   "Erreicht der Zaehler >= 7, wird automatische Fortschreibung gestoppt
+    //    und der Nutzer benachrichtigt."
+    //
+    // Genau EINE Ausnahme nennt die Spec: "Das Ventil greift nur, wenn keine
+    // `wunschzeit` gesetzt ist." FR-10 regelt ausschliesslich die *Werte* bei
+    // fehlendem Anker ("Ohne: kein Alarm geplant"), nicht die Meldung.
+    //
+    // Genau dort lag der Fehler: sobald das Ventil das Fenster einmal
+    // leergeraeumt hatte, war `lastEffectiveWakeTime` am Folgetag `null`, und
+    // der Kaltstart-Zweig gab hart `safetyValveTriggered: false` zurueck -
+    // obwohl der Zaehler weiterlief und nach wie vor nichts geplant wurde.
+
+    test('ohne Anker, Zaehler 7, keine wunschzeit: Ventil steht', () {
+      final window = List.generate(7, (i) => _utc(0, 0, day: 1 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: null,
+        allEvents: const [],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: null,
+        maxDailyDelta: const Duration(minutes: 30),
+        gapDayCounter: 7,
+      );
+
+      expect(result.safetyValveTriggered, isTrue);
+      expect(result.valuesByDay.values.every((v) => v == null), isTrue);
+    });
+
+    test('dasselbe mit gesetzter wunschzeit meldet nicht (FR-9s Ausnahme)', () {
+      final window = List.generate(7, (i) => _utc(0, 0, day: 1 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: null,
+        allEvents: const [],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        maxDailyDelta: const Duration(minutes: 30),
+        gapDayCounter: 42,
+      );
+
+      expect(result.safetyValveTriggered, isFalse);
+      expect(result.valuesByDay.values.every((v) => v != null), isTrue,
+          reason: 'FR-9s Ausnahme: mit wunschzeit wird weiter fortgeschrieben');
+    });
+
+    test('ohne Anker unterhalb der Schwelle meldet nicht', () {
+      // Gegenprobe: die Schwelle selbst bleibt bei >= 7. FR-9s eigener
+      // Testfall dazu ("Zaehler steht bei 6 ... kein Ausloesen") war in der
+      // Suite bisher nur als Additions-Schleife von `updateGapDayCounter`
+      // vertreten, nie als Aufruf von `computeWeekPlan`.
+      final window = List.generate(7, (i) => _utc(0, 0, day: 1 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: null,
+        allEvents: const [],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: null,
+        maxDailyDelta: const Duration(minutes: 30),
+        gapDayCounter: 6,
+      );
+
+      expect(result.safetyValveTriggered, isFalse);
+    });
+
+    test('mit Anker bleibt der bisherige Ventilweg unveraendert', () {
+      // Gegenprobe gegen eine Ueberkorrektur: der Zweig mit Anker meldet
+      // weiterhin genau wie bisher.
+      final window = List.generate(7, (i) => _utc(0, 0, day: 1 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(7, 0, day: 0),
+        allEvents: const [],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: null,
+        maxDailyDelta: const Duration(minutes: 30),
+        gapDayCounter: 7,
+      );
+
+      expect(result.safetyValveTriggered, isTrue);
     });
   });
 }

@@ -1328,6 +1328,87 @@ Conventions:
   belegt mit dem realen Fall: nach einem Dismiss war der Alarm für morgen weg (0 statt 1).
   Damit sind auch T-02 und T-32 gegenstandslos.
 
+### T-106 · Ein bereits geklingelter Tageswert wurde vom naechsten Nicht-Ring-Checkpoint ueberschrieben — BEHOBEN (2026-09-11)
+
+- [x] Abgeschlossene Fenstertage behalten ihren aufgezeichneten Wert.
+- **Why:** FR-11 sagt "Erst der tatsaechlich ausgeloeste Wert ist **fuer immer** fix" - und "fuer
+  immer" schliesst den Rest desselben Tages ein. Nur der Ring setzt `todayAlreadyRang`; fuer
+  `settingsChanged` und `manualSync` beginnt das Fenster deshalb wieder bei HEUTE, und der Merge
+  in `replan()` schrieb den bereits ausgeloesten Wert neu.
+- **Zwei Folgen, die zweite ist die schwerere:**
+  1. Ein **zweiter Alarm am selben Morgen**. FR-18 plant jeden noch zukuenftigen Planwert ein; der
+     revidierte heutige Wert ist einer. Ablauf: 06:00 klingelt, der Nutzer dismisst, aendert um
+     06:05 eine Einstellung - und um 06:30 klingelt es erneut.
+  2. Unter dem Klingeltag steht danach ein Wert, der **nie geklingelt hat**. Genau diesen Eintrag
+     liest der naechste Checkpoint als `lastEffectiveWakeTime` (FR-3: "immer der Eintrag in
+     `pendingDayValues` fuer den zuletzt abgeschlossenen Tag"). Der Vordergrund-Checkpoint am
+     Folgemorgen - vor dem Klingeln, Tagessperre greift dort nicht mehr - glaettet die ganze Woche
+     dann von einem erfundenen Anker aus.
+- **Erreichbarkeit (vom Gegenpruefer einzeln nachgegangen):** `manualSync` ist der Sync-Knopf in
+  der Alarmliste; `settingsChanged` haengt an sechs Ein-Tipp-Pfaden (Ton, Lautstaerke, die vier
+  Dauer-Picker, wunschzeit-Schalter, Gentle-Wake-Schalter). Beide unterliegen der Tagessperre
+  bewusst nicht. **`appForeground` traegt den Fall nicht** - dort faengt FR-17s Tagessperre ab,
+  weil der Ring `lastReplanDate` schon auf heute gesetzt hat; dieser Teil der urspruenglichen
+  Meldung ist widerlegt. Ausserdem braucht der Schaden eine *geaenderte* Lage: bleibt der Termin
+  im Kalender, ist die Revision ein No-op. "Besprechung abgesagt, ich schaue in die App und
+  synchronisiere" ist aber der naheliegendste Vormittagsablauf ueberhaupt.
+- **Fix:** Fenstertage, die nicht nach dem Fortschrittsmarker liegen, werden beim Merge
+  uebersprungen - Werte **und** `pendingDayInstantAnchored`. Das Fenster wird ausdruecklich
+  **nicht** verkuerzt: der Tag traegt weiter die Kurve, nur seine Aufzeichnung bleibt stehen.
+- **Test:** `test/replan_audit_test.dart` - der Fall selbst plus zwei Gegenproben (der Folgetag
+  bleibt revisionierbar; der Ring-Checkpoint schreibt weiterhin).
+- **Requirement:** R2
+
+### T-107 · FR-9s Ventil vergass sich selbst, sobald es gewirkt hatte — BEHOBEN (2026-09-11)
+
+- [x] Den Ventilzustand auch im Kaltstart-Zweig melden.
+- **Why:** sobald das Ventil alle Fensterwerte auf `null` gesetzt hat, ist beim naechsten
+  Checkpoint `lastEffectiveWakeTime == null`. `computeWeekPlan` nimmt dann FR-10s Kaltstart-Zweig,
+  und der gab hart `safetyValveTriggered: false` zurueck - obwohl der Zaehler weiterlaeuft (8, 9,
+  …), keine `wunschzeit` gesetzt ist und nach wie vor nichts geplant wird. Der Zustand behauptete
+  "keine Episode", waehrend die Episode andauerte.
+- **Warum das gefaehrlich ist, nicht nur unsauber:** `reportReplanNotifications` liest
+  `needed == false` bei `alreadySent == true` als "Episode vorbei" und setzt
+  `safetyValveNotificationSent` zurueck. Scheitert die Benachrichtigung am Tag des Ausloesens
+  (Merker bleibt absichtlich `false`, damit wiederholt wird), kommt der Wiederholungsversuch
+  **nie** - ab dem Folgetag ist `needed` dauerhaft `false`. Ergebnis: ein dauerhaft stummer Wecker
+  ohne jede Meldung. FR-9s eigene Begruendung nennt genau das "der falsche Ausgang".
+- **Zweite Auspraegung, vom selben Zweig getragen:** erreicht der Zaehler die Schwelle, **ohne**
+  dass je ein Anker existierte - frische Installation, Kalenderfreigabe ohne Termine, keine
+  `wunschzeit`, App taeglich geoeffnet -, war `safetyValveTriggered` **nie** `true`. Der Nutzer
+  erfuhr nie, dass nichts geplant wird. Der erste Pruefer hielt das fuer aus der Spec nicht
+  entscheidbar; der Gegenpruefer hat es entschieden, und die Begruendung traegt: FR-9 nennt
+  **genau eine** Ausnahme zu "Zaehler >= 7 -> gestoppt und benachrichtigt", naemlich eine gesetzte
+  `wunschzeit`. FR-10 regelt in diesem Zweig ausschliesslich die *Werte* ("Ohne: kein Alarm
+  geplant"), nie die Meldung. "Kein Anker" ist keine Ausnahme, die dort steht.
+- **Evidence:** ausgefuehrte Probe ueber elf Tage - Zaehler 11, kein geplanter Wert, null
+  Ventil-Benachrichtigungen.
+- **Fix:** `safetyValveTriggered: gapDayCounter >= gapDayValveThreshold && wunschzeit == null`.
+  Die Schwelle ist dabei aus zwei Literalen zu einer benannten Konstante geworden - sie wird jetzt
+  an zwei Stellen geprueft (mit und ohne Anker) und darf nicht auseinanderlaufen.
+- **Test:** `test/scheduling_v2_audit_test.dart`, Gruppe "FR-9" - vier Faelle, darunter FR-9s
+  eigener Schwellen-Testfall mit **6**. Der fehlte: die Suite rief `computeWeekPlan` nur mit 0, 7
+  und 42 auf, ein Wechsel auf `>= 6` waere gruen durchgegangen und haette den Wecker einen Tag zu
+  frueh abgeschaltet.
+- **Requirement:** R2, R3
+
+### T-108 · Drei FR-3-Felder ohne Persistenz-Rundreise — BEHOBEN (2026-09-11)
+
+- [x] Rundreise-Tests fuer `lastProcessedConcludedDay`, `overrunNotificationSent` und
+      `safetyValveNotificationSent`.
+- **Why:** von den zehn FR-3-Feldern hatten sieben einen Rundreise-Test, diese drei nicht. Benutzt
+  werden sie funktional in `replan_test`, `checkpoint_test` und `replan_notifications_test` - aber
+  keiner davon baut `AppState` neu auf, prueft also nie, ob der Wert einen App-Neustart
+  ueberdauert. Beide bool-Merker tragen FR-6s bzw. FR-9s "einmalig"-Zusage ueber genau diese
+  Grenze; ohne Persistenz wuerde nach jedem Neustart erneut gemeldet.
+- **Ergebnis:** das Verhalten war korrekt, nur ungedeckt - alle vier Tests waren sofort gruen.
+  Gegen einen Scheingruen-Test abgesichert: mit entfernter `setBool`-Zeile geht der Test rot
+  (ausprobiert), der Rundgang laeuft also wirklich ueber die Preferences und nicht ueber eine
+  gemeinsame Instanz.
+- **Zusaetzlich:** ein Test pflockt fest, dass `lastProcessedConcludedDay` und `lastReplanDate`
+  getrennt bleiben - das war der ganze Punkt von T-75 und war nur implizit abgesichert.
+- **Requirement:** R2
+
 ### T-105 · FR-6s Meldepflicht fiel genau im haeufigsten Overrun-Fall aus — BEHOBEN (2026-09-11)
 
 - [x] Die Overrun-Meldung auch auf dem Pfad setzen, der einem Tag seinen eigenen `hardFloor`

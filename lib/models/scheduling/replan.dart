@@ -199,12 +199,39 @@ Future<ReplanResult> replan(
   final oldestKeptDay = isoDate(dayMarker(lastConcludedDay, -1));
   bool worthKeeping(String day) => day.compareTo(oldestKeptDay) >= 0;
 
+  // FR-11, zweite Haelfte: "Erst der tatsaechlich ausgeloeste Wert ist fuer
+  // immer fix" - und "fuer immer" schliesst den Rest desselben Tages ein
+  // (docs/TODO.md T-106).
+  //
+  // Nur der Ring setzt `todayAlreadyRang`. Fuer `settingsChanged` und
+  // `manualSync` beginnt das Fenster deshalb wieder bei HEUTE, auch wenn heute
+  // vor zehn Minuten geklingelt hat - und der Merge unten schrieb dann den
+  // bereits ausgeloesten Wert neu. Folgen: ein zweiter Alarm am selben Morgen
+  // (FR-18 plant jeden noch zukuenftigen Wert), und - schwerer - unter dem
+  // Klingeltag steht danach ein Wert, der nie geklingelt hat. Genau den liest
+  // der naechste Checkpoint als `lastEffectiveWakeTime` (FR-3: "immer der
+  // Eintrag in `pendingDayValues` fuer den zuletzt abgeschlossenen Tag"), also
+  // haengt die ganze Folgewoche an einem erfundenen Anker.
+  //
+  // Abgeschlossen ist ein Tag genau dann, wenn er nicht nach dem
+  // Fortschrittsmarker liegt - nach dessen Fortschreibung durch DIESEN Lauf,
+  // die erst weiter unten passiert.
+  final concludedThrough = needsDayAdvance
+      ? lastConcludedDay
+      : (lastProcessedDay == null ? null : midnight(lastProcessedDay));
+  bool alreadyConcluded(DateTime day) =>
+      concludedThrough != null && !day.isAfter(concludedThrough);
+
   final mergedValues = <String, int?>{
     for (final entry in appState.pendingDayValues.entries)
       if (worthKeeping(entry.key)) entry.key: entry.value,
   };
   final prunedCount = appState.pendingDayValues.length - mergedValues.length;
   for (final day in window) {
+    // Der Tag laeuft in `computeWeekPlan` weiter mit (er traegt die Kurve) -
+    // nur sein AUFGEZEICHNETER Wert bleibt stehen. Das Fenster zu verkuerzen
+    // waere falsch: dann verlöre die Rechnung ihren Ankertag.
+    if (alreadyConcluded(day)) continue;
     mergedValues[isoDate(day)] = toStored(result.valuesByDay[day]);
   }
   appState.pendingDayValues = mergedValues;
@@ -217,6 +244,12 @@ Future<ReplanResult> replan(
       if (worthKeeping(entry.key)) entry.key: entry.value,
   };
   for (final day in window) {
+    // Dieselbe FR-11-Sperre wie oben (T-106): gehoert der Wert eines Tages
+    // nicht mehr uns, gehoert auch seine Verankerungs-Angabe nicht mehr uns.
+    // Sonst stuende unter dem Klingeltag ein Wert mit der Verankerung eines
+    // anderen - und FR-16s Checkpoint 2 wuerde ihn falsch (oder gar nicht)
+    // umdeuten.
+    if (alreadyConcluded(day)) continue;
     if (result.valuesByDay[day] == null) {
       mergedAnchors.remove(isoDate(day));
     } else {
