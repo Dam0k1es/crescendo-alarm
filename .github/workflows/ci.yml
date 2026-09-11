@@ -131,7 +131,6 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-modules-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-modules-
-          restore-keys: gradle-
       - run: flutter pub get
       - run: flutter build apk --debug
       - uses: actions/upload-artifact@v4
@@ -199,7 +198,6 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-modules-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-modules-
-          restore-keys: gradle-
 
       - name: Decode signing key
         run: |

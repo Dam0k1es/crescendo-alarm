@@ -65,7 +65,6 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-modules-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-modules-
-          restore-keys: gradle-
       - run: flutter pub get
 
       - name: Enable KVM group perms
