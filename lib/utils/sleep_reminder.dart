@@ -64,11 +64,46 @@ Future<void> scheduleSleepReminder(
       dateTime = dateTime.subtract(const Duration(minutes: 30));
     }
 
+    // docs/TODO.md T-110: eine Bettzeit in der VERGANGENHEIT darf hier nicht
+    // weitergereicht werden.
+    //
+    // Erreichbar, sobald `sleepGoal + reminderDuration` groesser ist als der
+    // Abstand bis zum naechsten Weckzeitpunkt - etwa: der Nutzer aendert um
+    // 22:00 eine Einstellung, geplant ist 05:00, Schlafziel 9 Stunden. Der
+    // Auslöser `settingsChanged` unterliegt keiner Tagessperre, laeuft also.
+    //
+    // Was dann passiert, ist im AAR nachgelesen, nicht vermutet:
+    // `CronUtils.getNextCalendar` liefert fuer ein vollstaendig bestimmtes
+    // Datum vor "jetzt" `null`, `NotificationScheduler.doInBackground` ruft
+    // daraufhin `cancelSchedule`, loggt "Date is not more valid." und bricht
+    // ab - das Created-Ereignis kommt nur im Nicht-null-Zweig. Die alte
+    // Notification ist zu dem Zeitpunkt schon storniert. Fuer diese Nacht
+    // haette FR-16s Checkpoint 2 damit gar keinen Einsprungpunkt mehr, und ein
+    // untertags eingetretener Zeitzonenwechsel faellt erst beim Klingeln auf -
+    // genau das Szenario, gegen das der zweite Checkpoint gebaut wurde.
+    //
+    // Zwei Minuten Vorlauf, nicht eine: `alarmPlatformTime` schneidet auf
+    // ganze Minuten ab, eine Minute koennte dabei bis auf Sekunden
+    // zusammenschrumpfen.
+    //
+    // Die SPEC entscheidet diesen Fall nicht - FR-16 sagt nur, wann der
+    // Checkpoint laufen soll, nicht was gilt, wenn dieser Zeitpunkt vorbei
+    // ist. Gewaehlt ist die Lesart, die FR-16s Zweck am naechsten kommt: den
+    // Aufhaenger so frueh wie moeglich nachholen. Sichtbar ist er dabei
+    // bewusst NICHT - eine "Zeit zu schlafen"-Meldung Stunden nach dem
+    // gemeinten Zeitpunkt waere irrefuehrend, und FR-16 trennt Sichtbarkeit
+    // ausdruecklich vom Aufhaenger ("unabhaengig davon, ob die Erinnerung
+    // aktiviert ist").
+    final missedBedtime = !dateTime.isAfter(DateTime.now());
+    if (missedBedtime) {
+      dateTime = DateTime.now().add(const Duration(minutes: 2));
+    }
+
     try {
       final notifier = notifications ?? Notifications();
       await notifier.cancelNotification(sleepReminderNotificationId);
-      final content =
-          sleepReminderContent(reminderEnabled: appState.reminderEnabled);
+      final content = sleepReminderContent(
+          reminderEnabled: appState.reminderEnabled && !missedBedtime);
       await notifier.scheduleNotification(
           title: content.title,
           body: content.body,

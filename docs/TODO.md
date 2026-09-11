@@ -1392,6 +1392,90 @@ Conventions:
   frueh abgeschaltet.
 - **Requirement:** R2, R3
 
+### T-109 · FR-17s Tagessperre legte nach einem Datumsruecksprung bis zu 48 Stunden alles still — BEHOBEN (2026-09-11)
+
+- [x] Die Sperre auf Gleichheit umstellen ("!= heute"), statt "nicht vor heute".
+- **Why:** FR-17 sagt woertlich "Ist `lastReplanDate` **!=** heutiges Kalenderdatum
+  (Geraete-Zeitzone): sofort, vor jeder UI-Interaktion, derselbe Ablauf wie FR-8s Ring-Checkpoint
+  […] Sonst: kein zusaetzlicher Checkpoint." Der Code las `!midnight(last).isBefore(midnight(now))`
+  - also ">=". Fuer einen Marker in der **Zukunft** wurde damit uebersprungen.
+- **Wie der Marker in die Zukunft geraet - ohne jedes Zutun der App:** er ist ein geraetelokales
+  Ziffern-Datum ohne Klammerung. Ein Zonenwechsel ueber die Datumsgrenze oder eine
+  Rueckwaertskorrektur der Systemuhr laesst das lokale Datum zurueckspringen. Kein Code-Pfad
+  klammert ihn gegen "nicht in der Zukunft".
+- **Evidence:** tz-basierte Probe (echte IANA-Zonen, nicht `DateTime.utc` - auf einer UTC+0-VM
+  kann ein UTC-Fixture einen Datumsruecksprung gar nicht darstellen). Apia (+13) 10.03. →
+  Pago Pago (−11), derselbe Instant traegt dort den **09.03.**: von fuenf App-Oeffnungen liefen
+  **zwei** statt der vier, die FR-17 wortwoertlich verlangt, und `fetchCount == 2` belegt, dass in
+  diesen zwei lokalen Tagen kein einziger ungecachter Kalender-Neuread stattfand. Dauer: der
+  gesamte lokale 09.03. **und** der gesamte 10.03., also bis zu ~48 lokale Stunden.
+- **Warum das gerade dort weh tut:** ein `alarmRing`-Checkpoint unterliegt der Sperre nicht und
+  repariert den Marker nebenbei - das begrenzt den Schaden real. Es begrenzt ihn aber genau dort
+  **nicht**, wofuer FR-17 ueberhaupt gebaut ist: Reboot, Force-Quit und ein ausgefallenes
+  taegliches Klingeln sind FR-17s drei namentliche Luecken, und in allen dreien gibt es keinen
+  Ring, der reparieren koennte. Nach einem West-Flug faellt also genau der Mechanismus aus, der
+  einen veralteten Plan und veraltete Plattformalarme noch heilen wuerde.
+- **Fix:** verglichen wird ueber `dayDistance(...) == 0`, **nicht** ueber `==` auf zwei
+  `DateTime`. Der Marker kommt lokal getaggt aus den Preferences, `currentTime` kann ein
+  `tz.TZDateTime` sein, und Darts `==` verlangt denselben `isUtc`-Frame - das waere genau die
+  Fehlerklasse dieses Moduls (T-61/T-76/T-83) an einer neuen Stelle.
+- **Test:** `test/checkpoint_audit_test.dart` - Marker morgen/heute/gestern plus der echte
+  Datumsruecksprung mit Fixture-Kontrollen (das lokale Datum springt wirklich zurueck; der zweite
+  Moment liegt real spaeter).
+- **Requirement:** R2, R3
+
+### T-110 · Eine vergangene Bettzeit nahm FR-16s Checkpoint 2 seinen Einsprungpunkt — BEHOBEN (2026-09-11)
+
+- [x] Nie fuer einen vergangenen Zeitpunkt planen; den Aufhaenger stattdessen nachholen.
+- **Why:** `scheduleSleepReminder` stornierte die vorhandene Notification **bedingungslos** und
+  plante dann neu - ohne zu pruefen, ob der berechnete Zeitpunkt noch in der Zukunft liegt. Ist
+  `sleepGoal + reminderDuration` groesser als der Abstand bis zum naechsten Weckzeitpunkt, ist die
+  Bettzeit vergangen. Beispiel: 22:00 eine Einstellung geaendert, naechster Weckzeitpunkt 05:00,
+  Schlafziel 9h → Bettzeit 20:00. `settingsChanged` unterliegt keiner Tagessperre, laeuft also.
+- **Was Android damit macht - nachgelesen, nicht vermutet:** der Pruefer hat
+  `AndroidAwnCore-0.12.1.aar` aus dem Gradle-Cache entpackt und mit `javap -c` gelesen.
+  `CronUtils.getNextCalendar` liefert fuer jedes Ergebnis vor "jetzt" `null`;
+  `NotificationScheduler.doInBackground` ruft daraufhin `cancelSchedule`, loggt
+  "Date is not more valid." und bricht ab; `onPostExecute` sendet das Created-Ereignis nur im
+  Nicht-null-Zweig. Die alte Notification ist zu dem Zeitpunkt bereits storniert.
+- **Folge:** fuer diese Nacht laeuft FR-16s Checkpoint 2 gar nicht. Ein untertags eingetretener
+  Zeitzonenwechsel faellt dann erst beim Klingeln auf - exakt das Szenario, gegen das der zweite
+  Checkpoint eingefuehrt wurde. Zusaetzlich bleibt die sichtbare Erinnerung aus.
+- **Fix und die Entscheidung darin:** liegt die Bettzeit nicht mehr in der Zukunft, wird der
+  Aufhaenger auf "in zwei Minuten" gelegt (zwei, nicht eine: `alarmPlatformTime` schneidet auf
+  ganze Minuten ab) - und zwar **still**, auch bei aktivierter Erinnerung. **Die Spec entscheidet
+  diesen Fall nicht**: FR-16 sagt, wann der Checkpoint laufen soll, nicht was gilt, wenn dieser
+  Zeitpunkt vorbei ist. Gewaehlt ist die Lesart, die FR-16s Zweck am naechsten kommt (Aufhaenger
+  so frueh wie moeglich nachholen), ohne eine irrefuehrende "Zeit zu schlafen"-Meldung Stunden
+  nach dem gemeinten Zeitpunkt - FR-16 trennt Sichtbarkeit ausdruecklich vom Aufhaenger. **Wenn
+  das anders gewollt ist, gehoert es in FR-16 und dann hierher.**
+- **Kein Schleifenrisiko:** der Isolate-Einstiegspunkt (`onNotificationCreatedMethod`) ruft nur
+  `runTimezoneCheckpoint2()` und plant die Erinnerung nicht neu. Geprueft.
+- **Test:** `test/sleep_reminder_always_scheduled_test.dart`, Gruppe T-110 - in die Zukunft
+  gelegt, still, und eine Gegenprobe, dass eine zukuenftige Bettzeit unveraendert sichtbar und
+  puenktlich bleibt.
+- **Requirement:** R2, R3
+
+### T-111 · Geprueft und WIDERLEGT: Migrationspfad `lastProcessedConcludedDay` → `lastReplanDate` (2026-09-11)
+
+- **Behauptung war:** faellt der neue Schluessel, wird `lastReplanDate` als Fortschrittsmarker
+  uebernommen; da der alte Schluessel vor T-75 bei *jedem* Replan auf heute gesetzt wurde,
+  importiere die Migration den T-75-Fehler noch einmal - der erste Ring nach einem Update zaehle
+  einen Tag nicht mit und pruefe ihn nicht auf FR-12.
+- **Ergebnis: widerlegt.** Der Mechanismus ist reproduzierbar (Sonde rot: `gapDayCounter` 0 statt
+  1), aber der ausloesende Preferences-Zustand ist **unerreichbar**: der heutige Code schreibt
+  beide Schluessel immer gemeinsam, FR-16s Checkpoint 2 fasst sie nicht an, und `git log -S`
+  zeigt, dass `lastReplanDate` erst mit demselben Commit existiert wie
+  `lastProcessedConcludedDay`. Es gibt **null** Tags und kein veroeffentlichtes Artefakt, in dem
+  der alte Schluessel je allein geschrieben worden waere. Die Spec regelt Migration nicht, und die
+  unterstellte Wirkung faellt zusaetzlich in FR-9s ausdruecklich akzeptiertes Restrisiko.
+- **Warum das hier steht, obwohl nichts zu tun ist:** damit derselbe Verdacht nicht ein drittes
+  Mal untersucht wird. Der Fallback bleibt bewusst stehen - er kostet nichts und ist die
+  konservativere der beiden Lesarten (die Alternative, `null`, wuerde denselben Tag doppelt
+  zaehlen).
+- **Was aus der Pruefung wirklich folgte:** der fehlende Persistenz-Rundreise-Test fuer
+  `lastProcessedConcludedDay` - das ist T-108, und der ist erledigt.
+
 ### T-108 · Drei FR-3-Felder ohne Persistenz-Rundreise — BEHOBEN (2026-09-11)
 
 - [x] Rundreise-Tests fuer `lastProcessedConcludedDay`, `overrunNotificationSent` und

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/models/alarms/handler.dart';
 import 'package:wakeywakey/utils/notifications.dart';
+import 'package:wakeywakey/models/scheduling/day_marker.dart';
 import 'package:wakeywakey/utils/sleep_reminder.dart';
 
 // Phase 5 (docs/scheduling-v2-spec.md, "Implementierungsreihenfolge", Schritt
@@ -162,6 +163,98 @@ void main() {
       expect(notifications.cancelAllCount, 0);
       expect(notifications.cancelledIds, [sleepReminderNotificationId]);
       expect(notifications.lastScheduledId, sleepReminderNotificationId);
+    });
+  });
+
+
+  group('die Bettzeit darf nie in der Vergangenheit geplant werden (T-110)', () {
+    // FR-16 haengt seinen zweiten Checkpoint an diese Notification:
+    //
+    //   "Voraussetzung (gebaut): eine NotificationContent ohne title/body,
+    //    die `onNotificationCreatedMethod` ausloest."
+    //
+    // `scheduleSleepReminder` stornierte die vorhandene aber bedingungslos und
+    // plante dann neu - auch fuer einen Zeitpunkt, der schon vorbei ist. Ist
+    // `sleepGoal + reminderDuration` groesser als der Abstand bis zum naechsten
+    // Weckzeitpunkt, ist die berechnete Bettzeit vergangen.
+    //
+    // Was Android damit macht, ist nachgelesen, nicht vermutet: in
+    // `AndroidAwnCore-0.12.1.aar` liefert `CronUtils.getNextCalendar` fuer
+    // jedes Ergebnis vor "jetzt" `null`, `NotificationScheduler.doInBackground`
+    // ruft daraufhin `cancelSchedule`, loggt "Date is not more valid." und
+    // bricht ab - das Created-Ereignis wird nur im Nicht-null-Zweig gesendet.
+    // Die alte Notification ist zu dem Zeitpunkt bereits storniert. Ergebnis:
+    // fuer diese Nacht laeuft FR-16s Checkpoint 2 gar nicht, also wird ein
+    // untertags eingetretener Zeitzonenwechsel erst beim Klingeln bemerkt -
+    // genau das Szenario, gegen das der zweite Checkpoint gebaut wurde.
+
+    test('vergangene Bettzeit: der Aufhaenger wird trotzdem in die Zukunft gelegt',
+        () async {
+      final appState = await _freshAppState();
+      final now = DateTime.now();
+
+      // Naechster Weckzeitpunkt in 5 Stunden, Schlafziel 9 Stunden
+      // -> Bettzeit vor 4 Stunden.
+      appState.pendingDayValues = {
+        isoDate(now.add(const Duration(hours: 5))):
+            now.add(const Duration(hours: 5)).millisecondsSinceEpoch,
+      };
+      appState.sleepGoal = const TimeOfDay(hour: 9, minute: 0);
+      appState.reminderDuration = const TimeOfDay(hour: 0, minute: 0);
+
+      final notifications = _RecordingNotifications();
+      await scheduleSleepReminder(appState, notifications: notifications);
+
+      expect(notifications.callCount, 1,
+          reason: 'ohne neue Notification haette FR-16 keinen Aufhaenger mehr');
+      expect(notifications.lastScheduledDate, isNotNull);
+      expect(notifications.lastScheduledDate!.isAfter(now), isTrue,
+          reason: 'ein vollstaendig bestimmtes Datum in der Vergangenheit hat '
+              'keinen naechsten gueltigen Termin - Android verwirft es');
+    });
+
+    test('vergangene Bettzeit: der Aufhaenger ist still, auch bei aktiver Erinnerung',
+        () async {
+      // Eine sichtbare "geh schlafen"-Meldung Stunden nach dem gemeinten
+      // Zeitpunkt waere irrefuehrend. FR-16 trennt Sichtbarkeit ausdruecklich
+      // vom Aufhaenger; hier ist nur der Aufhaenger noch sinnvoll.
+      final appState = await _freshAppState();
+      final now = DateTime.now();
+      appState.pendingDayValues = {
+        isoDate(now.add(const Duration(hours: 5))):
+            now.add(const Duration(hours: 5)).millisecondsSinceEpoch,
+      };
+      appState.sleepGoal = const TimeOfDay(hour: 9, minute: 0);
+      appState.reminderDuration = const TimeOfDay(hour: 0, minute: 0);
+      appState.reminderEnabled = true;
+
+      final notifications = _RecordingNotifications();
+      await scheduleSleepReminder(appState, notifications: notifications);
+
+      expect(notifications.lastTitle, isNull);
+      expect(notifications.lastBody, isNull);
+    });
+
+    test('zukuenftige Bettzeit bleibt unveraendert sichtbar und puenktlich',
+        () async {
+      // Gegenprobe gegen eine Ueberkorrektur.
+      final appState = await _freshAppState();
+      final now = DateTime.now();
+      appState.pendingDayValues = {
+        isoDate(now.add(const Duration(hours: 10))):
+            now.add(const Duration(hours: 10)).millisecondsSinceEpoch,
+      };
+      appState.sleepGoal = const TimeOfDay(hour: 2, minute: 0);
+      appState.reminderDuration = const TimeOfDay(hour: 0, minute: 0);
+      appState.reminderEnabled = true;
+
+      final notifications = _RecordingNotifications();
+      await scheduleSleepReminder(appState, notifications: notifications);
+
+      expect(notifications.lastTitle, isNotNull);
+      expect(notifications.lastScheduledDate!.isAfter(now.add(const Duration(hours: 7))),
+          isTrue,
+          reason: 'rund 8 Stunden voraus, nicht vorgezogen');
     });
   });
 }

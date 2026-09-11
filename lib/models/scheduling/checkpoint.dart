@@ -138,13 +138,34 @@ Future<ReplanResult?> runSchedulingCheckpoint(
       // FR-17: ein zweites App-Öffnen am selben Tag ist ein No-op. Innerhalb
       // der Serialisierung gelesen, damit der Wert nicht von einem parallel
       // laufenden Checkpoint stammt, der ihn gleich noch schreiben wird.
+      //
+      // Die Bedingung ist **Gleichheit**, nicht "nicht vor heute"
+      // (docs/TODO.md T-109). FR-17 sagt wörtlich "Ist `lastReplanDate` ≠
+      // heutiges Kalenderdatum: sofort […] Sonst: kein zusätzlicher
+      // Checkpoint" - und ein `>=` verschluckt zusätzlich den Fall, in dem der
+      // Marker in der ZUKUNFT liegt.
+      //
+      // Dorthin gerät er ohne jedes Zutun der App: er ist ein gerätelokales
+      // Ziffern-Datum ohne Klammerung, und ein Zonenwechsel über die
+      // Datumsgrenze (Apia +13 → Pago Pago −11) oder eine Rückwärtskorrektur
+      // der Systemuhr lässt das lokale Datum zurückspringen. Gemessen wurden
+      // dabei bis zu ~48 lokale Stunden ohne einen einzigen
+      // Vordergrund-Checkpoint - also ohne den ungecachten Kalender-Neuread,
+      // der einen veralteten Plan reparieren würde. Ein Ring repariert den
+      // Marker nebenbei, aber genau in FR-17s drei Lücken (Reboot,
+      // Force-Quit, ausgefallenes Klingeln) gibt es keinen.
+      //
+      // Verglichen wird über `dayDistance`, nicht über `==` auf zwei
+      // `DateTime`: der Marker kommt lokal getaggt aus den Preferences,
+      // `currentTime` kann ein `tz.TZDateTime` sein, und Darts `==` verlangt
+      // denselben `isUtc`-Frame. Das ist die Fehlerklasse dieses Moduls
+      // (T-61/T-76/T-83) - `dayDistance` vergleicht bewusst die Datumsziffern.
       final lastReplanDate = appState.lastReplanDate;
       if (lastReplanDate != null &&
-          !midnight(lastReplanDate).isBefore(midnight(currentTime))) {
+          dayDistance(currentTime, midnight(lastReplanDate)) == 0) {
         Diag.checkpointSkipped(
           trigger: diagTriggerOf(trigger),
-          daysSinceLastReplan:
-              dayDistance(currentTime, midnight(lastReplanDate)),
+          daysSinceLastReplan: 0,
         );
         return null;
       }
