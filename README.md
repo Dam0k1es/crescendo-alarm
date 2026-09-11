@@ -70,9 +70,10 @@ when a relevant setting changes - so there is no battery-draining background wor
 ### Quality & Testing
 
 Every change is automatically checked (static analysis, dependency/secret scanning) and tested,
-including somd end-to-end tests on a real Android emulator that must pass before a signed release build
-is produced. See [`CLAUDE.md`](CLAUDE.md) for exactly which checks run where, how to run them
-locally, and the current, honest testing status - and [`docs/TODO.md`](docs/TODO.md) for the known
+including end-to-end tests on a real Android emulator that must pass before a signed release build
+is produced. The unit tests run six times per push, once per timezone, because the dominant bug
+class in the scheduling engine is only visible away from UTC. See [`CLAUDE.md`](CLAUDE.md) for
+exactly which checks run where, how to run them locally, and the current, honest testing status - and [`docs/TODO.md`](docs/TODO.md) for the known
 gaps in that coverage.
 
 ### Open items
@@ -80,13 +81,15 @@ gaps in that coverage.
 All known gaps are tracked as prioritised TODOs in [`docs/TODO.md`](docs/TODO.md) - device
 feedback and audit findings in one list, with evidence and an acceptance criterion per item.
 
-The ones that currently block a production push: the per-alarm enable switch does not stop an alarm;
-alarm survival across a reboot or force-stop is unverified; a direct dependency is not open source
-(a GPLv3 conflict); and the signed release APK is built with no quality gate.
+The ones that currently block a production push: the per-alarm enable switch does not stop an
+alarm; alarm survival across a reboot or force-stop is unverified; and a direct dependency is not
+open source (a GPLv3 conflict).
 
-Three items that used to be on this list are done: the Sleep-Habits durations, the discarded
+Items that used to be on this list and are done: the Sleep-Habits durations, the discarded
 calendar-derived days and the missing background rescheduling were all symptoms of the old
-scheduling engine, which has been replaced (see "Alarm scheduling" above).
+scheduling engine, which has been replaced (see "Alarm scheduling" above) - and the signed release
+APK is no longer built without a quality gate: both the branch and the tag path now require the
+tests, the security scan and the emulator E2E suite to pass first.
 
 ### Project Documentation
 

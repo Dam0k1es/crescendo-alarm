@@ -12,16 +12,21 @@ what "should" be true.
 No SAST, SCA, or secret-scan finding at severity "high" or above may be outstanding.
 Medium/informational findings don't block a release but must be recorded and revisited.
 
-- **Checked by:** `flutter analyze`, `osv-scanner` and `trufflehog` all run in CI and can fail the
-  `master` pipeline (see `.github/workflows/ci.yml`). `mobsfscan` and a full MobSF scan also run on
-  every `master` push/PR, but **neither can currently fail the run**: `mobsfscan` runs with
-  `--no-fail`, and the MobSF step only prints a summary with no threshold. Treat their output as
-  informational until that's closed (see `docs/TODO.md` T-11).
-- **Status: partially met.** The three gating tools are currently clean. The two non-gating tools
-  are not: `mobsfscan` reports one ERROR (`android_task_hijacking2`, a StrandHogg-style
-  task-hijacking pattern), and the most recent MobSF scan reports one HIGH ("app installable on
-  unpatched Android 7.0", i.e. `minSdk=24`) plus 14 WARNING-level findings. Accepted rationale for
-  both, recorded here since neither previously had a citable write-up: the `mobsfscan` finding is a
+- **Checked by:** `flutter analyze`, `osv-scanner` and `trufflehog` run in the reusable
+  `.github/workflows/security-gate.yml`, which both `ci.yml` (on `master`) and `release.yml` (on a
+  tag) call - so the tag path can no longer skip them (`docs/TODO.md` T-92). `mobsfscan` runs in
+  the same gate and **is** gating since 2026-09: it runs with `--no-fail` only because its own exit
+  code cannot tell an accepted finding from a new one, and `scripts/mobsfscan_check.py` then fails
+  the job for anything not listed in `.github/security-exceptions.json`. The full MobSF scan of the
+  built APK (`ci.yml`'s `mobsf-full-scan`) is gating too, with the same exceptions file as its
+  threshold, and on an un-accepted HIGH it additionally **deletes the uploaded production APK
+  artifact** so a red run leaves nothing downloadable (`docs/TODO.md` T-11).
+- **Status: partially met.** All gating tools are currently green against the recorded exceptions.
+  The two findings that are *accepted* rather than fixed, and therefore carry a dated rationale in
+  `.github/security-exceptions.json`: `mobsfscan`'s one ERROR (`android_task_hijacking2`, a
+  StrandHogg-style task-hijacking pattern), and MobSF's one HIGH ("app installable on unpatched
+  Android 7.0", i.e. `minSdk=24`) alongside 14 WARNING-level findings. The rationale for
+  both - the same text as in that file: the `mobsfscan` finding is a
   known tool limitation - it flags a task-affinity/launch-mode pattern generically, without the
   runtime context to distinguish it from this app's actual configuration. The MobSF HIGH restates
   the project's own deliberate `minSdk=24` choice (see `CLAUDE.md`'s toolchain table) and is
@@ -74,8 +79,6 @@ set).
   (`docs/TODO.md` T-03), and a `SharedPreferences` load failure can currently block app startup
   entirely rather than degrade to defaults (`docs/TODO.md` T-45). Needs a real-device test:
   schedule an alarm, force-stop the app, reboot the device, and confirm it still fires.
-
-
 - **Verfahren steht jetzt bereit (2026-09-10, `docs/TODO.md` T-93):**
   `.github/scripts/check_alarm_survival.sh` beantwortet die Frage über `dumpsys alarm` statt über
   ein echtes Klingeln - damit ist "Alarm ist registriert" von "kein Alarm registriert"
@@ -92,6 +95,7 @@ set).
   überleben" ist damit kein erreichbares Ziel, sondern eine Plattformgrenze - R3 sollte das als
   Grenze führen und nicht als Defizit. Was die App leisten kann und laut FR-17 leistet: beim
   nächsten App-Öffnen alles neu setzen.
+
 ## R4 - All alarm-ringing prerequisites are met before an alarm fires
 
 Before an alarm rings, the app must have: working volume control, the ability to play the
@@ -168,8 +172,13 @@ reasonable trust assessment is.
 
 - **Checked by:** `pubspec.yaml`/`pubspec.lock` review. `osv-scanner` additionally checks for known
   vulnerabilities in the resolved dependency tree.
-- **Status: not met.** `syncfusion_flutter_calendar`, `_core` and `_datepicker` are direct
-  dependencies published under the Syncfusion Essential Studio licence - a commercial licence or a
+- **Status: not met.** `syncfusion_flutter_calendar` is a direct dependency published under the
+  Syncfusion Essential Studio licence, and it pulls `syncfusion_flutter_core` and
+  `syncfusion_flutter_datepicker` in transitively. Those two lost their *direct* entries in
+  `pubspec.yaml` in the 2026-09-10 hygiene pass (`docs/TODO.md` T-97); that changed nothing about
+  this requirement - the packages are still in the resolved tree and still under the same licence.
+  Only dropping `syncfusion_flutter_calendar` itself (the standing decision is to replace it with
+  `calendar_view`) removes the surface. The licence is - a commercial licence or a
   revenue/team-size-limited community programme, not an open-source licence. The QR-scanning stack
   (`mobile_scanner`) additionally pulls in proprietary Google/ML Kit Android dependencies
   (`play-services-mlkit-barcode-scanning`, `com.google.mlkit:barcode-scanning`). See
@@ -229,8 +238,10 @@ scheduling-v2 rebuild (2026-09) replaced the old engine wholesale and is covered
 R2 above for the one remaining caveat, which is really R3. R3 and part of R4 are no longer explained
 by "no build has ever run on a device or emulator" - that build now happens on every release and has
 surfaced what's actually still missing: no reboot/force-stop survival test (R3), and no coverage of
-audio/the gentle-wake ramp or a camera-isolated QR test (R4). R1's remaining gap is about two non-gating security tools,
-not about whether checks run at all. R8 and R9 are a separate, newly-identified licensing conflict
+audio/the gentle-wake ramp or a camera-isolated QR test (R4). R1 is only partial now because two
+findings are *accepted* rather than fixed, each with a dated rationale in
+`.github/security-exceptions.json` - not because a check is missing or non-gating; every tool in
+the gate can fail the run, on the branch path and the tag path alike. R8 and R9 are a separate, newly-identified licensing conflict
 (Syncfusion and Google/ML Kit are not open-source, and GPLv3 obligations for the distributed APK
 are unaddressed) - unrelated to device testing and requiring a licensing decision, not more
 testing. R10 remains a separate, still-open documentation gap (asset provenance). See

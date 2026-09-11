@@ -170,7 +170,7 @@ Run the E2E suite locally with a connected device or running emulator:
 | Gradle | 9.3.1 | `android/gradle/wrapper/gradle-wrapper.properties` |
 | Android Gradle Plugin (AGP) | 9.1.0 | `android/settings.gradle.kts` |
 | Kotlin Gradle Plugin | 2.4.0 | `android/settings.gradle.kts` |
-| compileSdk | 36 (Flutter default) | see "compileSdk override" below |
+| compileSdk | 36 (Flutter default) | no override any more - see "compileSdk override ... (removed)" below |
 | minSdk | 24 (pinned explicitly) | `android/app/build.gradle.kts` - was intended to stay below Flutter's own default (also 24, coincidentally, on current Flutter) for older-device support, but MobSF found the *compiled* APK's merged manifest already enforced minSdk=24 regardless, because several plugins (`image_picker_android`, `shared_preferences_android`, `flutter_plugin_android_lifecycle`) declare `minSdk=24` in their own Gradle modules, and manifest merging always takes the highest value across the app + all dependencies. Pinned explicitly to 24 to match the real enforced floor instead of leaving a misleadingly lower number. Also: this value has silently regressed to `flutter.minSdkVersion` (dropping any pin at all) more than once in this project's history - if you ever intend to actually push it lower than 24 again, you'd first need to downgrade those three plugins, not just change this line. |
 | targetSdk | 36 (Flutter default, `flutter.targetSdkVersion`) | |
 | NDK | intentionally left unset in `app/build.gradle.kts` (no `ndkVersion = flutter.ndkVersion` line) | AGP uses whichever NDK is installed (currently 28.2.13676358) instead of requiring an exact pin |
@@ -181,9 +181,9 @@ Run the E2E suite locally with a connected device or running emulator:
 asked for `build-tools;28.0.3` historically; AGP may also pull a newer one automatically). NDK
 `28.2.13676358` under `Sdk/ndk/`.
 
-### compileSdk override for plugin subprojects
+### compileSdk override for plugin subprojects (removed)
 
-`android/build.gradle.kts` forces every Android library subproject to `compileSdk = 36` via an
+`android/build.gradle.kts` used to force every Android library subproject to `compileSdk = 36` via an
 `afterEvaluate` hook, registered **before** `evaluationDependsOn(":app")` (registering it after
 throws `Cannot run Project.afterEvaluate(Action) when the project is already evaluated`). This
 existed because `awesome_notifications_core` (last published Feb 2025, `compileSdkVersion 33`
@@ -280,7 +280,9 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   carrying the *local* reading of the planned instant (T-61), tone/volume/gentle-wake reaching the
   plugin (T-84/T-96), and a dismiss leaving the planned week registered (T-64).
   `integration_test/arm_alarm_test.dart` is a one-test prelude for the reboot-survival evidence
-  script (T-93). **None of the four new scenarios has ever run** - they need a device or emulator.
+  script (T-93). All seven scenarios **have now run green on a real emulator** (CI run 34532845207,
+  `🎉 7 tests passed`, with `applyPlannedAlarms: removed 0, added 7` in the device log) - that run
+  is what closed T-91, so don't describe the engine as never having been on a device.
   Still not covered by anything: alarm survival across a reboot or force-stop (T-93 has the
   procedure, no result yet), audible playback and the gentle-wake ramp (the CI emulator runs with
   audio disabled), real camera QR decoding, and the real `device_calendar` boundary - every engine

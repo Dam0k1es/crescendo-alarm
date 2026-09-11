@@ -40,7 +40,9 @@ Alarm-Plugin. Vier Dinge kann sie strukturell **nicht** zeig, und genau die steh
 | A2 | Manuellen Alarm auf +2 min setzen | klingelt, Overlay erscheint | |
 | A3 | Über "Stop" abschalten | Overlay weg, kein Alarm mehr aktiv | |
 | A4 | Ton hörbar? Lautstärke wie eingestellt? | ja | |
-| A5 | Gentle Wake aktivieren, Alarm wiederholen | Lautstärke steigt über ~60 s an | |
+| A5 | Gentle Wake aktivieren (Standard-Rampe 1 min), Alarm wiederholen | Lautstärke steigt über ~60 s bis zur eingestellten Lautstärke an | |
+| A6 | "Ramp duration" auf 5 min stellen, Alarm wiederholen | die Rampe dauert jetzt ~5 min, nicht mehr 1 min (T-96) | |
+| A7 | Rampe auf unter 1 min zu stellen versuchen | nicht möglich, Hinweis "At least 00:01 h" erscheint | |
 
 ## B — Kalenderabgeleitetes Wecken (der eigentliche Produktpfad)
 

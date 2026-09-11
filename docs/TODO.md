@@ -25,21 +25,28 @@ Conventions:
 
 ## P0 — blocks a production push
 
-### T-01 · Sleep-Habits durations are not subtracted from the alarm time
+### T-01 · Sleep-Habits durations are not subtracted from the alarm time — BEHOBEN (2026-09-10, Phase 6)
 
-- [ ] Apply "duration to wake up" and "duration to get ready" when deriving an alarm from a
+- [x] Apply "duration to wake up" and "duration to get ready" when deriving an alarm from a
       calendar entry.
 - **Why:** the app's central promise. Confirmed on a real device: a calendar entry at 07:00 with
   both durations set to 15 minutes produced an alarm at 07:00 instead of 06:30.
-- **Evidence:** device test by the maintainer; scheduling path in
+- **Evidence (damals):** device test by the maintainer; scheduling path in the since-deleted
   `lib/models/scheduling/scheduling.dart` and `lib/screens/sleep_habits/screen_sleephabits.dart`.
-- **Done when:** a test pins the arithmetic (entry time minus both durations) and the same manual
-  scenario produces 06:30 on a device.
+- **Resolution:** die Subtraktion ist jetzt FR-2s Definition von `hardFloor` (frühester
+  nicht-ganztägiger Termin − `durationToWakeUp` − `durationToGetReady`), umgesetzt in
+  `lib/models/scheduling/scheduling_v2.dart`s `hardFloor()`. Alle drei durchgerechneten
+  FR-2-Testfälle liegen mit denselben Zahlen in `test/scheduling_v2_test.dart:151-196` — der
+  erste davon ist genau das gemeldete Gerätebeispiel: Termine um 09:00 und 07:00, beide Dauern
+  15 min, erwartet **06:30** (der frühere Termin zählt, minus 15 + 15).
+  Auf einem echten Emulator belegt hat das der E2E-Fall "injizierter Termin wird zu registrierten
+  Plattformalarmen" (T-63/T-91, Lauf 34532845207). Die verbleibende Prüfung auf einem **echten**
+  Gerät steht als B2/B4 in `docs/device-trial-checklist.md`.
 - **Requirement:** R2
 
-### T-02 · Calendar-derived alarm times are discarded for most days
+### T-02 · Calendar-derived alarm times are discarded for most days — BEHOBEN (2026-09-10, Phase 6)
 
-- [ ] Fix `_adjustAlarmTimes` so each day keeps its own calendar-derived time, and stop arming the
+- [x] Fix `_adjustAlarmTimes` so each day keeps its own calendar-derived time, and stop arming the
       synthetic "no calendar entry" placeholder.
 - **Why:** the headline calendar feature throws away the data it is derived from.
   `_adjustAlarmTimes` compares each day's alarm against `offset`, an *absolute* `DateTime` built
@@ -54,6 +61,15 @@ Conventions:
 - **Done when:** unit tests over the production function cover a multi-day schedule with differing
   meeting times, a day without entries, and the ≥7-estimate case; each asserts the resulting alarm
   times per day.
+- **Resolution (2026-09-10, Phase 6):** `_adjustAlarmTimes` existiert nicht mehr — die Datei ist
+  mit dem alten Motor gelöscht (T-64/T-86). Die drei gemeldeten Symptome haben in scheduling-v2
+  je eine benannte Anforderung, die das Gegenteil zusichert: jeder Tag behält seinen eigenen Wert
+  (FR-6 "jeder `Tag_i` bekommt sein eigenes, echtes Kalenderdatum"), ein Tag ohne Termin driftet
+  zur Wunschzeit statt verworfen zu werden (FR-4), und es gibt keinen Abbruch ab sieben
+  geschätzten Alarmen — FR-9s Ventil ist die eine bewusste Ausnahme und meldet sich beim Nutzer.
+  Der 23:59-Platzhalter ist ersatzlos weg; FR-18 legt nur Alarme für tatsächlich geplante Werte
+  an. Abgedeckt von der ganzen scheduling-v2-Suite, für den Mehrtagesfall namentlich
+  `test/scheduling_v2_test.dart`s `computeWeekPlan`-Gruppe und `test/replan_test.dart`.
 - **Requirement:** R2
 
 ### T-03 · The per-alarm enable switch does not stop an alarm
@@ -114,7 +130,10 @@ Conventions:
   `needs:` in the file); a real run concluded Analyze **failure**, SCA **failure**, mobsfscan
   **failure**, MobSF **failure** and still uploaded three artifacts.
 - **Resolution so far:** `build-android-release` in `ci.yml` now declares
-  `needs: [analyze-and-test, sca-and-secrets, mobsfscan, e2e-tests]` - a failure in any of those
+  `needs: [analyze-and-test, security-gate, e2e-tests]` (bis zum Gate-Refactoring T-92 hiess die
+  Liste `[analyze-and-test, sca-and-secrets, mobsfscan, e2e-tests]`; `security-gate` fasst die
+  beiden mittleren jetzt als aufrufbaren Workflow zusammen, den auch `release.yml` benutzt) - a
+  failure in any of those
   now prevents the job from running at all, per GitHub Actions' own `needs:` semantics (not
   demonstrated live with a deliberately-failing check, to avoid sabotaging a real pipeline run for
   the sake of a test; confirmed instead by a real green run where `build-android-release` correctly
@@ -124,9 +143,9 @@ Conventions:
 - **Still open:** the "deliberately failing check" demonstration itself.
 - **Requirement:** R1
 
-### T-32 · The background rescheduling R2 requires does not exist
+### T-32 · The background rescheduling R2 requires does not exist — BEHOBEN (2026-09-10, formal verworfen und ersetzt)
 
-- [ ] Implement (or formally drop) app-independent rescheduling when fewer than 7 days are armed.
+- [x] Implement (or formally drop) app-independent rescheduling when fewer than 7 days are armed.
 - **Why:** R2 demands that a new alarm is produced "in the background when fewer than 7 days ahead
   are currently scheduled, without requiring the app to be open". There is no such mechanism:
   `scheduleAlarms` is reachable only from four UI call sites and from the handler when an alarm
@@ -139,6 +158,16 @@ Conventions:
   `grep -rniE "workmanager|boot_completed" lib/` finds nothing of ours.
 - **Done when:** either a background path exists and is tested, or R2 is rewritten to describe what
   the app actually promises.
+- **Resolution:** die zweite Hälfte wurde gewählt, bewusst und begründet. Ein periodischer
+  Hintergrund-Worker ist ausdrücklich **nicht** gebaut (Akku, herstellereigene
+  Hintergrundgrenzen — `docs/choice-of-technologies.md` und FR-16 argumentieren beide dagegen).
+  Stattdessen hängt jeder Checkpoint an einem Ereignis, das ohnehin stattfindet: beim Klingeln
+  (FR-8, im Prozess, den der Alarm selbst gestartet hat), an der Bettzeit-Notification (FR-16
+  Checkpoint 2) und beim App-Vordergrund als Erholung nach Reboot/Force-Quit (FR-17). Da jeder
+  Checkpoint das **volle** 7-Tage-Fenster neu plant und anwendet (FR-8 + FR-18), kann "weniger als
+  7 Tage armiert" keinen Checkpoint überdauern. R2 ist entsprechend umgeschrieben und führt die
+  eine verbleibende Einschränkung ehrlich: die Kette trägt sich selbst nur, solange sie klingelt —
+  reisst sie ganz und wird die App nie geöffnet, planst nichts neu. Das ist R3/T-04, nicht T-32.
 - **Requirement:** R2
 
 ---
@@ -1580,8 +1609,9 @@ Conventions:
   Durchgang wurde ein laufender Build dadurch einmal faelschlich abgebrochen (`exit code -9` kam
   vom eigenen `kill`, nicht von Gradle).
 
-- **Was weiterhin unbelegt bleibt:** die neuen E2E-Szenarien aus T-91 - die brauchen ein Geraet
-  oder einen Emulator, nicht nur eine gesunde VM.
+- **Nachtrag (2026-09-11):** der damals noch offene Punkt "die neuen E2E-Szenarien brauchen ein
+  Geraet" ist erledigt - Lauf 34532845207 hat sie auf dem CI-Emulator gefahren (`🎉 7 tests
+  passed`). Siehe T-91.
 
 ### T-89 · PII-freies Entwickler-Log, und die Lecks, die es ersetzt — BEHOBEN (2026-09-10)
 
