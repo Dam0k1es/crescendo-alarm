@@ -117,10 +117,20 @@ jobs:
           restore-keys: pub-
       - uses: actions/cache@v4
         with:
+          # docs/TODO.md T-102: vorher lag hier `~/.gradle/caches` komplett drin.
+          # Das waechst unbegrenzt - es enthaelt neben den heruntergeladenen
+          # Abhaengigkeiten auch jede transformierte AAR und jeden
+          # Build-Cache-Eintrag. Ergebnis: zwei Gradle-Caches mit 3746 MB und
+          # 2397 MB, und ein Restore, der laenger dauert als der Build spart.
+          # Im Lauf 34535358135 ist der Release-Build daran gestorben - der
+          # Cache-Schritt kippte nach 2m49s, `flutter build apk` lief nie.
+          # Gecacht wird jetzt nur, was sich wirklich lohnt: die geladenen
+          # Module und der Wrapper.
           path: |
-            ~/.gradle/caches
+            ~/.gradle/caches/modules-2
             ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          key: gradle-modules-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-modules-
           restore-keys: gradle-
       - run: flutter pub get
       - run: flutter build apk --debug
@@ -175,10 +185,20 @@ jobs:
           restore-keys: pub-
       - uses: actions/cache@v4
         with:
+          # docs/TODO.md T-102: vorher lag hier `~/.gradle/caches` komplett drin.
+          # Das waechst unbegrenzt - es enthaelt neben den heruntergeladenen
+          # Abhaengigkeiten auch jede transformierte AAR und jeden
+          # Build-Cache-Eintrag. Ergebnis: zwei Gradle-Caches mit 3746 MB und
+          # 2397 MB, und ein Restore, der laenger dauert als der Build spart.
+          # Im Lauf 34535358135 ist der Release-Build daran gestorben - der
+          # Cache-Schritt kippte nach 2m49s, `flutter build apk` lief nie.
+          # Gecacht wird jetzt nur, was sich wirklich lohnt: die geladenen
+          # Module und der Wrapper.
           path: |
-            ~/.gradle/caches
+            ~/.gradle/caches/modules-2
             ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          key: gradle-modules-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-modules-
           restore-keys: gradle-
 
       - name: Decode signing key

@@ -1299,6 +1299,31 @@ Conventions:
   belegt mit dem realen Fall: nach einem Dismiss war der Alarm für morgen weg (0 statt 1).
   Damit sind auch T-02 und T-32 gegenstandslos.
 
+### T-102 · Der Gradle-Cache hat den Release-Build erschlagen — BEHOBEN (2026-09-11)
+
+- [x] Cache auf das verschmaelern, was sich lohnt.
+- [x] Die aufgelaufenen Caches loeschen.
+- [ ] Im naechsten Lauf bestaetigen, dass der Build-Job durchlaeuft (danach ist T-06s Restaufgabe
+      - ein Live-Beweis, dass das Gate wirklich stoppt - separat noch offen).
+- **Why:** im Lauf 34535358135 stand `Build Android (production)` auf `failure`, und die
+  naheliegende Deutung waere gewesen: "die Desugaring- oder Override-Aenderung hat den Build
+  zerbrochen". Das war **falsch**. Die Schrittliste des Jobs zeigt, dass er in **Schritt 6**
+  (`actions/cache`, Gradle) nach 2m49s starb und `flutter build apk --release` (Schritt 9)
+  **nie ausgefuehrt** wurde. Die Logs waren zu diesem Zeitpunkt schon nicht mehr abrufbar
+  (`BlobNotFound`), die Schrittliste aber schon.
+- **Ursache:** der Cache-Block legte `~/.gradle/caches` **komplett** ab. Das waechst unbegrenzt -
+  darin liegen neben den geladenen Abhaengigkeiten auch jede transformierte AAR und jeder
+  Build-Cache-Eintrag. Messung: **6436 MB** Actions-Cache, davon zwei Gradle-Eintraege mit
+  **3746 MB** und **2397 MB**. Zwei, weil die Aenderungen an `android/**/*.gradle*` den
+  Cache-Schluessel aendern - der alte Multi-GB-Eintrag bleibt daneben liegen. Ein Restore dieser
+  Groesse dauert laenger als der Build spart und faellt gelegentlich einfach um.
+- **Status:** gecacht wird jetzt nur `~/.gradle/caches/modules-2` (die geladenen Module) und
+  `~/.gradle/wrapper`, mit `restore-keys` fuer Teiltreffer - in allen vier Workflows. Alle
+  aufgelaufenen Caches geloescht (Liste ist leer; die Nutzungsanzeige von GitHub laeuft nach).
+- **Lehre, die ueber diesen Fall hinausgeht:** bei einem roten Job zuerst die **Schrittliste**
+  ansehen, nicht die eigene naheliegendste Hypothese. Hier haette die falsche Deutung dazu
+  gefuehrt, eine korrekte und nachweislich verifizierte Aenderung (T-90/T-97) zurueckzunehmen.
+
 ### T-101 · risk.png war ein Planungsbild, jetzt ein Threat Model — BEHOBEN (2026-09-10)
 
 - [x] `docs/risk.png` durch ein echtes Threat Model ersetzen.
