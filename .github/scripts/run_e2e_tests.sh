@@ -48,6 +48,36 @@ cat > "$EVIDENCE_DIR/README.md" <<'EOF'
 EOF
 
 adb wait-for-device
+
+# Gesundheitspruefung, bevor irgendetwas gemessen wird (docs/TODO.md T-129).
+#
+# `adb wait-for-device` kehrt schon zurueck, wenn der Geraeteeintrag existiert -
+# nicht erst, wenn das System benutzbar ist. In Lauf 34622327599 kam der
+# adb-Daemon gar nicht hoch ("Unable to connect to adb daemon on port: 5037",
+# danach "device 'emulator-5554' not found"), der Lauf ging trotzdem weiter, und
+# scheiterte spaeter an einer Zusicherung, die wie ein Produktfehler aussieht:
+# "Alarm … was created in AppState but never reached the native alarm plugin".
+# Dass es keiner war, liess sich nur dadurch zeigen, dass `lib/` gegenueber dem
+# vorigen, gruenen Lauf byteweise identisch war.
+#
+# Ein Beweismittel, das eine Umgebungsstoerung als Produktfehler ausgibt, ist
+# schlimmer als eines, das nichts findet. Deshalb hier abbrechen, mit einer
+# Meldung, die keine Verwechslung zulaesst.
+for _ in $(seq 1 60); do
+  if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+    break
+  fi
+  sleep 5
+done
+BOOTED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+if [ "$BOOTED" != "1" ]; then
+  echo "::error::EMULATOR NICHT BENUTZBAR - sys.boot_completed='$BOOTED'."
+  echo "::error::Das ist eine Umgebungsstoerung, KEIN Testergebnis."
+  adb devices -l || true
+  exit 1
+fi
+echo "emulator ready: sys.boot_completed=1, $(adb shell getprop ro.build.version.sdk | tr -d '\r') as API level"
+
 adb logcat -c # clear any backlog so this only captures the run below
 adb logcat 'ActivityManager:I' '*:S' >"$EVIDENCE_DIR/activity_manager.log" 2>&1 &
 LOGCAT_PID=$!

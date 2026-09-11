@@ -14,12 +14,39 @@ could not be confirmed from the repository it says so instead of asserting it.
 Conventions:
 
 - IDs (`T-01` …) are stable. Reference them in commit messages; never renumber an existing one.
+- **Der Status steht in der Überschrift**, nicht nur im Rumpf — `BEHOBEN`, `WIDERLEGT`,
+  `BEANTWORTET`, `TEILWEISE`/`GROSSTEILS`, oder `OFFENE SPEC-ENTSCHEIDUNG`. Eine Überschrift ohne
+  solchen Zusatz bedeutet: offen. Wer ein Item schliesst, zieht die Überschrift mit; sonst ist die
+  Liste nicht mehr überfliegbar, und genau das ist ihr ganzer Wert. (Am 2026-09-11 trugen 24 längst
+  erledigte Items ihren Status nur im Rumpf.)
 - **P0** blocks any push to `master` / production. **P1** must be resolved or consciously accepted
   before a public release. **P2** is real work that does not block a release. **P3** is
   housekeeping.
 - `R1`–`R12` refer to [`REQUIREMENTS.md`](REQUIREMENTS.md).
 - *Evidence* cites where the problem is visible, so nobody has to re-derive it.
 - *Done when* is the acceptance criterion — if it cannot be checked, the TODO is not finished.
+
+---
+
+## Wartet auf eine Entscheidung, nicht auf Arbeit
+
+Sieben Punkte sind untersucht, reproduziert und **nicht** umgesetzt, weil in allen der Code der
+Spec folgt und die *Anforderung* die Lücke hat. Sie brauchen eine Entscheidung des
+Projektverantwortlichen, keine weitere Analyse — jedes Item nennt die Frage, die Lesarten und was
+jede kostet:
+
+| | Frage in einem Satz |
+|---|---|
+| **T-112** | Was gilt, wenn eine Kurve über Mitternacht rutscht — darf ein Kalendertag zwei Weckzeiten tragen und ein anderer keine? |
+| **T-113** | Soll FR-16s Checkpoint 2 die bereits scharf gestellten Alarme nachziehen? (Sonst klingelt der erste Wecker nach einem Flug um die volle Versatzdifferenz falsch.) |
+| **T-115** | Welche Richtung gewinnt bei einem Abstand von exakt 12 Stunden? |
+| **T-119** | Muss die Tageszuordnung den Versatz des jeweiligen Fenstertages verwenden? (Sonst wird zweimal im Jahr ein echter Morgentermin verschluckt.) |
+| **T-120** | Welchem Tag gehört ein Weckwert, den die Vorlaufzeiten über Mitternacht zurückschieben? |
+| **T-121** | Setzt ein Termin im Fenster FR-9s Ventil auch für die Tage **nach** ihm ausser Kraft? |
+| **T-122** | Entscheidet über die Verankerung die Herkunft eines Wertes oder seine Bedeutung? |
+
+Der jeweils **entschiedene** Teil dieser Fälle ist bereits durch Tests festgehalten (T-118,
+T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formuliert werden kann.
 
 ---
 
@@ -717,9 +744,20 @@ Conventions:
   instead of "never ran on a device". README's "Quality Checks" section now documents the E2E gate
   and the local command to run it.
 
-### T-42 · Six persisted settings are unreachable or unused
+### T-42 · Six persisted settings are unreachable or unused — GROSSTEILS BEHOBEN (2026-09-10)
 
-- [ ] Wire them up or remove them.
+- [x] Fuenf der sechs entfernt: `doNotDisturbEnabled`, `turnOffNotifications`, `turnOffCalls`
+      (Feature nie gebaut), `wakeUpSteps` und `rescheduleOnAlarm` (beide gehoerten zum alten
+      Motor und sind mit ihm verschwunden - Phase 6, T-86). `grep -rn` findet sie in `lib/` nicht
+      mehr; der einzige verbliebene Treffer fuer `rescheduleOnAlarm` ist ein historischer
+      Kommentar in `handler.dart`, der erklaert, was dort frueher stand.
+- [ ] **Verbleibt: `startOfWeekDay`.** Und der Fall ist schlimmer als "keine UI": sein einziger
+      Leser `getStartOfWeek` (`lib/utils/utils.dart:112-118`) benutzt den Wert nur als
+      *Bedingung*, nicht als Ziel - trifft der Wochentag nicht zu, rechnet er mit
+      `subtract(weekday - 1)` **immer auf Montag** zurueck. Die Einstellung entscheidet also
+      lediglich, OB korrigiert wird, nie WORAUF. Betroffen ist die Kalender-Vorladung des
+      Schedule-Schirms, nicht scheduling-v2. Entweder den Helfer auf den eingestellten Tag rechnen
+      lassen und eine UI ergaenzen, oder die Einstellung ersatzlos streichen.
 - **Why:** three are fully dead — `doNotDisturbEnabled`, `turnOffNotifications`, `turnOffCalls` are
   declared and persisted but have zero readers outside `AppState`, for a feature the use cases mark
   as never implemented. Three more are read by logic but have no UI: `wakeUpSteps`, which drives the
@@ -766,8 +804,13 @@ Conventions:
   test.
 - **Requirement:** R3
 
-### T-46 · The scheduling window is hardcoded
+### T-46 · The scheduling window is hardcoded — BEANTWORTET (2026-09-10, durch scheduling-v2)
 
+- [x] **Begruendet statt konfigurierbar gemacht.** FR-8 legt das Fenster ausdruecklich fest: "Nur
+      das sichtbare 7-Tage-Fenster, kein groesserer Horizont", mit Begruendung im Spec-Text. Der
+      Abbruch ab sieben geschaetzten Alarmen existiert nicht mehr (er gehoerte zum alten Motor);
+      an seine Stelle tritt FR-9s Ventil mit einer benannten Schwelle (`gapDayValveThreshold`)
+      und einer Benachrichtigung an den Nutzer. Bleibt als urspruengliche Aufgabe:
 - [ ] Make the forward window, preload range, and estimate-abort threshold configurable, or justify
       the constants.
 - **Why:** scheduling covers a fixed 7-day forward window, the preload is a hardcoded two past / one
@@ -845,9 +888,14 @@ Conventions:
 - **Done when:** a test reproduces the race (or confirms it no longer occurs) by opening the
   Schedule screen concurrently with `preloadCalendarData`.
 
-### T-57 · No fallback scheduling target when there are no calendar entries at all
+### T-57 · No fallback scheduling target when there are no calendar entries at all — BEHOBEN (2026-09-10, durch scheduling-v2)
 
-- [ ] Decide and implement what should happen when `scheduleAlarms` finds zero calendar entries.
+- [x] **Entschieden und gebaut.** Ein Tag ohne Termin ist kein Sonderfall mehr, sondern FR-4s
+      Lueckentag: der Wert driftet zur `wunschzeit`, begrenzt durch `maxDailyDelta`, und haelt
+      ohne `wunschzeit` bei der zuletzt geklingelten Uhrzeit. Existiert gar kein Anker, greift
+      FR-10s Kaltstart (es wird nichts erfunden); reisst die Terminlage dauerhaft ab, greift
+      FR-9s Ventil und **meldet sich beim Nutzer**, statt stillschweigend nichts zu planen. Die
+      urspruengliche Formulierung bezog sich auf `scheduleAlarms`, das es nicht mehr gibt.
 - **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31). Today,
   `scheduleAlarms` logs "No events in calendar. Aborting." and schedules nothing at all - there is
   no user-configurable fallback wake-up target for days/weeks with no calendar data, distinct from
@@ -1003,7 +1051,7 @@ Conventions:
   scheduling engine is confirmed to bypass this cache entirely and call `retrieveEvents` directly
   on every replan, never through `updateCalendarData`.
 
-### T-61 · scheduling-v2's wall-clock arithmetic assumes `deviceUtcOffset == 0`
+### T-61 · scheduling-v2's wall-clock arithmetic assumes `deviceUtcOffset == 0` — BEHOBEN
 
 - [x] **Behoben (2026-09, zweiter Anlauf).** Der erste Anlauf hatte nur die halbe Ursache erfasst:
       `applyGapDayDrift`/`coldStart` offset-bewusst zu machen war richtig, aber die Einschätzung
@@ -1122,7 +1170,7 @@ Conventions:
   becomes a real missed-detection path the moment a reinterpretation step depends on the previously
   stored value.
 
-### T-67 · FR-6/FR-9/FR-12: die Warn-Flags werden auf zwei von drei Pfaden verworfen
+### T-67 · FR-6/FR-9/FR-12: die Warn-Flags werden auf zwei von drei Pfaden verworfen — BEHOBEN
 
 - [x] **Behoben** (`lib/models/scheduling/replan_notifications.dart`): `reportReplanNotifications()`
       wird jetzt von allen drei Pfaden gerufen (Ring, FR-17-Erholung, Einstellungsänderung), jede
@@ -1138,7 +1186,7 @@ Conventions:
   FR-17 ausdrücklich als Auslöser.
 - **Done when:** alle drei Flags werden auf jedem Pfad gemeldet, mit Test.
 
-### T-68 · FR-17 greift nie bei einem echten Vordergrund-Wechsel
+### T-68 · FR-17 greift nie bei einem echten Vordergrund-Wechsel — BEHOBEN
 
 - [x] **Behoben** (`lib/main.dart`): `didChangeAppLifecycleState` löst bei
       `AppLifecycleState.resumed` `runForegroundCheckpointSafely` aus - der zuvor tote
@@ -1153,7 +1201,7 @@ Conventions:
   damit weg. Nebenbefund: "sofort, vor jeder UI-Interaktion" ist durch den Post-Frame-Callback
   ebenfalls nicht erfüllt.
 
-### T-69 · Checkpoint 2s Reinterpretation wird vom veralteten AppState zurückgedreht
+### T-69 · Checkpoint 2s Reinterpretation wird vom veralteten AppState zurückgedreht — BEHOBEN
 
 - [x] **Behoben**: neues `AppState.reloadSchedulingStateFromPreferences()` (mit `prefs.reload()`)
       wird als erste Anweisung jedes `replan()` aufgerufen - ein Schreibzugriff aus dem
@@ -1167,7 +1215,7 @@ Conventions:
   von FR-16s eigenem Beispiel: Tom landet um 14:00, App läuft), hat Checkpoint 2 damit **keine
   Wirkung** außer dem Persistieren des Versatzes.
 
-### T-70 · Das Kalenderfenster liefert nur 6 statt 7 Tage Termindaten
+### T-70 · Das Kalenderfenster liefert nur 6 statt 7 Tage Termindaten — BEHOBEN
 
 - [x] **Behoben** (`lib/screens/schedule/calendar.dart`): `endDate` zieht nur noch 1 ms statt einen
       ganzen Tag ab - das Fenster deckt jetzt wirklich 7 Tage Termindaten ab.
@@ -1179,7 +1227,7 @@ Conventions:
   inklusive Tageskonvention von `getCalendarEntries` um. Für alle Tests unsichtbar, weil sie
   `fetchEvents` injizieren.
 
-### T-71 · replan()s Tagesmodell gilt nur für den Klingel-Auslöser
+### T-71 · replan()s Tagesmodell gilt nur für den Klingel-Auslöser — BEHOBEN
 
 - [x] **Behoben**: `replan()` hat jetzt `todayAlreadyRang` (Default `false`). Nur
       `runAlarmRingCheckpoint` setzt es auf `true`; FR-17s Erholung und eine Einstellungsänderung
@@ -1192,7 +1240,7 @@ Conventions:
   der heutige 07:30-Wert wird nicht neu abgeleitet (FR-11 verletzt, genau für den Tag, auf den es
   ankommt) und `gapDayCounter` zählt heute mit, obwohl FR-9 sagt "Heutiger Tag zählt nicht mit".
 
-### T-72 · Keine UI für `wunschzeit`/`maxDailyDelta` - halbe FR-4/FR-7 unerreichbar
+### T-72 · Keine UI für `wunschzeit`/`maxDailyDelta` - halbe FR-4/FR-7 unerreichbar — BEHOBEN
 
 - [x] **Behoben** (`lib/screens/sleep_habits/screen_sleephabits.dart`): neue Kacheln "Preferred
       wake-up time" (Schalter + Zeitwähler, `null`-fähig) und "Max. daily shift"; beide rufen
@@ -1205,7 +1253,7 @@ Conventions:
   **nichts** geplant, also klingelt nichts, also gibt es keinen Ring-Checkpoint - und nach 7
   gezählten Tagen schlägt FR-9s Ventil zu.
 
-### T-73 · Ein klingelnder ManualAlarm treibt die ScheduledAlarm-Kette (FR-8/FR-15-Grenze)
+### T-73 · Ein klingelnder ManualAlarm treibt die ScheduledAlarm-Kette (FR-8/FR-15-Grenze) — BEHOBEN
 
 - [x] **Behoben** (`lib/models/alarms/handler.dart`): `_fireReplanCheckpoint` prüft jetzt
       `_appState.getAlarm(event.id) is ScheduledAlarm` und kehrt sonst zurück. Regressionstest in
@@ -1219,7 +1267,7 @@ Conventions:
   Die *Wert*-Isolation aus FR-15 ist intakt (kein ManualAlarm wird je `hardFloor` oder Anker), die
   *Auslöser*-Isolation nicht.
 
-### T-74 · Kleinere, bestätigte Abweichungen (gesammelt) - **alle behoben**
+### T-74 · Kleinere, bestätigte Abweichungen (gesammelt) - **alle behoben** — BEHOBEN
 
 - [x] (a) **FR-6 "einmalig"**: das Overrun-Flag wird bei jedem Replan neu gesetzt, nichts persistiert
       "schon gemeldet" - bei einem mehrtägigen Overrun-Run kommt die Meldung täglich
@@ -1241,7 +1289,7 @@ Conventions:
       (`qr_scanner.dart:171-177`), ohne die AppState-Listen zu aktualisieren - nach Phase 6 repariert
       das niemand mehr. Zudem vergleicht `planAlarmSync` nur Minuten, Tonänderungen propagieren nicht.
 
-### T-66 · Phase 6 would delete `Scheduler.nextAlarmTime()`, which scheduling-v2 itself depends on
+### T-66 · Phase 6 would delete `Scheduler.nextAlarmTime()`, which scheduling-v2 itself depends on — BEHOBEN
 
 - [x] **Done** (`lib/models/scheduling/next_wake_up.dart`): `nextWakeUpTime()` derives the next
       wake-up from scheduling-v2's `pendingDayValues` **and** the user's `ManualAlarm`s (resolving a
@@ -1261,7 +1309,7 @@ Conventions:
 - **Done when:** the sleep reminder gets its "next wake-up time" from a source that survives Phase 6,
   with a test covering the manual-alarm-only case.
 
-### T-65 · Changing sleep-habit settings never triggers a scheduling-v2 replan
+### T-65 · Changing sleep-habit settings never triggers a scheduling-v2 replan — BEHOBEN (2026-09-10)
 
 - [x] **Done** (`lib/models/scheduling/settings_changed.dart`): `onSchedulingSettingsChanged()`
       re-plans (and re-applies per FR-18) and then re-schedules the bedtime notification, in that
@@ -1286,7 +1334,7 @@ Conventions:
 - **Done when:** changing any of the four re-plans (and re-applies, FR-18) immediately, covered by a
   test, and the spec records the trigger.
 
-### T-64 · Both scheduling systems now set alarms - and the old one can leave ZERO alarms
+### T-64 · Both scheduling systems now set alarms - and the old one can leave ZERO alarms — BEHOBEN (2026-09-10, Phase 6)
 
 - **Schwere nach oben korrigiert (2026-09):** die frühere Beschreibung ("die Zeiten kippen zwischen
   beiden Algorithmen") war zu milde. `Scheduler.scheduleAlarms()` löscht **zuerst** alle
@@ -1455,6 +1503,32 @@ Conventions:
   gelegt, still, und eine Gegenprobe, dass eine zukuenftige Bettzeit unveraendert sichtbar und
   puenktlich bleibt.
 - **Requirement:** R2, R3
+
+### T-129 · Ein kranker Emulator gab sich als Produktfehler aus — BEHOBEN (2026-09-11)
+
+- [x] Vor der Messung pruefen, ob der Emulator ueberhaupt benutzbar ist.
+- **Was passierte:** Lauf 34622327599 meldete `❌ a created alarm survives being reloaded from
+  on-device storage` mit der Begruendung "Alarm … was created in AppState but never reached the
+  native alarm plugin". Das liest sich wie ein schwerer Produktfehler. Es war keiner: derselbe Lauf
+  hatte zuvor `Unable to connect to adb daemon on port: 5037` und
+  `adb: device 'emulator-5554' not found` protokolliert - der Emulator war nie richtig
+  hochgekommen.
+- **Wie sich das zeigen liess:** der Commit dieses Laufs (`6aa2325`) aenderte ausschliesslich
+  Testdateien und Dokumentation; `git diff b0d6662 6aa2325 -- lib/` ist **leer**. Der
+  unmittelbar vorige Lauf auf byteweise identischem `lib/` hatte die E2E-Suite gruen. Damit war
+  eine Code-Regression ausgeschlossen, ohne auch nur einen Test lesen zu muessen.
+- **Warum das ein eigener Punkt ist:** `adb wait-for-device` kehrt schon zurueck, wenn der
+  Geraeteeintrag existiert - nicht erst, wenn das System benutzbar ist. Der Lauf lief also weiter
+  und produzierte am Ende eine Aussage ueber das Produkt, wo eine ueber die Umgebung faellig
+  gewesen waere. Das ist dieselbe Fehlerklasse wie T-99 und T-103, nur eine Ebene hoeher: **ein
+  Beweismittel, das eine Umgebungsstoerung als Produktfehler ausgibt, ist schlimmer als eines, das
+  nichts findet** - man glaubt ihm.
+- **Fix:** `run_e2e_tests.sh` wartet jetzt auf `sys.boot_completed=1` (bis zu fuenf Minuten) und
+  bricht sonst mit `::error::EMULATOR NICHT BENUTZBAR … Das ist eine Umgebungsstoerung, KEIN
+  Testergebnis` ab, samt `adb devices -l` fuer die Diagnose. Im Erfolgsfall protokolliert es den
+  API-Level des Geraets - bisher stand nirgends im Beweismaterial, auf welcher Android-Version
+  gemessen wurde.
+- **Requirement:** R3
 
 ### T-123 bis T-128 · Sechs weitere ungedeckte Eigenschaften — BEHOBEN (2026-09-11)
 
@@ -2427,7 +2501,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   Prozess empfaengt danach kein `BOOT_COMPLETED` mehr - Force-Stop wird also rot sein, und zwar
   **by design**. Das gehoert in R3 als Grenze, nicht als Fehler.
 
-### T-75 · `lastReplanDate` vermischt zwei Zwecke -> FR-9/FR-12 überspringen ganze Tage
+### T-75 · `lastReplanDate` vermischt zwei Zwecke -> FR-9/FR-12 überspringen ganze Tage — BEHOBEN (2026-09-10)
 
 - [x] Zwei Felder trennen: `lastProcessedConcludedDay` (steuert `firstUnprocessedDay`) und
       `lastReplanDate` (nur FR-17s Tagessperre).
@@ -2441,7 +2515,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
 - **Done when:** Regressionstest "Erholung an Tag D, Ring an Tag D+1 -> beide Tage gezählt" grün.
 - **Status:** Behoben 2026-09-10: `AppState.lastProcessedConcludedDay` neu (mit Migration aus dem alten Schlüssel), `lastReplanDate` trägt nur noch FR-17s Tagessperre. Regressionstests in `test/replan_test.dart`, Gruppe "T-75" (Erholung an Tag D dann Ring an Tag D zählt beide Tage; FR-12 bleibt meldefähig).
 
-### T-76 · Sommerzeit: `dayOffset` in `computeWeekPlan` ist nach der Frühjahrsumstellung um 1 zu klein
+### T-76 · Sommerzeit: `dayOffset` in `computeWeekPlan` ist nach der Frühjahrsumstellung um 1 zu klein — BEHOBEN (2026-03-29)
 
 - [x] Kalenderarithmetik auch in `computeWeekPlan` (`scheduling_v2.dart:578` und `:592`).
 - **Why:** T-74d hat `add(Duration(days:))` nur in `replan.dart` ersetzt. Hier stehen weiterhin
@@ -2454,7 +2528,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   Termin kann verletzt werden. Für die Tests unsichtbar, weil sie UTC-getaggte Fenster nutzen.
 - **Status:** Behoben 2026-09-10: neues `lib/models/scheduling/day_marker.dart` (`midnight`/`dayMarker`/`dayStamp`/`dayDistance`/`isoDate`), `computeWeekPlan` nutzt `dayMarker(window[startIndex], -1)` und `dayDistance(...)`. `replan.dart`s private Kopien sind entfallen. Tests: `test/day_marker_test.dart` und `test/scheduling_v2_dst_test.dart` - letzterer baut das Fenster aus `tz.TZDateTime` in `Europe/Berlin`, reproduziert also unabhängig von der Zeitzone der Testmaschine (der vorherige Teilfix T-74d lief genau daran vorbei). Der rote Testlauf lieferte exakt den vorab handgerechneten Fehlwert 04:36:40 statt 04:40.
 
-### T-77 · `replan()` ist nicht serialisiert - nebenläufige Checkpoints möglich
+### T-77 · `replan()` ist nicht serialisiert - nebenläufige Checkpoints möglich — BEHOBEN (2026-09-10)
 
 - [x] Einen Future-Mutex um den gesamten Checkpoint; den Tagesmarker **vor** dem Kalender-I/O
       reservieren, nicht erst am Ende.
@@ -2466,7 +2540,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   dieselbe alte Alarmliste -> Doppelalarme auf derselben Minute.
 - **Status:** Behoben 2026-09-10: `runSchedulingCheckpoint()` serialisiert alle Auslöser über eine Future-Kette, und FR-17s Tagessperre wird **innerhalb** der Sperre gelesen. Nachgewiesen wirksam: mit ausgeschaltetem Lock wird `test/checkpoint_test.dart`s erster Fall rot (2 parallele Kalenderzugriffe statt 1).
 
-### T-78 · FR-9s Sicherheitsventil hat für einen `wunschzeit`-Nutzer keinen Rückweg
+### T-78 · FR-9s Sicherheitsventil hat für einen `wunschzeit`-Nutzer keinen Rückweg — BEHOBEN (2026-09-10)
 
 - [x] Spec-Entscheidung + Umsetzung: Ventil bei `wunschzeit != null` nicht greifen lassen, oder den
       Zähler auch an einem tatsächlich geplanten Tag zurücksetzen, oder eine Reset-Aktion in der UI.
@@ -2477,7 +2551,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   `hardFloor`-Tag könnte den Zähler zurücksetzen. Der Wecker schaltet sich dauerhaft ab.
 - **Status:** Behoben 2026-09-10 - als **Spec-Änderung**, nicht als Bugfix: FR-9 hatte keine Ausnahme, also wurde zuerst FR-9 um den Abschnitt "Ausnahme: gesetzte `wunschzeit`" ergänzt (mit Begründung), dann der bestehende Ventil-Test auf `wunschzeit: null` umgestellt (das war die Bedingung, die ihn überhaupt gültig macht) und ein neuer Ausnahmefall ergänzt. Der Zähler läuft unverändert weiter, das Ventil greift nur bei `wunschzeit == null`.
 
-### T-79 · `Notifications().init()` wird nicht abgewartet, der Post-Frame-Replan braucht das Plugin
+### T-79 · `Notifications().init()` wird nicht abgewartet, der Post-Frame-Replan braucht das Plugin — BEHOBEN (2026-09-10)
 
 - [x] `await Notifications().init()` vor dem ersten Checkpoint (oder in `main()` vor `runApp`).
 - **Why:** `main.dart:190` startet `init()` ohne `await` (es enthält `Alarm.init()`,
@@ -2489,7 +2563,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   Notification Checkpoint 2 nicht aus.
 - **Status:** Behoben 2026-09-10: `Notifications().init()` wird im Post-Frame-Callback **awaited**, vor dem ersten Checkpoint (und damit vor jedem `Alarm.set`/`getAlarms` und vor der ersten erzeugten Notification).
 
-### T-80 · Der Schlafengeh-Aufhänger wird nach einem Replan nicht neu geplant
+### T-80 · Der Schlafengeh-Aufhänger wird nach einem Replan nicht neu geplant — BEHOBEN (2026-09-10)
 
 - [x] `scheduleSleepReminder` in den Checkpoint aufnehmen (dieselbe Begründung wie bei
       `applyPlannedAlarms`: kein Pfad soll rechnen und vergessen können).
@@ -2500,7 +2574,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   `onAlarmHandled`) ebenso.
 - **Status:** Behoben 2026-09-10: strukturell durch T-87 - `scheduleSleepReminder()` steht als letzter Schritt in `runSchedulingCheckpoint()`s fester Sequenz und läuft im `finally`, damit ein Kalenderfehler FR-16s Aufhänger nicht mitreißt.
 
-### T-81 · FR-9s Ventil-Benachrichtigung wiederholt sich bei jedem Replan
+### T-81 · FR-9s Ventil-Benachrichtigung wiederholt sich bei jedem Replan — BEHOBEN (2026-09-10)
 
 - [x] Analog zu T-74a drosseln (eigenes Feld oder eine gemeinsame "einmal pro Episode"-Hilfe).
 - **Why:** `replan_notifications.dart:53-63` hat keine Sperre, `safetyValveTriggered` wird aber bei
@@ -2508,7 +2582,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   bei jedem App-Öffnen an einem neuen Tag und bei jeder Einstellungsänderung erneut.
 - **Status:** Behoben 2026-09-10: neues `AppState.safetyValveNotificationSent`; `reportReplanNotifications` hat FR-6 und FR-9 in einen gemeinsamen `oncePerEpisode`-Helfer gezogen. FR-12 bleibt bewusst ungedrosselt (einmalige Beobachtung, keine stehende Bedingung).
 
-### T-82 · `pendingDayValues`/`pendingDayInstantAnchored` wachsen unbegrenzt
+### T-82 · `pendingDayValues`/`pendingDayInstantAnchored` wachsen unbegrenzt — BEHOBEN (2026-09-10)
 
 - [x] Beim Merge alles älter als `lastConcludedDay - 1` verwerfen.
 - **Why:** der Merge-ohne-Prune ist für *heute* lasttragend (Kommentar in `replan.dart:137-144`), es
@@ -2518,7 +2592,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   asymmetrisch (dort werden Einträge per `remove` gelöscht).
 - **Status:** Behoben 2026-09-10: der Merge verwirft Einträge vor `lastConcludedDay - 1` (dieselbe Grenze für `pendingDayInstantAnchored`, das vorher asymmetrisch war). Gestern bleibt als Sicherheitsmarge, weil ein Erholungs-Checkpoint gestern als `lastConcludedDay` liest. Tests halten zusätzlich fest, dass der heutige, noch nicht geklingelte Wert erhalten bleibt.
 
-### T-83 · Uneinheitliches `isUtc`-Tagging beim Lesen derselben Map
+### T-83 · Uneinheitliches `isUtc`-Tagging beim Lesen derselben Map — BEHOBEN (2026-09-10)
 
 - [x] Zwei benannte Konverter (`instantFromStored` -> UTC-getaggt für die Domänenschicht,
       `localFromStored` -> `.toLocal()` für Plugin/UI) plus `assert(anchor.isUtc)` in
@@ -2530,7 +2604,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   Konsistenz" würde Anzeige und Alarmtitel still um den Geräteversatz verschieben.
 - **Status:** Behoben 2026-09-10: neues `lib/models/scheduling/stored_values.dart` mit `instantFromStored` (Domäne, UTC-getaggt), `localFromStored` (Plattform/Anzeige) und `toStored`. Alle fünf Lesestellen benutzen jetzt den passenden Namen; rohe `DateTime.fromMillisecondsSinceEpoch`-Aufrufe gibt es außerhalb dieses Moduls nicht mehr.
 
-### T-84 · T-74e ist nur zur Hälfte behoben: Ton/Lautstärke/Gentle-Wake propagieren nicht
+### T-84 · T-74e ist nur zur Hälfte behoben: Ton/Lautstärke/Gentle-Wake propagieren nicht — BEHOBEN (2026-09-10)
 
 - [x] `selectedTone`/`selectedVolume`/`gentleWakeUpEnabled` an `onSchedulingSettingsChanged` hängen
       und `planAlarmSync` um einen Eigenschaftsvergleich erweitern; `ScheduledAlarm` um `volume`
@@ -2541,7 +2615,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   also mit `MyAlarm`s Default 0.6 und ignorieren `appState.selectedVolume` (das eine UI hat).
 - **Status:** Behoben 2026-09-10: `ScheduledAlarm` reicht `volume` durch (inkl. JSON und `==`; alte gespeicherte Alarme fallen auf den Default zurück), `applyPlannedAlarms` setzt Ton/Lautstärke/Gentle-Wake aus dem AppState, `planAlarmSync` vergleicht sie mit und ersetzt abweichende Alarme, und Ton-, Lautstärke- und Gentle-Wake-Änderungen lösen einen Checkpoint aus (Lautstärke per `onChangeEnd`, nicht bei jedem Rasterschritt).
 
-### T-85 · Dokumentation widerspricht dem Code an mehreren Stellen
+### T-85 · Dokumentation widerspricht dem Code an mehreren Stellen — BEHOBEN (2026-09-10)
 
 - [x] (a) `docs/scheduling-v2-spec.md`s Kopf nennt T-61 "wieder geöffnet", den UTC+0-Vorbehalt und
       "Phase 6 sollte erst danach beginnen" - alles überholt.
@@ -2581,7 +2655,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   `docs/scheduling-v2-pseudocode.md` steht nur in einer gepinnten Notiz außerhalb des Repos und
   ist hier nicht adressierbar.
 
-### T-86 · Toter Code und verwaister Zustand (Inventar für Phase 6)
+### T-86 · Toter Code und verwaister Zustand (Inventar für Phase 6) — BEHOBEN (2026-09-10)
 
 - [x] `test/scheduling_test.dart` (337 Zeilen, testet nur die zu löschenden Funktionen);
       `Scheduler.nextAlarmTime` und `Scheduler.setScheduledAlarmToNow` (keine Aufrufer mehr);
@@ -2601,7 +2675,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   `_MyHomePageState.notifications` ist **nicht** entfallen - es hat durch T-79 einen echten Leser
   bekommen (`await notifications.init()`).
 
-### T-87 · Strukturelle Vereinfachung: ein Checkpoint-Einstiegspunkt statt fünf
+### T-87 · Strukturelle Vereinfachung: ein Checkpoint-Einstiegspunkt statt fünf — BEHOBEN (2026-09-10)
 
 - [x] `replan`, `runAlarmRingCheckpoint`, `onAppForegroundCheckpoint`, `runForegroundCheckpointSafely`
       und `onSchedulingSettingsChanged` zu einem `runSchedulingCheckpoint({required trigger})` mit
@@ -2615,7 +2689,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
   die Speicherform hinter die Konverter aus T-83 legen.
 - **Status:** Umgesetzt 2026-09-10: neues `lib/models/scheduling/checkpoint.dart` mit `runSchedulingCheckpoint({trigger})` und `runCheckpointSafely(...)`. `runAlarmRingCheckpoint`, `onAppForegroundCheckpoint`, `runForegroundCheckpointSafely` und `onSchedulingSettingsChanged` (samt Datei) sind entfallen; ihre Zusicherungen sind nach `test/checkpoint_test.dart` portiert, der T-67-Meldepfad läuft dort jetzt durch die echte Verdrahtung statt durch injizierte Nähte. Ebenfalls erledigt: das gemeinsame Tagesmarker-Modul (T-76) und die benannten Konverter (T-83).
 
-### T-88 · Kleinere, bestätigte Punkte
+### T-88 · Kleinere, bestätigte Punkte — BEHOBEN (2026-09-10)
 
 - [x] `platformAlarmTimes` enthält auch `ManualAlarm`-Zeiten - ein `ScheduledAlarm` auf derselben
       Minute gilt fälschlich als "auf der Plattform vorhanden" (einzeiliger Fix: nur bekannte
@@ -2628,7 +2702,7 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
       die Episode nie nachgeholt.
 - **Status:** Behoben 2026-09-10: `planAlarmSync` vergleicht die Plattform über **IDs** statt über Zeiten (`platformAlarmIds`) - damit deckt ein fremder Alarm auf derselben Minute nichts mehr ab, und die T-61-Frame-Falle verschwindet an dieser Grenze ganz. Der `wunschzeit`-Picker ist als Uhrzeit beschriftet (" Uhr" statt " h"), das `maxDailyDelta`-Minimum steht als Hinweis in der UI, und die Episoden-Merker werden erst nach erfolgreichem Senden gesetzt.
 
-### T-63 · scheduling-v2 computes wake times but nothing ever turns them into real alarms
+### T-63 · scheduling-v2 computes wake times but nothing ever turns them into real alarms — BEHOBEN (2026-09-10)
 
 - [x] **Done** (`lib/models/scheduling/apply_alarms.dart`): `planAlarmSync()` (pure) +
       `applyPlannedAlarms()` convert `pendingDayValues` into real `ScheduledAlarm`s, called from
