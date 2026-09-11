@@ -108,10 +108,15 @@ void main() {
         todayAlreadyRang: false,
       );
 
+      // Frueher stand hier nur `isNot(06:00)` - "irgendetwas anderes". Das war
+      // zu schwach: der spec-richtige Wert 06:30 erfuellt es, der damals
+      // gelieferte 09:00 aber genauso, und damit blieb der Test gruen, obwohl
+      // `maxDailyDelta` um das Sechsfache ueberschritten wurde (T-114).
       expect(
         appState.pendingDayValues[isoDate(nextDay)],
-        isNot(_utc(6, 0, day: 11).millisecondsSinceEpoch),
-        reason: 'der Folgetag hat nicht geklingelt und driftet zur wunschzeit',
+        _utc(6, 30, day: 11).millisecondsSinceEpoch,
+        reason: 'FR-3/FR-4: Anker ist der geklingelte 06:00-Wert des 10.03., '
+            'maxDailyDelta = 30min -> genau ein Schritt',
       );
     });
 
@@ -138,6 +143,121 @@ void main() {
 
       expect(appState.pendingDayValues[isoDate(dayMarker(ringDay, 1))], isNotNull,
           reason: 'das Fenster des Ring-Pfads beginnt morgen und wird geschrieben');
+    });
+  });
+
+  group('FR-3: Anker ist der zuletzt abgeschlossene Tag, nicht "gestern" (T-114)',
+      () {
+    // FR-3 woertlich:
+    //
+    //   "`lastEffectiveWakeTime` ist bewusst KEIN eigenes Feld: es ist immer
+    //    der Eintrag in `pendingDayValues` fuer den zuletzt abgeschlossenen
+    //    Tag und wuerde als zweite Quelle nur auseinanderlaufen koennen."
+    //
+    // Welcher Tag das ist, steht in `lastProcessedConcludedDay` - genau dem
+    // Feld, das T-75 dafuer von `lastReplanDate` getrennt hat. `replan()` las
+    // den Anker aber aus einem vom AUSLOESER abgeleiteten Tag: fuer alles
+    // ausser dem Ring aus "gestern". Hat heute schon geklingelt, ist der
+    // zuletzt abgeschlossene Tag aber HEUTE.
+    //
+    // T-106 hat den geklingelten Wert bereits vor dem Ueberschreiben
+    // geschuetzt - derselbe Lauf hat ihn als Anker dann trotzdem ignoriert.
+    // Das ist genau die "zweite Quelle", vor der FR-3 warnt.
+
+    test('Anker vorhanden, aber der falsche: Schritt bleibt in maxDailyDelta',
+        () async {
+      final appState = await _freshAppState();
+      final ringDay = _utc(0, 0, day: 10);
+
+      appState.pendingDayValues = {
+        isoDate(dayMarker(ringDay, -1)):
+            _utc(6, 0, day: 9).millisecondsSinceEpoch,
+        isoDate(ringDay): _utc(6, 0, day: 10).millisecondsSinceEpoch,
+      };
+      appState.lastProcessedConcludedDay = ringDay; // heute hat geklingelt
+      appState.lastReplanDate = ringDay;
+      appState.maxDailyDelta = const Duration(minutes: 60);
+      appState.wunschzeit = const TimeOfDay(hour: 9, minute: 0);
+
+      await replan(
+        appState,
+        now: () => _utc(7, 0, day: 10),
+        deviceUtcOffset: Duration.zero,
+        fetchEvents: (start, end) async => [],
+        todayAlreadyRang: false, // settingsChanged
+      );
+
+      expect(
+        appState.pendingDayValues[isoDate(dayMarker(ringDay, 1))],
+        _utc(7, 0, day: 11).millisecondsSinceEpoch,
+        reason: 'ein Schritt von 60min ab dem geklingelten 06:00',
+      );
+    });
+
+    test('Anker fehlt fuer gestern: kein Sprung auf die wunschzeit', () async {
+      // Der schwerere Fall. Fehlt der Eintrag fuer gestern - der Normalzustand
+      // nach dem T-82-Prune oder nach einer Luecke -, liefert der Anker `null`
+      // und `computeWeekPlan` nimmt FR-10s Kaltstart, der ohne jede
+      // `maxDailyDelta`-Begrenzung direkt auf die wunschzeit springt. Der
+      // Eintrag fuer heute steht aber da.
+      final appState = await _freshAppState();
+      final ringDay = _utc(0, 0, day: 10);
+
+      appState.pendingDayValues = {
+        isoDate(ringDay): _utc(6, 0, day: 10).millisecondsSinceEpoch,
+        isoDate(dayMarker(ringDay, 1)):
+            _utc(6, 0, day: 11).millisecondsSinceEpoch,
+      };
+      appState.lastProcessedConcludedDay = ringDay;
+      appState.lastReplanDate = ringDay;
+      appState.maxDailyDelta = const Duration(minutes: 30);
+      appState.wunschzeit = const TimeOfDay(hour: 9, minute: 0);
+
+      await replan(
+        appState,
+        now: () => _utc(8, 0, day: 10),
+        deviceUtcOffset: Duration.zero,
+        fetchEvents: (start, end) async => [],
+        todayAlreadyRang: false,
+      );
+
+      expect(
+        appState.pendingDayValues[isoDate(dayMarker(ringDay, 1))],
+        _utc(6, 30, day: 11).millisecondsSinceEpoch,
+        reason: 'FR-10s Kaltstart ist hier gar nicht anwendbar - ein '
+            'lastEffectiveWakeTime existiert, es steht unter HEUTE',
+      );
+    });
+
+    test('ein Fortschrittsmarker in der Zukunft legt die Planung nicht still',
+        () async {
+      // Gegenstueck zu T-109 eine Ebene tiefer: der Marker ist ein
+      // geraetelokales Datum ohne Klammerung und kann durch eine
+      // Uhrzeitkorrektur zurueck (oder einen Zonenwechsel ueber die
+      // Datumsgrenze) VOR dem heutigen Datum liegen. Ein Tag in der Zukunft
+      // darf nie als "bereits abgeschlossen" gelten - sonst gilt das ganze
+      // Fenster als abgeschlossen und es wird ueberhaupt nichts mehr geplant.
+      final appState = await _freshAppState();
+      final today = _utc(0, 0, day: 10);
+
+      appState.pendingDayValues = {
+        isoDate(dayMarker(today, -1)):
+            _utc(6, 0, day: 9).millisecondsSinceEpoch,
+      };
+      appState.lastProcessedConcludedDay = dayMarker(today, 7);
+      appState.maxDailyDelta = const Duration(minutes: 30);
+      appState.wunschzeit = const TimeOfDay(hour: 6, minute: 0);
+
+      await replan(
+        appState,
+        now: () => _utc(8, 0, day: 10),
+        deviceUtcOffset: Duration.zero,
+        fetchEvents: (start, end) async => [],
+        todayAlreadyRang: false,
+      );
+
+      expect(appState.pendingDayValues[isoDate(dayMarker(today, 1))], isNotNull,
+          reason: 'die Woche muss trotzdem geplant werden');
     });
   });
 }

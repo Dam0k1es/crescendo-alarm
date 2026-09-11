@@ -73,14 +73,6 @@ Future<ReplanResult> replan(
   final offset = deviceUtcOffset ?? currentTime.timeZoneOffset;
 
   final today = midnight(currentTime);
-  // docs/TODO.md T-71: only the ring checkpoint may treat today as concluded.
-  // For FR-17's recovery and a settings change, today has NOT rung yet: it
-  // must stay inside the window (FR-11: revisable until it actually rings) and
-  // must not be counted by FR-9 ("heutiger Tag zählt nicht mit").
-  final lastConcludedDay =
-      todayAlreadyRang ? today : dayMarker(today, -1);
-  final windowStart = dayMarker(lastConcludedDay, 1);
-  final window = List.generate(7, (i) => dayMarker(windowStart, i));
 
   // docs/TODO.md T-75: the day-advance progress marker, deliberately NOT
   // `lastReplanDate` (which only answers FR-17's "did a checkpoint already run
@@ -89,10 +81,63 @@ Future<ReplanResult> replan(
   // day found nothing to process - the day was lost, FR-9 under-counted and
   // FR-12 never reported. See test/replan_test.dart, group "T-75".
   final lastProcessedDay = appState.lastProcessedConcludedDay;
-  final firstUnprocessedDay = lastProcessedDay == null
-      ? lastConcludedDay
-      : dayMarker(midnight(lastProcessedDay), 1);
-  final needsDayAdvance = !firstUnprocessedDay.isAfter(lastConcludedDay);
+  final markerDay =
+      lastProcessedDay == null ? null : midnight(lastProcessedDay);
+
+  // Welcher Tag zuletzt abgeschlossen ist, ist eine Frage des ZUSTANDS, nicht
+  // des Auslösers (docs/TODO.md T-114).
+  //
+  // docs/TODO.md T-71 bleibt gültig, sagt aber etwas anderes, als diese Zeile
+  // früher daraus machte: ein Checkpoint darf nicht *annehmen*, heute sei
+  // abgeschlossen - deshalb `todayAlreadyRang`. Ob heute abgeschlossen *ist*,
+  // steht dagegen im Fortschrittsmarker, und wenn der heute schon auf heute
+  // steht, hat heute nachweislich geklingelt. Ihn dann zu ignorieren, machte
+  // den Anker für morgen zu einem Wert, der nie geklingelt hat - genau die
+  // "zweite Quelle", vor der FR-3 warnt ("`lastEffectiveWakeTime` ist bewusst
+  // kein eigenes Feld … würde als zweite Quelle nur auseinanderlaufen
+  // können"). Gemessen wurde dabei ein Tagesschritt vom Doppelten bis zum
+  // Sechsfachen von `maxDailyDelta`.
+  //
+  // Ein Marker in der ZUKUNFT zählt nie (`dayDistance <= 0`): er ist ein
+  // gerätelokales Ziffern-Datum ohne Klammerung und rutscht bei einer
+  // Uhrzeitkorrektur zurück oder einem Zonenwechsel über die Datumsgrenze vor
+  // das heutige Datum - dieselbe Ursache wie T-109. Ohne die Klammerung gälte
+  // dann das ganze Fenster als abgeschlossen und es würde überhaupt nichts
+  // mehr geplant.
+  //
+  // Verglichen wird durchgehend über `dayDistance` statt über `isAfter`: der
+  // Marker kommt lokal getaggt aus den Preferences, `currentTime` kann ein
+  // `tz.TZDateTime` sein, und ein Instant-Vergleich zweier Mitternachten aus
+  // verschiedenen Frames ist genau die Fehlerklasse dieses Moduls
+  // (T-61/T-76/T-83).
+  final concludedByTrigger =
+      todayAlreadyRang ? today : dayMarker(today, -1);
+  final lastConcludedDay = (markerDay != null &&
+          dayDistance(markerDay, today) <= 0 &&
+          dayDistance(markerDay, concludedByTrigger) > 0)
+      ? markerDay
+      : concludedByTrigger;
+
+  // Hier - und nur hier - entsteht FR-11s "erst der tatsaechlich ausgeloeste
+  // Wert ist fuer immer fix" (docs/TODO.md T-106): das Fenster beginnt hinter
+  // dem zuletzt abgeschlossenen Tag, also kann ein abgeschlossener Tag gar
+  // nicht mehr neu berechnet oder ueberschrieben werden.
+  //
+  // Zwischenzeitlich stand die Zusicherung stattdessen als Schreibsperre im
+  // Merge weiter unten. Seit [lastConcludedDay] dem Zustand folgt (T-114), war
+  // die nachweislich toter Code - `windowStart` liegt per Konstruktion hinter
+  // jedem abgeschlossenen Tag, die Bedingung konnte nie wahr werden. Eine
+  // Mutationsprobe bestaetigte es: die Sperre zu entfernen liess jeden Test
+  // gruen. Sie ist deshalb entfernt worden, statt als Schein-Sicherung stehen
+  // zu bleiben. Wer hier die Fensterbildung aendert, nimmt FR-11 mit - die
+  // Regressionstests dazu stehen in test/replan_audit_test.dart.
+  final windowStart = dayMarker(lastConcludedDay, 1);
+  final window = List.generate(7, (i) => dayMarker(windowStart, i));
+
+  final firstUnprocessedDay =
+      markerDay == null ? lastConcludedDay : dayMarker(markerDay, 1);
+  final needsDayAdvance =
+      dayDistance(firstUnprocessedDay, lastConcludedDay) <= 0;
 
   final fetchStart = needsDayAdvance ? firstUnprocessedDay : windowStart;
   final allEvents = await fetch(fetchStart, dayMarker(windowStart, 7));
@@ -213,25 +258,12 @@ Future<ReplanResult> replan(
   // Eintrag in `pendingDayValues` fuer den zuletzt abgeschlossenen Tag"), also
   // haengt die ganze Folgewoche an einem erfundenen Anker.
   //
-  // Abgeschlossen ist ein Tag genau dann, wenn er nicht nach dem
-  // Fortschrittsmarker liegt - nach dessen Fortschreibung durch DIESEN Lauf,
-  // die erst weiter unten passiert.
-  final concludedThrough = needsDayAdvance
-      ? lastConcludedDay
-      : (lastProcessedDay == null ? null : midnight(lastProcessedDay));
-  bool alreadyConcluded(DateTime day) =>
-      concludedThrough != null && !day.isAfter(concludedThrough);
-
   final mergedValues = <String, int?>{
     for (final entry in appState.pendingDayValues.entries)
       if (worthKeeping(entry.key)) entry.key: entry.value,
   };
   final prunedCount = appState.pendingDayValues.length - mergedValues.length;
   for (final day in window) {
-    // Der Tag laeuft in `computeWeekPlan` weiter mit (er traegt die Kurve) -
-    // nur sein AUFGEZEICHNETER Wert bleibt stehen. Das Fenster zu verkuerzen
-    // waere falsch: dann verlöre die Rechnung ihren Ankertag.
-    if (alreadyConcluded(day)) continue;
     mergedValues[isoDate(day)] = toStored(result.valuesByDay[day]);
   }
   appState.pendingDayValues = mergedValues;
@@ -244,12 +276,6 @@ Future<ReplanResult> replan(
       if (worthKeeping(entry.key)) entry.key: entry.value,
   };
   for (final day in window) {
-    // Dieselbe FR-11-Sperre wie oben (T-106): gehoert der Wert eines Tages
-    // nicht mehr uns, gehoert auch seine Verankerungs-Angabe nicht mehr uns.
-    // Sonst stuende unter dem Klingeltag ein Wert mit der Verankerung eines
-    // anderen - und FR-16s Checkpoint 2 wuerde ihn falsch (oder gar nicht)
-    // umdeuten.
-    if (alreadyConcluded(day)) continue;
     if (result.valuesByDay[day] == null) {
       mergedAnchors.remove(isoDate(day));
     } else {

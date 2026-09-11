@@ -1456,6 +1456,56 @@ Conventions:
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-114 · Der Anker der Folgewoche hing am Ausloeser statt am Zustand — BEHOBEN (2026-09-11)
+
+- [x] `lastConcludedDay` aus dem Fortschrittsmarker ableiten, gegen die Zukunft geklammert.
+- [x] Die zu schwache Zusicherung aus T-106 schaerfen.
+- [x] Die dadurch tot gewordene Schreibsperre entfernen, statt sie als Schein-Sicherung
+      stehenzulassen.
+- **Why:** FR-3 sagt "`lastEffectiveWakeTime` ist bewusst **kein** eigenes Feld: es ist **immer
+  der Eintrag in `pendingDayValues` fuer den zuletzt abgeschlossenen Tag** und wuerde als zweite
+  Quelle nur auseinanderlaufen koennen". `replan()` las den Anker aber aus einem vom **Ausloeser**
+  abgeleiteten Tag: fuer alles ausser dem Ring aus "gestern". Hat heute schon geklingelt, ist der
+  zuletzt abgeschlossene Tag aber **heute** - und der steht in `lastProcessedConcludedDay`, genau
+  dem Feld, das T-75 dafuer von `lastReplanDate` getrennt hat.
+- **Wirkung, gemessen:** `maxDailyDelta` ist die eine Zusicherung, die diese App ihren Nutzern
+  ueber ihren Schlaf gibt - "verschiebe meine Weckzeit nie um mehr als X pro Tag". Sie wurde durch
+  eine beliebige Einstellungsaenderung am Vormittag gebrochen:
+  - *Anker vorhanden, aber der falsche:* Tagesschritt **2 Stunden** bei erlaubter einer.
+  - *Kein Eintrag fuer gestern* (der Normalzustand nach dem T-82-Prune oder nach einer Luecke):
+    der Anker ist `null`, `computeWeekPlan` nimmt FR-10s Kaltstart - und der springt **direkt auf
+    die `wunschzeit`**, ohne jede Begrenzung. Gemessen: **3 Stunden** bei erlaubter halben. FR-10
+    ist hier gar nicht anwendbar; ein `lastEffectiveWakeTime` existiert sehr wohl, es steht unter
+    heute.
+  Betroffen ist jede planungsrelevante Einstellung und der Sync-Knopf, also ein alltaeglicher
+  Handgriff - und der Nutzer erfaehrt nichts davon: FR-6s Overrun-Warnung greift nur in Runs,
+  nicht im Lueckentag-Drift.
+- **T-71 widerspricht dem nicht,** obwohl es so aussieht. T-71 sagt, ein Checkpoint darf nicht
+  *annehmen*, heute sei abgeschlossen - daher `todayAlreadyRang`. Ob heute abgeschlossen **ist**,
+  ist eine Frage des Zustands. Vom Gegenpruefer eigens gesucht: keine FR und kein bestehender Test
+  widerspricht (21 Fundstellen von `todayAlreadyRang` in `test/` einzeln durchgesehen).
+- **Ein Fehler, den ich selbst am selben Tag eingebaut hatte, faellt damit auch:** T-106s
+  Schreibsperre las den Fortschrittsmarker **ungeklammert**. Stand der in der Zukunft (Uhrzeit
+  zurueckgestellt, Zonenwechsel ueber die Datumsgrenze - dieselbe Ursache wie T-109), galt das
+  **ganze Fenster** als abgeschlossen und es wurde ueberhaupt nichts mehr geplant. Regressionstest
+  vorhanden; `dayDistance(markerDay, today) <= 0` klammert jetzt.
+- **Und eine Sicherung, die nichts mehr sicherte:** seit `windowStart = lastConcludedDay + 1` dem
+  Zustand folgt, kann kein Fenstertag mehr als abgeschlossen gelten - die Sperre war beweisbar
+  toter Code. Die Mutationsprobe bestaetigte es (entfernt: alle Tests bleiben gruen). Entfernt
+  statt stehengelassen: eine Sicherung, die Schutz vortaeuscht, ist schlimmer als keine. FR-11
+  entsteht jetzt an genau einer Stelle - der Fensterbildung -, und das steht dort im Kommentar.
+- **Meine eigene Luecke, vom Pruefer gefunden:** der T-106-Test "der Folgetag bleibt revisionierbar"
+  pruefte `isNot(06:00)` - "irgendetwas anderes". Der spec-richtige Wert 06:30 erfuellt das, der
+  falsche 09:00 aber genauso. Der Test lag exakt auf diesem Fall und blieb gruen, waehrend
+  `maxDailyDelta` um das Sechsfache ueberschritten wurde. Jetzt prueft er den Betrag.
+- **Verglichen wird durchgehend ueber `dayDistance`,** nicht ueber `isAfter`: der Marker kommt
+  lokal getaggt aus den Preferences, `currentTime` kann ein `tz.TZDateTime` sein - ein
+  Instant-Vergleich zweier Mitternachten aus verschiedenen Frames waere die Fehlerklasse dieses
+  Moduls an einer neuen Stelle.
+- **Test:** `test/replan_audit_test.dart`, Gruppe T-114 - drei Faelle; beide Mutationen (zurueck
+  auf die Ausloeser-Ableitung; Klammerung entfernt) gehen gezielt rot.
+- **Requirement:** R2
+
 ### T-112 · OFFENE SPEC-ENTSCHEIDUNG: was gilt beim Mitternachtsuebertritt einer Kurve?
 
 - [ ] FR-6 um eine Mitternachtsregel ergaenzen, DANN testgetrieben umsetzen.
