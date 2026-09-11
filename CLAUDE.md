@@ -239,7 +239,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **227 tests across 26 files**, and CI runs them six times over -
+`flutter test` currently runs **234 tests across 27 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -266,8 +266,8 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   `stored_values_test.dart`, `handler_replan_wiring_test.dart`,
   `handler_on_alarm_handled_test.dart`, `sleep_reminder_always_scheduled_test.dart`) is written
 
-- `scheduling_v2_audit_test.dart` and `replan_audit_test.dart` are the regressions from the
-  independent spec review of 2026-09-11 (`docs/TODO.md` T-104 … T-107), kept out of
+- `scheduling_v2_audit_test.dart`, `replan_audit_test.dart` and `checkpoint_audit_test.dart` are
+  the regressions from the independent spec review of 2026-09-11 (`docs/TODO.md` T-104 … T-110), kept out of
   `scheduling_v2_test.dart` on purpose: that file's header promises every case is taken **verbatim**
   from a spec "Test:" bullet, and these are *derived* from the FR text instead. That distinction is
   worth preserving, because it is exactly what the review exposed - the spec works each requirement
