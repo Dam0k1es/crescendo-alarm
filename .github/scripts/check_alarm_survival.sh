@@ -182,13 +182,45 @@ fi
 
 # Die uid der App. Drei Wege, weil das Feld je nach Android-Version anders
 # heisst - und weil Lauf 34566962847 zeigte, dass `userId=` allein leer bleibt.
+# Die uid der App. Drei Wege, weil das Feld je nach Android-Version anders
+# heisst - und weil Lauf 34566962847 zeigte, dass `userId=` allein leer bleibt.
+#
+# Jeder Versuch protokolliert seine ROHAUSGABE in die Beweisdatei (docs/TODO.md
+# T-130). In Lauf 34622086175 schlugen alle Wege fehl, und weil ihre Fehler nach
+# /dev/null gingen, war aus dem Beweismaterial nicht zu erkennen warum - obwohl
+# `arm_alarm_test.dart` im selben Lauf nachweislich einen Alarm gesetzt hatte
+# und die App installiert war. Das Format zu raten hat dieses Skript schon
+# zweimal in die Irre gefuehrt (T-99, T-103); hier wird es aufgezeichnet.
 resolve_uid() {
-  local uid
-  uid=$(adb shell pm list packages -U 2>/dev/null | tr -d '\r' \
+  local uid raw
+  {
+    echo "--- uid attempt 1: pm list packages -U ---"
+    raw=$(adb shell pm list packages -U 2>&1 | tr -d '\r' | grep -F "$PACKAGE" | head -5)
+    echo "${raw:-(keine Zeile enthaelt den Paketnamen)}"
+  } >>"$OUT" 2>&1
+  uid=$(printf '%s\n' "$raw" \
     | awk -v p="package:$PACKAGE" '$1 == p { for (i=1;i<=NF;i++) if ($i ~ /^uid:/) { sub(/^uid:/,"",$i); print $i } }' | head -1)
+  if [[ -z "$uid" ]]; then
+    # Weniger streng: irgendein uid:NNN in einer Zeile, die das Paket nennt.
+    uid=$(printf '%s\n' "$raw" | grep -oE "uid:[0-9]+" | head -1 | cut -d: -f2)
+  fi
   [[ -n "$uid" ]] && { printf '%s' "$uid"; return; }
+
+  {
+    echo "--- uid attempt 2: dumpsys package (userId=/appId=) ---"
+    adb shell dumpsys package "$PACKAGE" 2>&1 | tr -d '\r' \
+      | grep -E "userId=|appId=|versionName=|Unable|Error|not found" | head -5
+  } >>"$OUT" 2>&1
   uid=$(adb shell dumpsys package "$PACKAGE" 2>/dev/null | tr -d '\r' \
     | grep -oE "(userId|appId)=[0-9]+" | head -1 | cut -d= -f2)
+  [[ -n "$uid" ]] && { printf '%s' "$uid"; return; }
+
+  {
+    echo "--- uid attempt 3: stat des Datenverzeichnisses ---"
+    adb shell "stat -c %u /data/data/$PACKAGE" 2>&1 | tr -d '\r' | head -2
+  } >>"$OUT" 2>&1
+  uid=$(adb shell "stat -c %u /data/data/$PACKAGE" 2>/dev/null | tr -d '\r' \
+    | grep -oE '^[0-9]+$' | head -1)
   printf '%s' "$uid"
 }
 

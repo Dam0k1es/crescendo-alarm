@@ -1504,6 +1504,32 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-130 · Die uid-Aufloesung scheiterte stumm — BEHOBEN (2026-09-11)
+
+- [x] Jeder Aufloesungsversuch protokolliert seine Rohausgabe in die Beweisdatei.
+- **Stand nach dem ersten Lauf mit der reparierten Messung (34622086175):** das Skript verhaelt
+  sich jetzt richtig - der Selbsttest ist bestanden, es gibt **keinen** Falschbefund mehr, und
+  statt eines erfundenen `FAIL` steht ehrlich `RESULT: inconclusive - this app has no alarm
+  registered even BEFORE the reboot` da. Genau so soll ein Beweismittel scheitern.
+- **Was es dabei selbst benannt hat:** `app uid: <nicht aufloesbar>`. Ohne uid-Token traegt allein
+  der Paketname, und der taucht in `dumpsys alarm` auf diesem Image offenbar nicht auf - deshalb
+  die Null. Im Rohauszug ist eine uid mit genau einem anstehenden Alarm zu sehen (`u0a160:1`), die
+  sehr wahrscheinlich die App ist; belegen laesst sich das ohne Aufloesung aber nicht.
+- **Warum das eine eigene Behebung braucht:** beide Aufloesungswege leiteten ihre Fehler nach
+  `/dev/null`. Aus dem Beweismaterial war deshalb nicht zu erkennen, **warum** sie scheiterten -
+  obwohl `arm_alarm_test.dart` im selben Lauf nachweislich einen Alarm gesetzt hatte ("1 test
+  passed") und die App installiert war (kein Uninstall in `arm_alarm.log`). Das Format zu raten
+  hat dieses Skript schon zweimal in die Irre gefuehrt (T-99, T-103); ein drittes Mal wird es
+  aufgezeichnet statt geraten.
+- **Fix:** drei Wege, jeder mit Rohausgabe in der Beweisdatei - `pm list packages -U` (zusaetzlich
+  mit einer weniger strengen Zweitauswertung), `dumpsys package` auf `userId=`/`appId=`, und
+  `stat -c %u /data/data/<paket>`. Der naechste Lauf zeigt damit, welcher greift und woran die
+  anderen scheitern.
+- **T-93 bleibt offen** - die Frage "ueberlebt ein Alarm den Reboot?" ist weiterhin unbeantwortet.
+  Sie ist jetzt aber ehrlich als unbeantwortet ausgewiesen und einen Schritt naeher an einer
+  Messung.
+- **Requirement:** R3
+
 ### T-129 · Ein kranker Emulator gab sich als Produktfehler aus — BEHOBEN (2026-09-11)
 
 - [x] Vor der Messung pruefen, ob der Emulator ueberhaupt benutzbar ist.
