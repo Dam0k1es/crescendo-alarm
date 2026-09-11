@@ -1456,6 +1456,67 @@ Conventions:
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-112 · OFFENE SPEC-ENTSCHEIDUNG: was gilt beim Mitternachtsuebertritt einer Kurve?
+
+- [ ] FR-6 um eine Mitternachtsregel ergaenzen, DANN testgetrieben umsetzen.
+- **Lage:** rutscht eine interpolierte Weckzeit ueber Mitternacht, kann ein Kalendertag **zwei**
+  Alarme bekommen (in der Probe 00:30 und 01:00) und ein anderer **keinen**. Kein FR verbietet das
+  woertlich: FR-18 fordert einen Alarm *pro geplantem Wert*, sieben Werte ergeben sieben Alarme,
+  und eine Regel "genau ein Alarm pro Kalendertag" existiert nirgends.
+- **Warum es nicht einfach ein Bug ist:** FR-6 verlangt gleichzeitig zwei Dinge, die beim
+  Uebertritt **nicht gleichzeitig erfuellbar** sind - "jeder `Tag_i` bekommt sein eigenes, echtes
+  Kalenderdatum `A`s Datum + i" und die Schrittformel `Tag_i = A ± (ΔT/N)·i`. Ein Beispiel: Anker
+  lokal 23:30, Schritt +30min. Die strenge Datumslesart ergaebe fuer `Tag_1` den Folgetag um
+  00:00 - das liegt **23,5 Stunden vor** dem Anker und ist gerade kein "+30min"-Schritt. Der Code
+  hat sich fuer die Formel entschieden (Instant-Monotonie, Schritt <= `maxDailyDelta`) und das
+  Datum folgen lassen. Das ist eine zulaessige Lesart, nicht nachweisbar die verlangte.
+- **Dazu kommt:** der Uebertritt ist eine direkte Folge einer anderen Spec-Regel. FR-1s
+  Richtungsaufloesung "`|Δ| <= 12h` gewinnt" erzwingt ihn. Und "Schluesseldatum != Instant-Datum"
+  ist per Spec kein Fehlerindiz - FR-2 erzeugt es selbst (ein Termin lokal 01:00 ergibt einen
+  `hardFloor`-Instant am Vortag, der per FR-2 der Wert des Termintags ist).
+- **Geprueft und widerlegt wurden beide urspruenglich unterstellten Folgen:** ein rueckwaerts
+  gerutschter Wert wird auf dem Ring-Pfad **nie** stillschweigend verworfen (der Wert fuer
+  `window[0]` liegt strukturell >= Anker + 12h); auf dem FR-17-Erholungspfad faellt einer weg, aber
+  es ist einer, der zum Planungszeitpunkt schon vergangen war - genau das schreibt FR-18 vor. Keine
+  Nacht bleibt ohne Alarm.
+- **Zu entscheiden:** entweder FR-6 ergaenzen um "der Instant bleibt monoton, das Schluesseldatum
+  bleibt der Fenstertag; ein Fenstertag darf dadurch ohne eigenen Alarm bleiben" - das ist das
+  heutige Verhalten, die Aenderung waere rein redaktionell - **oder** um "der Wert wird auf seinen
+  Fenstertag zurueckgeholt", dann ist es eine echte Verhaltensaenderung mit Folgen fuer FR-5s
+  Verletzungspruefung (die vergliche sonst Kurvenwerte mit `hardFloor`s eines anderen Tages).
+- **Vor einer Entscheidung nicht implementieren:** ohne sie gibt es keinen Test, der den Fall rot
+  machen koennte, ohne das Soll vorher selbst zu erfinden.
+- **Requirement:** R2
+
+### T-113 · OFFENE SPEC-ENTSCHEIDUNG: soll FR-16s Checkpoint 2 die scharf gestellten Alarme nachziehen?
+
+- [ ] FR-16/FR-18 entscheiden, DANN testgetrieben umsetzen.
+- **Lage:** Checkpoint 2 deutet bei erkanntem Versatzwechsel den gespeicherten Plan um, ruehrt den
+  bereits registrierten Plattformalarm aber nicht an. Der **erste** Wecker nach einem Flug klingelt
+  deshalb um die volle Versatzdifferenz falsch - im durchgerechneten Beispiel 17:00 statt 09:00
+  Ortszeit - und wird erst durch den Ring dieses falsch stehenden Alarms korrigiert. Fuer einen
+  Wecker ist das der schwerste Schadensfall ueberhaupt.
+- **Warum das (heute) kein Implementierungsfehler ist:** vier unabhaengige Festlegungen sprechen
+  fuer den Code. FR-18s Praeambel sagt, FR-1 bis FR-17 beschreiben **ausschliesslich Berechnung und
+  Ausloeser** - FR-16s Testfall kann ueber scharf gestellte Alarme also gar nichts aussagen. FR-18
+  bindet den Abgleich an "nach **jeder Neuplanung**", und CP2 ist per FR-16 explizit **keine**.
+  FR-16 verschiebt die Wirkung selbst ("die folgt erst beim naechsten regulaeren Planungslauf").
+  Und FR-16s Abschnitt "Bekannte Grenze am Umstellungstag" akzeptiert woertlich denselben
+  Nutzereffekt.
+- **Wogegen das steht:** FR-16s eigener durchgerechneter Testfall "Ortswechsel" behauptet
+  "**Ohne den zweiten Checkpoint waere das erst beim naechsten Klingeln (>12h spaeter) korrigiert
+  worden**" - also eine sofortige Wirkung. In seiner schwachen Lesart ist er erfuellt (der
+  gespeicherte Planwert traegt danach die richtigen Ziffern), in der starken nicht.
+- **Zu entscheiden:** bleibt es bei der schwachen Lesart (dann gehoert FR-16s Testfall
+  praezisiert, damit er nicht laenger mehr verspricht als die Anforderung), oder kommt eine
+  Anforderung "nach einer Umdeutung durch CP2 ist FR-18 erneut anzuwenden"?
+- **Was die zweite Variante technisch bedeutet:** `planAlarmSync` ist rein und aus dem Isolate
+  aufrufbar, `Alarm.set` aus dem Hintergrund-Isolate ist dagegen eine eigene, in FR-16 nicht
+  behandelte Frage - Plugin-Kanal im Isolate, dieselbe Fehlerklasse, der FR-16 mit dem direkten
+  SharedPreferences-Zugriff schon einmal ausgewichen ist (T-79). Das ist der eigentliche Aufwand,
+  nicht die Rechnung.
+- **Requirement:** R2, R3
+
 ### T-111 · Geprueft und WIDERLEGT: Migrationspfad `lastProcessedConcludedDay` → `lastReplanDate` (2026-09-11)
 
 - **Behauptung war:** faellt der neue Schluessel, wird `lastReplanDate` als Fortschrittsmarker
