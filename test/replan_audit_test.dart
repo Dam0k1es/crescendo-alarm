@@ -355,4 +355,48 @@ void main() {
       expect(after, plannedFutureMinutes(appState, now));
     });
   });
+
+  group('Zweimal derselbe Ring-Checkpoint ergibt denselben Zustand (T-128)', () {
+    // Idempotenz auf Checkpoint-Ebene. Fuer genau diese Fehlerklasse - ein
+    // Lauf, der den Zustand ein zweites Mal anfasst, obwohl er ihn schon
+    // verarbeitet hat - gab es bisher kein Netz, und sie hat in diesem Projekt
+    // bereits sechsmal zugeschlagen (T-67, T-71, T-77, T-80, T-106, T-114).
+
+    test('der zweite Ring zaehlt denselben Tag nicht erneut', () async {
+      final appState = await _freshAppState();
+      final ringDay = _utc(0, 0, day: 10);
+
+      appState.pendingDayValues = {
+        isoDate(dayMarker(ringDay, -1)):
+            _utc(7, 0, day: 9).millisecondsSinceEpoch,
+      };
+      appState.lastProcessedConcludedDay = dayMarker(ringDay, -6);
+      appState.gapDayCounter = 0;
+      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+
+      await replan(
+        appState,
+        now: () => _utc(7, 0, day: 10),
+        deviceUtcOffset: Duration.zero,
+        fetchEvents: (start, end) async => [],
+        todayAlreadyRang: true,
+      );
+      final counterAfterFirst = appState.gapDayCounter;
+      final valuesAfterFirst = Map<String, int?>.from(appState.pendingDayValues);
+      final markerAfterFirst = appState.lastProcessedConcludedDay;
+
+      await replan(
+        appState,
+        now: () => _utc(7, 0, day: 10),
+        deviceUtcOffset: Duration.zero,
+        fetchEvents: (start, end) async => [],
+        todayAlreadyRang: true,
+      );
+
+      expect(appState.gapDayCounter, counterAfterFirst,
+          reason: 'FR-9: jeder abgeschlossene Tag fliesst GENAU EINMAL ein');
+      expect(appState.pendingDayValues, valuesAfterFirst);
+      expect(appState.lastProcessedConcludedDay, markerAfterFirst);
+    });
+  });
 }

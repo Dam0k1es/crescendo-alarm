@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wakeywakey/models/scheduling/day_marker.dart';
 import 'package:wakeywakey/models/scheduling/scheduling_v2.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 
@@ -551,6 +552,112 @@ void main() {
           reason: 'FR-2s Obergrenze kappt den Kurvenwert');
       expect(result.instantAnchoredDays, contains(window[0]),
           reason: 'der gekappte Wert kommt aus einem echten hardFloor');
+    });
+  });
+
+  group('Versaetze mit halben und dreiviertel Stunden (T-125)', () {
+    // Saemtliche Versaetze der Suite waren bisher ganze Stunden
+    // (`Duration.zero`, 1/2/5/9 h). Die Fehlerklasse "jemand rechnet mit
+    // `offset.inHours` statt mit `offset`" ist damit in **keinem** Test
+    // sichtbar - belegt ueber alle vierzehn Scheduling-Testdateien.
+    //
+    // Auch die CI-Zeitzonen-Matrix faengt sie nicht, obwohl sie St. John's,
+    // Chatham und Lord Howe enthaelt: die Matrix setzt die Zone der
+    // Testmaschine, waehrend die Domaenenschicht den Versatz als expliziten
+    // Parameter bekommt (FR-2 "Testbarkeit"). Matrix und Unit-Test erfassen
+    // also Verschiedenes und ersetzen einander nicht.
+
+    test('Lord Howe: halbstuendige Umstellung, gleiche Ziffern in der neuen Zone',
+        () {
+      // +11:00 -> +10:30. Der Wert liest sich unter +11 als 05.04. 07:00;
+      // gesucht ist der Instant, der unter +10:30 dieselben Ziffern ergibt.
+      final result = reinterpretForNewOffset(
+        value: DateTime.utc(2026, 4, 4, 20, 0),
+        oldOffset: const Duration(hours: 11),
+        newOffset: const Duration(hours: 10, minutes: 30),
+      );
+
+      expect(result, DateTime.utc(2026, 4, 4, 20, 30));
+    });
+
+    test('Chatham +12:45: der Drift landet auf einem anderen UTC-Datum', () {
+      // Lokale Lesung 11:15Z + 12:45 = 11.03. 00:00; zu planen ist der
+      // Folgetag, also lokal der 12.03.; Ziel 06:30, Abstand 6:30 > 30min ->
+      // ein Schritt von 30min -> lokal 12.03. 00:30 -> Instant 11:45Z am 11.03.
+      final result = applyGapDayDrift(
+        v: DateTime.utc(2026, 3, 10, 11, 15),
+        wunschzeit: const TimeOfDay(hour: 6, minute: 30),
+        maxDailyDelta: const Duration(minutes: 30),
+        deviceUtcOffset: const Duration(hours: 12, minutes: 45),
+      );
+
+      expect(result, DateTime.utc(2026, 3, 11, 11, 45));
+    });
+
+    test('Chatham +12:45: Kaltstart legt den Wert auf den vorigen UTC-Tag', () {
+      final result = coldStart(
+        days: [DateTime.utc(2026, 4, 5)],
+        wunschzeit: const TimeOfDay(hour: 0, minute: 15),
+        deviceUtcOffset: const Duration(hours: 12, minutes: 45),
+      );
+
+      expect(result[DateTime.utc(2026, 4, 5)], DateTime.utc(2026, 4, 4, 11, 30));
+    });
+  });
+
+  group('FR-2 als Invariante ueber eine volle Terminwoche (T-126)', () {
+    // FR-2 ist eine Allaussage, kein Beispiel:
+    //
+    //   "`hardFloor` ist eine **Obergrenze** ('nicht spaeter als'). Der
+    //    geplante Wert darf frueher liegen (immer erlaubt), aber **niemals
+    //    spaeter** (ein spaeterer Wert bedeutet, einen echten Termin zu
+    //    verpassen)."
+    //
+    // Deshalb ist sie hier als Invariante gepruft und nicht als Liste
+    // handgerechneter Einzelwerte: eine solche Liste wird bei jeder legitimen
+    // Kurvenaenderung ohnehin angepasst, die Invariante nicht. Belegt: FR-2s
+    // Kappung laesst sich heute ersatzlos streichen, ohne dass ein einziger
+    // bestehender Test rot wird.
+
+    test('kein Tag wird spaeter geweckt als sein eigener hardFloor', () {
+      final window = List.generate(7, (i) => _utc(0, 0, day: 11 + i));
+      final events = [
+        _meetingAt(_utc(9, 0, day: 11)),
+        _meetingAt(_utc(8, 30, day: 12)),
+        _meetingAt(_utc(12, 0, day: 13)),
+        _meetingAt(_utc(6, 0, day: 14)),
+        _meetingAt(_utc(10, 0, day: 15)),
+        _meetingAt(_utc(5, 30, day: 16)),
+        _meetingAt(_utc(9, 0, day: 17)),
+      ];
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(8, 0, day: 10),
+        allEvents: events,
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: null,
+        maxDailyDelta: const Duration(minutes: 30),
+        gapDayCounter: 0,
+      );
+
+      for (final day in window) {
+        final value = result.valuesByDay[day];
+        final floor = hardFloor(
+          day: day,
+          allEvents: events,
+          deviceUtcOffset: Duration.zero,
+          durationToWakeUp: Duration.zero,
+          durationToGetReady: Duration.zero,
+        );
+        expect(value, isNotNull,
+            reason: 'jeder Tag hat einen echten Termin - keiner darf leer sein');
+        expect(value!.isAfter(floor!), isFalse,
+            reason: 'FR-2: niemals spaeter als der eigene hardFloor '
+                '(${isoDate(day)}: Wert $value, Obergrenze $floor)');
+      }
     });
   });
 }

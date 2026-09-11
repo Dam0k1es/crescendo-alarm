@@ -1456,6 +1456,49 @@ Conventions:
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-123 bis T-128 · Sechs weitere ungedeckte Eigenschaften — BEHOBEN (2026-09-11)
+
+Zweite Absicherungs-Charge aus der Testfall-Pruefung. Jede hat eine belegte Mutation, die sie rot
+macht und die heute in der uebrigen Suite unsichtbar bleibt.
+
+- **T-123 · FR-18s Gleichheitsgrenze zu jetzt.** Die gefaehrlichste Minute des Moduls, und sie war
+  ungedeckt. FR-18 verbietet ausdruecklich, einen Alarm der laufenden Minute zu entfernen - "die
+  Anwendung laeuft auch aus FR-8s Ring-Checkpoint heraus, also *waehrend* ein Alarm klingelt […]
+  ihn zu entfernen wuerde ihn per `Alarm.stop()` mitten im Klingeln verstummen lassen". Der
+  vorhandene Test arbeitet mit **fuenf Minuten** Abstand; der Fehler tritt aber nur in den
+  60 Sekunden auf, in denen er zaehlt. Belegt: eine Umformulierung der Vergangenheitspruefung
+  (`isAfter` -> `isBefore`) laesst apply_alarms, replan, replan_audit, checkpoint, app_state und
+  next_wake_up vollstaendig gruen und faellt nur an den zwei neuen Zeilen auf.
+  Als Grenzwerttabelle ueber vier Faelle geschrieben. Der fuenfte (geplanter Wert **genau** in der
+  laufenden Minute) bleibt bewusst ohne Zusicherung: er hat keine beobachtbare Wirkung, weil
+  `AppState.addAlarm` einen Wert vor `DateTime.now()` ohnehin ablehnt - beide Lesarten enden im
+  selben sichtbaren Ergebnis, die Frage ist kosmetisch und darf keine sicherheitskritische
+  Absicherung blockieren.
+- **T-124 · Schalttag.** Die klassische selbstgeschriebene Tag-im-Jahr-Rechnung (Monatstabelle plus
+  `(a.year - b.year) * 365`) liegt ueber den 29.02.2028 um einen Tag daneben - und blieb in
+  **allen** sechzehn Testdateien unsichtbar, `day_marker_test` eingeschlossen, also gerade in der
+  Datei, die fuer diese Arithmetik zustaendig ist. Der Jahreswechsel faengt sie **nicht** (die
+  Tabelle stimmt fuer 2026/2027); nur der Schalttag tut es.
+- **T-125 · Versaetze mit halben und dreiviertel Stunden.** Saemtliche Versaetze der Suite waren
+  ganze Stunden. Die Fehlerklasse "jemand rechnet mit `offset.inHours` statt mit `offset`" war
+  dadurch in **keinem** Test sichtbar. Wichtig: die CI-Zeitzonen-Matrix faengt sie ebenfalls nicht,
+  obwohl sie St. John's, Chatham und Lord Howe enthaelt - die Matrix setzt die Zone der
+  **Testmaschine**, waehrend die Domaenenschicht den Versatz als expliziten Parameter bekommt
+  (FR-2 "Testbarkeit"). Matrix und Unit-Test erfassen Verschiedenes und ersetzen einander nicht;
+  das war bisher nirgends festgehalten.
+- **T-126 · FR-2 als Invariante ueber eine volle Terminwoche.** FR-2 ist eine Allaussage ("der
+  geplante Wert darf frueher liegen, aber **niemals spaeter**"), also ist sie als Invariante
+  geprueft und nicht als Liste handgerechneter Einzelwerte - eine solche Liste wird bei jeder
+  legitimen Kurvenaenderung ohnehin angepasst, die Invariante nicht. Belegt: FR-2s Kappung liess
+  sich ersatzlos streichen, ohne dass ein einziger bestehender Test rot wurde.
+- **T-127 · Ein Plattform-Alarm, den die App nicht kennt.** Ungedeckt war die Kombination "eigene
+  ID **und** eine fremde": der vorhandene T-88-Fall uebergibt eine fremde ID *ohne* die eigene.
+- **T-128 · Idempotenz zweier Ring-Checkpoints.** Fuer diese Fehlerklasse - ein Lauf fasst den
+  Zustand ein zweites Mal an, obwohl er ihn schon verarbeitet hat - gab es auf Checkpoint-Ebene
+  kein Netz, und sie hat in diesem Projekt bereits sechsmal zugeschlagen (T-67, T-71, T-77, T-80,
+  T-106, T-114).
+- **Requirement:** R2, R3
+
 ### T-119 · OFFENE SPEC-ENTSCHEIDUNG: eine Sommerzeit-Umstellung INNERHALB des 7-Tage-Fensters
 
 - [ ] Entscheiden, ob die Tageszuordnung den Versatz des jeweiligen Fenstertages verwenden muss.

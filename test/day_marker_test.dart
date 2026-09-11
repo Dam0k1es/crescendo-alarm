@@ -86,4 +86,35 @@ void main() {
       expect(isoDate(DateTime.utc(2026, 4, 3)), '2026-04-03');
     });
   });
+
+  group('Schalttag und Jahreswechsel (T-124)', () {
+    // Die klassische selbstgeschriebene Tag-im-Jahr-Rechnung (eine
+    // kumulative Monatstabelle plus `(a.year - b.year) * 365`) liefert fuer
+    // 2028 ueber den 29. Februar hinweg einen Tag zu wenig. Belegt: eine
+    // solche Mutation in `dayDistance` laesst **alle** sechzehn Testdateien
+    // gruen, diese Datei eingeschlossen - obwohl genau sie fuer diese
+    // Arithmetik zustaendig ist. Der Schalttag ist die einzige Konstellation,
+    // in der sie sichtbar wird.
+
+    test('ueber den 29. Februar hinweg', () {
+      expect(dayDistance(DateTime.utc(2028, 3, 1), DateTime.utc(2028, 2, 28)), 2,
+          reason: '2028 ist ein Schaltjahr - der 29.02. liegt dazwischen');
+      expect(dayDistance(DateTime.utc(2027, 3, 1), DateTime.utc(2027, 2, 28)), 1,
+          reason: '2027 nicht');
+    });
+
+    test('ein Fenster ueber den Schalttag hat sieben verschiedene Tage', () {
+      final start = DateTime.utc(2028, 2, 26);
+      final window = List.generate(7, (i) => dayMarker(start, i));
+      expect(window.map(isoDate).toSet().length, 7);
+      expect(window.map(isoDate), contains('2028-02-29'));
+    });
+
+    test('ueber den Jahreswechsel', () {
+      expect(dayDistance(DateTime.utc(2027, 1, 2), DateTime.utc(2026, 12, 30)), 3);
+      final window = List.generate(7, (i) => dayMarker(DateTime.utc(2026, 12, 29), i));
+      expect(window.map(isoDate).toSet().length, 7);
+      expect(window.map(isoDate), contains('2027-01-01'));
+    });
+  });
 }

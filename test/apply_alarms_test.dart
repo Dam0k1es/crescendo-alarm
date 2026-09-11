@@ -614,4 +614,125 @@ void main() {
       expect(plan.toAdd, isEmpty);
     });
   });
+
+  group('FR-18: die Gleichheitsgrenze zu jetzt (T-123)', () {
+    // Die gefaehrlichste Minute des ganzen Moduls, und sie war ungedeckt.
+    //
+    // FR-18:
+    //   "Ein `ScheduledAlarm` **in der Vergangenheit** wird **nie** entfernt:
+    //    die Anwendung laeuft auch aus FR-8s Ring-Checkpoint heraus, also
+    //    *waehrend* ein Alarm klingelt - und dessen Zeit liegt dann gerade in
+    //    der Vergangenheit. Ihn als 'nicht mehr geplant' zu entfernen wuerde
+    //    ihn per `Alarm.stop()` mitten im Klingeln verstummen lassen und das
+    //    garantierte Aufwachen aushebeln."
+    //
+    // Genau das passiert in der LAUFENDEN Minute - und der Ring-Checkpoint
+    // laeuft per Definition in ihr. Der vorhandene Test dazu arbeitet mit
+    // fuenf Minuten Abstand; eine Umformulierung der Vergangenheitspruefung
+    // (`isAfter`/`isBefore`, `<=`/`<`, Minuten- statt Sekundengenauigkeit)
+    // wird davon nicht bemerkt. Belegt: eine solche Mutation laesst
+    // apply_alarms, replan, replan_audit, checkpoint, app_state und
+    // next_wake_up vollstaendig gruen und faellt nur hier auf.
+    //
+    // Der Vergleich ist laut FR-18 minutengenau, `now = 07:00:30` faellt also
+    // auf die Minute 07:00.
+
+    final now = DateTime(2026, 3, 10, 7, 0, 30);
+    final nowExact = DateTime(2026, 3, 10, 7, 0);
+
+    test('(b) geplanter Wert eine Minute NACH jetzt wird angelegt', () {
+      final value = DateTime(2026, 3, 10, 7, 1);
+      final plan = planAlarmSync(
+        pendingDayValues: {_iso(value): value.millisecondsSinceEpoch},
+        existingScheduledAlarms: const [],
+        now: now,
+      );
+
+      expect(plan.toAdd, [value]);
+    });
+
+    test('(c) geplanter Wert eine Minute VOR jetzt wird nicht angelegt', () {
+      final value = DateTime(2026, 3, 10, 6, 59);
+      final plan = planAlarmSync(
+        pendingDayValues: {_iso(value): value.millisecondsSinceEpoch},
+        existingScheduledAlarms: const [],
+        now: now,
+      );
+
+      expect(plan.toAdd, isEmpty,
+          reason: 'FR-11: bereits vergangene geplante Werte werden nicht neu '
+              'gesetzt');
+    });
+
+    test('(d) ein Alarm in der LAUFENDEN Minute wird nie entfernt', () {
+      // Die sicherheitskritische Zeile: dieser Alarm ist der gerade
+      // klingelnde.
+      final ringing = DateTime(2026, 3, 10, 7, 0);
+      final plan = planAlarmSync(
+        pendingDayValues: const {},
+        existingScheduledAlarms: [_alarmAt(ringing, id: 5)],
+        now: now,
+      );
+
+      expect(plan.toRemove, isEmpty,
+          reason: 'Alarm.stop() mitten im Klingeln hebelt das garantierte '
+              'Aufwachen aus');
+    });
+
+    test('(d2) dasselbe, wenn jetzt exakt auf der Alarmminute liegt', () {
+      final ringing = DateTime(2026, 3, 10, 7, 0);
+      final plan = planAlarmSync(
+        pendingDayValues: const {},
+        existingScheduledAlarms: [_alarmAt(ringing, id: 5)],
+        now: nowExact,
+      );
+
+      expect(plan.toRemove, isEmpty);
+    });
+
+    test('(e) ein ungeplanter Alarm eine Minute NACH jetzt wird entfernt', () {
+      // Gegenprobe: die Vergangenheitsregel darf nicht zur Generalamnestie
+      // werden, sonst raeumt FR-18 revidierte Tage nie mehr ab.
+      final future = DateTime(2026, 3, 10, 7, 1);
+      final plan = planAlarmSync(
+        pendingDayValues: const {},
+        existingScheduledAlarms: [_alarmAt(future, id: 5)],
+        now: now,
+      );
+
+      expect(plan.toRemove.map((a) => a.id), [5]);
+    });
+
+    // (a) Ein geplanter Wert GENAU in der laufenden Minute ohne Alarm: FR-18s
+    // Satz liest sich zusammengenommen als "nicht nach jetzt" -> nicht
+    // anlegen, und so verhaelt sich der Code. Der Fall bleibt hier bewusst
+    // ohne Zusicherung: er hat keine beobachtbare Wirkung, weil
+    // `AppState.addAlarm` einen Wert vor `DateTime.now()` ohnehin ablehnt
+    // (app_state.dart). Beide Lesarten enden im selben sichtbaren Ergebnis.
+  });
+
+  group('FR-18: ein Plattform-Alarm, den die App nicht kennt (T-127)', () {
+    // Ein "Geisteralarm" - eine Plattform-ID ohne `ScheduledAlarm`-Gegenstueck -
+    // wird von keiner FR-18-Regel erfasst: die Anlege-Regel betrifft geplante
+    // Werte, die Entfernungs-Regel `ScheduledAlarm`s. Der Sync darf sich davon
+    // also nicht beirren lassen.
+    //
+    // Bisher ungedeckt war genau die Kombination "eigene ID UND eine fremde":
+    // der vorhandene T-88-Fall uebergibt eine fremde ID OHNE die eigene (und
+    // erwartet dann korrekt Entfernung plus Neuanlage), der Nachbarfall genau
+    // die eigene.
+
+    test('eine fremde Plattform-ID laesst den Sync unberuehrt', () {
+      final planned = DateTime(2026, 3, 11, 7, 30);
+      final plan = planAlarmSync(
+        pendingDayValues: {_iso(planned): planned.millisecondsSinceEpoch},
+        existingScheduledAlarms: [_alarmAt(planned, id: 1)],
+        platformAlarmIds: const {1, 4711},
+        now: DateTime(2026, 3, 10, 6, 0),
+      );
+
+      expect(plan.toAdd, isEmpty);
+      expect(plan.toRemove, isEmpty);
+    });
+  });
 }
