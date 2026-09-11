@@ -42,7 +42,10 @@ with the calendar screen.
 - **Checked by:** code review of `lib/models/scheduling/` (`checkpoint.dart`, `replan.dart`,
   `scheduling_v2.dart`, `apply_alarms.dart`) and every call site of `runSchedulingCheckpoint` /
   `runCheckpointSafely`; plus `test/checkpoint_test.dart`, `test/replan_test.dart`,
-  `test/apply_alarms_test.dart` and `test/scheduling_v2_test.dart`.
+  `test/apply_alarms_test.dart` and `test/scheduling_v2_test.dart`. Since the independent review of
+  2026-09-11 also `test/scheduling_v2_audit_test.dart`, `test/replan_audit_test.dart` and
+  `test/checkpoint_audit_test.dart` - those carry the regressions and guards from it, each with a
+  recorded mutation that turns it red (`docs/TODO.md` T-104 … T-129).
 - **Status: met in substance since the scheduling-v2 rebuild (2026-09), with one caveat.** The
   requirement was written against the old engine, which really had no mechanism at all. What exists
   now (`docs/scheduling-v2-spec.md`, FR-1–FR-18):
@@ -58,6 +61,17 @@ with the calendar screen.
   - There is deliberately **no** periodic background worker - `docs/choice-of-technologies.md` and
     FR-16 both argue against one (battery, OEM-specific background limits); every checkpoint hangs
     off an event that is already scheduled anyway.
+- **What the 2026-09-11 review changed here.** Six real deviations were found and fixed, three of
+  which bore directly on this requirement: a value that had already rung was overwritten by any
+  setting change the same morning, so the user could be woken twice and the next week was smoothed
+  from an anchor that never existed (T-106/T-114); FR-9's valve reported itself as "over" after a
+  single day, so a notification that failed once was never retried and the alarm clock stayed
+  permanently silent (T-107); and two alarms on the same minute were a stable fixed point that
+  nothing ever cleaned up (T-116). Separately, **nothing had ever checked that `replan()` applies
+  its own plan** - deleting that one call left nine test files green, which is precisely how this
+  engine was once completely inert (T-117). Seven further points are understood, reproduced and
+  deliberately **not** implemented: in each the code follows the spec and the spec is what has the
+  gap - see `docs/TODO.md`, "Wartet auf eine Entscheidung, nicht auf Arbeit".
 - **Remaining caveat (honest):** the chain is self-sustaining only while it keeps ringing. If the
   chain is ever fully broken *and* the app is never opened - the realistic case being a reboot that
   loses the platform alarms (that is R3, still unverified) - nothing re-plans until the next app
