@@ -227,6 +227,30 @@ resolve_uid() {
 APP_UID=$(resolve_uid)
 UID_TOKEN=$(uid_token_for "${APP_UID:-}")
 note "app uid: ${APP_UID:-<nicht aufloesbar>}  token: ${UID_TOKEN:-<keins>}"
+
+# Ist die App ueberhaupt installiert? (docs/TODO.md T-131)
+#
+# Lauf 34627328009 hat die eigentliche Ursache gezeigt, und sie ist
+# strukturell: alle drei Aufloesungswege meldeten uebereinstimmend
+# "Unable to find package" bzw. "No such file or directory" fuer
+# /data/data/<paket>. Die App war zum Messzeitpunkt DEINSTALLIERT - `flutter
+# test` installiert sie fuer den Lauf und raeumt sie danach wieder ab, und
+# Android verwirft mit dem Paket auch dessen AlarmManager-Eintraege.
+#
+# Damit kann das Verfahren "Alarm in einem Test scharf stellen, danach dumpsys
+# befragen" grundsaetzlich nichts messen - unabhaengig von jedem Suchmuster.
+# Genau das hat T-99 als "Muster falsch geraten" fehlgedeutet. Hier wird es
+# beim Namen genannt, statt es wieder als Messluecke zu verbuchen.
+if ! adb shell pm path "$PACKAGE" 2>/dev/null | grep -q "package:"; then
+  note "RESULT: not measurable - die App ist zum Messzeitpunkt NICHT INSTALLIERT."
+  note "Android verwirft mit dem Paket auch seine AlarmManager-Eintraege, es kann"
+  note "also gar kein Alarm registriert sein. Das ist KEIN Befund ueber das"
+  note "Produkt und auch keine Musterfrage mehr, sondern eine Grenze des"
+  note "Verfahrens: flutter test deinstalliert die App nach dem Lauf. Solange"
+  note "das so ist, muss der Alarm auf einem anderen Weg scharf gestellt werden"
+  note "(installierte App plus UI-Automatisierung) - siehe docs/TODO.md T-131."
+  exit 0
+fi
 DUMP=$(mktemp)
 snapshot() { adb shell dumpsys alarm 2>/dev/null | tr -d '\r' >"$DUMP"; }
 count_alarms() { snapshot; count_app_alarms "$PACKAGE" "$UID_TOKEN" "$DUMP"; }

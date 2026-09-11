@@ -1504,6 +1504,38 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-131 · Das Reboot-Verfahren kann strukturell nichts messen: `flutter test` deinstalliert die App
+
+- [x] Die Ursache benennen, statt sie ein drittes Mal als Musterfrage zu verbuchen.
+- [ ] **Entscheidung noetig:** auf welchem Weg soll der Alarm fuer die Messung scharf gestellt
+      werden?
+- **Der Befund, aus Lauf 34627328009:** die drei Aufloesungswege melden uebereinstimmend
+  - `pm list packages -U` → keine Zeile enthaelt den Paketnamen
+  - `dumpsys package` → `Unable to find package: com.wakeywakey.wakeywakey`
+  - `stat /data/data/<paket>` → `No such file or directory`
+  Die App ist zum Messzeitpunkt **nicht installiert**. Ein Debug-Suffix scheidet als Erklaerung aus
+  (`applicationId` traegt keinen, `android/app/build.gradle.kts:44`), und `arm_alarm.log` desselben
+  Laufs zeigt eine erfolgreiche Installation plus `🎉 1 test passed`.
+- **Warum das alles erklaert:** `flutter test integration_test/...` installiert die App fuer den
+  Lauf und raeumt sie danach wieder ab. Android verwirft mit dem Paket auch dessen
+  AlarmManager-Eintraege. Das Verfahren "Alarm in einem Test scharf stellen, danach `dumpsys`
+  befragen" kann deshalb **grundsaetzlich** nichts messen - unabhaengig von jedem Suchmuster.
+- **Und damit war T-99s urspruengliche Deutung falsch.** Dort wurde die Null als "Muster falsch
+  geraten" gelesen und mit **mehr** Mustern beantwortet; daraus entstand T-103s Falschbefund. Die
+  eigentliche Ursache lag eine Ebene tiefer und war die ganze Zeit dieselbe. Lehre: wenn ein
+  Beweismittel nichts findet, ist die erste Frage nicht "suche ich falsch?", sondern "ist das
+  Gesuchte ueberhaupt da?".
+- **Was jetzt passiert:** das Skript prueft `pm path` und meldet
+  `RESULT: not measurable - die App ist zum Messzeitpunkt NICHT INSTALLIERT`, statt eine
+  Messluecke zu verbuchen. Kein Lauf kann daraus mehr eine Aussage ueber das Produkt machen.
+- **Zu entscheiden, bevor hier weitergebaut wird:** *soll CI den Alarm ueber eine installierte App
+  plus UI-Automatisierung scharf stellen (`adb install` + `am start` + `input tap`), oder bleibt
+  Reboot-Ueberleben eine Sache des manuellen Geraetetests?* Ersteres ist echte Arbeit und macht
+  den E2E-Job von der UI-Beschriftung abhaengig; Letzteres steht bereits als Abschnitt C in
+  `docs/device-trial-checklist.md` und braucht nur ein Geraet und fuenf Minuten. Solange das nicht
+  entschieden ist, bleibt **T-93 offen** - und zwar als *unbeantwortet*, nicht als *fehlgeschlagen*.
+- **Requirement:** R3
+
 ### T-130 · Die uid-Aufloesung scheiterte stumm — BEHOBEN (2026-09-11)
 
 - [x] Jeder Aufloesungsversuch protokolliert seine Rohausgabe in die Beweisdatei.
@@ -2506,6 +2538,11 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
 - [x] Ein Verfahren, das die Frage ohne Wartezeit beantwortet.
 - [x] Das Verfahren einmal wirklich laufen lassen (Lauf 34566962847, 2026-09-11).
 - [ ] Ein **verwertbares** Ergebnis eintragen und das Bein dann scharf stellen.
+- **Ursache seit 2026-09-11 bekannt und strukturell (T-131):** `flutter test` deinstalliert die
+  App nach dem Lauf, Android verwirft damit ihre AlarmManager-Eintraege - es kann zum Messzeitpunkt
+  gar kein Alarm registriert sein. Das Verfahren braucht also einen anderen Weg, den Alarm scharf
+  zu stellen, bevor hier ueberhaupt etwas messbar wird. **Die Frage bleibt unbeantwortet, nicht
+  fehlgeschlagen.**
 - **Stand nach dem ersten echten Lauf:** unbrauchbar, und zwar messtechnisch, nicht inhaltlich.
   Das Zaehlmuster traf fremde Alarme und meldete ein unbegruendetes FAIL - siehe T-103, wo das
   aufgearbeitet und behoben ist. Die Frage "ueberlebt ein Alarm den Reboot?" ist damit weiterhin
