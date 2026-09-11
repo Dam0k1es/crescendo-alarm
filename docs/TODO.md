@@ -1328,6 +1328,68 @@ Conventions:
   belegt mit dem realen Fall: nach einem Dismiss war der Alarm für morgen weg (0 statt 1).
   Damit sind auch T-02 und T-32 gegenstandslos.
 
+### T-105 · FR-6s Meldepflicht fiel genau im haeufigsten Overrun-Fall aus — BEHOBEN (2026-09-11)
+
+- [x] Die Overrun-Meldung auch auf dem Pfad setzen, der einem Tag seinen eigenen `hardFloor`
+      direkt zuweist.
+- **Why:** FR-6 sagt "bei **jeder** Ueberschreitung von `maxDailyDelta` (`N=1` **oder** verteilt)
+  wird der Nutzer einmalig benachrichtigt", und rechnet den `N=1`-Fall sogar als eigenen Testfall
+  durch (`A=08:00, F=02:00, N=1, maxDailyDelta=60min` -> voller 6h-Sprung **plus** Meldung). Die
+  Ausnahme, die FR-6 fuer `N=1` gewaehrt, betrifft die Sprunghoehe ("nicht verteilbar"), nicht das
+  Schweigen. `computeWeekPlan`s Zweig `remaining.isEmpty` wies den `hardFloor` aber direkt zu,
+  ohne `distribute()` - und `distribute()` ist die einzige Stelle, die die Flagge je gesetzt hat.
+- **Tragweite:** betroffen ist genau `window[0]`, also der Alltagsfall "morgen einmal frueh raus,
+  danach eine termin-lose Woche". Fuer jeden spaeteren Fenstertag laeuft der Vortag noch durch
+  FR-7s Pruefung, die den Rest-Sprung entweder klein haelt oder dort einen Run startet (dann
+  meldet `distribute`). `window[0]`s Anker ist der gestern geklingelte Wert - fuer den findet
+  keine solche Pruefung mehr statt. Der Nutzer bekam also fuer einen mehrstuendigen
+  Weckzeit-Sprung keine Warnung.
+- **Evidence:** unabhaengig gefunden und anschliessend unabhaengig gegengeprueft (beide Male mit
+  ausgefuehrter Probe). Anker 31.12. 07:00Z, ein einziger Termin am 01.01. 01:00Z,
+  `maxDailyDelta = 30min` -> Wert 01:00Z (FR-konform), `overrunNotificationNeeded: false`
+  (spec-widrig). Der Gegenpruefer hat die urspruengliche Formulierung ausserdem **eingeschraenkt**:
+  ein "beliebig grosser Sprung ohne Meldung" entsteht nicht bei jedem letzten Fensterpunkt,
+  sondern nur auf `window[0]`.
+- **Fix:** derselbe Ausdruck wie in `distribute` (`ΔT/N > maxDailyDelta`, division-frei
+  geschrieben), damit die beiden Pfade nicht auseinanderlaufen koennen.
+- **Test:** `test/scheduling_v2_audit_test.dart`, Gruppe "FR-6: die Overrun-Meldung darf auch bei
+  N=1 nicht ausfallen" - drei Faelle: Sprung ueber der Grenze meldet, Sprung darunter meldet
+  nicht, Sprung **genau auf** der Grenze meldet nicht (FR-6s Bedingung ist `>`, nicht `>=`).
+  Schliesst zugleich eine zweite Luecke: `overrunNotificationNeeded` wurde auf
+  `computeWeekPlan`-Ebene in der ganzen Suite **nie** als `true` geprueft - nur an `distribute`
+  direkt und an handgebauten `WeekPlanResult`s in `replan_notifications_test.dart`. Genau deshalb
+  konnte der Befund unentdeckt bleiben: Unit-Ebene und Meldeebene waren je einzeln gruen, die
+  Verbindung dazwischen ungetestet.
+- **Requirement:** R2
+
+### T-104 · FR-5s ΔT=0-Regel galt nur fuer den ersten Punkt — BEHOBEN (2026-09-11)
+
+- [x] Den Run an jedem ΔT=0-Punkt begrenzen, nicht nur an `points.first`.
+- **Why:** FR-5 Schritt 2 lautet "Ein Punkt mit `ΔT=0` relativ zu `A` beendet den Run sofort bei
+  sich selbst - zaehlt fuer keine Richtung als kompatibel, **wird nie mit einem Folgepunkt
+  zusammengefasst**". Kein Positionsvorbehalt. `groupTarget` pruefte aber nur `points.first`; die
+  anschliessende Schrumpfungsschleife sieht fuer Zwischenpunkte ausschliesslich die *Verletzung*
+  (`interpolated.isAfter(intermediate.value)`), nie deren ΔT=0-Eigenschaft.
+- **Warum das so lange unentdeckt blieb:** der spec-eigene Test-Bullet stellt den ΔT=0-Punkt an
+  Position 1 (`A=07:00, t1(Di)=07:00, t2(Fr)=09:00`) - also genau dorthin, wo eine Pruefung von
+  `points.first` allein schon ausreicht. Der vorhandene Test bildet diesen Bullet ab und war
+  gruen.
+- **Evidence:** unabhaengig gefunden und gegengeprueft. Anker 07:00, `t1(+1)=08:00`,
+  `t2(+2)=07:00` (ΔT=0), `t3(+3)=05:00`, `maxDailyDelta=60min` -> geliefert wurde `t3`, verlangt
+  ist `t2`.
+- **Tragweite:** gering, aber eindeutig. Der Run wird ueber einen Tag hinweg zusammengefasst,
+  dessen Weckzeit ohnehin schon exakt der aktuellen entspricht; die Kurve wird flacher als
+  vorgesehen und verschiebt genau den Tag, an dem gar nichts zu glaetten war. Setzt eine auf die
+  Minute gleiche Uhrzeit-Ablesung voraus.
+- **Fix:** die Kandidatenliste wird am ersten ΔT=0-Punkt abgeschnitten (einschliesslich), statt
+  bei ihm sofort zurueckzukehren - so bleibt Schritt 1s Schrumpfung darunter wirksam. Eine flache
+  Kurve kann einen strengeren Zwischenpunkt sehr wohl verletzen; dann muss `t_m` weiter
+  schrumpfen wie bei jedem anderen Ziel auch.
+- **Test:** `test/scheduling_v2_audit_test.dart`, Gruppe "FR-5 Schritt 2" - vier Faelle,
+  darunter zwei Gegenproben gegen eine Ueberkorrektur (ohne ΔT=0-Punkt wird weiterhin bis zum
+  letzten Punkt gruppiert; ein ΔT=0-Punkt schrumpft weiter, wenn er einen Zwischenpunkt verletzt).
+- **Requirement:** R2
+
 ### T-103 · Die Alarm-Ueberlebensmessung meldete ein FAIL, das sie nicht belegen konnte — BEHOBEN (2026-09-11)
 
 - [x] Das Zaehlmuster auf vollstaendig qualifizierte Bezeichner umstellen.

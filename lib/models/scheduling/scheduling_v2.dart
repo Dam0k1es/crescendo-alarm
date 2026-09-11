@@ -279,15 +279,26 @@ HardFloorPoint groupTarget({
 }) {
   assert(points.isNotEmpty, 'groupTarget needs at least one real hardFloor point');
 
-  final first = points.first;
-  if (_wallClockDelta(anchor, first.value) == Duration.zero) {
-    // FR-5 step 2: a ΔT=0 point (same wall-clock reading as anchor - real
-    // calendar dates necessarily differ, since points are always strictly
-    // ahead of anchor) ends its own run immediately.
-    return first;
-  }
-
-  final candidates = points;
+  // FR-5 step 2: a ΔT=0 point (same wall-clock reading as the anchor - real
+  // calendar dates necessarily differ, since points are always strictly ahead
+  // of the anchor) ends its own run immediately and "wird nie mit einem
+  // Folgepunkt zusammengefasst".
+  //
+  // That sentence carries no positional caveat, so the run is capped at the
+  // FIRST such point wherever it sits - not only when it happens to be
+  // points.first. The spec's own worked example puts it at position 1, which
+  // is exactly the case a `points.first` check already covers; an independent
+  // review found the same wording violated from position 2 onwards
+  // (docs/TODO.md T-104).
+  //
+  // Capping rather than returning: step 1's shrinking still applies below the
+  // cap. A ΔT=0 target yields a flat curve, and a flat curve can perfectly
+  // well violate a stricter intermediate point - then t_m has to shrink
+  // further, exactly as for any other target.
+  final zeroDeltaIndex = points.indexWhere(
+      (p) => _wallClockDelta(anchor, p.value) == Duration.zero);
+  final candidates =
+      zeroDeltaIndex == -1 ? points : points.sublist(0, zeroDeltaIndex + 1);
   for (var m = candidates.length; m >= 1; m--) {
     final target = candidates[m - 1];
     final curve = distribute(
@@ -632,7 +643,24 @@ WeekPlanResult computeWeekPlan({
               wunschzeit: wunschzeit,
               maxDailyDelta: maxDailyDelta,
               deviceUtcOffset: deviceUtcOffset);
-      if (ownHardFloor != null) instantAnchoredDays.add(day);
+      if (ownHardFloor != null) {
+        instantAnchoredDays.add(day);
+        // FR-6's reporting duty, which this branch used to skip entirely
+        // (docs/TODO.md T-105). Assigning a day its own hardFloor is a
+        // legitimate jump of any size - FR-6 explicitly permits it when the
+        // distance is a single day - but the requirement reads "bei JEDER
+        // Ueberschreitung von maxDailyDelta (N=1 ODER verteilt) wird der
+        // Nutzer einmalig benachrichtigt". The N=1 exemption is about not
+        // being able to spread the jump, not about staying silent.
+        //
+        // Same formula as `distribute` uses, so the two paths cannot drift
+        // apart: ΔT/N > maxDailyDelta, expressed without a division.
+        final n = dayDistance(day, anchorDay);
+        final delta = _wallClockDelta(anchor!, value).abs();
+        if (n >= 1 && delta.inMicroseconds > maxDailyDelta.inMicroseconds * n) {
+          overrunNotificationNeeded = true;
+        }
+      }
       valuesByDay[day] = value;
       anchor = value;
       anchorDay = day;
