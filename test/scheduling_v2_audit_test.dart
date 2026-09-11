@@ -287,4 +287,50 @@ void main() {
       expect(result.safetyValveTriggered, isTrue);
     });
   });
+
+  group('FR-6: die 12-Stunden-Schwelle der Richtungsaufloesung (T-115)', () {
+    // FR-6, "Klarstellung ΔT":
+    //
+    //   "Die Mehrdeutigkeit bei der Richtungsbestimmung wird wie in FR-1
+    //    aufgeloest (die Variante mit `|Δ| <= 12h` gewinnt)."
+    //
+    // Diese Schwelle traegt die gesamte Mitternachtsbehandlung des Moduls -
+    // sie ist der Grund, warum "22:00 -> 05:00 am Folgetag" als +7h gelesen
+    // wird und nicht als -17h. In der Suite kam sie bisher nicht vor: der
+    // groesste gepruefte Abstand lag bei zwei Stunden.
+    //
+    // Geprueft werden hier die beiden Werte UNMITTELBAR neben der Schwelle.
+    // Sie klammern sie beidseitig auf 12:00 +/- eine Minute ein und fangen
+    // damit jede Verschiebung oder versehentliche Entfernung der
+    // Wraparound-Aufloesung.
+    //
+    // Der Wert AUF der Schwelle (genau 12:00) fehlt hier mit Absicht: dort
+    // erfuellen beide Lesarten `|Δ| <= 12h`, die Regel waehlt also nicht, und
+    // der Spec-Text entscheidet den Fall nicht. Ihn hier festzuschreiben
+    // hiesse, das Soll selbst zu erfinden. Siehe docs/TODO.md T-115.
+
+    test('11:59 Abstand wird als "frueher" gelesen', () {
+      final result = applyGapDayDrift(
+        v: _utc(18, 59, day: 1),
+        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        maxDailyDelta: const Duration(minutes: 30),
+        deviceUtcOffset: Duration.zero,
+      );
+
+      // -11:59 gewinnt gegen +12:01, also rueckwaerts, gedeckelt auf 30min.
+      expect(result, _utc(18, 29, day: 2));
+    });
+
+    test('12:01 Abstand wird als "spaeter" gelesen', () {
+      final result = applyGapDayDrift(
+        v: _utc(19, 1, day: 1),
+        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        maxDailyDelta: const Duration(minutes: 30),
+        deviceUtcOffset: Duration.zero,
+      );
+
+      // +11:59 gewinnt gegen -12:01, also vorwaerts.
+      expect(result, _utc(19, 31, day: 2));
+    });
+  });
 }

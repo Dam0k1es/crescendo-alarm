@@ -1456,6 +1456,38 @@ Conventions:
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-115 · OFFENE SPEC-ENTSCHEIDUNG: was gilt bei einem Abstand von exakt 12 Stunden?
+
+- [x] Die beiden Werte NEBEN der Schwelle absichern (das geht ohne Entscheidung).
+- [ ] Entscheiden, welche Lesart bei genau 12:00 gewinnt, und es in FR-6 schreiben.
+- **Lage:** FR-6s Klarstellung loest die Richtungs-Mehrdeutigkeit so auf, dass "die Variante mit
+  `|Δ| <= 12h` gewinnt". Bei einem Abstand von **exakt** 12:00 erfuellen aber **beide** Lesarten
+  `|Δ| <= 12h` - die Regel waehlt nicht. FR-1 hilft nicht weiter: FR-1 rechnet ueber echte
+  Instants, wo die Mehrdeutigkeit gar nicht erst entsteht; das `|Δ| <= 12h`-Kriterium existiert
+  ausschliesslich fuer FR-6s reinen Uhrzeit-Vergleich.
+- **Heute** wird "spaeter" gewaehlt - aber nur als Nebenwirkung der Operatorwahl in
+  `scheduling_v2.dart:61-68` (`> halfDay` im ersten, `<= -halfDay` im zweiten Zweig), nicht als
+  bewusste Festlegung.
+- **Zu entscheiden:** *Welche Lesart gewinnt bei genau 12:00, und soll das im Spec-Text stehen?*
+  - **"spaeter"** (heutiges Verhalten): der Weg von 07:00 ueber 13:00 nach 19:00 fuehrt durch den
+    Tag. Dann gehoert in FR-6 ein Zusatz "bei Gleichstand gewinnt die positive Variante", und
+    `_wallClockDelta`s zweiter Zweig muss sein `<=` behalten.
+  - **"frueher"**: der Zwischentag laege bei 01:00, der Nutzer wuerde mitten durch die Nacht
+    geschleift. Fuer eine Wecker-App die schlechtere Wahl, vom heutigen Text aber gleichermassen
+    gedeckt.
+- **Was bereits erledigt ist:** die beiden Werte unmittelbar neben der Schwelle (11:59 und 12:01)
+  sind jetzt getestet - dort entscheidet die Spec eindeutig, und die beiden Faelle klammern die
+  Schwelle beidseitig auf 12:00 +/- eine Minute ein. Damit ist die eigentliche Gefahr abgedeckt:
+  jede Verschiebung oder versehentliche Entfernung der Wraparound-Aufloesung. Mutationsprobe
+  (Schwelle 12h -> 11h) geht rot. Vorher deckte die Suite gar nichts davon ab - der groesste
+  geprüfte Abstand lag bei zwei Stunden, und diese Schwelle traegt die gesamte
+  Mitternachtsbehandlung des Moduls.
+- **Ein Hinweis aus der Pruefung, der Arbeit spart:** die naheliegende Mutation `>` -> `>=` im
+  **ersten** Zweig ist ein *aequivalenter* Mutant und durch keinen Test fangbar - die beiden `if`
+  sind nicht `else if`, bei genau +12h zieht der erste Zweig 24h ab und der zweite addiert sie
+  sofort wieder. Der Grenzfall haengt allein am zweiten Zweig.
+- **Requirement:** R2
+
 ### T-114 · Der Anker der Folgewoche hing am Ausloeser statt am Zustand — BEHOBEN (2026-09-11)
 
 - [x] `lastConcludedDay` aus dem Fortschrittsmarker ableiten, gegen die Zukunft geklammert.
