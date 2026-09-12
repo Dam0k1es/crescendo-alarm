@@ -55,6 +55,20 @@ Duration durationFromString(String time) {
   return Duration(hours: hours, minutes: minutes);
 }
 
+/// Kurze Rueckmeldung an den Nutzer, die nach [duration] von selbst verschwindet.
+///
+/// `persist: false` ist hier **nicht** redundant, auch wenn eine Dauer gesetzt
+/// ist (docs/TODO.md T-136). `SnackBar` belegt `persist` mit
+/// `persist ?? action != null` vor, und `ScaffoldMessenger` bricht seinen
+/// Ausblend-Timer mit `if (snackBar.persist) return;` ab - ein SnackBar MIT
+/// Aktion ignoriert also seine eigene `duration`. Das Framework sagt es
+/// ausdruecklich: "If not provided, but the snackbar action is not null, the
+/// snackbar will persist as well."
+///
+/// Weil diese Funktion einen "Dismiss"-Knopf mitgibt, blieben Meldungen wie
+/// "Can not edit scheduled alarms!" seit dem ersten Commit stehen, bis der
+/// Nutzer sie wegtippte - obwohl die 5 Sekunden die ganze Zeit dastanden. Wer
+/// den Knopf hier entfernt oder die Zeile anfasst, nimmt das wieder mit.
 void displayToast(BuildContext context, String message) {
   final scaffold = ScaffoldMessenger.of(context);
   scaffold.showSnackBar(
@@ -65,6 +79,7 @@ void displayToast(BuildContext context, String message) {
         onPressed: () {},
       ),
       duration: const Duration(seconds: 5),
+      persist: false,
     ),
   );
 }

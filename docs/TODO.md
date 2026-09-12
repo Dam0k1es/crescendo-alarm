@@ -1504,6 +1504,35 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-136 · Meldungen blieben stehen, obwohl seit dem ersten Commit 5 Sekunden eingestellt waren — BEHOBEN (2026-09-12)
+
+- [x] `persist: false` an `displayToast`s SnackBar.
+- **Gemeldet vom Maintainer:** Meldungen wie "Can not edit scheduled alarms!" verschwinden nicht
+  von selbst.
+- **Der verwirrende Teil:** `displayToast` setzt `duration: const Duration(seconds: 5)`, und zwar
+  seit dem allerersten Commit (`git log -S` bestaetigt es) - die Zeile steht in **jedem**
+  ausgelieferten APK. Die Einstellung war also nie das Problem.
+- **Ursache im Framework, nicht im Aufruf:** `SnackBar` belegt sein Feld `persist` mit
+  `persist ?? action != null` vor, und `ScaffoldMessengerState.build` bricht den Ausblend-Timer mit
+  `if (snackBar.persist) return;` ab. Ein SnackBar **mit Aktion** ignoriert damit seine eigene
+  `duration`. Die Framework-Dokumentation sagt es woertlich: *"If not provided, but the snackbar
+  action is not null, the snackbar will persist as well."* Und `displayToast` gibt einen
+  "Dismiss"-Knopf mit - genau der hat die Zeitabschaltung abgeschaltet.
+- **Fix:** `persist: false` ausdruecklich. Der Knopf bleibt (wer gelesen hat, tippt sofort weg),
+  und nach 5 Sekunden verschwindet die Meldung ohne Zutun.
+- **Nur diese eine Stelle betroffen:** die uebrigen drei SnackBars im Projekt (Barcode-Ergebnis,
+  "Diagnostics copied", Alarm-Bildschirm) haben keine Aktion, fuer sie ist `persist` also ohnehin
+  `false`. `displayToast` ist die einzige Stelle mit `SnackBarAction`.
+- **Test:** `test/display_toast_test.dart` - verschwindet nach Ablauf von selbst (und steht kurz
+  davor noch), und der Dismiss-Knopf funktioniert weiterhin. Mutationsprobe (`persist: false`
+  entfernt) geht rot.
+- **Eine Testfalle, die dabei fast in die Irre gefuehrt haette:** `ScaffoldMessenger` legt seinen
+  Timer erst an, wenn die **Einblend-Animation** durch ist (`_snackBarController!.isCompleted` in
+  dessen `build`). Ein Test, der zu knapp pumpt, misst den Timer gar nicht und sieht die Meldung
+  faelschlich als "bleibt stehen" - genau so sah der erste Lauf nach dem Fix aus. Deshalb pumpt der
+  Test die Animation ausdruecklich ab, bevor er die Zeit misst.
+- **Requirement:** R12 (Benutzbarkeit)
+
 ### T-135 · Das Log protokolliert Weckzeiten und fruehe Terminzeiten — auf Wunsch (2026-09-12)
 
 - [x] `Diag.dayPlanned`: pro Fenstertag die geplante Weckzeit und der fruehste Termin des Tages.
