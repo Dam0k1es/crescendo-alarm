@@ -90,6 +90,30 @@ class _PageDiagnosticsState extends State<PageDiagnostics> {
                       appState.diagnosticsEnabled = value;
                     },
                   ),
+                  // docs/TODO.md T-135. Bewusst ein ZWEITER Schalter, nicht
+                  // Teil des ersten: er hebt genau die Eigenschaft auf, die den
+                  // Absatz darueber wahr macht.
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Also record wake and appointment times'),
+                    subtitle: const Text(
+                      'Off by default. Adds each day\'s planned wake time and '
+                      'its earliest appointment, so a week can be recalculated '
+                      'from the log. These are clock times: together they are a '
+                      'sleep pattern and a daily routine. Turn it on while '
+                      'investigating a scheduling problem - and remember it is '
+                      'then in anything you share.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    isThreeLine: true,
+                    value: appState.diagnosticsIncludeClockTimes,
+                    activeThumbColor: appState.accentColor,
+                    onChanged: appState.diagnosticsEnabled
+                        ? (value) {
+                            appState.diagnosticsIncludeClockTimes = value;
+                          }
+                        : null,
+                  ),
                 ],
               ),
             ),

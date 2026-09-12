@@ -266,4 +266,73 @@ void main() {
       expect(text, contains('no calendar data'));
     });
   });
+
+  group('Uhrwerte nur auf ausdruecklichen Wunsch (T-135)', () {
+    // Das uebrige Log ist konstruktiv frei von personenbezogenen Daten. Eine
+    // Historie aus Weckzeiten und fruehesten Terminzeiten ist dagegen ein
+    // Schlafmuster samt Tagesablauf - identifizierend ohne jeden Namen - und
+    // das Log ist ausdruecklich per Zwischenablage exportierbar. Deshalb ein
+    // eigener Schalter, und deshalb steht er standardmaessig aus.
+
+    test('Voreinstellung: dayPlanned schreibt nichts', () async {
+      await _freshDiag();
+
+      expect(Diag.includeClockTimes, isFalse,
+          reason: 'die Voreinstellung ist die tragende Zusicherung');
+      Diag.dayPlanned(
+          dayOffset: 1, plannedMinuteOfDay: 405, earliestEventMinuteOfDay: 480);
+
+      expect(Diag.records, isEmpty);
+    });
+
+    test('eingeschaltet werden beide Zahlen aufgezeichnet', () async {
+      await _freshDiag();
+      Diag.setIncludeClockTimes(true);
+
+      // 06:45 geplant, fruehester Termin 08:00.
+      Diag.dayPlanned(
+          dayOffset: 2, plannedMinuteOfDay: 405, earliestEventMinuteOfDay: 480);
+
+      expect(Diag.records, hasLength(1));
+      final r = Diag.records.single;
+      expect(r.event, DiagEvent.dayPlanned);
+      expect(r.fields[DiagField.windowDayOffset], 2);
+      expect(r.fields[DiagField.plannedMinuteOfDay], 405);
+      expect(r.fields[DiagField.earliestEventMinuteOfDay], 480);
+    });
+
+    test('"kein Wert"/"kein Termin" ist -1, nicht 0', () async {
+      // 0 waere Mitternacht und damit eine gueltige Uhrzeit.
+      await _freshDiag();
+      Diag.setIncludeClockTimes(true);
+
+      Diag.dayPlanned(
+          dayOffset: 3, plannedMinuteOfDay: -1, earliestEventMinuteOfDay: -1);
+
+      final r = Diag.records.single;
+      expect(r.fields[DiagField.plannedMinuteOfDay], -1);
+      expect(r.fields[DiagField.earliestEventMinuteOfDay], -1);
+    });
+
+    test('der Export sagt selbst, ob Uhrwerte darin stehen', () async {
+      await _freshDiag();
+      expect(Diag.render(Diag.records), contains('no wake times by design'));
+
+      Diag.setIncludeClockTimes(true);
+      expect(Diag.render(Diag.records), contains('ARE'),
+          reason: 'wer das Log weitergibt, soll es der Kopfzeile ansehen');
+    });
+
+    test('der Schalter wirkt auch abgeschaltet nicht als Umgehung', () async {
+      // Gegenprobe: `includeClockTimes` darf den Hauptschalter nicht
+      // aushebeln.
+      await _freshDiag(enabled: false);
+      Diag.setIncludeClockTimes(true);
+
+      Diag.dayPlanned(
+          dayOffset: 1, plannedMinuteOfDay: 405, earliestEventMinuteOfDay: 480);
+
+      expect(Diag.records, isEmpty);
+    });
+  });
 }

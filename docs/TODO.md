@@ -1504,6 +1504,48 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-135 · Das Log protokolliert Weckzeiten und fruehe Terminzeiten — auf Wunsch (2026-09-12)
+
+- [x] `Diag.dayPlanned`: pro Fenstertag die geplante Weckzeit und der fruehste Termin des Tages.
+- [x] Eigener Schalter, Standard **aus**, getrennt vom allgemeinen Diagnoseschalter.
+- **Angefragt vom Maintainer**, und der Bedarf ist belegt: T-132 (der Termin, der die Weckzeit nach
+  spaet zog) liess sich aus dem Log **nicht** diagnostizieren. Es enthielt Zaehlungen und Buckets,
+  aber nicht die eine Information, die die Frage beantwortet: *warum* steht an diesem Tag diese
+  Weckzeit - liegt es am Termin, an der Kurve oder an der Wunschzeit? Gefunden wurde der Fehler
+  ueber Bildschirmfotos und Handrechnung.
+- **Was das kostet, und warum es einen eigenen Schalter hat:** die tragende Eigenschaft dieses Logs
+  war bisher, dass ein Uhrwert konstruktiv nicht hineinpasst - *"eine Historie von Weckzeiten plus
+  Versaetzen ist ein Schlafmuster und eine Reisespur, identifizierend ohne jeden Namen"*. Genau die
+  wird hier gelockert. Deshalb:
+  - **nicht** am allgemeinen Diagnoseschalter mitgehaengt (der steht auf **an**), sondern ein
+    zweiter, der auf **aus** steht;
+  - `Diag.dayPlanned` ist ohne ihn ein No-op, und der Hauptschalter bleibt uebergeordnet (beides
+    getestet);
+  - die Kopfzeile des Exports **sagt selbst**, in welchem der beiden Modi er entstanden ist - wer
+    ihn an einen Fehlerbericht haengt, sieht es ihm an;
+  - `-1` bedeutet "kein Wert"/"kein Termin". Nicht `0` - das waere Mitternacht und damit eine
+    gueltige Uhrzeit.
+  - Datum bleibt draussen: protokolliert wird die Minute des lokalen Tages plus ein **relativer**
+    Tagesversatz. Ein Kalendertag ist daraus nicht zu gewinnen.
+- **Zwei Fehler, die beim Bauen aufgefallen sind:**
+  - Der Quelltext-Waechter in `test/diag_log_api_test.dart` haette die neuen Parameter
+    **durchgelassen** - sein Muster prueft Endungen wie `...Minutes`/`...Time`, und
+    `plannedMinuteOfDay` endet auf `Day`. Eine Namenslücke, keine Erlaubnis. Das Muster kennt jetzt
+    auch `...MinuteOfDay`/`...HourOfDay`, und die beiden Ausnahmen stehen **namentlich** im Test,
+    mit Begruendung. Probe: ein neu hinzugefuegter `wakeMinuteOfDay` wird gefangen.
+  - `Diag.resetForTest()` setzte den neuen Schalter nicht zurueck, er leckte also zwischen Tests
+    durch. Dieselbe Falle mit globalem Zustand wie bei `Diag.init` (T-89). Gefunden vom eigenen
+    Test; behoben.
+- **Nebenbei gelernt:** die `Actual`-Anzeige des Dart-Matchers bricht bei einem mehrzeiligen String
+  an der ersten Zeile ab. Das sah aus, als liefere `render()` nur eine Zeile, und hat die Suche
+  kurz in die falsche Richtung geschickt - erst eine Ausgabe im Test selbst zeigte den wahren
+  Zustand.
+- **Test:** `diag_log_test.dart` (Gruppe T-135: Voreinstellung schreibt nichts, eingeschaltet
+  beide Zahlen, `-1`-Bedeutung, Kopfzeile, Hauptschalter bleibt uebergeordnet),
+  `diag_log_api_test.dart` (verschaerfter Waechter), `app_state_scheduling_v2_test.dart`
+  (Persistenz-Rundreise, Unabhaengigkeit der beiden Schalter).
+- **Requirement:** R7 (Datensparsamkeit), R2 (Diagnosefaehigkeit)
+
 ### T-133 · Ein Deckelungs-Sprung an einem Termin blieb stumm — BEHOBEN (2026-09-12)
 
 - [x] FR-6s Meldepflicht auch auf dem Kappungs-Pfad.

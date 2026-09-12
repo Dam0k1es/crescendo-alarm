@@ -52,6 +52,7 @@ enum DiagEvent {
   dayAdvance(11),
   weekPlanComputed(12),
   timezoneCheck(13),
+  dayPlanned(14),
   alarmSync(20),
   alarmRang(30),
   alarmDismissed(31),
@@ -133,6 +134,11 @@ enum DiagField {
   manualAlarmCount(104),
   pendingValueCount(105),
   daysSinceLastReplan(106),
+  // FR-19-loses Tagesprotokoll (docs/TODO.md T-135). NUR diese drei tragen
+  // Uhrwerte, und nur bei ausdruecklich eingeschalteter Zeitprotokollierung.
+  windowDayOffset(120),
+  plannedMinuteOfDay(121),
+  earliestEventMinuteOfDay(122),
   // Fehler
   site(110),
   errorKind(111),
@@ -436,6 +442,18 @@ abstract final class Diag {
 
   static void setEnabled(bool value) => _enabled = value;
 
+  /// Schreibt [dayPlanned] ueberhaupt Uhrwerte? Standard **aus**.
+  ///
+  /// Getrennt von [setEnabled] mit Absicht: das uebrige Log ist konstruktiv
+  /// frei von personenbezogenen Daten, und das soll die Vorgabe bleiben. Eine
+  /// Historie aus Weckzeiten und fruehesten Terminzeiten ist dagegen ein
+  /// Schlafmuster samt Tagesablauf - identifizierend ohne jeden Namen, und das
+  /// Log ist ausdruecklich per Zwischenablage exportierbar. Wer es einschaltet,
+  /// tut das fuer die eigene Fehlersuche und weiss, was er weitergibt.
+  static bool _includeClockTimes = false;
+  static void setIncludeClockTimes(bool value) => _includeClockTimes = value;
+  static bool get includeClockTimes => _includeClockTimes;
+
   /// Nur fuer Tests: setzt den Prozesszustand zurueck.
   static void resetForTest() {
     _ring.clear();
@@ -443,6 +461,11 @@ abstract final class Diag {
     _boot = 0;
     _dirty = false;
     _enabled = true;
+    // Muss mit zurueckgesetzt werden, sonst leckt der Schalter zwischen Tests
+    // (docs/TODO.md T-135): ein Test, der ihn einschaltet, haette sonst den
+    // naechsten beeinflusst - dieselbe Falle mit globalem Zustand, die T-89
+    // schon einmal gestellt hat.
+    _includeClockTimes = false;
     _isolate = LogIsolate.main;
     _typeCodes.clear();
     _prefs = null;
@@ -523,7 +546,10 @@ abstract final class Diag {
   static String render(List<DiagRecord> records) {
     final out = StringBuffer()
       ..writeln('WakeyWakey diagnostics (${records.length} events)')
-      ..writeln('No timestamps, no calendar data, no wake times by design.')
+      ..writeln(_includeClockTimes
+          ? 'No timestamps. Wake times and earliest appointment times ARE '
+              'included (dayPlanned) because clock logging is switched on.'
+          : 'No timestamps, no calendar data, no wake times by design.')
       ..writeln();
     for (final r in records) {
       out.write('b${r.boot}.${r.seq} [${r.uptime.name}] ${r.event.name}');
@@ -754,6 +780,33 @@ abstract final class Diag {
   /// die Ausnahme geht als `runtimeType` und Kategorie ein, nie als Nachricht.
   /// `FormatException.toString()` echot einen Ausschnitt der
   /// Quellzeichenkette - genau darueber sind in T-89 Nutzdaten ausgetreten.
+  /// Ein einzelner Fenstertag: geplante Weckzeit und fruehester Termin des
+  /// Tages, beide als Minute des lokalen Tages (0..1439), `-1` fuer "keiner"
+  /// (docs/TODO.md T-135).
+  ///
+  /// **Das einzige Ereignis mit Uhrwerten.** Es schreibt nur, wenn
+  /// [setIncludeClockTimes] eingeschaltet ist; sonst ist es ein No-op. Gebaut
+  /// fuer genau die Frage, die sich aus dem uebrigen Log nicht beantworten
+  /// laesst: *warum* steht an einem Tag diese Weckzeit - liegt es am Termin,
+  /// an der Kurve oder an der Wunschzeit? Ohne die beiden Zahlen ist das aus
+  /// Zaehlungen und Buckets nicht zu rekonstruieren; mit ihnen ist ein
+  /// Wochenplan nachrechenbar.
+  ///
+  /// [dayOffset] bleibt relativ (wie ueberall im Log), die Minuten sind
+  /// bewusst OHNE Datum - ein Kalendertag ist daraus nicht zu gewinnen.
+  static void dayPlanned({
+    required int dayOffset,
+    required int plannedMinuteOfDay,
+    required int earliestEventMinuteOfDay,
+  }) {
+    if (!_includeClockTimes) return;
+    _record(DiagEvent.dayPlanned, <DiagField, int>{
+      DiagField.windowDayOffset: dayOffset,
+      DiagField.plannedMinuteOfDay: plannedMinuteOfDay,
+      DiagField.earliestEventMinuteOfDay: earliestEventMinuteOfDay,
+    });
+  }
+
   static void failure({
     required DiagEvent at,
     required Type exceptionType,

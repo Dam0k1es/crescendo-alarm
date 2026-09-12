@@ -219,6 +219,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         Diag.registerType(ScheduledAlarm, 1);
         Diag.registerType(ManualAlarm, 2);
         await Diag.init(enabled: _appState.diagnosticsEnabled);
+        Diag.setIncludeClockTimes(_appState.diagnosticsIncludeClockTimes);
         Diag.boot(
           coldStart: _appState.lastReplanDate == null,
           notificationsInitAwaited: true,

@@ -54,6 +54,7 @@ class AppState extends ChangeNotifier {
   bool _overrunNotificationSent = false;
   bool _safetyValveNotificationSent = false;
   bool _diagnosticsEnabled = true;
+  bool _diagnosticsIncludeClockTimes = false;
   TimeOfDay? _wunschzeit;
   Duration _maxDailyDelta = const Duration(minutes: 15);
 
@@ -182,6 +183,20 @@ class AppState extends ChangeNotifier {
   /// abschaltbar und einsehbar" die einzige ehrliche Voreinstellung ist.
   bool get diagnosticsEnabled => _diagnosticsEnabled;
 
+  /// Schreibt das Log auch Weckzeiten und fruehe Terminzeiten
+  /// (`docs/TODO.md` T-135)? Standard **aus**, und getrennt von
+  /// [diagnosticsEnabled] mit Absicht.
+  ///
+  /// Das uebrige Log ist konstruktiv frei von personenbezogenen Daten - es
+  /// gibt keinen String-Parameter und keinen Uhrwert, also auch keinen Kanal.
+  /// Eine Historie aus Weckzeiten und fruehesten Terminzeiten ist dagegen ein
+  /// Schlafmuster samt Tagesablauf, identifizierend ohne jeden Namen. Und das
+  /// Log ist ausdruecklich per Zwischenablage exportierbar - ein Nutzer, der
+  /// es an einen Fehlerbericht haengt, wuerde das mitschicken. Deshalb
+  /// ausdruecklich einzuschalten und nicht an der allgemeinen Diagnose
+  /// mitzuhaengen.
+  bool get diagnosticsIncludeClockTimes => _diagnosticsIncludeClockTimes;
+
   TimeOfDay? get wunschzeit => _wunschzeit;
 
   Duration get maxDailyDelta => _maxDailyDelta;
@@ -282,6 +297,13 @@ class AppState extends ChangeNotifier {
   set pendingDayInstantAnchored(Map<String, bool> value) {
     _pendingDayInstantAnchored = value;
     _prefs.setString('pendingDayInstantAnchored', jsonEncode(value));
+    notifyListeners();
+  }
+
+  set diagnosticsIncludeClockTimes(bool value) {
+    _diagnosticsIncludeClockTimes = value;
+    _prefs.setBool('diagnosticsIncludeClockTimes', value);
+    Diag.setIncludeClockTimes(value);
     notifyListeners();
   }
 
@@ -910,6 +932,9 @@ class AppState extends ChangeNotifier {
               _safetyValveNotificationSent;
       _diagnosticsEnabled =
           _prefs.getBool('diagnosticsEnabled') ?? _diagnosticsEnabled;
+      _diagnosticsIncludeClockTimes =
+          _prefs.getBool('diagnosticsIncludeClockTimes') ??
+              _diagnosticsIncludeClockTimes;
       _wunschzeit = _loadWunschzeit();
       final maxDailyDeltaMinutes = _prefs.getInt('maxDailyDeltaMinutes');
       if (maxDailyDeltaMinutes != null) {

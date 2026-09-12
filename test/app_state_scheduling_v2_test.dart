@@ -234,4 +234,35 @@ void main() {
           reason: 'FR-9 "einmalig" muss einen Neustart ueberdauern');
     });
   });
+
+  group('Diagnose-Schalter (T-135)', () {
+    test('diagnosticsIncludeClockTimes: Standard aus, Rundreise haelt',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      final first = AppState();
+      await first.initialized;
+      expect(first.diagnosticsIncludeClockTimes, isFalse,
+          reason: 'die Voreinstellung ist die tragende Zusicherung: ohne '
+              'ausdrueckliches Einschalten enthaelt das Log keine Uhrwerte');
+
+      first.diagnosticsIncludeClockTimes = true;
+
+      final second = AppState();
+      await second.initialized;
+      expect(second.diagnosticsIncludeClockTimes, isTrue);
+    });
+
+    test('der allgemeine Diagnoseschalter bleibt davon unabhaengig', () async {
+      SharedPreferences.setMockInitialValues({});
+      final appState = AppState();
+      await appState.initialized;
+
+      appState.diagnosticsIncludeClockTimes = true;
+      expect(appState.diagnosticsEnabled, isTrue);
+      appState.diagnosticsEnabled = false;
+      expect(appState.diagnosticsIncludeClockTimes, isTrue,
+          reason: 'zwei getrennte Schalter - der eine schaltet den anderen '
+              'nicht um');
+    });
+  });
 }

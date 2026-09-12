@@ -50,10 +50,24 @@ and `test/no_pii_in_logs_test.dart` forbids the *channel* in `lib/` generally - 
 
 Consequences to respect when adding an event:
 
-- **No clock values.** Days are relative (via `dayDistance`, so the logger does not rebuild T-76
-  inside itself); moments appear only as *bucketed differences*; the absolute UTC offset is never
-  recorded, only the shape of a change. A history of wake times plus offsets is a sleep pattern and
-  a travel trace - identifying without any name.
+- **No clock values, by default.** Days are relative (via `dayDistance`, so the logger does not
+  rebuild T-76 inside itself); moments appear only as *bucketed differences*; the absolute UTC
+  offset is never recorded, only the shape of a change. A history of wake times plus offsets is a
+  sleep pattern and a travel trace - identifying without any name.
+  - **The one exception is `Diag.dayPlanned`** (`docs/TODO.md` T-135), which records each window
+    day's planned wake time and its earliest appointment as a minute-of-day. It exists because
+    nothing else in the log answers *why* a given day got the wake time it did, and that question
+    cost a real diagnosis: T-132 could only be tracked down from screenshots and hand arithmetic.
+  - It is behind its **own** switch (`AppState.diagnosticsIncludeClockTimes`, Settings >
+    Diagnostics), **off by default** and deliberately not folded into the general diagnostics
+    toggle - because the log is meant to be pasted into a bug report, and a user doing that should
+    not ship their sleep pattern without having said so. The export header says which of the two
+    modes produced it.
+  - When adding an event: the source-reading guard in `test/diag_log_api_test.dart` still rejects
+    any `int` parameter whose name looks like a clock value, and the two allowed names are listed
+    there explicitly. Do not widen that list without a switch and a reason - and note that
+    `...MinuteOfDay` had to be added to the pattern, because a `...OfDay` suffix slipped past the
+    original rule unnoticed.
 - **Exceptions go in as `runtimeType`** through an identity table to an int; `toString()` is never
   called on a `Type` (R8 obfuscation is then irrelevant).
 - **The background isolate has its own ring buffer.** FR-16's Checkpoint 2 runs in a separate
@@ -239,7 +253,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **272 tests across 27 files**, and CI runs them six times over -
+`flutter test` currently runs **279 tests across 27 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry

@@ -302,6 +302,47 @@ Future<ReplanResult> replan(
     storedEntriesPruned: prunedCount,
   );
 
+  // docs/TODO.md T-135: pro Fenstertag die geplante Weckzeit und den fruehesten
+  // Termin des Tages, beide als Minute des LOKALEN Tages. Schreibt nur, wenn
+  // die Zeitprotokollierung ausdruecklich eingeschaltet ist - `Diag.dayPlanned`
+  // ist sonst ein No-op.
+  //
+  // Warum ueberhaupt: aus Zaehlungen und Buckets laesst sich nicht
+  // rekonstruieren, WARUM an einem Tag diese Weckzeit steht. Genau daran hing
+  // die Diagnose von T-132, die nur ueber Bildschirmfotos und Handrechnung
+  // moeglich war. Mit diesen beiden Zahlen ist ein Wochenplan nachrechenbar:
+  // liegt der Wert am Termin (dann sind beide gekoppelt), an der Kurve oder an
+  // der Wunschzeit?
+  //
+  // Lokale Ablesung ueber denselben Versatz, mit dem geplant wurde - das ist
+  // die Zahl, die der Nutzer in der Alarmliste sieht (FR-1/T-83s Trennung von
+  // Instant und Wanduhr).
+  if (Diag.includeClockTimes) {
+    int minuteOfDay(DateTime instant) {
+      final local = instant.toUtc().add(offset);
+      return local.hour * 60 + local.minute;
+    }
+
+    for (final day in window) {
+      final planned = result.valuesByDay[day];
+      final dayEvents = eventsForDay(day,
+          allEvents: allEvents, deviceUtcOffset: offset)
+        ..removeWhere((e) => e.isAllDay);
+      DateTime? earliest;
+      for (final e in dayEvents) {
+        if (earliest == null || e.from.toUtc().isBefore(earliest.toUtc())) {
+          earliest = e.from;
+        }
+      }
+      Diag.dayPlanned(
+        dayOffset: dayDistance(day, today),
+        plannedMinuteOfDay: planned == null ? -1 : minuteOfDay(planned),
+        earliestEventMinuteOfDay:
+            earliest == null ? -1 : minuteOfDay(earliest),
+      );
+    }
+  }
+
   appState.lastReplanDate = today;
   // Only ever forward (docs/TODO.md T-75): a recovery replan's own
   // `lastConcludedDay` is yesterday, so assigning unconditionally would move
