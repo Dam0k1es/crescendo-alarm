@@ -115,6 +115,13 @@ Future<void> createManualAlarmOneMinuteFromNow(
     WidgetTester tester, AppState appState) async {
   expect(find.byType(ScreenAlarms), findsOneWidget);
 
+  // docs/TODO.md T-137: der Schirm oeffnet seit der Umstellung auf
+  // "Scheduled"; der Add-Knopf gehoert zum Manual-Reiter (auf "Scheduled"
+  // sitzt dort der Sync-Knopf). Ohne diesen Wechsel findet der Tipp unten
+  // nichts - genau daran ist Lauf 34721191411 gescheitert.
+  await tester.tap(find.text('Manual'));
+  await tester.pumpAndSettle();
+
   await tester.tap(find.byIcon(Icons.add));
   await tester.pumpAndSettle();
 

@@ -445,3 +445,9 @@ tasks.txt
 # Python bytecode cache (scripts/*.py, e.g. mobsfscan_check.py, mobsf_summary.py)
 __pycache__/
 *.pyc
+
+# Projektregel: nach jedem neu gebauten Feature liegt hier ein `current.apk` zum
+# Flashen (siehe CLAUDE.md, "Current APK"). Bewusst NICHT verfolgt - es ist ein
+# Build-Ergebnis, aendert sich mit jedem Feature und waere 80 MB pro Commit.
+current.apk
+

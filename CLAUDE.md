@@ -333,6 +333,19 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   "build success plus static analysis only" going forward; that was true before the E2E work below
   and no longer is.
 
+## Current APK
+
+**After every newly built feature, a `current.apk` is placed at the repository root** so the
+maintainer can flash the latest state without hunting for a CI artifact. It is gitignored - a
+build output, ~80 MB, changing with every feature.
+
+It is always *the current one*: overwrite it, never add versioned names beside it. Take the
+`app-production-apk` artifact from the newest **green** CI run containing the feature
+(`gh run download <run-id> -n app-production-apk`), verify it with `apksigner verify`, and report
+the SHA-256 so it is clear whether the file on disk is the one just described. Building locally is
+a fallback for when CI has not run yet - the CI build is the signed release build the release path
+actually produces.
+
 ## Quality baseline snapshot
 
 A point-in-time SAST/SCA/PII/security assessment and an end-to-end test plan live in
