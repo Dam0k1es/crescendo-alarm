@@ -1504,6 +1504,56 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-133 · Ein Deckelungs-Sprung an einem Termin blieb stumm — BEHOBEN (2026-09-12)
+
+- [x] FR-6s Meldepflicht auch auf dem Kappungs-Pfad.
+- **Why:** FR-6 sagt "bei **jeder** Ueberschreitung von `maxDailyDelta` (`N=1` oder verteilt) wird
+  der Nutzer einmalig benachrichtigt". T-105 hat das fuer den Zweig ohne Folgepunkte nachgetragen;
+  der zweite Weg, auf dem ein Tageswert an einem Termin gedeckelt wird - die Kappung eines
+  laufenden Kurvenwerts am eigenen `hardFloor` -, meldete weiterhin nichts.
+- **Wie er aufgefallen ist:** beim Durchrechnen eines Alltagsfalls (siehe T-134). Die Weckzeit war
+  ueber terminlose Tage bis zur `wunschzeit` 07:00 gedriftet, danach wurde die Arbeit im Kalender
+  nachgetragen. Der erste Arbeitstag wurde auf seinen `hardFloor` 06:15 gedeckelt - ein Schritt von
+  **45 Minuten** bei erlaubten 30, und der Nutzer erfuhr **nichts** davon.
+- **Warum ihn die erste Pruefung nur streifte:** sie hatte ihn als "Nebenbefund (schwaecher)" zu
+  B-2 notiert, weil die Meldung in ihrer eigenen Probe zufaellig trotzdem anfiel - ein Folgetag
+  startete dort einen neuen Run und meldete ueber `distribute`. Der Fall ohne diesen Zufall blieb
+  ungeprueft.
+- **Fix:** dieselbe division-freie Formel wie im Nachbarzweig und in `distribute`, damit die drei
+  nicht auseinanderlaufen koennen.
+- **Test:** `test/scheduling_v2_audit_test.dart`, Gruppe T-133 - der Sprung ueber der Grenze meldet,
+  eine Kappung innerhalb der Grenze (25 min) nicht. Mutationsprobe (Meldung wieder entfernt) geht
+  gezielt rot.
+- **Requirement:** R2
+
+### T-134 · VERWORFEN: ein Wochenend-/Wochentagsbegriff in der Scheduling-Schicht (2026-09-12)
+
+- **Angefragt war:** Wochenenden sollen den Rhythmus nur beeinflussen, wenn ein Termin frueher
+  liegt als unter der Woche; sonst sollen sie keinen Drift erzeugen bzw. nur Richtung
+  `wunschzeit`. Dazu eine konfigurierbare Menge freier Wochentage mit eigener UI, aus der auch
+  `startOfWeekDay` abgeleitet wird.
+- **Verworfen auf Entscheidung des Maintainers,** und es ist die bessere Abstraktion: *"eigentlich
+  ist die Logik 'Wochentag' egal, man hat ja Termine oder nicht."* Die Engine trennt bereits Tage
+  mit realem `hardFloor` von Lueckentagen, und das ist die Unterscheidung, die etwas bedeutet - ein
+  freier Dienstag und ein freier Sonntag sind dasselbe. Fuer eine App, die ausdruecklich fuer
+  unregelmaessige Schlafzeiten und Schichtdienst gebaut ist, liegt "das Wochenende" ohnehin nicht
+  dort, wo der Kalender es vermutet.
+- **Was das Aufschreiben vorher gebracht hat** (die Spec stand fertig als FR-19 da, bevor eine
+  Zeile Code entstand): gegen die laufende Engine durchgerechnet war die Anforderung **groesstenteils
+  schon erfuellt**. FR-7s Rueckwaerts-Pruefung kappt den `wunschzeit`-Drift bereits so weit, dass
+  der naechste bindende `hardFloor` erreichbar bleibt - ein terminloses Wochenende schiesst also gar
+  nicht erst ueber, solange der Termin des Arbeitstages im 7-Tage-Fenster sichtbar ist. Gerechnet
+  (`wunschzeit` 07:00, `maxDailyDelta` 30 min, Freitag 06:15, spaeter Samstagstermin, Montag 06:15):
+  **Sa 06:45, So 06:45, Mo 06:15**, kein Sprung, keine Meldung. Mein von Hand geschriebener
+  Erwartungswert ("So 07:00") war falsch; die Engine hatte recht.
+- **Was daraus wirklich folgte:** genau ein Fall traegt - wenn die Anforderung des Arbeitstages beim
+  Planen noch nicht sichtbar ist (Termin noch nicht eingetragen oder hinter dem Fensterrand). Dann
+  faellt die Korrektur in einen Schritt, und der war zusaetzlich **stumm**. Das ist T-133, und es
+  braucht keinen Wochentagsbegriff.
+- **Fuer kuenftige Entwuerfe:** keine Regeln auf `DateTime.weekday` in `lib/models/scheduling/`.
+  Wenn eine Regel "Wochenende" zu brauchen scheint, in An- oder Abwesenheit eines `hardFloor`
+  formulieren - das ist fast immer das Gemeinte und kommt ohne Einstellung und ohne UI aus.
+
 ### T-132 · Ein Termin zog die Weckzeit nach SPAET — BEHOBEN (2026-09-11)
 
 - [x] Ein `hardFloor` kann nur noch Ziel sein, wenn er frueher liegt als der heutige Wert.

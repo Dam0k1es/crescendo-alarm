@@ -743,7 +743,31 @@ WeekPlanResult computeWeekPlan({
     final clampedToOwnHardFloor =
         ownHardFloor != null && candidate.value.isAfter(ownHardFloor);
     final value = clampedToOwnHardFloor ? ownHardFloor : candidate.value;
-    if (clampedToOwnHardFloor) instantAnchoredDays.add(day);
+    if (clampedToOwnHardFloor) {
+      instantAnchoredDays.add(day);
+      // FR-6s Meldepflicht auch hier (docs/TODO.md T-133). T-105 hat sie fuer
+      // den Zweig ohne Folgepunkte nachgetragen; dieser zweite Weg, auf dem
+      // ein Tageswert an einem Termin gedeckelt wird, blieb stumm.
+      //
+      // FR-6 laesst keinen Zweifel: "Bei JEDER Ueberschreitung von
+      // `maxDailyDelta` (`N=1` oder verteilt) wird der Nutzer einmalig
+      // benachrichtigt." Die Kappung ist inhaltlich richtig - FR-2s Obergrenze
+      // muss gelten -, nur eben meldepflichtig, wenn sie mehr als einen
+      // Tagesschritt kostet.
+      //
+      // Der Alltagsfall dahinter: die Weckzeit ist ueber terminlose Tage bis
+      // zur `wunschzeit` gedriftet, danach wird ein Termin nachgetragen. Der
+      // erste Arbeitstag wird dann in einem Schritt zurueckgeholt - gemessen
+      // 45 Minuten bei erlaubten 30, und der Nutzer erfuhr nichts davon.
+      //
+      // Dieselbe division-freie Formel wie im Nachbarzweig und in
+      // `distribute`, damit die drei nicht auseinanderlaufen koennen.
+      final n = dayDistance(day, anchorDay);
+      final delta = _wallClockDelta(anchor, value).abs();
+      if (n >= 1 && delta.inMicroseconds > maxDailyDelta.inMicroseconds * n) {
+        overrunNotificationNeeded = true;
+      }
+    }
 
     valuesByDay[day] = value;
     anchor = value;

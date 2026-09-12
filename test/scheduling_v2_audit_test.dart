@@ -768,4 +768,70 @@ void main() {
       expect(result.valuesByDay[window[3]], _utc(5, 0, day: 15));
     });
   });
+
+  group('FR-6: auch die Kappung an einem Termin ist zu melden (T-133)', () {
+    // FR-6: "Bei JEDER Ueberschreitung von `maxDailyDelta` (`N=1` oder
+    // verteilt) wird der Nutzer einmalig benachrichtigt."
+    //
+    // T-105 hat das fuer den Zweig ohne Folgepunkte behoben. Der zweite Weg,
+    // auf dem ein Tageswert an einem Termin gedeckelt wird - die Kappung eines
+    // laufenden Kurvenwerts am eigenen `hardFloor` -, meldet weiterhin nichts.
+    // Die urspruengliche Pruefung hatte ihn als schwaecheren Nebenbefund
+    // notiert, weil die Meldung in ihrer Probe zufaellig trotzdem anfiel (ein
+    // Folgetag startete einen neuen Run).
+    //
+    // Aufgefallen ist er an einem gerechneten Alltagsfall: die Weckzeit ist
+    // ueber ein terminloses Wochenende bis zur `wunschzeit` gedriftet, danach
+    // wird die Arbeit im Kalender nachgetragen. Der Montag wird auf seinen
+    // `hardFloor` gedeckelt - ein Schritt von 45 Minuten bei erlaubten 30,
+    // und der Nutzer erfaehrt nichts davon.
+
+    test('ein Deckelungs-Sprung ueber maxDailyDelta wird gemeldet', () {
+      final window = List.generate(7, (i) => _utc(0, 0, day: 14 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(7, 0, day: 13),
+        allEvents: [
+          _meetingAt(_utc(6, 15, day: 14)),
+          _meetingAt(_utc(6, 15, day: 15)),
+        ],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        maxDailyDelta: const Duration(minutes: 30),
+        gapDayCounter: 0,
+      );
+
+      expect(result.valuesByDay[window[0]], _utc(6, 15, day: 14),
+          reason: 'FR-2: der Termin deckelt den Wert - das ist richtig');
+      expect(result.overrunNotificationNeeded, isTrue,
+          reason: '45 Minuten bei erlaubten 30 - FR-6 fordert die Meldung');
+    });
+
+    test('eine Kappung innerhalb der Grenze meldet nicht', () {
+      // Gegenprobe gegen eine Ueberkorrektur.
+      final window = List.generate(7, (i) => _utc(0, 0, day: 14 + i));
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(6, 40, day: 13),
+        allEvents: [
+          _meetingAt(_utc(6, 15, day: 14)),
+          _meetingAt(_utc(6, 15, day: 15)),
+        ],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReady: Duration.zero,
+        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        maxDailyDelta: const Duration(minutes: 30),
+        gapDayCounter: 0,
+      );
+
+      expect(result.valuesByDay[window[0]], _utc(6, 15, day: 14));
+      expect(result.overrunNotificationNeeded, isFalse,
+          reason: '25 Minuten liegen innerhalb der Grenze');
+    });
+  });
 }
