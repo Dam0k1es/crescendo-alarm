@@ -30,6 +30,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Seit T-137 oeffnet der Schirm auf "Scheduled"; der Add-Knopf gehoert zum
+    // Manual-Reiter (auf "Scheduled" sitzt dort der Sync-Knopf). Also erst
+    // dorthin wechseln - die Zusicherung dieses Tests bleibt unveraendert, nur
+    // der Weg zum Dialog ist ein Schritt laenger.
+    await tester.tap(find.text('Manual'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save'));

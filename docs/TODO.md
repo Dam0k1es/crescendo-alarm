@@ -1504,6 +1504,31 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-137 · "Scheduled" ist der erste Reiter, "Manual" der zweite — UMGESETZT (2026-09-12)
+
+- [x] Reiter, Inhalte und Indexkonstanten getauscht.
+- **Warum:** auf Wunsch des Maintainers, und es passt zum Produkt: die kalenderabgeleiteten Wecker
+  sind der eigentliche Zweck der App, manuelle Alarme die Ausnahme. Der Schirm oeffnet jetzt auf
+  dem, was man taeglich sieht.
+- **Folge, die man kennen muss:** der Knopf unten rechts haengt am Reiter. Auf "Scheduled" ist es
+  der **Sync**-Knopf, auf "Manual" der **Add**-Knopf. Einen neuen manuellen Alarm anzulegen kostet
+  damit einen Tipp mehr - das ist die beabsichtigte Gewichtung, aber es ist eine Aenderung am
+  gewohnten Ablauf.
+- **Die eigentliche Gefahr beim Tauschen** ist nicht die Reihenfolge, sondern ein Auseinanderlaufen:
+  wer die `tabs:`-Liste tauscht und die `TabBarView.children` vergisst (oder die
+  Indexkonstanten), bekommt einen Schirm, der die eine Liste zeigt, waehrend der Knopf zur anderen
+  gehoert - und beide Reiter sehen weiterhin plausibel aus. Genau diese **Kopplung** sichert
+  `test/screen_alarms_tab_order_test.dart`: er legt einen manuellen Alarm an und prueft, dass er
+  auf Reiter 1 **nicht** und auf Reiter 2 **doch** erscheint. Beide Mutationen (nur die Inhalte
+  zurueckgetauscht; nur die Indizes zurueckgetauscht) gehen rot.
+- **Nebenbei:** `manualTabIndex`/`scheduledTabIndex` waren `static int`, also von ueberall
+  veraenderbar, obwohl sie eine feste Reihenfolge beschreiben. Jetzt `static const`.
+- **Ein bestehender Test musste seinen Weg anpassen** (nicht seine Zusicherung):
+  `manual_alarm_inherits_settings_test` tippte direkt nach dem Oeffnen auf den Add-Knopf. Der sitzt
+  jetzt einen Reiter weiter; der Test wechselt vorher dorthin. Was er prueft - dass ein neuer
+  manueller Alarm Rampendauer, Lautstaerke und Ton erbt - ist unveraendert.
+- **Requirement:** R12
+
 ### T-136 · Meldungen blieben stehen, obwohl seit dem ersten Commit 5 Sekunden eingestellt waren — BEHOBEN (2026-09-12)
 
 - [x] `persist: false` an `displayToast`s SnackBar.

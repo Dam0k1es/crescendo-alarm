@@ -13,8 +13,16 @@ import 'package:wakeywakey/utils/utils.dart';
 class ScreenAlarms extends StatefulWidget {
   const ScreenAlarms({super.key});
 
-  static int manualTabIndex = 0;
-  static int scheduledTabIndex = 1;
+  // "Scheduled" steht vorn: die kalenderabgeleiteten Wecker sind der
+  // eigentliche Produktpfad, manuelle Alarme die Ausnahme.
+  //
+  // `const` statt `static int`: die beiden waren veraenderbar und haetten von
+  // ueberall umgesetzt werden koennen, obwohl sie die Tab-Reihenfolge unten
+  // beschreiben. Wer hier tauscht, muss die `tabs:`- und die
+  // `TabBarView.children`-Liste mittauschen - sonst zeigt der Schirm die eine
+  // Liste und der Knopf gehoert zur anderen.
+  static const int scheduledTabIndex = 0;
+  static const int manualTabIndex = 1;
 
   @override
   State<ScreenAlarms> createState() => _ScreenAlarmsState();
@@ -192,14 +200,14 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
           indicatorColor: context.watch<AppState>().accentColor,
           tabs: [
             Tab(
-              icon: Icon(Icons.access_alarm,
-                  color: context.watch<AppState>().accentColor),
-              text: "Manual",
-            ),
-            Tab(
               icon: Icon(Icons.calendar_month,
                   color: context.watch<AppState>().accentColor),
               text: "Scheduled",
+            ),
+            Tab(
+              icon: Icon(Icons.access_alarm,
+                  color: context.watch<AppState>().accentColor),
+              text: "Manual",
             ),
           ],
         ),
@@ -209,8 +217,8 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
           return TabBarView(
             controller: _tabController,
             children: [
-              buildListView(appState.manualAlarms),
               buildListView(appState.scheduledAlarms),
+              buildListView(appState.manualAlarms),
             ],
           );
         },
