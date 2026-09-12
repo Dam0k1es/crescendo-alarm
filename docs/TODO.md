@@ -1504,6 +1504,42 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-138 · Snooze (FR-20) — UMGESETZT (2026-09-12)
+
+- [x] `snoozeEnabled`, `snoozeTime`, Ursprungsruf-Merker; Schaltflaeche auf beiden Klingelschirmen;
+      Einstellungen in Sleep Habits.
+- **Anforderung zuerst geschrieben** (FR-20 in `docs/scheduling-v2-spec.md`), dann durchgerechnet,
+  dann implementiert - die Zahlen der Testfaelle stammen aus der Anforderung, nicht aus dem Code.
+- **Das Budget ist `durationToWakeUp`, und das traegt die eigentliche Zusicherung.** FR-2 legt den
+  Weckruf auf `Termin − durationToWakeUp − durationToGetReady`. Snooze darf nur die **erste** Dauer
+  aufbrauchen. Daraus folgt ohne eigene Pruefung: **wer nur snoozet, kommt trotzdem rechtzeitig
+  los** - die Zeit zum Fertigmachen bleibt unangetastet.
+- **Vorgaben:** Snooze aus, `snoozeTime` 5 min, `durationToWakeUp` **00:00** (vorher 00:30). Wird
+  Snooze eingeschaltet und ist die Dauer dabei 00:00, wird sie auf 00:10 gehoben - sonst waere das
+  Budget null und die gerade eingeschaltete Funktion von Anfang an tot. Ein gesetzter Wert bleibt;
+  Ausschalten setzt nichts zurueck.
+- **Zwei Wechselwirkungen, die ohne die Spec-Runde uebersehen worden waeren:**
+  1. Der verschobene Ruf ist ein **reiner Plattform-Alarm mit neuer ID**, kein `ScheduledAlarm`.
+     Sonst haette FR-18 ihn beim naechsten Abgleich entfernt - er liegt in der Zukunft und hat kein
+     geplantes Gegenstueck. Dass ein Plattform-Eintrag ohne Gegenstueck unberuehrt bleibt, ist
+     eigens geprueft (T-127) - diese Absicherung zahlt sich hier zum ersten Mal aus.
+  2. Der verschobene Ruf loest **keinen** Ring-Checkpoint aus. Er ist `AppState` unbekannt, also
+     greift die bestehende Regel "nur ein klingelnder `ScheduledAlarm` treibt die Kette" (T-73) von
+     selbst. Keine Sonderregel noetig.
+- **Sicherheitsverhalten:** erst wird der neue Ruf gestellt, dann der alte beendet. Scheitert das
+  Stellen, klingelt der alte weiter - der Nutzer steht nie ohne Wecker da. Eigener Test.
+- **Der Ursprungsruf wandert auf die neue ID mit,** sonst begaenne das Budget bei jedem Druck von
+  vorn. Er wird persistiert, sonst haette ein Prozesstod dasselbe bewirkt.
+- **QR:** Snooze ist auf dem Scanner-Schirm ohne Scan erreichbar. Den Code zu verlangen, um
+  **weiter geweckt** zu werden, waere sinnlos - und wuerde im Zweifel dazu fuehren, das Geraet ganz
+  abzuschalten. Abgeschaltet wird weiterhin nur mit Scan.
+- **Ein Widget fuer beide Schirme** (`SnoozeButton`), nicht zwei Kopien: die Budgetpruefung an zwei
+  Orten waere genau die Fehlerklasse der fuenf Checkpoint-Einstiegspunkte (T-87).
+- **Tests:** `test/snooze_test.dart` (die reine Budgetrechnung, inkl. der Durchrechnung "genau
+  sechs Verschiebungen, endet auf 06:30"), `test/snooze_state_test.dart` (Vorgaben, das Anheben
+  beim Einschalten, Persistenz, der Vorgang selbst mit eingespeisten Plattformaufrufen).
+- **Requirement:** R2, R3, R4
+
 ### T-137 · "Scheduled" ist der erste Reiter, "Manual" der zweite — UMGESETZT (2026-09-12)
 
 - [x] Reiter, Inhalte und Indexkonstanten getauscht.

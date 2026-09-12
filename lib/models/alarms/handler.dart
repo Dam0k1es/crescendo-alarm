@@ -149,6 +149,19 @@ class Handler {
             "=====handleAlarm: Failed to check if deactivation code is set: ${e.runtimeType}");
       }
 
+      // FR-20: den URSPRUENGLICHEN Weckzeitpunkt festhalten, bevor
+      // irgendein Schirm erscheint. Nur hier ist er ueberhaupt bekannt - die
+      // Schirme bekommen lediglich eine Alarm-ID. Er traegt das Snooze-Budget,
+      // und `rememberSnoozeOrigin` ueberschreibt einen vorhandenen Eintrag
+      // NICHT: klingelt ein bereits verschobener Ruf erneut, bleibt der erste
+      // Zeitpunkt stehen - sonst begaenne das Budget von vorn.
+      try {
+        _appState.rememberSnoozeOrigin(event.id, event.dateTime);
+      } catch (e) {
+        debugPrint(
+            "=====handleAlarm: rememberSnoozeOrigin failed: ${e.runtimeType}");
+      }
+
       // If the deactivation code is not set, show the alarm overlay
       if (!isDeactivationCodeSet) {
         debugPrint("=====handleAlarm: _appState.deactivationCode is null");

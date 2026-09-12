@@ -4,6 +4,7 @@ import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
+import 'package:wakeywakey/screens/alarms/snooze_button.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/utils/diag/diag_log.dart';
 import 'package:wakeywakey/models/alarms/handler.dart';
@@ -287,6 +288,26 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
         body: Stack(
           fit: StackFit.expand,
           children: [
+            // FR-20: Snooze braucht NIE den Code. Der Scan schaltet ab; Snooze
+            // verschiebt nur - und zwar innerhalb eines Budgets, das den Termin
+            // nicht gefaehrden kann. Einen Scan zu verlangen, um WEITER geweckt
+            // zu werden, waere sinnlos und wuerde den Nutzer im Zweifel dazu
+            // bringen, das Geraet ganz abzuschalten.
+            // `alarmId` ist hier nullable: der Schirm wird auch zum blossen
+            // Einlesen eines Codes geoeffnet, ohne dass etwas klingelt. Dann
+            // gibt es nichts zu verschieben.
+            if (widget.alarmId case final int ringingId)
+              SafeArea(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: SnoozeButton(
+                    alarmId: ringingId,
+                    onSnoozed: () {
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                  ),
+                ),
+              ),
             Center(
               child: MobileScanner(
                 fit: BoxFit.contain,

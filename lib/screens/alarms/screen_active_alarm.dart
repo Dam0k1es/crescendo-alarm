@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/models/alarms/handler.dart';
+import 'package:wakeywakey/screens/alarms/snooze_button.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
 class ScreenAlarmActive extends StatefulWidget {
@@ -71,6 +72,14 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(),
+              // FR-20: Snooze steht ueber dem Stop-Knopf und verschwindet, sobald
+              // das Budget erschoepft ist.
+              SnoozeButton(
+                alarmId: widget.alarmId,
+                onSnoozed: () {
+                  if (context.mounted) Navigator.pop(context);
+                },
+              ),
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(

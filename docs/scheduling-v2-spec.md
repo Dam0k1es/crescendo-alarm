@@ -123,6 +123,9 @@ dünne AppState-Schicht (Architektur) liest den tatsächlichen, aktuellen Versat
 | `lastProcessedConcludedDay` | `Date?` | Fortschritt der Tagesfortschreibung: bis zu welchem *abgeschlossenen* Tag haben FR-9 und FR-12 gezählt bzw. geprüft? Getrennt von `lastReplanDate` (`docs/TODO.md` T-75), weil beide Bedeutungen auseinanderfallen, sobald ein Checkpoint läuft, für den heute noch nicht abgeschlossen ist |
 | `pendingDayValues` | `Map<Datum, Instant?>` | die geplanten Werte selbst; `null` = kein Alarm für diesen Tag (Lückentag ohne `wunschzeit`, oder FR-9s Ventil). Revidierbar für jeden noch nicht ausgelösten Tag (FR-11), danach für immer fix. Nach unten begrenzt auf "ab vorgestern" (T-82) |
 | `pendingDayInstantAnchored` | `Map<Datum, bool>` | pro geplanten Tag: kam der Wert direkt aus einem echten `hardFloor` (instant-verankert) oder aus `wunschzeit`/der Kurve (wall-clock-verankert)? FR-16 Checkpoint 2 hat keinen Kalenderzugriff und kann das nicht neu ableiten |
+| `snoozeEnabled` | `bool` | FR-20: darf der Nutzer den Wecker verschieben? Standard **false** |
+| `snoozeTime` | `Duration` | FR-20: um wie viel ein Druck auf Snooze verschiebt. Standard **5 Minuten** |
+| `snoozeOriginOf` | `Map<int, Instant>` | FR-20: je klingelndem Alarm der **ursprüngliche** Weckzeitpunkt. Trägt das Restbudget über App-Neustarts und über mehrere Snooze-Vorgänge hinweg - ohne ihn wäre nach einem Prozesstod wieder das volle Budget da |
 | `overrunNotificationSent` | `bool` | FR-6 fordert "einmalig" - Merker für die laufende Overrun-Episode |
 | `safetyValveNotificationSent` | `bool` | dasselbe für FR-9 (`docs/TODO.md` T-81) |
 
@@ -690,3 +693,73 @@ stillschweigend als getestet zu behandeln.
 
 Phase 1–3 sind risikoärmsten (komplett `flutter test`, keine Mocks, keine Geräte) und liefern am
 schnellsten sichtbaren TDD-Fortschritt - dort zuerst anfangen.
+
+## FR-20 — Snooze: verschieben, nie abschalten
+
+**Grundsatz.** Snooze **deaktiviert den Wecker nie**. Es beendet das laufende Klingeln und stellt
+denselben Weckruf um `snoozeTime` später erneut. Ein Nutzer, der ausschließlich Snooze drückt, wird
+weiter geweckt, bis das Budget erschöpft ist - danach bleibt nur das reguläre Abschalten.
+
+**Das Budget ist `durationToWakeUp`, und das ist kein Zufall.** FR-2 legt den Weckzeitpunkt auf
+`frühester Termin − durationToWakeUp − durationToGetReady`. Die erste Dauer ist die Zeit zum
+Wachwerden, die zweite die zum Fertigmachen. Snooze darf ausschließlich die **erste** aufbrauchen:
+
+```
+Summe aller Verschiebungen eines Weckrufs <= durationToWakeUp
+```
+
+Daraus folgt die tragende Zusicherung, ohne dass sie eigens geprüft werden müsste: **wer nur
+snoozet, kommt trotzdem rechtzeitig los.** Das Fertigmachen bleibt unangetastet, der Termin wird
+nicht verpasst - und genau deshalb ist das Budget diese Dauer und keine eigene Zahl.
+
+Konkret: ein weiteres Snooze wird nur angeboten, wenn
+
+```
+jetzt + snoozeTime <= ursprünglicher Weckzeitpunkt + durationToWakeUp
+```
+
+Ist das nicht erfüllt, verschwindet die Snooze-Schaltfläche. Der Wecker klingelt weiter; der Nutzer
+muss ihn regulär abschalten.
+
+**Snooze braucht nie den QR-Code.** Auch wenn ein Deaktivierungscode gesetzt ist und das Abschalten
+ihn verlangt (das "garantierte Aufwachen"), ist Snooze ohne Scan erreichbar. Begründung: Snooze
+schaltet nichts ab - es verschiebt nur, und zwar innerhalb eines Budgets, das den Termin nicht
+gefährden kann. Den Code zu verlangen, um **weiter geweckt zu werden**, wäre sinnlos und würde den
+Nutzer im Zweifel dazu bringen, das Gerät ganz abzuschalten.
+
+**Vorgaben.** `snoozeEnabled` = `false`; `snoozeTime` = 5 Minuten; `durationToWakeUp` = `00:00`.
+Wird `snoozeEnabled` eingeschaltet und ist `durationToWakeUp` dabei `00:00`, wird es auf **10
+Minuten** gesetzt - sonst wäre das Budget null und die gerade eingeschaltete Funktion von Anfang an
+tot. Ein bereits gesetzter Wert bleibt unangetastet.
+
+**Zwei Wechselwirkungen, die nicht offensichtlich sind und ohne die es bricht:**
+
+1. **Der verschobene Weckruf darf FR-18 nicht in die Hände fallen.** FR-18 entfernt jeden
+   `ScheduledAlarm` in der Zukunft ohne geplantes Gegenstück - und ein auf `jetzt + snoozeTime`
+   verschobener Ruf hat keines. Er wird deshalb **nicht** als `ScheduledAlarm` geführt, sondern als
+   reiner Plattform-Alarm mit eigener ID, den `AppState` nicht kennt. FR-18 sieht ausschließlich
+   `appState.scheduledAlarms`; ein Plattform-Eintrag ohne Gegenstück bleibt unberührt (eigens
+   geprüft, `docs/TODO.md` T-127).
+2. **Der verschobene Ruf löst keinen Ring-Checkpoint aus.** FR-8s Checkpoint lief bereits beim
+   ersten Klingeln; der Tag ist abgeschlossen. Ein zweiter Checkpoint würde nichts hinzufügen, aber
+   FR-9s Zähler und FR-11s Anker erneut anfassen. Da der verschobene Ruf `AppState` unbekannt ist,
+   greift `Handler`s bestehende Regel "nur ein klingelnder `ScheduledAlarm` treibt die Kette"
+   (FR-15, `docs/TODO.md` T-73) von selbst - es ist keine zusätzliche Sonderregel nötig.
+
+**Manuelle Alarme** sind eingeschlossen: Snooze verschiebt auch sie, mit demselben Budget. FR-15
+bleibt gewahrt, weil der verschobene Ruf die `ScheduledAlarm`-Kette gar nicht berührt.
+
+- **Test (Budget):** `durationToWakeUp = 30min`, `snoozeTime = 5min`, Weckruf 06:00.
+  → Snooze ist möglich bis einschließlich der Verschiebung auf **06:30**; der Druck, der auf
+  06:35 führen würde, wird nicht mehr angeboten. Sechs Verschiebungen, danach Schluss.
+- **Test (Budget erschöpft trotz Wartens):** derselbe Aufbau, der Nutzer lässt bis 06:28 klingeln
+  und drückt dann Snooze → `06:28 + 5min = 06:33 > 06:30`, also **kein** Snooze mehr. Das Budget
+  zählt ab dem ursprünglichen Weckzeitpunkt, nicht ab dem letzten Druck.
+- **Test (Standard):** `snoozeEnabled = false` → keine Snooze-Schaltfläche, egal was die anderen
+  Werte sagen.
+- **Test (Einschalten):** `snoozeEnabled` von `false` auf `true` bei `durationToWakeUp = 00:00`
+  → `durationToWakeUp` steht danach auf `00:10`. Bei `durationToWakeUp = 00:45` bleibt es `00:45`.
+- **Test (QR):** Deaktivierungscode gesetzt → das Abschalten verlangt den Scan, Snooze **nicht**.
+- **Test (kein Abschalten):** nach einem Snooze ist der Weckruf weiterhin scharf; es gibt keinen
+  Zustand, in dem Snooze ihn entfernt hat.
+

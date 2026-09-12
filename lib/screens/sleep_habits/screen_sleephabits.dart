@@ -84,6 +84,11 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           break;
         // docs/TODO.md T-96: wie lange die Gentle-Wake-Rampe braucht, also wie
         // lange der Alarm leise bleibt. War vorher festverdrahtet.
+        // FR-20: um wie viel ein Druck auf Snooze verschiebt.
+        case 'snoozeTime':
+          _appState.snoozeTime =
+              Duration(hours: pickedTime.hour, minutes: pickedTime.minute);
+          break;
         case 'gentleWakeDuration':
           _appState.gentleWakeUpDuration =
               Duration(hours: pickedTime.hour, minutes: pickedTime.minute);
@@ -195,6 +200,19 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                   children: [
                     _buildLabel("Duration to wake up"),
                     _buildTimePicker("wakeUp", _appState.durationToWakeUp),
+                    // FR-20: dieselbe Dauer ist das Snooze-Budget. Der
+                    // Zusammenhang ist nicht zu erraten, also steht er da -
+                    // aber nur, wenn Snooze ueberhaupt an ist.
+                    if (_appState.snoozeEnabled)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4.0),
+                        child: Text(
+                          'Also your snooze budget: all snoozes together may '
+                          'push a wake-up by at most this much, so the time '
+                          'you need to get ready stays untouched.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -283,6 +301,51 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                         child: Text(
                           'At least 00:01 h - the alarm stays quiet for this '
                           'long before reaching full volume.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16.0),
+              // FR-20. Gehoert hierher und nicht zur Weckzeit-Gruppe: Snooze
+              // beschreibt, was beim Klingeln passiert, nicht wann geklingelt
+              // wird (dieselbe kausale Gruppierung wie T-95).
+              _buildTile(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildToggle(
+                      "Snooze",
+                      _appState.snoozeEnabled,
+                      (value) {
+                        // Der Setter hebt `durationToWakeUp` beim Einschalten
+                        // von 00:00 auf 00:10 - sonst waere das Budget null
+                        // und die Funktion von Anfang an tot.
+                        _appState.snoozeEnabled = value;
+                        // Die Weckzeit selbst aendert sich dadurch (FR-2 zieht
+                        // `durationToWakeUp` ab), also muss neu geplant werden.
+                        runCheckpointSafely(_appState,
+                            trigger: CheckpointTrigger.settingsChanged);
+                      },
+                    ),
+                    if (_appState.snoozeEnabled) ...[
+                      _buildLabel("Snooze time"),
+                      _buildTimePicker(
+                        "snoozeTime",
+                        TimeOfDay(
+                          hour: _appState.snoozeTime.inHours,
+                          minute: _appState.snoozeTime.inMinutes % 60,
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4.0),
+                        child: Text(
+                          'Snooze never switches the alarm off - it only moves '
+                          'it. No QR code needed, even when one is required to '
+                          'stop it. Once "Duration to wake up" is used up, '
+                          'snoozing stops being offered.',
                           style: TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                       ),

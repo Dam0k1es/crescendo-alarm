@@ -36,7 +36,13 @@ class AppState extends ChangeNotifier {
 
   // Sleep Goal Configuration variables
   TimeOfDay _sleepGoal = const TimeOfDay(hour: 8, minute: 0);
-  TimeOfDay _durationToWakeUp = const TimeOfDay(hour: 0, minute: 30);
+  // FR-20: Vorgabe 00:00. Ohne Snooze gibt es keinen Grund, den Wecker vor den
+  // Termin zu ziehen; mit Snooze ist diese Dauer das Budget und wird beim
+  // Einschalten auf 00:10 gehoben.
+  TimeOfDay _durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
+  bool _snoozeEnabled = false;
+  Duration _snoozeTime = const Duration(minutes: 5);
+  Map<int, DateTime> _snoozeOriginOf = <int, DateTime>{};
   TimeOfDay _durationToGetReady = const TimeOfDay(hour: 1, minute: 0);
 
   bool _reminderEnabled = false;
@@ -108,6 +114,37 @@ class AppState extends ChangeNotifier {
   TimeOfDay get sleepGoal => _sleepGoal;
 
   TimeOfDay get durationToWakeUp => _durationToWakeUp;
+
+  /// FR-20: darf der Nutzer den Wecker verschieben? Vorgabe **aus**.
+  bool get snoozeEnabled => _snoozeEnabled;
+
+  /// FR-20: um wie viel ein Druck auf Snooze verschiebt. Vorgabe 5 Minuten.
+  Duration get snoozeTime => _snoozeTime;
+
+  /// FR-20: der **urspruengliche** Weckzeitpunkt eines gerade verschobenen
+  /// Rufes. Traegt das Restbudget ueber mehrere Snooze-Vorgaenge und ueber
+  /// einen Prozesstod hinweg - ohne ihn haette der Nutzer nach einem Neustart
+  /// wieder das volle Budget, und Snooze waere unbegrenzt.
+  DateTime? snoozeOriginFor(int alarmId) => _snoozeOriginOf[alarmId];
+
+  void rememberSnoozeOrigin(int alarmId, DateTime originalRing) {
+    if (_snoozeOriginOf.containsKey(alarmId)) return; // nur der ERSTE Ruf zaehlt
+    _snoozeOriginOf = {..._snoozeOriginOf, alarmId: originalRing};
+    _saveSnoozeOrigins();
+    notifyListeners();
+  }
+
+  void forgetSnoozeOrigin(int alarmId) {
+    if (!_snoozeOriginOf.containsKey(alarmId)) return;
+    _snoozeOriginOf = {..._snoozeOriginOf}..remove(alarmId);
+    _saveSnoozeOrigins();
+    notifyListeners();
+  }
+
+  void _saveSnoozeOrigins() => _prefs.setString(
+      'snoozeOriginOf',
+      jsonEncode(_snoozeOriginOf
+          .map((id, at) => MapEntry('$id', at.millisecondsSinceEpoch))));
 
   // TODO durationToGetReady per Weekday - 0x399
   TimeOfDay get durationToGetReady => _durationToGetReady;
@@ -346,6 +383,28 @@ class AppState extends ChangeNotifier {
   set sleepGoal(TimeOfDay value) {
     _sleepGoal = value;
     _prefs.setString('sleepGoal', '${_sleepGoal.hour}:${_sleepGoal.minute}');
+    notifyListeners();
+  }
+
+  /// FR-20. Wird Snooze eingeschaltet und ist [durationToWakeUp] dabei
+  /// `00:00`, wird es auf 10 Minuten gehoben: sonst waere das Budget null und
+  /// die gerade eingeschaltete Funktion von Anfang an tot. Ein bereits
+  /// gesetzter Wert bleibt unangetastet - und Ausschalten setzt nichts
+  /// zurueck, damit eine kurze Abschaltung die Einstellung nicht verliert.
+  set snoozeEnabled(bool value) {
+    _snoozeEnabled = value;
+    _prefs.setBool('snoozeEnabled', value);
+    if (value &&
+        _durationToWakeUp.hour == 0 &&
+        _durationToWakeUp.minute == 0) {
+      durationToWakeUp = const TimeOfDay(hour: 0, minute: 10);
+    }
+    notifyListeners();
+  }
+
+  set snoozeTime(Duration value) {
+    _snoozeTime = value;
+    _prefs.setInt('snoozeTimeMinutes', value.inMinutes);
     notifyListeners();
   }
 
@@ -655,6 +714,41 @@ class AppState extends ChangeNotifier {
     await Alarm.set(alarmSettings: alarmSettings);
   }
 
+  /// FR-20: stellt den **verschobenen** Weckruf als reinen Plattform-Alarm.
+  ///
+  /// Bewusst ohne Eintrag in [scheduledAlarms] oder [manualAlarms]: FR-18
+  /// entfernt jeden `ScheduledAlarm` in der Zukunft ohne geplantes Gegenstueck,
+  /// und ein verschobener Ruf hat keines. Ein Plattform-Eintrag, den die App
+  /// nicht als eigenen Alarm fuehrt, bleibt dagegen unberuehrt (T-127).
+  ///
+  /// Ton, Lautstaerke und Rampe kommen aus den aktuellen Einstellungen - der
+  /// verschobene Ruf soll klingen wie der, den er ersetzt.
+  Future<void> setSnoozeAlarm(int id, DateTime at) async {
+    await Alarm.set(
+      alarmSettings: AlarmSettings(
+        id: id,
+        dateTime: alarmPlatformTime(at),
+        assetAudioPath: _selectedTone,
+        volumeSettings: _gentleWakeUpEnabled
+            ? VolumeSettings.fade(
+                volume: _selectedVolume,
+                fadeDuration: _gentleWakeUpDuration,
+              )
+            : VolumeSettings.fixed(volume: _selectedVolume),
+        notificationSettings: const NotificationSettings(
+          title: 'Snoozed alarm',
+          body: "Your alarm is ringing",
+        ),
+        loopAudio: true,
+        vibrate: true,
+        warningNotificationOnKill: true,
+        androidFullScreenIntent: true,
+      ),
+    );
+  }
+
+  Future<void> stopPlatformAlarm(int id) => _stopAlarm(id);
+
   Future<void> _stopAlarm(int id) async {
     await Alarm.stop(id);
   }
@@ -712,6 +806,22 @@ class AppState extends ChangeNotifier {
   }
 
   DateTime? _loadLastReplanDate() => _loadStoredDate('lastReplanDate');
+
+  /// FR-20. Fehlerhafte oder alte Daten fuehren zu einer leeren Karte, nie zu
+  /// einem Startabbruch - dieselbe Haltung wie bei den uebrigen geladenen
+  /// Feldern (docs/TODO.md T-45).
+  Map<int, DateTime> _loadSnoozeOrigins() {
+    try {
+      final raw = _prefs.getString('snoozeOriginOf');
+      if (raw == null) return <int, DateTime>{};
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      return decoded.map((id, millis) => MapEntry(
+          int.parse(id), DateTime.fromMillisecondsSinceEpoch(millis as int)));
+    } catch (e) {
+      debugPrint("=====_loadSnoozeOrigins: ${e.runtimeType}");
+      return <int, DateTime>{};
+    }
+  }
 
   /// docs/TODO.md T-75. Falls back to the old `lastReplanDate` key when the
   /// new one is absent: on an app that was installed before the two markers
@@ -932,6 +1042,10 @@ class AppState extends ChangeNotifier {
               _safetyValveNotificationSent;
       _diagnosticsEnabled =
           _prefs.getBool('diagnosticsEnabled') ?? _diagnosticsEnabled;
+      _snoozeEnabled = _prefs.getBool('snoozeEnabled') ?? _snoozeEnabled;
+      final snoozeMinutes = _prefs.getInt('snoozeTimeMinutes');
+      if (snoozeMinutes != null) _snoozeTime = Duration(minutes: snoozeMinutes);
+      _snoozeOriginOf = _loadSnoozeOrigins();
       _diagnosticsIncludeClockTimes =
           _prefs.getBool('diagnosticsIncludeClockTimes') ??
               _diagnosticsIncludeClockTimes;
