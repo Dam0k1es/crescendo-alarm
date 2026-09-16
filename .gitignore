@@ -451,3 +451,9 @@ __pycache__/
 # Build-Ergebnis, aendert sich mit jedem Feature und waere 80 MB pro Commit.
 current.apk
 
+
+# Evidence from scripts/verify-alarm-survival.sh (device model, serial and raw
+# dumpsys output of the maintainer's own phone - untracked on purpose, see the
+# PII policy in CLAUDE.md). Only *.log was ignored before, which would have let
+# any other artefact in that directory slip into a commit.
+evidence/

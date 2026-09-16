@@ -1,9 +1,13 @@
 // Real end-to-end tests, driven against a real (emulated or physical)
 // Android device via `flutter test integration_test/` (or `flutter drive`).
 // These exercise the actual native `alarm` plugin - alarms really fire via
-// the OS. Scenario 3's persistence check currently reads an in-process
-// SharedPreferences cache rather than a genuine on-device storage round-trip
-// (see docs/TODO.md T-04) - it does not yet prove what its name suggests.
+// the OS. Scenario 3's persistence check does a genuine storage round-trip
+// since docs/TODO.md T-04: it resets the memoised SharedPreferences instance
+// and reloads from the platform before re-reading. It used to read back an
+// in-process cache and would have stayed green with storage entirely broken.
+// What it still does NOT cover is survival across a real process death or
+// reboot - that is measured outside the suite by
+// `scripts/verify-alarm-survival.sh` against a physical phone (T-93).
 //
 // Prerequisites (see .github/workflows for how CI sets these up):
 // - All dangerous permissions pre-granted via `adb shell pm grant` /
@@ -333,15 +337,38 @@ void main() {
     (tester) async {
       final appState = await pumpFreshApp(tester);
       await createManualAlarmOneMinuteFromNow(tester, appState);
+      final created = appState.manualAlarms.single;
 
-      // Don't wait for it to ring - just confirm it's really on disk by
-      // constructing a completely fresh AppState (as a real app restart
-      // would) and checking it reads the alarm back via SharedPreferences,
-      // rather than relying on in-memory state.
+      // docs/TODO.md T-04: this test used to prove nothing. Building a fresh
+      // `AppState` does NOT re-read storage - `SharedPreferences.getInstance()`
+      // memoises its instance behind a static `Completer` and answers every
+      // read from an in-process cache, so the "restart" read back exactly the
+      // object graph the test had just written in memory. It would have stayed
+      // green with storage entirely broken.
+      //
+      // Two steps are needed to make it a real round-trip, and both matter:
+      // `resetStatic()` drops the memoised instance, and `reload()` makes the
+      // next instance fetch its values from the platform instead of the cache.
+      SharedPreferences.resetStatic();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+
       final reloaded = AppState();
       await reloaded.initialized;
 
-      expect(reloaded.manualAlarms, isNotEmpty);
+      // And not just "some alarm came back": id and time, because a wrong id
+      // is exactly what a broken round-trip produces - the list looks right
+      // and no longer matches the alarm the platform has armed.
+      expect(reloaded.manualAlarms, hasLength(1));
+      expect(reloaded.manualAlarms.single.id, created.id);
+      expect(reloaded.manualAlarms.single.time, created.time);
+
+      // The other half of the durability question (R3): the alarm the OS holds
+      // must still be there too, and carry the same id.
+      final platformIds = (await Alarm.getAlarms()).map((a) => a.id).toSet();
+      expect(platformIds, contains(created.id),
+          reason: 'the app remembers the alarm, but AlarmManager is what makes '
+              'it ring');
     },
     timeout: const Timeout(Duration(minutes: 1)),
   );

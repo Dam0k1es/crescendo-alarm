@@ -18,3 +18,20 @@
 
   Sobald ein Lauf einen eigenen Alarm tatsächlich zeigt, gehört dessen echte
   Ausgabe hier hinein und dieser Absatz gestrichen.
+
+## uiautomator_*.xml
+
+Recorded accessibility trees for `scripts/verify-alarm-survival.sh`, which taps
+its way through the app to arm an alarm before measuring. Two things about them
+are deliberate:
+
+- In `uiautomator_alarms_screen.xml` the node `Manual Alarm List` comes
+  **before** the tab `Manual`. A pattern that matches a label as a prefix then
+  grabs the wrong node, and the self-test turns red. In the original ordering
+  the same broken pattern passed by luck, because `head -1` still happened to
+  take the right node - a compensating error of exactly the kind this project
+  has been bitten by before.
+- `uiautomator_empty.xml` is the tree a Flutter app shows on the *first* dump:
+  the semantics tree is only built once an accessibility client connects, and
+  `uiautomator dump` is that client. The script therefore retries, and the
+  self-test pins that an empty tree yields no coordinate rather than a bogus one.

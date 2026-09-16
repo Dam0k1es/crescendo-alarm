@@ -121,12 +121,34 @@ void main() {
   group('FR-21: the state survives a restart', () {
     test('switching off is persisted', () async {
       final appState = await _fresh();
-      await appState.addAlarm(
-          _alarmAt(const TimeOfDay(hour: 7, minute: 30), enabled: false));
+      // Created SWITCHED ON, deliberately: if it were added switched off,
+      // `addAlarm` would already have written `enabled: false`, and this test
+      // would stay green even with the save in `setManualAlarmEnabled`
+      // removed. It only pins the toggle's own write when the stored value has
+      // to change (verified by exactly that mutation).
+      //
+      // Arming throws here - a unit test has no platform channel - and that
+      // happens after the alarm was added to the list and saved, so catching
+      // it leaves the same state a real device would have.
+      try {
+        await appState.addAlarm(_alarmAt(const TimeOfDay(hour: 7, minute: 30)));
+      } catch (_) {
+        // expected: Alarm.set has no channel here
+      }
       final stored = appState.manualAlarms.single;
+      expect(stored.enabled, isTrue);
 
       final ok = await appState.setManualAlarmEnabled(stored, false);
       expect(ok, isTrue);
+
+      // docs/TODO.md T-04: a fresh AppState alone does not prove a round-trip.
+      // SharedPreferences.getInstance() memoises its instance and answers from
+      // an in-process cache, so a "restart" can read back the object graph the
+      // test just wrote in memory. Dropping the memoised instance and
+      // reloading is what the integration test needed; here it costs nothing
+      // and keeps both sides of the assertion honest.
+      SharedPreferences.resetStatic();
+      await (await SharedPreferences.getInstance()).reload();
 
       final reloaded = AppState();
       await reloaded.initialized;

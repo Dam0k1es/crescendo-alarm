@@ -133,8 +133,16 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
 
 ### T-04 · Alarm survival across reboot and force-stop is unverified
 
-- [ ] Add a real restart scenario to the E2E run, and fix the test that currently claims to cover
-      persistence.
+- [x] Fixed the test that claimed to cover persistence. `integration_test/app_test.dart`'s
+      scenario 3 now calls `SharedPreferences.resetStatic()` and `reload()` before re-reading, and
+      asserts the alarm's **id and time** plus its presence in `Alarm.getAlarms()` - previously it
+      built a fresh `AppState`, which re-read the memoised in-process cache and would have stayed
+      green with storage entirely broken. The same hardening went into
+      `test/disabled_manual_alarm_test.dart`, where a mutation (dropping the save) proved the
+      assertion had been vacuous until the alarm was created **switched on**.
+- [ ] Open: a real restart scenario. The route for it is now
+      `scripts/verify-alarm-survival.sh` (see T-93), not the E2E suite: `flutter test` uninstalls
+      the app at the end, and an uninstalled package has no AlarmManager entries left.
 - **Why:** for an alarm clock this is the only durability question that matters, and nothing tests
   it. The test named *"a created alarm survives being reloaded from on-device storage"* does not
   touch storage: `SharedPreferences.getInstance()` memoises its instance behind a static
@@ -2844,7 +2852,19 @@ macht und die heute in der uebrigen Suite unsichtbar bleibt.
 
 - [x] Ein Verfahren, das die Frage ohne Wartezeit beantwortet.
 - [x] Das Verfahren einmal wirklich laufen lassen (Lauf 34566962847, 2026-09-11).
-- [ ] Ein **verwertbares** Ergebnis eintragen und das Bein dann scharf stellen.
+- [x] A route that can answer the question at all: `scripts/verify-alarm-survival.sh` measures
+      against a **real phone over USB** - no GitHub Actions and no emulator. That removes T-131's
+      structural blocker (the app stays installed) and this VM's emulator problem (T-94) in one
+      go. The alarm is armed through the app's **own UI**, located via `uiautomator dump` in the
+      accessibility tree rather than by fixed coordinates, so it does not depend on one phone's
+      screen size. The counting moved to `.github/scripts/alarm_detection.sh` and is now shared by
+      both scripts - a second copy would be a second chance at T-99/T-103. The tap locating proves
+      itself against recorded accessibility trees too, and that self-test immediately caught a real
+      bug: `tr '>' '>\n'` cannot map one character to two, so all three taps would have landed in
+      the middle of the screen and the script would have reported "not measurable" while the app
+      was fine.
+- [ ] Open: run the script once with a phone attached and record the result here. **Until then the
+      question remains unanswered** - the script is verified mechanism, not yet a measurement.
 - **Ursache seit 2026-09-11 bekannt und strukturell (T-131):** `flutter test` deinstalliert die
   App nach dem Lauf, Android verwirft damit ihre AlarmManager-Eintraege - es kann zum Messzeitpunkt
   gar kein Alarm registriert sein. Das Verfahren braucht also einen anderen Weg, den Alarm scharf

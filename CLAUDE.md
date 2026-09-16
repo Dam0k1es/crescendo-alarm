@@ -178,6 +178,21 @@ as a failure in a few seconds, which reads like an infrastructure blip rather th
 Three runs were burned that way on one commit (a duplicated `restore-keys:` inside one `with:`
 mapping) before the cause was found.
 
+**Alarm survival (R3) is measured against a real phone, not in CI.**
+`scripts/verify-alarm-survival.sh` installs/uses the app on a USB-connected device, arms an alarm
+**through the app's own UI** (located via `uiautomator dump` in the accessibility tree, not by
+fixed coordinates), then reboots and force-stops, reading `dumpsys alarm` at each step. Two reasons
+it is not a CI job: inside the E2E run the question is structurally unanswerable, because
+`flutter test` uninstalls the app afterwards and Android drops a package's AlarmManager entries
+with it (`docs/TODO.md` T-131); and the emulator is unreliable on this VM's nested virtualisation
+(T-94). Run it with `scripts/verify-alarm-survival.sh --apk current.apk`; `--self-test` checks both
+self-tests without any device. Its evidence lands in `evidence/` (gitignored - it contains the
+device model and serial).
+
+The counting itself lives in `.github/scripts/alarm_detection.sh`, shared by that script and the CI
+leg. Keep it that way: a second copy is a second chance to repeat T-99/T-103, where a generic
+substring counted another app's alarms and produced a confident, unfounded verdict.
+
 `.github/scripts/check_alarm_survival.sh --self-test` is the other cheap local check: it runs the
 alarm-detection logic against recorded `dumpsys alarm` output in `.github/scripts/fixtures/`, needs
 no emulator, and runs in CI's UTC leg. It exists because that script produces a *verdict* ("the
