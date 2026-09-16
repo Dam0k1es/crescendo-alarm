@@ -311,7 +311,7 @@ Future<ReplanResult> replan(
     instantAnchoredDays: result.instantAnchoredDays.length,
     overrunFlag: result.overrunNotificationNeeded,
     safetyValveFlag: result.safetyValveTriggered,
-    hasWunschzeit: appState.preferredWakeUpTime != null,
+    hasPreferredWakeUpTime: appState.preferredWakeUpTime != null,
     maxStep: bucketMinutes(_maxStepMinutes(result.valuesByDay, window)),
     storedEntriesTotal: mergedValues.length,
     storedEntriesPruned: prunedCount,

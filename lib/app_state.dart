@@ -62,7 +62,7 @@ class AppState extends ChangeNotifier {
   bool _safetyValveNotificationSent = false;
   bool _diagnosticsEnabled = true;
   bool _diagnosticsIncludeClockTimes = false;
-  TimeOfDay? _wunschzeit;
+  TimeOfDay? _preferredWakeUpTime;
   Duration _maxDailyDelta = const Duration(minutes: 15);
 
   static const _maxDailyDeltaMinimum = Duration(minutes: 15);
@@ -264,7 +264,7 @@ class AppState extends ChangeNotifier {
   /// mitzuhaengen.
   bool get diagnosticsIncludeClockTimes => _diagnosticsIncludeClockTimes;
 
-  TimeOfDay? get preferredWakeUpTime => _wunschzeit;
+  TimeOfDay? get preferredWakeUpTime => _preferredWakeUpTime;
 
   Duration get maxDailyDelta => _maxDailyDelta;
 
@@ -394,17 +394,17 @@ class AppState extends ChangeNotifier {
   }
 
   set preferredWakeUpTime(TimeOfDay? value) {
-    _wunschzeit = value;
+    _preferredWakeUpTime = value;
     if (value == null) {
-      // Der gespeicherte SCHLUESSEL bleibt 'wunschzeit', obwohl der Bezeichner
-      // jetzt englisch ist: er benennt Nutzerdaten auf bereits installierten
-      // Geraeten. Ihn umzubenennen wuerde die Einstellung jedes bestehenden
-      // Nutzers stillschweigend verwerfen - ein Datenverlust fuer eine reine
-      // Kosmetik. Wer ihn doch umstellt, braucht einen Rueckfallweg, der den
-      // alten Schluessel beim Laden noch liest.
-      _prefs.remove('wunschzeit');
+      // The stored key was renamed from 'preferredWakeUpTime' along with the
+      // identifier. That drops the setting of anyone who upgrades from an
+      // older build, because nothing reads the old key any more. The
+      // maintainer accepted this explicitly while the app is still in its
+      // test phase - no production users exist yet. Once it ships, a key
+      // rename needs a fallback read of the old key instead.
+      _prefs.remove('preferredWakeUpTime');
     } else {
-      _prefs.setString('wunschzeit', '${value.hour}:${value.minute}');
+      _prefs.setString('preferredWakeUpTime', '${value.hour}:${value.minute}');
     }
     notifyListeners();
   }
@@ -881,13 +881,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  TimeOfDay? _loadWunschzeit() {
+  TimeOfDay? _loadPreferredWakeUpTime() {
     try {
-      final data = _prefs.getString('wunschzeit');
+      final data = _prefs.getString('preferredWakeUpTime');
       if (data == null) return null;
       return timeOfDayFromString(data);
     } catch (e) {
-      debugPrint("=====_loadWunschzeit: Error loading preferredWakeUpTime: ${e.runtimeType}");
+      debugPrint("=====_loadPreferredWakeUpTime: Error loading preferredWakeUpTime: ${e.runtimeType}");
       return null;
     }
   }
@@ -1087,7 +1087,7 @@ class AppState extends ChangeNotifier {
       _diagnosticsIncludeClockTimes =
           _prefs.getBool('diagnosticsIncludeClockTimes') ??
               _diagnosticsIncludeClockTimes;
-      _wunschzeit = _loadWunschzeit();
+      _preferredWakeUpTime = _loadPreferredWakeUpTime();
       final maxDailyDeltaMinutes = _prefs.getInt('maxDailyDeltaMinutes');
       if (maxDailyDeltaMinutes != null) {
         _maxDailyDelta = Duration(minutes: maxDailyDeltaMinutes);

@@ -93,7 +93,7 @@ enum DiagField {
   instantAnchoredDays(42),
   overrunFlag(43),
   safetyValveFlag(44),
-  hasWunschzeit(45),
+  hasPreferredWakeUpTime(45),
   maxStepBucket(46),
   // Kalender (T-70)
   calendarCount(50),
@@ -679,7 +679,7 @@ abstract final class Diag {
     required int instantAnchoredDays,
     required bool overrunFlag,
     required bool safetyValveFlag,
-    required bool hasWunschzeit,
+    required bool hasPreferredWakeUpTime,
     required MinuteBucket maxStep,
     required int storedEntriesTotal,
     required int storedEntriesPruned,
@@ -693,7 +693,7 @@ abstract final class Diag {
         DiagField.instantAnchoredDays: instantAnchoredDays,
         DiagField.overrunFlag: overrunFlag ? 1 : 0,
         DiagField.safetyValveFlag: safetyValveFlag ? 1 : 0,
-        DiagField.hasWunschzeit: hasWunschzeit ? 1 : 0,
+        DiagField.hasPreferredWakeUpTime: hasPreferredWakeUpTime ? 1 : 0,
         DiagField.maxStepBucket: maxStep.code,
         DiagField.storedEntriesTotal: storedEntriesTotal,
         DiagField.storedEntriesPruned: storedEntriesPruned,
@@ -788,20 +788,19 @@ abstract final class Diag {
   /// die Ausnahme geht als `runtimeType` und Kategorie ein, nie als Nachricht.
   /// `FormatException.toString()` echot einen Ausschnitt der
   /// Quellzeichenkette - genau darueber sind in T-89 Nutzdaten ausgetreten.
-  /// Ein einzelner Fenstertag: geplante Weckzeit und fruehester Termin des
-  /// Tages, beide als Minute des lokalen Tages (0..1439), `-1` fuer "keiner"
-  /// (docs/TODO.md T-135).
+  /// A single window day: the planned wake time and the day's earliest
+  /// appointment, both as a minute of the local day (0..1439), `-1` for
+  /// "none" (docs/TODO.md T-135).
   ///
-  /// **Das einzige Ereignis mit Uhrwerten.** Es schreibt nur, wenn
-  /// [setIncludeClockTimes] eingeschaltet ist; sonst ist es ein No-op. Gebaut
-  /// fuer genau die Frage, die sich aus dem uebrigen Log nicht beantworten
-  /// laesst: *warum* steht an einem Tag diese Weckzeit - liegt es am Termin,
-  /// an der Kurve oder an der Wunschzeit? Ohne die beiden Zahlen ist das aus
-  /// Zaehlungen und Buckets nicht zu rekonstruieren; mit ihnen ist ein
-  /// Wochenplan nachrechenbar.
+  /// **The only event carrying clock values.** It writes only while
+  /// [setIncludeClockTimes] is on; otherwise it is a no-op. Built for exactly
+  /// the question the rest of the log cannot answer: *why* does a given day
+  /// carry this wake time - is it the appointment, the curve, or the
+  /// preferred wake-up time? Counts and buckets alone cannot reconstruct
+  /// that; with these two numbers a week's plan can be recomputed by hand.
   ///
-  /// [dayOffset] bleibt relativ (wie ueberall im Log), die Minuten sind
-  /// bewusst OHNE Datum - ein Kalendertag ist daraus nicht zu gewinnen.
+  /// [dayOffset] stays relative (as everywhere in the log), and the minutes
+  /// deliberately carry NO date - no calendar day can be derived from them.
   static void dayPlanned({
     required int dayOffset,
     required int plannedMinuteOfDay,

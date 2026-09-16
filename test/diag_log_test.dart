@@ -223,7 +223,7 @@ void main() {
         instantAnchoredDays: 1,
         overrunFlag: false,
         safetyValveFlag: false,
-        hasWunschzeit: true,
+        hasPreferredWakeUpTime: true,
         maxStep: MinuteBucket.plusQuarter,
         storedEntriesTotal: 9,
         storedEntriesPruned: 2,
