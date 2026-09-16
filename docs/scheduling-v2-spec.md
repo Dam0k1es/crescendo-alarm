@@ -123,6 +123,7 @@ dünne AppState-Schicht (Architektur) liest den tatsächlichen, aktuellen Versat
 | `lastProcessedConcludedDay` | `Date?` | Fortschritt der Tagesfortschreibung: bis zu welchem *abgeschlossenen* Tag haben FR-9 und FR-12 gezählt bzw. geprüft? Getrennt von `lastReplanDate` (`docs/TODO.md` T-75), weil beide Bedeutungen auseinanderfallen, sobald ein Checkpoint läuft, für den heute noch nicht abgeschlossen ist |
 | `pendingDayValues` | `Map<Datum, Instant?>` | die geplanten Werte selbst; `null` = kein Alarm für diesen Tag (Lückentag ohne `wunschzeit`, oder FR-9s Ventil). Revidierbar für jeden noch nicht ausgelösten Tag (FR-11), danach für immer fix. Nach unten begrenzt auf "ab vorgestern" (T-82) |
 | `pendingDayInstantAnchored` | `Map<Datum, bool>` | pro geplanten Tag: kam der Wert direkt aus einem echten `hardFloor` (instant-verankert) oder aus `wunschzeit`/der Kurve (wall-clock-verankert)? FR-16 Checkpoint 2 hat keinen Kalenderzugriff und kann das nicht neu ableiten |
+| `disabledDays` | `Set<Datum>` | FR-21: Tage, fuer die der Nutzer den geplanten Wecker ausdruecklich **abgeschaltet** hat. Getrennt von `pendingDayValues`, weil `null` dort "nichts geplant" heisst (FR-9/FR-10) und von der naechsten Planung ueberschrieben wuerde - das Veto des Nutzers darf das nicht |
 | `snoozeEnabled` | `bool` | FR-20: darf der Nutzer den Wecker verschieben? Standard **false** |
 | `snoozeTime` | `Duration` | FR-20: um wie viel ein Druck auf Snooze verschiebt. Standard **5 Minuten** |
 | `snoozeOriginOf` | `Map<int, Instant>` | FR-20: je klingelndem Alarm der **ursprüngliche** Weckzeitpunkt. Trägt das Restbudget über App-Neustarts und über mehrere Snooze-Vorgänge hinweg - ohne ihn wäre nach einem Prozesstod wieder das volle Budget da |
@@ -762,4 +763,51 @@ bleibt gewahrt, weil der verschobene Ruf die `ScheduledAlarm`-Kette gar nicht be
 - **Test (QR):** Deaktivierungscode gesetzt → das Abschalten verlangt den Scan, Snooze **nicht**.
 - **Test (kein Abschalten):** nach einem Snooze ist der Weckruf weiterhin scharf; es gibt keinen
   Zustand, in dem Snooze ihn entfernt hat.
+
+## FR-21 — Ein abgeschalteter Wecker klingelt nicht
+
+**Grundsatz.** Schaltet der Nutzer einen geplanten Wecker ueber den Schalter in der Alarmliste aus,
+klingelt er nicht - sofort, dauerhaft und ueber Neustarts hinweg.
+
+Das ist heute **nicht** so: `enabled` wird gespeichert, durch Konstruktoren gereicht, verglichen
+und an den UI-Schalter gebunden, aber an keiner Stelle gelesen, wenn ein Alarm gestellt oder
+abgebrochen wird (`docs/TODO.md` T-03, ein P0-Blocker). Der Schalter sieht aus wie eine Zusage und
+ist keine - fuer eine Wecker-App die schlechteste Sorte Fehler, weil der Nutzer sich darauf
+verlaesst und erst beim Klingeln merkt, dass es nicht stimmte.
+
+**Drei Zusicherungen:**
+
+1. **Sofort.** Beim Ausschalten wird der bereits scharf gestellte Plattform-Alarm dieses Tages
+   abgebrochen, nicht erst beim naechsten Checkpoint.
+2. **Dauerhaft.** Der naechste Planungslauf stellt ihn **nicht** wieder. Das ist die Zusicherung,
+   an der ein naiver Fix scheitert: FR-18 baut die Alarmmenge bei **jeder** Neuplanung aus
+   `pendingDayValues` auf, ein blosses `Alarm.stop()` beim Umlegen des Schalters waere also beim
+   naechsten Ring-Checkpoint wieder rueckgaengig gemacht - und der laeuft garantiert, weil ein
+   anderer Wecker klingelt.
+3. **Ueber Neustarts.** Der Zustand ist persistiert.
+
+**Warum ein eigenes Feld (`disabledDays`) und nicht `pendingDayValues[tag] = null`:** dort bedeutet
+`null` "nichts geplant" (Lueckentag ohne `wunschzeit`, oder FR-9s Ventil), und der naechste
+Planungslauf ueberschreibt den Eintrag aus der Rechnung heraus. Das Veto des Nutzers wuerde dabei
+verschwinden. Es ist eine andere Aussage als der Plan - deshalb steht es daneben, nicht darin. FR-3s
+Warnung vor einer "zweiten Quelle" gilt dem *abgeleiteten* `lastEffectiveWakeTime`, nicht einer
+eigenstaendigen Nutzerentscheidung.
+
+**Abgrenzungen:**
+
+- Der abgeschaltete Tag bleibt im Plan und bleibt **Anker** fuer die Glaettung (FR-4/FR-6). Der
+  Nutzer hat gesagt "an diesem Tag nicht wecken", nicht "diesen Tag aus meinem Rhythmus streichen".
+- FR-9s Zaehler ist unberuehrt: ein abgeschalteter Tag ist kein termin-loser Tag.
+- Wird der Tag wieder eingeschaltet, gilt sofort wieder der geplante Wert.
+- Ein abgeschalteter Tag, der vorbei ist, wird mit `pendingDayValues` aufgeraeumt (dieselbe
+  Aufbewahrungsgrenze, T-82) - sonst waechst die Menge unbegrenzt.
+- **Snooze (FR-20) ist davon unberuehrt:** es gibt nichts zu verschieben, was nicht klingelt.
+
+- **Test:** Wecker fuer morgen abschalten → `Alarm.getAlarms()` enthaelt ihn nicht mehr; ein
+  anschliessender Checkpoint (Ring, Einstellungsaenderung, Sync-Knopf) stellt ihn **nicht** wieder;
+  nach einem App-Neustart bleibt er aus.
+- **Test:** derselbe Tag wieder eingeschaltet → der geplante Wert ist unveraendert da und wird
+  wieder gestellt.
+- **Test:** ein abgeschalteter Tag aendert die Weckzeiten der uebrigen Tage **nicht** - er bleibt
+  Anker der Kurve.
 
