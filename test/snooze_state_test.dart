@@ -29,7 +29,7 @@ void main() {
   });
 
   group('FR-20: Einschalten macht das Budget brauchbar', () {
-    test('bei 00:00 wird durationToWakeUp auf 00:10 gesetzt', () async {
+    test('bei 00:00 wird durationToWakeUp auf 00:10 armed', () async {
       final appState = await _fresh();
       expect(appState.durationToWakeUp, const TimeOfDay(hour: 0, minute: 0));
 
@@ -97,16 +97,16 @@ void main() {
   });
 
   group('FR-20: der Vorgang selbst', () {
-    late List<({int id, DateTime at})> gesetzt;
-    late List<int> gestoppt;
+    late List<({int id, DateTime at})> armed;
+    late List<int> stopped;
 
     Future<bool> snooze(AppState appState,
         {required int alarmId,
         required DateTime ringTime,
         required DateTime now,
-        bool setzenSchlaegtFehl = false}) {
-      gesetzt = [];
-      gestoppt = [];
+        bool settingFails = false}) {
+      armed = [];
+      stopped = [];
       return snoozeRingingAlarm(
         appState,
         alarmId: alarmId,
@@ -114,10 +114,10 @@ void main() {
         now: () => now,
         newId: () => 999,
         setAlarm: (id, at) async {
-          if (setzenSchlaegtFehl) throw StateError('Plattform weg');
-          gesetzt.add((id: id, at: at));
+          if (settingFails) throw StateError('Plattform weg');
+          armed.add((id: id, at: at));
         },
-        stopAlarm: (id) async => gestoppt.add(id),
+        stopAlarm: (id) async => stopped.add(id),
       );
     }
 
@@ -130,8 +130,8 @@ void main() {
           alarmId: 1, ringTime: ring, now: DateTime(2026, 9, 14, 6, 0));
 
       expect(ok, isTrue);
-      expect(gesetzt.single.at, DateTime(2026, 9, 14, 6, 5));
-      expect(gestoppt, [1]);
+      expect(armed.single.at, DateTime(2026, 9, 14, 6, 5));
+      expect(stopped, [1]);
     });
 
     test('der Ursprungsruf wandert auf die neue ID mit', () async {
@@ -147,7 +147,7 @@ void main() {
       expect(appState.snoozeOriginFor(1), isNull);
     });
 
-    test('am Budgetende wird nicht mehr verschoben - und nichts gestoppt',
+    test('am Budgetende wird nicht mehr verschoben - und nichts stopped',
         () async {
       final appState = await _fresh();
       appState.snoozeEnabled = true; // Budget 10min
@@ -157,8 +157,8 @@ void main() {
           alarmId: 1, ringTime: ring, now: DateTime(2026, 9, 14, 6, 6));
 
       expect(ok, isFalse, reason: '06:06 + 5min = 06:11 > 06:10');
-      expect(gesetzt, isEmpty);
-      expect(gestoppt, isEmpty,
+      expect(armed, isEmpty);
+      expect(stopped, isEmpty,
           reason: 'FR-20: Snooze schaltet nie ab - scheitert es, klingelt der '
               'Wecker weiter');
     });
@@ -171,10 +171,10 @@ void main() {
           alarmId: 1,
           ringTime: DateTime(2026, 9, 14, 6, 0),
           now: DateTime(2026, 9, 14, 6, 0),
-          setzenSchlaegtFehl: true);
+          settingFails: true);
 
       expect(ok, isFalse);
-      expect(gestoppt, isEmpty,
+      expect(stopped, isEmpty,
           reason: 'sonst stuende der Nutzer ohne jeden Wecker da');
     });
 
@@ -187,8 +187,8 @@ void main() {
           now: DateTime(2026, 9, 14, 6, 0));
 
       expect(ok, isFalse);
-      expect(gesetzt, isEmpty);
-      expect(gestoppt, isEmpty);
+      expect(armed, isEmpty);
+      expect(stopped, isEmpty);
     });
   });
 }

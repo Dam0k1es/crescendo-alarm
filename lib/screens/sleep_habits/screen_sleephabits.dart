@@ -73,10 +73,10 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           _appState.reminderDuration = pickedTime;
           break;
         // docs/TODO.md T-72: ohne diese beiden Regler waren FR-4s Drift, FR-7s
-        // Teil-Kappung und FR-10s wunschzeit-Zweig für Nutzer unerreichbar -
-        // wunschzeit war immer null, maxDailyDelta immer das Minimum.
-        case 'wunschzeit':
-          _appState.wunschzeit = pickedTime;
+        // Teil-Kappung und FR-10s preferredWakeUpTime-Zweig für Nutzer unerreichbar -
+        // preferredWakeUpTime war immer null, maxDailyDelta immer das Minimum.
+        case 'preferredWakeUpTime':
+          _appState.preferredWakeUpTime = pickedTime;
           break;
         case 'maxDailyDelta':
           _appState.maxDailyDelta =
@@ -141,20 +141,20 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                   children: [
                     _buildToggle(
                       "Preferred wake-up time",
-                      _appState.wunschzeit != null,
+                      _appState.preferredWakeUpTime != null,
                       (value) {
                         if (value) {
-                          _appState.wunschzeit =
-                              _appState.wunschzeit ?? const TimeOfDay(hour: 7, minute: 0);
+                          _appState.preferredWakeUpTime =
+                              _appState.preferredWakeUpTime ?? const TimeOfDay(hour: 7, minute: 0);
                         } else {
-                          _appState.wunschzeit = null;
+                          _appState.preferredWakeUpTime = null;
                         }
                         runCheckpointSafely(_appState,
                             trigger: CheckpointTrigger.settingsChanged);
                       },
                     ),
-                    if (_appState.wunschzeit != null)
-                      _buildTimePicker("wunschzeit", _appState.wunschzeit!,
+                    if (_appState.preferredWakeUpTime != null)
+                      _buildTimePicker("preferredWakeUpTime", _appState.preferredWakeUpTime!,
                           isDuration: false),
                   ],
                 ),

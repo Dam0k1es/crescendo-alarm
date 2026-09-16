@@ -140,7 +140,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
       );
@@ -163,7 +163,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
       );
@@ -183,7 +183,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
       );
@@ -199,7 +199,7 @@ void main() {
     //    und der Nutzer benachrichtigt."
     //
     // Genau EINE Ausnahme nennt die Spec: "Das Ventil greift nur, wenn keine
-    // `wunschzeit` gesetzt ist." FR-10 regelt ausschliesslich die *Werte* bei
+    // `preferredWakeUpTime` gesetzt ist." FR-10 regelt ausschliesslich die *Werte* bei
     // fehlendem Anker ("Ohne: kein Alarm geplant"), nicht die Meldung.
     //
     // Genau dort lag der Fehler: sobald das Ventil das Fenster einmal
@@ -207,7 +207,7 @@ void main() {
     // der Kaltstart-Zweig gab hart `safetyValveTriggered: false` zurueck -
     // obwohl der Zaehler weiterlief und nach wie vor nichts geplant wurde.
 
-    test('ohne Anker, Zaehler 7, keine wunschzeit: Ventil steht', () {
+    test('ohne Anker, Zaehler 7, keine preferredWakeUpTime: Ventil steht', () {
       final window = List.generate(7, (i) => _utc(0, 0, day: 1 + i));
 
       final result = computeWeekPlan(
@@ -217,7 +217,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 7,
       );
@@ -226,7 +226,7 @@ void main() {
       expect(result.valuesByDay.values.every((v) => v == null), isTrue);
     });
 
-    test('dasselbe mit gesetzter wunschzeit meldet nicht (FR-9s Ausnahme)', () {
+    test('dasselbe mit gesetzter preferredWakeUpTime meldet nicht (FR-9s Ausnahme)', () {
       final window = List.generate(7, (i) => _utc(0, 0, day: 1 + i));
 
       final result = computeWeekPlan(
@@ -236,14 +236,14 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 42,
       );
 
       expect(result.safetyValveTriggered, isFalse);
       expect(result.valuesByDay.values.every((v) => v != null), isTrue,
-          reason: 'FR-9s Ausnahme: mit wunschzeit wird weiter fortgeschrieben');
+          reason: 'FR-9s Ausnahme: mit preferredWakeUpTime wird weiter fortgeschrieben');
     });
 
     test('ohne Anker unterhalb der Schwelle meldet nicht', () {
@@ -260,7 +260,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 6,
       );
@@ -280,7 +280,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 7,
       );
@@ -313,7 +313,7 @@ void main() {
     test('11:59 Abstand wird als "frueher" gelesen', () {
       final result = applyGapDayDrift(
         v: _utc(18, 59, day: 1),
-        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: Duration.zero,
       );
@@ -325,7 +325,7 @@ void main() {
     test('12:01 Abstand wird als "spaeter" gelesen', () {
       final result = applyGapDayDrift(
         v: _utc(19, 1, day: 1),
-        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: Duration.zero,
       );
@@ -464,7 +464,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 60),
         gapDayCounter: 42,
       );
@@ -472,7 +472,7 @@ void main() {
       expect(result.valuesByDay[window[0]], isNotNull,
           reason: 'null hiesse, den Termin garantiert zu verpassen');
       // Der Wert ist 07:00, nicht 08:00 (docs/TODO.md T-132): ohne
-      // `wunschzeit` haelt FR-4 bei der Uhrzeit des Ankers, und FR-2s
+      // `preferredWakeUpTime` haelt FR-4 bei der Uhrzeit des Ankers, und FR-2s
       // Obergrenze von 08:00 erlaubt jeden frueheren Wert ausdruecklich
       // ("immer erlaubt"). Bis 2026-09-11 stand hier 08:00 - das war der
       // Fehler, den eine Geraeterueckmeldung sichtbar gemacht hat: der
@@ -490,7 +490,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 60),
         gapDayCounter: 42,
       );
@@ -512,7 +512,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 60),
         gapDayCounter: 42,
       );
@@ -549,7 +549,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 60),
         gapDayCounter: 0,
       );
@@ -592,7 +592,7 @@ void main() {
       // ein Schritt von 30min -> lokal 12.03. 00:30 -> Instant 11:45Z am 11.03.
       final result = applyGapDayDrift(
         v: DateTime.utc(2026, 3, 10, 11, 15),
-        wunschzeit: const TimeOfDay(hour: 6, minute: 30),
+        preferredWakeUpTime: const TimeOfDay(hour: 6, minute: 30),
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: const Duration(hours: 12, minutes: 45),
       );
@@ -603,7 +603,7 @@ void main() {
     test('Chatham +12:45: Kaltstart legt den Wert auf den vorigen UTC-Tag', () {
       final result = coldStart(
         days: [DateTime.utc(2026, 4, 5)],
-        wunschzeit: const TimeOfDay(hour: 0, minute: 15),
+        preferredWakeUpTime: const TimeOfDay(hour: 0, minute: 15),
         deviceUtcOffset: const Duration(hours: 12, minutes: 45),
       );
 
@@ -644,7 +644,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
       );
@@ -687,7 +687,7 @@ void main() {
     // Wer um 06:45 aufsteht, erfuellt einen Termin um 11:00 laengst. Es gibt
     // keinen Grund, dafuer auszuschlafen - und schon gar keinen, dafuer
     // `maxDailyDelta` zu reissen. Nach spaet bewegt die Weckzeit ausschliesslich
-    // die `wunschzeit` (FR-4), begrenzt durch `maxDailyDelta`.
+    // die `preferredWakeUpTime` (FR-4), begrenzt durch `maxDailyDelta`.
 
     test('zwei spaetere Termine ziehen die Weckzeit nicht hoch', () {
       final window = List.generate(7, (i) => _utc(0, 0, day: 12 + i));
@@ -702,20 +702,20 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
       );
 
       // FR-4: 06:45 -> 07:00 ist ein Schritt von 15min, innerhalb der Grenze,
-      // und die wunschzeit wird exakt getroffen (kein Ueberschiessen).
+      // und die preferredWakeUpTime wird exakt getroffen (kein Ueberschiessen).
       expect(result.valuesByDay[window[0]], _utc(7, 0, day: 12));
       // Danach halten - der 11-Uhr-Termin fordert nichts.
       expect(result.valuesByDay[window[1]], _utc(7, 0, day: 13));
       for (final day in window) {
         expect(result.valuesByDay[day], isNotNull);
         expect(result.valuesByDay[day]!.hour, lessThanOrEqualTo(7),
-            reason: 'kein Tag darf ueber die wunschzeit hinaus nach hinten');
+            reason: 'kein Tag darf ueber die preferredWakeUpTime hinaus nach hinten');
       }
     });
 
@@ -733,7 +733,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
       );
@@ -757,7 +757,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
       );
@@ -781,7 +781,7 @@ void main() {
     // Folgetag startete einen neuen Run).
     //
     // Aufgefallen ist er an einem gerechneten Alltagsfall: die Weckzeit ist
-    // ueber ein terminloses Wochenende bis zur `wunschzeit` gedriftet, danach
+    // ueber ein terminloses Wochenende bis zur `preferredWakeUpTime` gedriftet, danach
     // wird die Arbeit im Kalender nachgetragen. Der Montag wird auf seinen
     // `hardFloor` gedeckelt - ein Schritt von 45 Minuten bei erlaubten 30,
     // und der Nutzer erfaehrt nichts davon.
@@ -799,7 +799,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
       );
@@ -824,7 +824,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
       );

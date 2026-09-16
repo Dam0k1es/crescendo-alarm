@@ -182,7 +182,7 @@ class _SilentNotifications implements Notifications {
 ///
 /// Warum das deterministisch ist: mit `durationToWakeUp` und
 /// `durationToGetReady` auf null ist der `hardFloor` genau der Terminbeginn
-/// (FR-2), und ohne `wunschzeit` und ohne Vorgeschichte greift FR-10s
+/// (FR-2), und ohne `preferredWakeUpTime` und ohne Vorgeschichte greift FR-10s
 /// Kaltstart - der erste Tag mit echtem `hardFloor` bekommt **exakt** diesen
 /// Wert, die Folgetage halten dieselbe Wanduhrzeit (FR-4 ohne Ziel). Aus einem
 /// Termin entstehen so mehrere Alarme, was fuer die T-64-Pruefung sogar
@@ -200,7 +200,7 @@ Future<DateTime> planOneCalendarEvent(
 }) async {
   appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
   appState.durationToGetReady = const TimeOfDay(hour: 0, minute: 0);
-  appState.wunschzeit = null;
+  appState.preferredWakeUpTime = null;
 
   // Ein echter Zukunftszeitpunkt ist Pflicht: AppState.addAlarm verwirft einen
   // ScheduledAlarm, dessen Zeit nicht nach dem ECHTEN DateTime.now() liegt -

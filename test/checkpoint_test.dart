@@ -133,7 +133,7 @@ void main() {
     test('eine Einstellungsänderung wartet auf einen laufenden Ring-Checkpoint',
         () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       final gate = Completer<void>();
       final order = <String>[];
@@ -206,7 +206,7 @@ void main() {
   group('T-80: vollständige Sequenz', () {
     test('der Ring-Checkpoint plant die Bettzeit-Notification neu', () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
       final notifications = _RecordingNotifications();
 
       await runSchedulingCheckpoint(
@@ -226,7 +226,7 @@ void main() {
 
     test('der Vordergrund-Checkpoint plant sie ebenfalls neu', () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
       final notifications = _RecordingNotifications();
 
       await runSchedulingCheckpoint(
@@ -243,7 +243,7 @@ void main() {
 
     test('die Bettzeit wird NACH dem Plan bestimmt, nicht davor', () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
       var pendingCountAtNotification = -1;
       final notifications = _RecordingNotifications(
         observe: () =>
@@ -310,7 +310,7 @@ void main() {
     test('der Ring plant in jedem Fall auch neu (T-61: Instant, nicht Ziffern)',
         () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
       appState.lastCheckedUtcOffset = const Duration(hours: 1);
 
       await runSchedulingCheckpoint(
@@ -322,10 +322,10 @@ void main() {
         notifications: _RecordingNotifications(),
       );
 
-      // windowStart = Tag11; Kaltstart mit wunschzeit setzt Tag11 auf 07:00
+      // windowStart = Tag11; Kaltstart mit preferredWakeUpTime setzt Tag11 auf 07:00
       // **lokal**. Bei deviceUtcOffset = +9 ist das der Instant 22:00 UTC am
       // Vortag - genau der T-61-Fix (gespeichert wird ein echter Instant,
-      // wunschzeit ist eine geräte-lokale Uhrzeit).
+      // preferredWakeUpTime ist eine geräte-lokale Uhrzeit).
       expect(appState.pendingDayValues['2026-03-11'],
           DateTime.utc(2026, 3, 10, 22, 0).millisecondsSinceEpoch);
       expect(appState.lastReplanDate, _utc(0, 0, day: 10));
@@ -334,7 +334,7 @@ void main() {
     test('unveränderter Versatz lässt den bereits geklingelten Wert unberührt',
         () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
       appState.lastCheckedUtcOffset = const Duration(hours: 1);
 
       await runSchedulingCheckpoint(
@@ -433,7 +433,7 @@ void main() {
     test('plant sofort neu, ohne FR-17s Tagessperre abzuwarten', () async {
       final appState = await _freshAppState();
       appState.lastReplanDate = _utc(0, 0, day: 10);
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       final result = await runSchedulingCheckpoint(
         appState,
@@ -450,7 +450,7 @@ void main() {
 
     test('ein längeres Schlafziel verschiebt die Bettzeit nach vorn', () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       final short = _RecordingNotifications();
       appState.sleepGoal = const TimeOfDay(hour: 6, minute: 0);
@@ -528,7 +528,7 @@ void main() {
         () async {
       final appState = await _freshAppState();
       final notifications = _RecordingNotifications();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       // Tag9 klingelt, leerer Kalender -> Tag10 auf 07:00 geplant.
       await runSchedulingCheckpoint(
@@ -569,7 +569,7 @@ void main() {
   group('Auslöser-Semantik', () {
     test('nur der Ring behandelt heute als abgeschlossen (T-71)', () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       await runSchedulingCheckpoint(
         appState,

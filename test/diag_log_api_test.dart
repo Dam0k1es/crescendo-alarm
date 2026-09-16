@@ -96,10 +96,10 @@ void main() {
         // Zeitprotokollierung (Standard aus; der Test dazu steht in
         // diag_log_test.dart). Die konstruktive Zusicherung gilt damit
         // weiterhin fuer die Voreinstellung - aber eben nur noch dort.
-        const erlaubt = {
+        const allowed = {
           'plannedMinuteOfDay',
           'earliestEventMinuteOfDay',
-          'wunschzeitMinuteOfDay',
+          'preferredWakeUpMinuteOfDay',
           // Dauern, keine Uhrzeiten (T-140): "90 Minuten Grenze" oder "30
           // Minuten Vorlauf" verraten nichts ueber Schlaf - sie sind
           // Einstellwerte, ohne die ein geloggter Plan aber nicht
@@ -115,7 +115,7 @@ void main() {
         for (final match
             in RegExp(r'required\s+int\s+(\w+)').allMatches(_publicApi())) {
           final name = match.group(1)!;
-          if (erlaubt.contains(name)) continue;
+          if (allowed.contains(name)) continue;
           // "MinuteOfDay"/"HourOfDay" ausdruecklich mit aufgenommen: sonst
           // genuegt ein Suffix "...OfDay", um an dieser Regel vorbeizukommen -
           // wie es den beiden Ausnahmen oben beinahe passiert waere.
@@ -127,7 +127,7 @@ void main() {
         expect(offenders, isEmpty,
             reason: 'Diese int-Parameter tragen einen Uhrwert. Reduziere sie '
                 'vorher auf ein Bucket-Enum - oder trage sie, mit Begruendung '
-                'und hinter einem Schalter, oben in `erlaubt` ein:\n'
+                'und hinter einem Schalter, oben in `allowed` ein:\n'
                 '${offenders.join(', ')}');
     });
   });

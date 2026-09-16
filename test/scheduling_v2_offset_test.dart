@@ -7,7 +7,7 @@ import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 //
 // Semantik (Option B, entschieden vor diesen Tests): jeder Wert der
 // Domänenschicht ist ein **echter absoluter Instant** (FR-1). Nur dort, wo
-// eine geräte-lokale `TimeOfDay` (`wunschzeit`) auf einen Instant trifft, muss
+// eine geräte-lokale `TimeOfDay` (`preferredWakeUpTime`) auf einen Instant trifft, muss
 // `deviceUtcOffset` einfließen - also in applyGapDayDrift und coldStart.
 // distribute/groupTarget sind dagegen frame-invariant: sie vergleichen
 // ausschließlich Instant mit Instant, und die Tag_i-Platzierung im lokalen
@@ -27,12 +27,12 @@ const berlin = Duration(hours: 2);
 void main() {
   group('applyGapDayDrift mit deviceUtcOffset != 0 (T-61, Ebene 2)', () {
     test('wunschzeit ist bereits erreicht (lokal gelesen) -> kein Drift', () {
-      // v = 05:00 UTC = 07:00 lokal in Berlin. wunschzeit ist 07:00 lokal,
+      // v = 05:00 UTC = 07:00 lokal in Berlin. preferredWakeUpTime ist 07:00 lokal,
       // also genau erreicht - es darf NICHT gedriftet werden. Der alte Code
       // liest 05:00 als Ziffern und driftet 30min Richtung "07:00".
       final result = applyGapDayDrift(
         v: _utc(5, 0, day: 1),
-        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: berlin,
       );
@@ -41,11 +41,11 @@ void main() {
     });
 
     test('Drift Richtung später wird lokal gemessen', () {
-      // v = 05:00 UTC = 07:00 lokal, wunschzeit 09:00 lokal -> Distanz 2h,
+      // v = 05:00 UTC = 07:00 lokal, preferredWakeUpTime 09:00 lokal -> Distanz 2h,
       // gekappt auf 30min -> 07:30 lokal = 05:30 UTC am Folgetag.
       final result = applyGapDayDrift(
         v: _utc(5, 0, day: 1),
-        wunschzeit: const TimeOfDay(hour: 9, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: berlin,
       );
@@ -55,10 +55,10 @@ void main() {
 
     test('lokales Datum zählt, nicht das UTC-Datum', () {
       // v = 23:00 UTC am Tag 1 = 01:00 lokal am Tag 2. "Morgen" ist damit
-      // lokal Tag 3, nicht Tag 2. wunschzeit = 01:00 lokal (erreicht).
+      // lokal Tag 3, nicht Tag 2. preferredWakeUpTime = 01:00 lokal (erreicht).
       final result = applyGapDayDrift(
         v: _utc(23, 0, day: 1),
-        wunschzeit: const TimeOfDay(hour: 1, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 1, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: berlin,
       );
@@ -70,7 +70,7 @@ void main() {
     test('Invarianz: bei deviceUtcOffset = 0 unverändertes Verhalten', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0, day: 1),
-        wunschzeit: const TimeOfDay(hour: 9, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: Duration.zero,
       );
@@ -81,13 +81,13 @@ void main() {
 
   group('coldStart mit deviceUtcOffset != 0 (T-61, Ebene 2)', () {
     test('wunschzeit wird als lokale Uhrzeit des Fenstertages gesetzt', () {
-      // Fenstertage sind lokale Kalenderdaten (Datums-Marker). wunschzeit
+      // Fenstertage sind lokale Kalenderdaten (Datums-Marker). preferredWakeUpTime
       // 07:00 lokal am Tag 1 -> Instant 05:00 UTC am Tag 1.
       final days = [_utc(0, 0, day: 1), _utc(0, 0, day: 2)];
 
       final result = coldStart(
         days: days,
-        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         deviceUtcOffset: berlin,
       );
 
@@ -101,7 +101,7 @@ void main() {
 
       final result = coldStart(
         days: days,
-        wunschzeit: const TimeOfDay(hour: 1, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 1, minute: 0),
         deviceUtcOffset: berlin,
       );
 
@@ -113,7 +113,7 @@ void main() {
 
       final result = coldStart(
         days: days,
-        wunschzeit: const TimeOfDay(hour: 9, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
         deviceUtcOffset: Duration.zero,
       );
 
@@ -194,7 +194,7 @@ void main() {
             deviceUtcOffset: offset,
             durationToWakeUp: Duration.zero,
             durationToGetReady: Duration.zero,
-            wunschzeit: const TimeOfDay(hour: 10, minute: 0),
+            preferredWakeUpTime: const TimeOfDay(hour: 10, minute: 0),
             maxDailyDelta: const Duration(minutes: 30),
             gapDayCounter: 0,
           );

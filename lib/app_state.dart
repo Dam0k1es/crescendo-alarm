@@ -222,7 +222,7 @@ class AppState extends ChangeNotifier {
 
   /// Per planned day: was its value taken directly from a real `hardFloor`
   /// (`true`, instant-anchored - a fixed real moment) or computed from
-  /// `wunschzeit`/the smoothing curve (`false`, wall-clock-anchored)? FR-16's
+  /// `preferredWakeUpTime`/the smoothing curve (`false`, wall-clock-anchored)? FR-16's
   /// Checkpoint 2 runs in a background isolate without calendar access and
   /// cannot re-derive this, so it is persisted next to [pendingDayValues] in
   /// the same directly-decodable shape.
@@ -264,7 +264,7 @@ class AppState extends ChangeNotifier {
   /// mitzuhaengen.
   bool get diagnosticsIncludeClockTimes => _diagnosticsIncludeClockTimes;
 
-  TimeOfDay? get wunschzeit => _wunschzeit;
+  TimeOfDay? get preferredWakeUpTime => _wunschzeit;
 
   Duration get maxDailyDelta => _maxDailyDelta;
 
@@ -393,9 +393,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  set wunschzeit(TimeOfDay? value) {
+  set preferredWakeUpTime(TimeOfDay? value) {
     _wunschzeit = value;
     if (value == null) {
+      // Der gespeicherte SCHLUESSEL bleibt 'wunschzeit', obwohl der Bezeichner
+      // jetzt englisch ist: er benennt Nutzerdaten auf bereits installierten
+      // Geraeten. Ihn umzubenennen wuerde die Einstellung jedes bestehenden
+      // Nutzers stillschweigend verwerfen - ein Datenverlust fuer eine reine
+      // Kosmetik. Wer ihn doch umstellt, braucht einen Rueckfallweg, der den
+      // alten Schluessel beim Laden noch liest.
       _prefs.remove('wunschzeit');
     } else {
       _prefs.setString('wunschzeit', '${value.hour}:${value.minute}');
@@ -881,7 +887,7 @@ class AppState extends ChangeNotifier {
       if (data == null) return null;
       return timeOfDayFromString(data);
     } catch (e) {
-      debugPrint("=====_loadWunschzeit: Error loading wunschzeit: ${e.runtimeType}");
+      debugPrint("=====_loadWunschzeit: Error loading preferredWakeUpTime: ${e.runtimeType}");
       return null;
     }
   }

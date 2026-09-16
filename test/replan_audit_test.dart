@@ -49,7 +49,7 @@ void main() {
     // `lastReplanDate` schon auf heute gesetzt. `settingsChanged` und
     // `manualSync` unterliegen ihr bewusst nicht und tragen den Fall allein:
     // Ton- und Lautstaerkeregler, die vier Dauer-Picker, der
-    // wunschzeit-Schalter, der Gentle-Wake-Schalter und der Sync-Knopf.
+    // preferredWakeUpTime-Schalter, der Gentle-Wake-Schalter und der Sync-Knopf.
 
     test('ein Nicht-Ring-Replan am selben Tag laesst den geklingelten Wert stehen',
         () async {
@@ -65,7 +65,7 @@ void main() {
       };
       appState.lastProcessedConcludedDay = ringDay;
       appState.lastReplanDate = ringDay;
-      appState.wunschzeit = const TimeOfDay(hour: 9, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 9, minute: 0);
 
       // 08:00: der Termin ist abgesagt, der Nutzer aendert eine Einstellung.
       await replan(
@@ -97,7 +97,7 @@ void main() {
       };
       appState.lastProcessedConcludedDay = ringDay;
       appState.lastReplanDate = ringDay;
-      appState.wunschzeit = const TimeOfDay(hour: 9, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 9, minute: 0);
       appState.maxDailyDelta = const Duration(minutes: 30);
 
       await replan(
@@ -131,7 +131,7 @@ void main() {
         isoDate(dayMarker(ringDay, -1)): _utc(7, 0, day: 9).millisecondsSinceEpoch,
       };
       appState.lastProcessedConcludedDay = dayMarker(ringDay, -1);
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       await replan(
         appState,
@@ -177,7 +177,7 @@ void main() {
       appState.lastProcessedConcludedDay = ringDay; // heute hat geklingelt
       appState.lastReplanDate = ringDay;
       appState.maxDailyDelta = const Duration(minutes: 60);
-      appState.wunschzeit = const TimeOfDay(hour: 9, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 9, minute: 0);
 
       await replan(
         appState,
@@ -198,7 +198,7 @@ void main() {
       // Der schwerere Fall. Fehlt der Eintrag fuer gestern - der Normalzustand
       // nach dem T-82-Prune oder nach einer Luecke -, liefert der Anker `null`
       // und `computeWeekPlan` nimmt FR-10s Kaltstart, der ohne jede
-      // `maxDailyDelta`-Begrenzung direkt auf die wunschzeit springt. Der
+      // `maxDailyDelta`-Begrenzung direkt auf die preferredWakeUpTime springt. Der
       // Eintrag fuer heute steht aber da.
       final appState = await _freshAppState();
       final ringDay = _utc(0, 0, day: 10);
@@ -211,7 +211,7 @@ void main() {
       appState.lastProcessedConcludedDay = ringDay;
       appState.lastReplanDate = ringDay;
       appState.maxDailyDelta = const Duration(minutes: 30);
-      appState.wunschzeit = const TimeOfDay(hour: 9, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 9, minute: 0);
 
       await replan(
         appState,
@@ -246,7 +246,7 @@ void main() {
       };
       appState.lastProcessedConcludedDay = dayMarker(today, 7);
       appState.maxDailyDelta = const Duration(minutes: 30);
-      appState.wunschzeit = const TimeOfDay(hour: 6, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 6, minute: 0);
 
       await replan(
         appState,
@@ -301,7 +301,7 @@ void main() {
     test('die geplanten Werte werden zu registrierten Alarmen', () async {
       final appState = await _freshAppState();
       final now = DateTime.now();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       await replan(
         appState,
@@ -329,7 +329,7 @@ void main() {
       // Alarme mitzieht, ist damit zugesichert - und war ebenfalls ungedeckt.
       final appState = await _freshAppState();
       final now = DateTime.now();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       await replan(
         appState,
@@ -340,7 +340,7 @@ void main() {
       final before = minutesOf(appState.scheduledAlarms.map((a) => a.time));
       expect(before, isNotEmpty);
 
-      appState.wunschzeit = const TimeOfDay(hour: 9, minute: 30);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 9, minute: 30);
       await replan(
         appState,
         now: () => now,
@@ -372,7 +372,7 @@ void main() {
       };
       appState.lastProcessedConcludedDay = dayMarker(ringDay, -6);
       appState.gapDayCounter = 0;
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       await replan(
         appState,

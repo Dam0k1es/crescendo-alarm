@@ -3,7 +3,7 @@
 // directly unit-testable without mocks (see test/scheduling_v2_test.dart).
 //
 // Convention (spec, Phase 0): "Instant" is represented as a plain [DateTime];
-// "wunschzeit" as a [TimeOfDay]; day windows as plain integer day-offsets.
+// "preferredWakeUpTime" as a [TimeOfDay]; day windows as plain integer day-offsets.
 
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:wakeywakey/models/scheduling/day_marker.dart';
@@ -153,11 +153,11 @@ DateTime _instantOf(DateTime localReading, Duration deviceUtcOffset) =>
 
 /// FR-4, isolated from FR-7s cap: computes **today**'s (the day after `v`'s own
 /// **device-local** date - the day actually being planned) wake time by
-/// drifting `v` towards [wunschzeit] by at most [maxDailyDelta], stopping
-/// exactly at [wunschzeit] rather than overshooting. Holds at `v`'s clock
-/// reading (on today's date) if [wunschzeit] is null or already reached.
+/// drifting `v` towards [preferredWakeUpTime] by at most [maxDailyDelta], stopping
+/// exactly at [preferredWakeUpTime] rather than overshooting. Holds at `v`'s clock
+/// reading (on today's date) if [preferredWakeUpTime] is null or already reached.
 ///
-/// [v] and the return value are absolute instants (FR-1); [wunschzeit] is a
+/// [v] and the return value are absolute instants (FR-1); [preferredWakeUpTime] is a
 /// bare device-local `TimeOfDay` with no date or zone of its own (FR-3). That
 /// mismatch is exactly why [deviceUtcOffset] is needed here (`docs/TODO.md`
 /// T-61): combining wunschzeit's digits with `v`'s *raw* fields would compare a
@@ -170,7 +170,7 @@ DateTime _instantOf(DateTime localReading, Duration deviceUtcOffset) =>
 /// yields the identical instant whether computed in the local or the raw frame.
 DateTime applyGapDayDrift({
   required DateTime v,
-  required TimeOfDay? wunschzeit,
+  required TimeOfDay? preferredWakeUpTime,
   required Duration maxDailyDelta,
   required Duration deviceUtcOffset,
 }) {
@@ -185,10 +185,10 @@ DateTime applyGapDayDrift({
     vLocal.millisecond,
     vLocal.microsecond,
   );
-  if (wunschzeit == null) return _instantOf(todayLocal, deviceUtcOffset);
+  if (preferredWakeUpTime == null) return _instantOf(todayLocal, deviceUtcOffset);
 
   final targetLocal = DateTime.utc(todayLocal.year, todayLocal.month,
-      todayLocal.day, wunschzeit.hour, wunschzeit.minute);
+      todayLocal.day, preferredWakeUpTime.hour, preferredWakeUpTime.minute);
   final distance = _wallClockDelta(vLocal, targetLocal);
   if (distance == Duration.zero) {
     return _instantOf(todayLocal, deviceUtcOffset);
@@ -348,14 +348,14 @@ class GapOrRunStartResult {
 GapOrRunStartResult planGapOrRunStartDay({
   required DateTime v,
   required List<HardFloorPoint> remainingPoints,
-  required TimeOfDay? wunschzeit,
+  required TimeOfDay? preferredWakeUpTime,
   required Duration maxDailyDelta,
   required Duration deviceUtcOffset,
 }) {
   GapOrRunStartResult gapDay() => GapOrRunStartResult(
         value: applyGapDayDrift(
             v: v,
-            wunschzeit: wunschzeit,
+            preferredWakeUpTime: preferredWakeUpTime,
             maxDailyDelta: maxDailyDelta,
             deviceUtcOffset: deviceUtcOffset),
         overrunNotificationNeeded: false,
@@ -384,10 +384,10 @@ GapOrRunStartResult planGapOrRunStartDay({
   // Genau dagegen lief der Run: er behandelte jeden Punkt als Ziel, auch einen
   // spaeteren, und zog die Weckzeit zu ihm hinauf. Auf einem echten Kalender
   // sah das so aus: 06:45 -> 08:00 -> 11:00, bei `maxDailyDelta` von 30
-  // Minuten und einer `wunschzeit` von 07:00.
+  // Minuten und einer `preferredWakeUpTime` von 07:00.
   //
   // Nach spaet bewegt die Weckzeit ausschliesslich FR-4s Drift zur
-  // `wunschzeit`, begrenzt durch `maxDailyDelta`. Die Tagesobergrenze wirkt
+  // `preferredWakeUpTime`, begrenzt durch `maxDailyDelta`. Die Tagesobergrenze wirkt
   // weiter - aber als Deckel (die Kappung in `computeWeekPlan`), nicht als
   // Zugseil.
   //
@@ -441,14 +441,14 @@ GapOrRunStartResult planGapOrRunStartDay({
 
   final drifted = applyGapDayDrift(
       v: v,
-      wunschzeit: wunschzeit,
+      preferredWakeUpTime: preferredWakeUpTime,
       maxDailyDelta: maxDailyDelta,
       deviceUtcOffset: deviceUtcOffset);
   if (feasible(drifted)) {
     return GapOrRunStartResult(value: drifted, overrunNotificationNeeded: false);
   }
 
-  // Nur der volle wunschzeit-Schritt verletzt: auf das größtmögliche Maß
+  // Nur der volle preferredWakeUpTime-Schritt verletzt: auf das größtmögliche Maß
   // kappen, das die Bedingung noch erfüllt (binäre Suche, da |V+d*sign - F|
   // als Funktion von d konvex ist und bei d=0 erfüllt, bei d=fullStep verletzt).
   // Gearbeitet wird ausschließlich in Wall-Clock-Differenzen (nicht
@@ -502,21 +502,21 @@ int updateGapDayCounter({
 /// real `hardFloor` day itself is not part of [days]; it's handled directly
 /// by FR-2 and becomes the new anchor for whatever follows (computeWeekPlan).
 /// [days] are **device-local calendar dates** (date markers - only their
-/// year/month/day are read), and [wunschzeit] is a bare device-local time
+/// year/month/day are read), and [preferredWakeUpTime] is a bare device-local time
 /// (FR-3), so producing an absolute instant (FR-1) needs [deviceUtcOffset] -
 /// same reason as in [applyGapDayDrift], see `docs/TODO.md` T-61.
 Map<DateTime, DateTime?> coldStart({
   required List<DateTime> days,
-  required TimeOfDay? wunschzeit,
+  required TimeOfDay? preferredWakeUpTime,
   required Duration deviceUtcOffset,
 }) {
   return {
     for (final day in days)
-      day: wunschzeit == null
+      day: preferredWakeUpTime == null
           ? null
           : _instantOf(
-              DateTime.utc(day.year, day.month, day.day, wunschzeit.hour,
-                  wunschzeit.minute),
+              DateTime.utc(day.year, day.month, day.day, preferredWakeUpTime.hour,
+                  preferredWakeUpTime.minute),
               deviceUtcOffset),
   };
 }
@@ -540,7 +540,7 @@ class WeekPlanResult {
   /// therefore instant-anchored: it denotes a fixed real moment (the
   /// appointment), so FR-16 must leave it alone when the device's UTC offset
   /// changes - "nur die lokale Anzeige ändert sich". Every other planned day
-  /// is wall-clock-anchored (`wunschzeit`/curve) and has to keep its local
+  /// is wall-clock-anchored (`preferredWakeUpTime`/curve) and has to keep its local
   /// digits instead, via `reinterpretForNewOffset`. Checkpoint 2
   /// (`runTimezoneCheckpoint2`) cannot tell the two apart on its own - it has
   /// no calendar access by design - so this is persisted alongside the values.
@@ -570,7 +570,7 @@ WeekPlanResult computeWeekPlan({
   required Duration deviceUtcOffset,
   required Duration durationToWakeUp,
   required Duration durationToGetReady,
-  required TimeOfDay? wunschzeit,
+  required TimeOfDay? preferredWakeUpTime,
   required Duration maxDailyDelta,
   required int gapDayCounter,
 }) {
@@ -616,7 +616,7 @@ WeekPlanResult computeWeekPlan({
       return WeekPlanResult(
         valuesByDay: coldStart(
             days: window,
-            wunschzeit: wunschzeit,
+            preferredWakeUpTime: preferredWakeUpTime,
             deviceUtcOffset: deviceUtcOffset),
         overrunNotificationNeeded: false,
         // FR-9's valve reports from this branch too (docs/TODO.md T-107).
@@ -634,18 +634,18 @@ WeekPlanResult computeWeekPlan({
         //
         // The same expression also covers the case where no anchor ever
         // existed (fresh install, calendar permission granted but no
-        // appointments, no wunschzeit): FR-9 states exactly one exception to
+        // appointments, no preferredWakeUpTime): FR-9 states exactly one exception to
         // "Zaehler >= 7 -> gestoppt und benachrichtigt", namely a set
-        // `wunschzeit`. FR-10 governs only the *values* in this branch
+        // `preferredWakeUpTime`. FR-10 governs only the *values* in this branch
         // ("Ohne: kein Alarm geplant"), never the notification.
         safetyValveTriggered:
-            gapDayCounter >= gapDayValveThreshold && wunschzeit == null,
+            gapDayCounter >= gapDayValveThreshold && preferredWakeUpTime == null,
         instantAnchoredDays: const {},
       );
     }
     valuesByDay.addAll(coldStart(
       days: window.sublist(0, firstRealIndex),
-      wunschzeit: wunschzeit,
+      preferredWakeUpTime: preferredWakeUpTime,
       deviceUtcOffset: deviceUtcOffset,
     ));
     anchor = hardFloorByDay[window[firstRealIndex]];
@@ -676,17 +676,17 @@ WeekPlanResult computeWeekPlan({
     if (remaining.isEmpty &&
         ownHardFloor == null &&
         gapDayCounter >= gapDayValveThreshold &&
-        // FR-9 "Ausnahme: gesetzte wunschzeit" (docs/TODO.md T-78): the valve
-        // guards against *blind* extrapolation. A wunschzeit is an explicit
+        // FR-9 "Ausnahme: gesetzte preferredWakeUpTime" (docs/TODO.md T-78): the valve
+        // guards against *blind* extrapolation. A preferredWakeUpTime is an explicit
         // target - FR-4 drifts towards it and stops exactly on it, so the
         // continuation is bounded by construction and there is nothing to
         // guard against. Triggering anyway would be a one-way trapdoor: with
         // every value null, FR-18 removes all future alarms, nothing rings,
         // and without a ring checkpoint the counter can never be reset again
         // (only a real hardFloor day resets it) - a permanently dead alarm
-        // clock. Removing the wunschzeit later re-arms the valve immediately,
+        // clock. Removing the preferredWakeUpTime later re-arms the valve immediately,
         // since the counter itself keeps counting regardless.
-        wunschzeit == null) {
+        preferredWakeUpTime == null) {
       // FR-9: safety valve - no future anchor visible anywhere in the
       // window, and already 7 elapsed termin-lose days. Stop auto-continuing.
       valuesByDay[day] = null;
@@ -701,7 +701,7 @@ WeekPlanResult computeWeekPlan({
       // haette ohne jeden Anlass ausgeschlafen.
       final drifted = applyGapDayDrift(
           v: anchor!,
-          wunschzeit: wunschzeit,
+          preferredWakeUpTime: preferredWakeUpTime,
           maxDailyDelta: maxDailyDelta,
           deviceUtcOffset: deviceUtcOffset);
       final bindsToday = ownHardFloor != null && drifted.isAfter(ownHardFloor);
@@ -733,7 +733,7 @@ WeekPlanResult computeWeekPlan({
     final candidate = planGapOrRunStartDay(
       v: anchor!,
       remainingPoints: remaining,
-      wunschzeit: wunschzeit,
+      preferredWakeUpTime: preferredWakeUpTime,
       maxDailyDelta: maxDailyDelta,
       deviceUtcOffset: deviceUtcOffset,
     );
@@ -756,7 +756,7 @@ WeekPlanResult computeWeekPlan({
       // Tagesschritt kostet.
       //
       // Der Alltagsfall dahinter: die Weckzeit ist ueber terminlose Tage bis
-      // zur `wunschzeit` gedriftet, danach wird ein Termin nachgetragen. Der
+      // zur `preferredWakeUpTime` gedriftet, danach wird ein Termin nachgetragen. Der
       // erste Arbeitstag wird dann in einem Schritt zurueckgeholt - gemessen
       // 45 Minuten bei erlaubten 30, und der Nutzer erfuhr nichts davon.
       //
@@ -798,7 +798,7 @@ WeekPlanResult computeWeekPlan({
 /// instant differs after an offset change. Deciding which of a day's
 /// `pendingDayValues` entries are wall-clock-anchored (this applies) versus
 /// hardFloor-derived (this must not be applied) is the caller's job (Phase 4
-/// orchestration), not this pure function's - `wunschzeit` itself is never an
+/// orchestration), not this pure function's - `preferredWakeUpTime` itself is never an
 /// input here either, since it already carries no zone of its own (FR-3) and
 /// so needs no reinterpretation at all.
 DateTime reinterpretForNewOffset({

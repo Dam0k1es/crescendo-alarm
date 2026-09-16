@@ -55,7 +55,7 @@ void main() {
       deviceUtcOffset: cest,
       durationToWakeUp: const Duration(minutes: 30),
       durationToGetReady: const Duration(hours: 2),
-      wunschzeit: null,
+      preferredWakeUpTime: null,
       maxDailyDelta: const Duration(minutes: 20),
       gapDayCounter: 0,
     );
@@ -107,7 +107,7 @@ void main() {
       deviceUtcOffset: cest,
       durationToWakeUp: const Duration(minutes: 30),
       durationToGetReady: Duration.zero,
-      wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+      preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
       maxDailyDelta: const Duration(minutes: 30),
       gapDayCounter: 0,
     );

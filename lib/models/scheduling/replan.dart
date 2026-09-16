@@ -219,7 +219,7 @@ Future<ReplanResult> replan(
     deviceUtcOffset: offset,
     durationToWakeUp: durationToWakeUp,
     durationToGetReady: durationToGetReady,
-    wunschzeit: appState.wunschzeit,
+    preferredWakeUpTime: appState.preferredWakeUpTime,
     maxDailyDelta: appState.maxDailyDelta,
     gapDayCounter: appState.gapDayCounter,
   );
@@ -292,14 +292,14 @@ Future<ReplanResult> replan(
   // Fenstertage sind auf denselben Tagesschluessel kollidiert.
   // docs/TODO.md T-140: die EINGABEN, ohne die der geloggte Plan nicht
   // nachrechenbar ist. Immer geschrieben - Dauern sind keine Uhrzeiten; die
-  // wunschzeit haengt am Zeit-Schalter und ist sonst -1.
+  // preferredWakeUpTime haengt am Zeit-Schalter und ist sonst -1.
   Diag.planInputs(
     maxDailyDeltaMinutes: appState.maxDailyDelta.inMinutes,
     wakeUpMinutes: durationToWakeUp.inMinutes,
     getReadyMinutes: durationToGetReady.inMinutes,
-    wunschzeitMinuteOfDay: appState.wunschzeit == null
+    preferredWakeUpMinuteOfDay: appState.preferredWakeUpTime == null
         ? -1
-        : appState.wunschzeit!.hour * 60 + appState.wunschzeit!.minute,
+        : appState.preferredWakeUpTime!.hour * 60 + appState.preferredWakeUpTime!.minute,
   );
 
   Diag.weekPlanComputed(
@@ -311,7 +311,7 @@ Future<ReplanResult> replan(
     instantAnchoredDays: result.instantAnchoredDays.length,
     overrunFlag: result.overrunNotificationNeeded,
     safetyValveFlag: result.safetyValveTriggered,
-    hasWunschzeit: appState.wunschzeit != null,
+    hasWunschzeit: appState.preferredWakeUpTime != null,
     maxStep: bucketMinutes(_maxStepMinutes(result.valuesByDay, window)),
     storedEntriesTotal: mergedValues.length,
     storedEntriesPruned: prunedCount,
@@ -403,7 +403,7 @@ Future<ReplanResult> replan(
 /// never calls [replan] and never reads the calendar. What it *does* do on a
 /// detected change is FR-16's second half, applied to the still-pending days:
 ///
-/// - **wall-clock-anchored** values (`wunschzeit`/curve) keep their **local
+/// - **wall-clock-anchored** values (`preferredWakeUpTime`/curve) keep their **local
 ///   digits** - the alarm-clock convention, "7:00 stays 7:00, now in the new
 ///   zone" - via [reinterpretForNewOffset];
 /// - **instant-anchored** values (taken straight from a real `hardFloor`) keep

@@ -41,7 +41,7 @@ Future<AppState> _freshAppState() async {
 void main() {
   group('replan (FR-8/T-60/FR-11/FR-12/FR-15)', () {
     test(
-        'Kaltstart: erster replan() ohne wunschzeit plant nichts vor dem ersten hardFloor',
+        'Kaltstart: erster replan() ohne preferredWakeUpTime plant nichts vor dem ersten hardFloor',
         () async {
       final appState = await _freshAppState();
       final ringDay = _utc(0, 0, day: 10);
@@ -68,7 +68,7 @@ void main() {
         () async {
       final appState = await _freshAppState();
       final ringDay = _utc(0, 0, day: 10);
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       await replan(
         appState,
@@ -103,10 +103,10 @@ void main() {
         'FR-12: verspätet bekannter Termin für den bereits geklingelten Tag löst possiblyMissedAppointment aus, ohne dessen fixen Wert zu ändern',
         () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       // Erster Checkpoint (Tag9 klingelt): Kalender komplett leer -> Kaltstart
-      // mit wunschzeit, Tag10 (windowStart) wird auf 07:00 gesetzt und ist
+      // mit preferredWakeUpTime, Tag10 (windowStart) wird auf 07:00 gesetzt und ist
       // damit ab jetzt der fixe, tatsächlich geklingelte Wert.
       await replan(
         appState,
@@ -171,7 +171,7 @@ void main() {
       test('Einträge vor gestern verschwinden, gestern und heute bleiben',
           () async {
         final appState = await _freshAppState();
-        appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+        appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
         appState.pendingDayValues = {
           '2025-01-01': DateTime.utc(2025, 1, 1, 7).millisecondsSinceEpoch,
           '2026-02-14': DateTime.utc(2026, 2, 14, 7).millisecondsSinceEpoch,
@@ -203,7 +203,7 @@ void main() {
 
       test('die Karte wächst über viele Replans hinweg nicht weiter', () async {
         final appState = await _freshAppState();
-        appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+        appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
         for (var d = 10; d <= 25; d++) {
           await replan(
@@ -229,7 +229,7 @@ void main() {
         // 07:00 ist geplant, um 03:00 läuft ein Erholungs-Checkpoint. Fiele
         // der heutige Eintrag weg, würde FR-18 den Alarm entfernen.
         final appState = await _freshAppState();
-        appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+        appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
         appState.pendingDayValues = {
           '2026-03-10': _utc(7, 0, day: 10).millisecondsSinceEpoch,
         };
@@ -245,14 +245,14 @@ void main() {
       });
     });
 
-    // docs/TODO.md T-78 / FR-9 "Ausnahme: gesetzte wunschzeit": der
+    // docs/TODO.md T-78 / FR-9 "Ausnahme: gesetzte preferredWakeUpTime": der
     // Endzustand, um den es dabei wirklich geht - ein Nutzer ohne
     // Kalendertermine, aber mit gewünschter Weckzeit, darf nach zwei Wochen
     // nicht ohne Wecker dastehen.
-    test('T-78: wunschzeit-Nutzer ohne Termine behält auch nach 14 Tagen Alarme',
+    test('T-78: preferredWakeUpTime-Nutzer ohne Termine behält auch nach 14 Tagen Alarme',
         () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       for (var d = 9; d <= 22; d++) {
         await replan(
@@ -326,7 +326,7 @@ void main() {
 
       test('FR-12 bleibt nach einer Erholung am selben Tag meldefähig', () async {
         final appState = await _freshAppState();
-        appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+        appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
         // Tag9 klingelt, leerer Kalender -> Tag10 wird auf 07:00 geplant.
         await replan(
@@ -387,7 +387,7 @@ void main() {
     test('Erholungs-Replan (todayAlreadyRang=false): heute bleibt im Fenster und wird nicht gezählt',
         () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       await replan(
         appState,
@@ -407,7 +407,7 @@ void main() {
     test('Ring-Replan (todayAlreadyRang=true): heute ist fix, Fenster beginnt morgen',
         () async {
       final appState = await _freshAppState();
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
       await replan(
         appState,
@@ -507,7 +507,7 @@ void main() {
 
     // FR-16s eigentliche Aufgabe (Phase 5 Schritt 22): auf einen erkannten
     // Versatzwechsel reagieren. Erst durch T-61 (Option B) ist das korrekt
-    // möglich - ein wunschzeit-abgeleiteter Wert ist ein Instant, dessen
+    // möglich - ein preferredWakeUpTime-abgeleiteter Wert ist ein Instant, dessen
     // LOKALE Ziffern erhalten bleiben müssen (Alarmuhren-Konvention), ein
     // hardFloor-abgeleiteter behält dagegen seinen Instant (der Termin
     // verschiebt sich nicht). Checkpoint 2 hat keinen Kalenderzugriff, kann

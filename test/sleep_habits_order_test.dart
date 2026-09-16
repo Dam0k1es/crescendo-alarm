@@ -27,7 +27,7 @@ Future<AppState> _appStateWithAllTilesVisible() async {
   final appState = AppState();
   await appState.initialized;
   // Beide aufklappbaren Bereiche öffnen, damit alle Einträge im Baum liegen.
-  appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+  appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
   appState.reminderEnabled = true;
   appState.gentleWakeUpEnabled = true;
   return appState;

@@ -96,10 +96,10 @@ void main() {
     // applyGapDayDrift()s Doc-Kommentar. Werte sind explizite UTC-Instants und
     // der Geräte-Versatz ist explizit 0 (T-61/Option B) - Verhalten bei
     // Versatz != 0 deckt test/scheduling_v2_offset_test.dart ab.
-    test('kein wunschzeit -> hält (Uhrzeit unverändert, Datum +1)', () {
+    test('kein preferredWakeUpTime -> hält (Uhrzeit unverändert, Datum +1)', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: Duration.zero,
       );
@@ -109,7 +109,7 @@ void main() {
     test('Drift Richtung später, voller Schritt', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
-        wunschzeit: const TimeOfDay(hour: 9, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: Duration.zero,
       );
@@ -119,7 +119,7 @@ void main() {
     test('Drift Richtung früher, voller Schritt', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
-        wunschzeit: const TimeOfDay(hour: 5, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 5, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: Duration.zero,
       );
@@ -129,7 +129,7 @@ void main() {
     test('Ziel näher als maxDailyDelta -> kein Überschießen', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
-        wunschzeit: const TimeOfDay(hour: 7, minute: 15),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 15),
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: Duration.zero,
       );
@@ -139,7 +139,7 @@ void main() {
     test('wunschzeit bereits erreicht -> Uhrzeit unverändert, Datum +1', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
-        wunschzeit: const TimeOfDay(hour: 7, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         deviceUtcOffset: Duration.zero,
       );
@@ -276,7 +276,7 @@ void main() {
     // exactly as a real daily replanning loop would rebase it.
 
     test('ein hardFloor-Punkt: Montag driftet, Dienstag startet den Run', () {
-      const wunschzeit = TimeOfDay(hour: 10, minute: 0);
+      const preferredWakeUpTime = TimeOfDay(hour: 10, minute: 0);
       const maxDailyDelta = Duration(minutes: 30);
       final f = _utc(5, 0); // Samstag, 05:00
 
@@ -289,7 +289,7 @@ void main() {
       final montag = planGapOrRunStartDay(
         v: _utc(7, 0),
         remainingPoints: [HardFloorPoint(dayOffset: 6, value: f)],
-        wunschzeit: wunschzeit,
+        preferredWakeUpTime: preferredWakeUpTime,
         maxDailyDelta: maxDailyDelta,
         deviceUtcOffset: Duration.zero,
       );
@@ -304,7 +304,7 @@ void main() {
       final dienstag = planGapOrRunStartDay(
         v: montag.value,
         remainingPoints: [HardFloorPoint(dayOffset: 5, value: f)],
-        wunschzeit: wunschzeit,
+        preferredWakeUpTime: preferredWakeUpTime,
         maxDailyDelta: maxDailyDelta,
         deviceUtcOffset: Duration.zero,
       );
@@ -328,7 +328,7 @@ void main() {
           HardFloorPoint(dayOffset: 5, value: t1),
           HardFloorPoint(dayOffset: 6, value: t2),
         ],
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: maxDailyDelta,
         deviceUtcOffset: Duration.zero,
       );
@@ -366,7 +366,7 @@ void main() {
   });
 
   group('coldStart (FR-10)', () {
-    test('Tag1-5 termin-los, keine wunschzeit -> kein Alarm geplant', () {
+    test('Tag1-5 termin-los, keine preferredWakeUpTime -> kein Alarm geplant', () {
       final days = [
         _utc(0, 0, day: 1),
         _utc(0, 0, day: 2),
@@ -376,18 +376,18 @@ void main() {
       ];
 
       final result = coldStart(
-          days: days, wunschzeit: null, deviceUtcOffset: Duration.zero);
+          days: days, preferredWakeUpTime: null, deviceUtcOffset: Duration.zero);
 
       expect(result.length, 5);
       expect(result.values.every((v) => v == null), isTrue);
     });
 
-    test('mit wunschzeit -> diese Tage nutzen sie', () {
+    test('mit preferredWakeUpTime -> diese Tage nutzen sie', () {
       final days = [_utc(0, 0, day: 1), _utc(0, 0, day: 2)];
 
       final result = coldStart(
         days: days,
-        wunschzeit: const TimeOfDay(hour: 9, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
         deviceUtcOffset: Duration.zero,
       );
 
@@ -410,7 +410,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
       );
@@ -435,7 +435,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: const TimeOfDay(hour: 10, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 10, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
       );
@@ -472,7 +472,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 90),
         gapDayCounter: 0,
       );
@@ -495,14 +495,14 @@ void main() {
       // FR-16 braucht pro Tag die Information, ob der Wert instant-verankert
       // ist (direkt aus einem echten hardFloor - der Termin verschiebt sich
       // bei einem Zeitzonenwechsel nicht) oder ziffern-verankert (aus
-      // wunschzeit/Kurve - da gilt die Alarmuhren-Konvention). Genau dieses
+      // preferredWakeUpTime/Kurve - da gilt die Alarmuhren-Konvention). Genau dieses
       // Szenario unterscheidet beides: Mi liegt auf der Kurve (04:30), obwohl
       // der Tag einen eigenen hardFloor (08:00) hat, Do dagegen exakt auf
       // seinem hardFloor.
       expect(result.instantAnchoredDays, {day(4)});
     });
 
-    // FR-9s Ventil greift laut Spec nur ohne gesetzte `wunschzeit`
+    // FR-9s Ventil greift laut Spec nur ohne gesetzte `preferredWakeUpTime`
     // (Ausnahme nachträglich ergänzt, docs/TODO.md T-78) - dieser Fall setzt
     // deshalb bewusst keine.
     test(
@@ -517,7 +517,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: null,
+        preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 7,
       );
@@ -526,13 +526,13 @@ void main() {
       expect(result.safetyValveTriggered, isTrue);
     });
 
-    // docs/TODO.md T-78 / FR-9 "Ausnahme: gesetzte wunschzeit": das Ventil
-    // schützt gegen blinde Fortschreibung. Mit einer wunschzeit ist die
-    // Fortschreibung durch FR-4 beschränkt (sie hält exakt auf der wunschzeit
+    // docs/TODO.md T-78 / FR-9 "Ausnahme: gesetzte preferredWakeUpTime": das Ventil
+    // schützt gegen blinde Fortschreibung. Mit einer preferredWakeUpTime ist die
+    // Fortschreibung durch FR-4 beschränkt (sie hält exakt auf der preferredWakeUpTime
     // an), es gibt also nichts, wovor zu schützen wäre - und das Auslösen wäre
     // hier eine Einbahnstraße: ohne Alarme gibt es keinen Ring-Checkpoint mehr,
     // der den Zähler je zurücksetzen könnte.
-    test('Sicherheitsventil greift NICHT, wenn eine wunschzeit gesetzt ist', () {
+    test('Sicherheitsventil greift NICHT, wenn eine preferredWakeUpTime gesetzt ist', () {
       final window = [1, 2, 3].map(day).toList();
 
       final result = computeWeekPlan(
@@ -542,7 +542,7 @@ void main() {
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
-        wunschzeit: const TimeOfDay(hour: 9, minute: 0),
+        preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 42, // weit jenseits der Schwelle
       );

@@ -9,8 +9,8 @@ import 'package:wakeywakey/models/alarms/snooze.dart';
 DateTime at(int h, int m) => DateTime(2026, 9, 14, h, m);
 
 void main() {
-  const fuenf = Duration(minutes: 5);
-  const dreissig = Duration(minutes: 30);
+  const fiveMinutes = Duration(minutes: 5);
+  const thirtyMinutes = Duration(minutes: 30);
 
   group('FR-20: das Budget ist durationToWakeUp', () {
     test('vom ersten Druck an moeglich', () {
@@ -18,8 +18,8 @@ void main() {
         canSnooze(
           now: at(6, 0),
           originalRing: at(6, 0),
-          snoozeTime: fuenf,
-          wakeUpBudget: dreissig,
+          snoozeTime: fiveMinutes,
+          wakeUpBudget: thirtyMinutes,
           snoozeEnabled: true,
         ),
         isTrue,
@@ -32,8 +32,8 @@ void main() {
         canSnooze(
           now: at(6, 25),
           originalRing: at(6, 0),
-          snoozeTime: fuenf,
-          wakeUpBudget: dreissig,
+          snoozeTime: fiveMinutes,
+          wakeUpBudget: thirtyMinutes,
           snoozeEnabled: true,
         ),
         isTrue,
@@ -46,8 +46,8 @@ void main() {
         canSnooze(
           now: at(6, 26),
           originalRing: at(6, 0),
-          snoozeTime: fuenf,
-          wakeUpBudget: dreissig,
+          snoozeTime: fiveMinutes,
+          wakeUpBudget: thirtyMinutes,
           snoozeEnabled: true,
         ),
         isFalse,
@@ -61,8 +61,8 @@ void main() {
         canSnooze(
           now: at(6, 28),
           originalRing: at(6, 0),
-          snoozeTime: fuenf,
-          wakeUpBudget: dreissig,
+          snoozeTime: fiveMinutes,
+          wakeUpBudget: thirtyMinutes,
           snoozeEnabled: true,
         ),
         isFalse,
@@ -74,8 +74,8 @@ void main() {
         canSnooze(
           now: at(6, 0),
           originalRing: at(6, 0),
-          snoozeTime: fuenf,
-          wakeUpBudget: dreissig,
+          snoozeTime: fiveMinutes,
+          wakeUpBudget: thirtyMinutes,
           snoozeEnabled: false,
         ),
         isFalse,
@@ -87,7 +87,7 @@ void main() {
         canSnooze(
           now: at(6, 0),
           originalRing: at(6, 0),
-          snoozeTime: fuenf,
+          snoozeTime: fiveMinutes,
           wakeUpBudget: Duration.zero,
           snoozeEnabled: true,
         ),
@@ -103,11 +103,11 @@ void main() {
       while (canSnooze(
         now: now,
         originalRing: at(6, 0),
-        snoozeTime: fuenf,
-        wakeUpBudget: dreissig,
+        snoozeTime: fiveMinutes,
+        wakeUpBudget: thirtyMinutes,
         snoozeEnabled: true,
       )) {
-        now = snoozedRingTime(now: now, snoozeTime: fuenf);
+        now = snoozedRingTime(now: now, snoozeTime: fiveMinutes);
         count++;
         if (count > 20) break; // Schutz gegen eine Endlosschleife im Test
       }

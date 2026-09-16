@@ -79,7 +79,7 @@ void main() {
     });
 
     // Phase 4 (docs/scheduling-v2-spec.md, "Implementierungsreihenfolge"):
-    // replan() needs wunschzeit/maxDailyDelta from AppState directly (FR-3) -
+    // replan() needs preferredWakeUpTime/maxDailyDelta from AppState directly (FR-3) -
     // Phase 0 deliberately added only the 4 fields that don't need a settings
     // UI first (lastEffectiveWakeTime is derived from pendingDayValues
     // instead, see replan_test.dart); these two are added now, following the
@@ -88,17 +88,17 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
       await first.initialized;
-      expect(first.wunschzeit, isNull);
+      expect(first.preferredWakeUpTime, isNull);
 
-      first.wunschzeit = const TimeOfDay(hour: 7, minute: 30);
+      first.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 30);
       final second = AppState();
       await second.initialized;
-      expect(second.wunschzeit, const TimeOfDay(hour: 7, minute: 30));
+      expect(second.preferredWakeUpTime, const TimeOfDay(hour: 7, minute: 30));
 
-      second.wunschzeit = null;
+      second.preferredWakeUpTime = null;
       final third = AppState();
       await third.initialized;
-      expect(third.wunschzeit, isNull);
+      expect(third.preferredWakeUpTime, isNull);
     });
 
     // FR-16/Phase 5 Schritt 22: Checkpoint 2 läuft im Hintergrund-Isolate ohne
@@ -113,7 +113,7 @@ void main() {
 
       final anchored = <String, bool>{
         '2026-01-16': true, // Wert kam direkt aus einem echten hardFloor
-        '2026-01-17': false, // wunschzeit/Kurve
+        '2026-01-17': false, // preferredWakeUpTime/Kurve
       };
       first.pendingDayInstantAnchored = anchored;
 

@@ -51,7 +51,7 @@ DateTime _toMinute(DateTime t) {
 /// "erst der tatsächlich ausgelöste Wert ist für immer fix" - re-setting it
 /// would be pointless) or been missed entirely, and the alarm plugin rejects
 /// past times anyway. A `null` value (FR-9's safety valve, or FR-10's cold
-/// start without a `wunschzeit`) means "no alarm planned for that day", so any
+/// start without a `preferredWakeUpTime`) means "no alarm planned for that day", so any
 /// existing alarm for it gets removed rather than kept.
 ///
 /// **Past-dated existing alarms are deliberately never removed.** This sync

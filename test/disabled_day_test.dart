@@ -102,7 +102,7 @@ void main() {
       final ringDay = _utc(0, 0, day: 10);
       final morgen = dayMarker(ringDay, 1);
 
-      appState.wunschzeit = const TimeOfDay(hour: 7, minute: 0);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
       appState.setDayEnabled(isoDate(morgen), false);
 
       await replan(
