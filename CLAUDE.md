@@ -8,7 +8,7 @@ scanning a physical QR code to deactivate the alarm. Fully offline - no network 
 ## Scheduling engine (`lib/models/scheduling/`)
 
 Calendar-derived wake times come from **scheduling-v2**, specified in
-`docs/scheduling-v2-spec.md` (FR-1 … FR-18) and implemented test-first against that spec. The old
+`docs/scheduling-v2-spec.md` (FR-1 … FR-21) and implemented test-first against that spec. The old
 engine (`scheduling.dart`'s `Scheduler`/`getEarliestEvent`/`adjustAlarmTimes`/`getStartTimeForDate`)
 was **removed** in Phase 6 (2026-09, `docs/TODO.md` T-64/T-86) - don't reintroduce a second
 scheduling path, and don't look for `Scheduler` in older docs' terms.
@@ -363,7 +363,7 @@ snapshot file as still accurate.
 production push), `TODO.md` (every known open task, prioritised, with evidence and an acceptance
 criterion - the living record of what's actually wrong or missing, as opposed to the two frozen
 snapshots above), `device-trial-checklist.md` (the manual counterpart to the E2E suite, with a
-result field per line), `scheduling-v2-spec.md` (FR-1 … FR-18), plus `personas.md`,
+result field per line), `scheduling-v2-spec.md` (FR-1 … FR-21), plus `personas.md`,
 `use-cases.md`, `choice-of-technologies.md` and a UML diagram (`UML_WakeyWakey.drawio`) from the
 original project planning. Those three markdown documents predate the finished app and have been
 annotated inline where they describe features that were planned but never implemented (e.g.

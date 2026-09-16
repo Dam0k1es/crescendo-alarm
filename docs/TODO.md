@@ -111,7 +111,17 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
       der Alarmliste schreibt den TAG statt eines Objektfeldes und stoesst einen Checkpoint an.
       Tests zuerst, aus FR-21s durchgerechneten Faellen: `test/disabled_day_test.dart` (7 Faelle;
       die Mutation "Filter entfernt" macht 3 davon rot).
-- [ ] Offen: dasselbe fuer `ManualAlarm`s - dort traegt `enabled` weiterhin nur das Objekt.
+- [x] The same for `ManualAlarm`s, through FR-21's second section:
+      `applyManualAlarmEnabled` (`lib/models/alarms/manual_alarm_enable.dart`) cancels the platform
+      alarm, or re-arms it for the **next** occurrence of its time - the same resolution used when
+      an alarm is created, so switching off and on again cannot land on a different day than a
+      freshly created alarm would. If the platform call fails the flag is left alone: it describes
+      what the device will actually do. `addAlarm`/`updateAlarm` no longer arm a switched-off alarm
+      at all (the back door: change the title and it is live again), and `nextWakeUpTime()` now
+      skips it - a bedtime reminder derived from an alarm that will not ring sends the user to bed
+      for nothing. Tests first, from FR-21's "Test:" bullets:
+      `test/disabled_manual_alarm_test.dart` (9 cases; three mutations - dropping the flag check,
+      dropping the arming guard, setting the flag before the platform call - kill one to two each).
 - **Why:** a user switches an alarm off and it rings anyway. The flag is stored, serialized and
   compared, but never consulted when arming or cancelling.
 - **Evidence:** `lib/models/alarms/myalarm.dart:6`; the only reads are constructor pass-throughs

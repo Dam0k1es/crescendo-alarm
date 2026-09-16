@@ -764,50 +764,87 @@ bleibt gewahrt, weil der verschobene Ruf die `ScheduledAlarm`-Kette gar nicht be
 - **Test (kein Abschalten):** nach einem Snooze ist der Weckruf weiterhin scharf; es gibt keinen
   Zustand, in dem Snooze ihn entfernt hat.
 
-## FR-21 — Ein abgeschalteter Wecker klingelt nicht
+## FR-21 — A switched-off alarm does not ring
 
-**Grundsatz.** Schaltet der Nutzer einen geplanten Wecker ueber den Schalter in der Alarmliste aus,
-klingelt er nicht - sofort, dauerhaft und ueber Neustarts hinweg.
+**Principle.** When the user switches an alarm off with the toggle in the alarm list, it does not
+ring — immediately, permanently, and across restarts. This holds for **both** kinds of alarm, the
+planned ones this specification computes and the manual ones the user sets by hand.
 
-Das ist heute **nicht** so: `enabled` wird gespeichert, durch Konstruktoren gereicht, verglichen
-und an den UI-Schalter gebunden, aber an keiner Stelle gelesen, wenn ein Alarm gestellt oder
-abgebrochen wird (`docs/TODO.md` T-03, ein P0-Blocker). Der Schalter sieht aus wie eine Zusage und
-ist keine - fuer eine Wecker-App die schlechteste Sorte Fehler, weil der Nutzer sich darauf
-verlaesst und erst beim Klingeln merkt, dass es nicht stimmte.
+This was **not** the case: `enabled` was stored, passed through constructors, compared and bound to
+the UI toggle, but read nowhere when an alarm is armed or cancelled (`docs/TODO.md` T-03, a P0
+blocker). The toggle looked like a promise and was none — for an alarm clock the worst kind of
+defect, because the user relies on it and finds out only when it rings.
 
-**Drei Zusicherungen:**
+**Three assurances, for either kind of alarm:**
 
-1. **Sofort.** Beim Ausschalten wird der bereits scharf gestellte Plattform-Alarm dieses Tages
-   abgebrochen, nicht erst beim naechsten Checkpoint.
-2. **Dauerhaft.** Der naechste Planungslauf stellt ihn **nicht** wieder. Das ist die Zusicherung,
-   an der ein naiver Fix scheitert: FR-18 baut die Alarmmenge bei **jeder** Neuplanung aus
-   `pendingDayValues` auf, ein blosses `Alarm.stop()` beim Umlegen des Schalters waere also beim
-   naechsten Ring-Checkpoint wieder rueckgaengig gemacht - und der laeuft garantiert, weil ein
-   anderer Wecker klingelt.
-3. **Ueber Neustarts.** Der Zustand ist persistiert.
+1. **Immediately.** Switching off cancels the platform alarm that is already armed, not just at the
+   next checkpoint.
+2. **Permanently.** Nothing arms it again behind the user's back.
+3. **Across restarts.** The state is persisted.
 
-**Warum ein eigenes Feld (`disabledDays`) und nicht `pendingDayValues[tag] = null`:** dort bedeutet
-`null` "nichts geplant" (Lueckentag ohne `wunschzeit`, oder FR-9s Ventil), und der naechste
-Planungslauf ueberschreibt den Eintrag aus der Rechnung heraus. Das Veto des Nutzers wuerde dabei
-verschwinden. Es ist eine andere Aussage als der Plan - deshalb steht es daneben, nicht darin. FR-3s
-Warnung vor einer "zweiten Quelle" gilt dem *abgeleiteten* `lastEffectiveWakeTime`, nicht einer
-eigenstaendigen Nutzerentscheidung.
+### Planned alarms
 
-**Abgrenzungen:**
+Assurance 2 is where a naive fix fails here: FR-18 rebuilds the alarm set from `pendingDayValues`
+on **every** re-plan, so a bare `Alarm.stop()` when the toggle is flipped would be undone at the
+next ring checkpoint — and that one runs for certain, because another alarm is ringing.
 
-- Der abgeschaltete Tag bleibt im Plan und bleibt **Anker** fuer die Glaettung (FR-4/FR-6). Der
-  Nutzer hat gesagt "an diesem Tag nicht wecken", nicht "diesen Tag aus meinem Rhythmus streichen".
-- FR-9s Zaehler ist unberuehrt: ein abgeschalteter Tag ist kein termin-loser Tag.
-- Wird der Tag wieder eingeschaltet, gilt sofort wieder der geplante Wert.
-- Ein abgeschalteter Tag, der vorbei ist, wird mit `pendingDayValues` aufgeraeumt (dieselbe
-  Aufbewahrungsgrenze, T-82) - sonst waechst die Menge unbegrenzt.
-- **Snooze (FR-20) ist davon unberuehrt:** es gibt nichts zu verschieben, was nicht klingelt.
+**Why a separate field (`disabledDays`) and not `pendingDayValues[day] = null`:** there, `null`
+means "nothing planned" (a gap day without a preferred wake-up time, or FR-9's valve), and the next
+planning run overwrites the entry out of its own arithmetic. The user's veto would vanish with it.
+It is a different statement from the plan, so it lives beside it, not inside it. FR-3's warning
+about a "second source" is about the *derived* `lastEffectiveWakeTime`, not about a standalone user
+decision.
 
-- **Test:** Wecker fuer morgen abschalten → `Alarm.getAlarms()` enthaelt ihn nicht mehr; ein
-  anschliessender Checkpoint (Ring, Einstellungsaenderung, Sync-Knopf) stellt ihn **nicht** wieder;
-  nach einem App-Neustart bleibt er aus.
-- **Test:** derselbe Tag wieder eingeschaltet → der geplante Wert ist unveraendert da und wird
-  wieder gestellt.
-- **Test:** ein abgeschalteter Tag aendert die Weckzeiten der uebrigen Tage **nicht** - er bleibt
-  Anker der Kurve.
+**Boundaries:**
 
+- The switched-off day stays in the plan and stays an **anchor** for the smoothing (FR-4/FR-6). The
+  user said "do not wake me on this day", not "remove this day from my rhythm".
+- FR-9's counter is untouched: a switched-off day is not an appointment-free day.
+- Switching the day back on restores the planned value immediately.
+- A switched-off day that has passed is cleaned up along with `pendingDayValues` (the same
+  retention bound, T-82) — otherwise the set grows without limit.
+- **Snooze (FR-20) is unaffected:** there is nothing to postpone that does not ring.
+
+- **Test:** switch tomorrow's alarm off → `Alarm.getAlarms()` no longer contains it; a following
+  checkpoint (ring, settings change, sync button) does **not** re-arm it; after an app restart it
+  stays off.
+- **Test:** the same day switched back on → the planned value is unchanged and armed again.
+- **Test:** a switched-off day does **not** change the other days' wake times — it remains an anchor
+  of the curve.
+
+### Manual alarms
+
+The same promise, and a **simpler mechanism**: a manual alarm is an object the user owns directly.
+Nothing re-derives it, and FR-15 keeps the planner away from it altogether, so there is no analogue
+to the `disabledDays` problem — the flag on the object *is* the durable statement, and the only
+thing missing was that nobody ever acted on it.
+
+What the toggle must do:
+
+- **Off:** cancel the platform alarm carrying this alarm's id, and persist `enabled = false`.
+- **On:** arm it again for the **next occurrence** of its `TimeOfDay` — today at that time if that
+  is still ahead, otherwise tomorrow. This is the same resolution used when the alarm was created,
+  so switching off and on again may not silently move the alarm to a different day than a freshly
+  created one with the same time would get.
+- Creating or editing an alarm that is switched off must **not** arm it. Otherwise the defect
+  returns through the back door: the user edits the title of a switched-off alarm and it is live
+  again.
+
+**One consequence beyond the arming itself.** The bedtime reminder asks `nextWakeUpTime()` when the
+user has to sleep. It reads manual alarms deliberately (see FR-15's note there), and it must now
+**skip the switched-off ones** — a reminder computed from an alarm that will not ring sends the
+user to bed for a wake-up that never comes. Until this requirement, that function documented its
+ignoring of `enabled` as deliberate, precisely *because* the flag was known to be inert app-wide;
+that reasoning ends here.
+
+**Boundary:** `repeatOnDays` stays inert and is a separate matter (`docs/TODO.md` T-14). A
+switched-off alarm stays in the list and keeps its time — switching off is not deleting.
+
+- **Test:** switch a manual alarm off → the platform alarm with its id is stopped, no new one is
+  armed, and `enabled` is `false` after reloading the persisted state.
+- **Test:** switch it back on → it is armed for the next occurrence of its time; with the time
+  already past today, that is tomorrow, not today.
+- **Test:** a switched-off manual alarm does not feed the bedtime reminder — `nextWakeUpTime()`
+  skips it and returns the next one that will actually ring.
+- **Test (counter-check against over-correction):** a switched-on manual alarm is still armed, and
+  still feeds the reminder, exactly as before.

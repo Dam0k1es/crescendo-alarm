@@ -22,10 +22,14 @@ import 'package:wakeywakey/models/scheduling/stored_values.dart';
 /// tomorrow - matching `AppState._getAlarmTime`, i.e. the time the alarm would
 /// actually be set to. `repeatOnDays` is deliberately not consulted, because
 /// nothing in the app evaluates it when setting alarms either (it is stored
-/// and editable, but never acted on), and `enabled` is not consulted either
-/// (the per-alarm switch is a known no-op app-wide, `docs/TODO.md` T-03) -
-/// this function mirrors actual current alarm behavior rather than inventing
-/// its own.
+/// and editable, but never acted on).
+///
+/// `enabled` **is** consulted since FR-21 (docs/TODO.md T-03): a switched-off
+/// alarm does not ring, and a bedtime reminder computed from it would send the
+/// user to bed for a wake-up that never comes. Until FR-21 this function
+/// documented the opposite as deliberate - precisely because the flag was
+/// inert app-wide, so honouring it here would have invented a behaviour the
+/// app did not have. That reason is gone.
 ///
 /// Returns `null` when neither source yields a future wake-up time; callers
 /// decide what to do with that (see `scheduleSleepReminder`'s fallback).
@@ -53,6 +57,7 @@ DateTime? nextWakeUpTime({
   }
 
   for (final alarm in manualAlarms) {
+    if (!alarm.enabled) continue;
     // `MyAlarm.time` is declared `dynamic` (a `DateTime` for `ScheduledAlarm`,
     // a `TimeOfDay` for `ManualAlarm`) - hence the cast.
     final time = alarm.time as TimeOfDay;

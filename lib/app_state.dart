@@ -4,6 +4,7 @@ import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakeywakey/models/alarms/manual_alarm.dart';
+import 'package:wakeywakey/models/alarms/manual_alarm_enable.dart';
 import 'package:wakeywakey/models/alarms/myalarm.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
@@ -586,7 +587,13 @@ class AppState extends ChangeNotifier {
         'success': true,
         'errMsg': '',
       };
-      await _setAlarm(newAlarm, alarmDateTime);
+      // FR-21 (docs/TODO.md T-03): a switched-off alarm is never armed - not
+      // when it is created and not when it is edited. Without this guard the
+      // defect returns through the back door: the user changes the title of a
+      // switched-off alarm and it is live again.
+      if (newAlarm.enabled) {
+        await _setAlarm(newAlarm, alarmDateTime);
+      }
     } else if (alarm is ScheduledAlarm) {
       // Create a new alarm in case it was set to a DayTime in the past
       ScheduledAlarm newAlarm = ScheduledAlarm(
@@ -632,7 +639,10 @@ class AppState extends ChangeNotifier {
         _saveManualAlarms();
         // Set the new alarm in the list of flutter_alarm plugin type
         DateTime alarmDateTime = _getAlarmTime(newAlarm);
-        await _setAlarm(newAlarm, alarmDateTime);
+        // FR-21: see addAlarm - editing must not arm a switched-off alarm.
+        if (newAlarm.enabled) {
+          await _setAlarm(newAlarm, alarmDateTime);
+        }
         await removeAlarm(oldAlarm);
         notifyListeners();
         return {'success': true, 'errMsg': ''};
@@ -706,16 +716,33 @@ class AppState extends ChangeNotifier {
   /// instant's raw fields, reinterpreting UTC digits as device-local time.
   /// Deleted rather than fixed (docs/TODO.md T-86).
   DateTime _getAlarmTime(ManualAlarm alarm) {
-    DateTime now = DateTime.now();
     debugPrint(
         "=====getAlarmTime: ${alarm.id} is a manual alarm set on ${alarm.time}");
-    DateTime alarmDateTime = DateTime(
-        now.year, now.month, now.day, alarm.time.hour, alarm.time.minute);
-    // Only alarms in the future are allowed to be set
-    if (alarmDateTime.isBefore(now)) {
-      alarmDateTime = alarmDateTime.add(const Duration(days: 1));
-    }
-    return alarmDateTime;
+    // The resolution itself lives in manual_alarm_enable.dart, so that
+    // re-arming through the FR-21 toggle uses exactly this rule and cannot
+    // drift away from it (a duplicate would be a silent off-by-one-day).
+    return nextManualOccurrence(alarm.time, DateTime.now());
+  }
+
+  /// FR-21 (docs/TODO.md T-03): makes the alarm-list toggle of a manual alarm
+  /// real - it cancels the armed platform alarm or arms it again.
+  ///
+  /// Returns `false` when the platform refused; nothing is then changed or
+  /// persisted, because the flag has to keep describing what the device will
+  /// actually do.
+  Future<bool> setManualAlarmEnabled(ManualAlarm alarm, bool enabled) async {
+    final applied = await applyManualAlarmEnabled(
+      alarm: alarm,
+      enabled: enabled,
+      now: DateTime.now(),
+      armAlarm: _setAlarm,
+      stopAlarm: _stopAlarm,
+    );
+    if (!applied) return false;
+
+    _saveManualAlarms();
+    notifyListeners();
+    return true;
   }
 
   Future<void> _setAlarm(MyAlarm alarm, DateTime alarmDateTime) async {

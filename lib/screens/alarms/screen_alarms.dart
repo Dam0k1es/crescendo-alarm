@@ -157,21 +157,38 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                 ),
                 trailing: Switch(
                   value: alarms[index].enabled,
-                  onChanged: (bool value) {
-                    setState(() {
-                      alarms[index].enabled = value;
-                      // FR-21 (docs/TODO.md T-03): fuer einen geplanten Wecker
-                      // ist der Schalter eine Aussage ueber den TAG, nicht
-                      // ueber das Objekt - sonst haette ihn die naechste
-                      // Neuplanung wieder ueberschrieben, weil FR-18 die
-                      // Alarmmenge jedes Mal neu aufbaut.
-                      final alarm = alarms[index];
-                      if (alarm is ScheduledAlarm) {
-                        _appState.setDayEnabled(isoDate(alarm.time), value);
-                        runCheckpointSafely(_appState,
-                            trigger: CheckpointTrigger.settingsChanged);
-                      }
-                    });
+                  onChanged: (bool value) async {
+                    final alarm = alarms[index];
+                    if (alarm is ScheduledAlarm) {
+                      // FR-21 (docs/TODO.md T-03): for a planned alarm the
+                      // toggle is a statement about the DAY, not about the
+                      // object - otherwise the next re-plan would overwrite
+                      // it, because FR-18 rebuilds the alarm set every time.
+                      setState(() => alarm.enabled = value);
+                      _appState.setDayEnabled(isoDate(alarm.time), value);
+                      runCheckpointSafely(_appState,
+                          trigger: CheckpointTrigger.settingsChanged);
+                      return;
+                    }
+                    // FR-21, manual alarms: the object itself is the durable
+                    // statement, but it only counts once the platform has
+                    // accepted it. A refused call leaves the switch where it
+                    // was - the alarm would still ring, and the switch must
+                    // not claim otherwise.
+                    final messenger = ScaffoldMessenger.of(context);
+                    final applied = await _appState.setManualAlarmEnabled(
+                        alarm as ManualAlarm, value);
+                    if (!mounted) return;
+                    setState(() {});
+                    if (!applied) {
+                      // The messenger was taken before the await, so no
+                      // BuildContext crosses the gap.
+                      messenger.showSnackBar(const SnackBar(
+                        content: Text('Could not change this alarm'),
+                        duration: Duration(seconds: 5),
+                        persist: false,
+                      ));
+                    }
                   },
                   activeThumbColor: context
                       .watch<AppState>()
