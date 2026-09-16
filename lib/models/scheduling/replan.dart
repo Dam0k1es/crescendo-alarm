@@ -267,6 +267,9 @@ Future<ReplanResult> replan(
     mergedValues[isoDate(day)] = toStored(result.valuesByDay[day]);
   }
   appState.pendingDayValues = mergedValues;
+  // FR-21 + T-82: abgeschaltete Tage mit derselben Grenze aufraeumen wie die
+  // Werte - ein vergangener abgeschalteter Tag interessiert niemanden mehr.
+  appState.pruneDisabledDays(oldestKeptDay);
 
   // FR-16: derselbe Merge wie oben (samt derselben Grenze), damit Checkpoint 2
   // auch für den heutigen (noch nicht geklingelten) Tag weiß, ob dessen Wert

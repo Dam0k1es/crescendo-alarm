@@ -40,6 +40,7 @@ class AppState extends ChangeNotifier {
   // Termin zu ziehen; mit Snooze ist diese Dauer das Budget und wird beim
   // Einschalten auf 00:10 gehoben.
   TimeOfDay _durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
+  Set<String> _disabledDays = <String>{};
   bool _snoozeEnabled = false;
   Duration _snoozeTime = const Duration(minutes: 5);
   Map<int, DateTime> _snoozeOriginOf = <int, DateTime>{};
@@ -116,6 +117,35 @@ class AppState extends ChangeNotifier {
   TimeOfDay get durationToWakeUp => _durationToWakeUp;
 
   /// FR-20: darf der Nutzer den Wecker verschieben? Vorgabe **aus**.
+  /// FR-21: Tage (als `isoDate`), fuer die der Nutzer den geplanten Wecker
+  /// abgeschaltet hat. Bewusst neben `pendingDayValues` und nicht darin: dort
+  /// hiesse `null` "nichts geplant", und die naechste Planung wuerde den
+  /// Eintrag aus der Rechnung heraus ueberschreiben - das Veto des Nutzers
+  /// verschwaende dabei.
+  Set<String> get disabledDays => _disabledDays;
+
+  bool isDayDisabled(String isoDay) => _disabledDays.contains(isoDay);
+
+  void setDayEnabled(String isoDay, bool enabled) {
+    if (enabled ? !_disabledDays.contains(isoDay) : _disabledDays.contains(isoDay)) {
+      return;
+    }
+    _disabledDays = enabled
+        ? ({..._disabledDays}..remove(isoDay))
+        : {..._disabledDays, isoDay};
+    _prefs.setStringList('disabledDays', _disabledDays.toList()..sort());
+    notifyListeners();
+  }
+
+  /// FR-21 + docs/TODO.md T-82: dieselbe Aufbewahrungsgrenze wie fuer die
+  /// geplanten Werte - sonst waechst die Menge unbegrenzt.
+  void pruneDisabledDays(String oldestKeptDay) {
+    final kept = _disabledDays.where((d) => d.compareTo(oldestKeptDay) >= 0).toSet();
+    if (kept.length == _disabledDays.length) return;
+    _disabledDays = kept;
+    _prefs.setStringList('disabledDays', _disabledDays.toList()..sort());
+  }
+
   bool get snoozeEnabled => _snoozeEnabled;
 
   /// FR-20: um wie viel ein Druck auf Snooze verschiebt. Vorgabe 5 Minuten.
@@ -1042,6 +1072,8 @@ class AppState extends ChangeNotifier {
               _safetyValveNotificationSent;
       _diagnosticsEnabled =
           _prefs.getBool('diagnosticsEnabled') ?? _diagnosticsEnabled;
+      _disabledDays =
+          (_prefs.getStringList('disabledDays') ?? const <String>[]).toSet();
       _snoozeEnabled = _prefs.getBool('snoozeEnabled') ?? _snoozeEnabled;
       final snoozeMinutes = _prefs.getInt('snoozeTimeMinutes');
       if (snoozeMinutes != null) _snoozeTime = Duration(minutes: snoozeMinutes);

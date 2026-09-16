@@ -8,6 +8,7 @@ import 'package:wakeywakey/models/alarms/manual_alarm.dart';
 import 'package:wakeywakey/models/alarms/myalarm.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
 import 'package:wakeywakey/models/scheduling/checkpoint.dart';
+import 'package:wakeywakey/models/scheduling/day_marker.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
 class ScreenAlarms extends StatefulWidget {
@@ -159,6 +160,17 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                   onChanged: (bool value) {
                     setState(() {
                       alarms[index].enabled = value;
+                      // FR-21 (docs/TODO.md T-03): fuer einen geplanten Wecker
+                      // ist der Schalter eine Aussage ueber den TAG, nicht
+                      // ueber das Objekt - sonst haette ihn die naechste
+                      // Neuplanung wieder ueberschrieben, weil FR-18 die
+                      // Alarmmenge jedes Mal neu aufbaut.
+                      final alarm = alarms[index];
+                      if (alarm is ScheduledAlarm) {
+                        _appState.setDayEnabled(isoDate(alarm.time), value);
+                        runCheckpointSafely(_appState,
+                            trigger: CheckpointTrigger.settingsChanged);
+                      }
                     });
                   },
                   activeThumbColor: context

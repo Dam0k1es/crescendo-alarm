@@ -99,14 +99,19 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   `test/scheduling_v2_test.dart`s `computeWeekPlan`-Gruppe und `test/replan_test.dart`.
 - **Requirement:** R2
 
-### T-03 · The per-alarm enable switch does not stop an alarm — SPEZIFIZIERT als FR-21 (2026-09-16)
+### T-03 · The per-alarm enable switch does not stop an alarm — BEHOBEN (2026-09-16, FR-21)
 
 - [x] Als Anforderung festgeschrieben: **FR-21** in `docs/scheduling-v2-spec.md`, samt der
       Wechselwirkung, an der ein naiver Fix scheitert (FR-18 baut die Alarmmenge bei jeder
       Neuplanung neu auf - ein blosses `Alarm.stop()` beim Umlegen des Schalters haelt nicht bis
       zum naechsten Checkpoint) und der Begruendung fuer ein eigenes Feld `disabledDays` statt
       `pendingDayValues[tag] = null`.
-- [ ] Make the `enabled` flag actually cancel/arm the OS alarm, and persist the change.
+- [x] Umgesetzt fuer geplante Wecker: `AppState.disabledDays` (persistiert, mit T-82s
+      Aufbewahrungsgrenze aufgeraeumt), `planAlarmSync` ueberspringt diese Tage, der Schalter in
+      der Alarmliste schreibt den TAG statt eines Objektfeldes und stoesst einen Checkpoint an.
+      Tests zuerst, aus FR-21s durchgerechneten Faellen: `test/disabled_day_test.dart` (7 Faelle;
+      die Mutation "Filter entfernt" macht 3 davon rot).
+- [ ] Offen: dasselbe fuer `ManualAlarm`s - dort traegt `enabled` weiterhin nur das Objekt.
 - **Why:** a user switches an alarm off and it rings anyway. The flag is stored, serialized and
   compared, but never consulted when arming or cancelling.
 - **Evidence:** `lib/models/alarms/myalarm.dart:6`; the only reads are constructor pass-throughs

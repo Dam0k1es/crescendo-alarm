@@ -89,6 +89,12 @@ AlarmSyncPlan planAlarmSync({
   required List<ScheduledAlarm> existingScheduledAlarms,
   required DateTime now,
   Set<int>? platformAlarmIds,
+  /// FR-21: Tage, fuer die der Nutzer den Wecker ausdruecklich abgeschaltet
+  /// hat. Sie werden behandelt, als waere fuer sie nichts geplant - der Wert
+  /// selbst bleibt aber stehen (abgeschaltet ist nicht geloescht), damit er
+  /// beim Wiedereinschalten sofort wieder gilt und die Glaettung ihn weiter
+  /// als Anker benutzen kann.
+  Set<String>? disabledDays,
   String? tone,
   double? volume,
   bool? gentleWake,
@@ -97,7 +103,14 @@ AlarmSyncPlan planAlarmSync({
   final nowMinute = _toMinute(now);
 
   final desired = <DateTime>[];
-  for (final millis in pendingDayValues.values) {
+  for (final entry in pendingDayValues.entries) {
+    // FR-21: der Nutzer hat fuer diesen Tag "nicht wecken" gesagt. Das muss
+    // HIER greifen und nicht erst beim Stellen: `applyPlannedAlarms` baut die
+    // Alarmmenge bei jeder Neuplanung aus dieser Liste auf, ein blosses
+    // `Alarm.stop()` an der Oberflaeche haelt also nicht bis zum naechsten
+    // Checkpoint.
+    if (disabledDays != null && disabledDays.contains(entry.key)) continue;
+    final millis = entry.value;
     // localFromStored, nicht instantFromStored (docs/TODO.md T-83): diese
     // Werte landen in ScheduledAlarm.time, und dessen Titel (formatDateTime)
     // sowie die Alarmliste in der UI lesen die Ziffern als Wanduhrzeit.
@@ -199,6 +212,7 @@ Future<void> applyPlannedAlarms(
   final plan = planAlarmSync(
     pendingDayValues: appState.pendingDayValues,
     existingScheduledAlarms: existing,
+    disabledDays: appState.disabledDays,
     now: nowFn(),
     platformAlarmIds: platformIds,
     // docs/TODO.md T-84: die Alarm-Eigenschaften gehören zum Abgleich, sonst
