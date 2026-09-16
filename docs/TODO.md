@@ -1504,6 +1504,26 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-140 · Das Log fuehrte die Planungs-EINGABEN nicht mit — BEHOBEN (2026-09-16)
+
+- [x] `Diag.planInputs`: `maxDailyDelta`, beide Vorlaufdauern und die `wunschzeit` je Planung.
+- **Woher:** Hinweis des Maintainers zum ersten Geraete-Log - *"ich hatte zwischendrin die maximale
+  Driftzeit angepasst, falls das nicht im Log erscheint"*. Er hatte recht: es erschien nicht.
+- **Die Luecke:** das Log fuehrte `maxStepBucket` (wie gross der groesste Schritt **war**) und
+  `hasWunschzeit` als blosses Ja/Nein - aber nicht, wie gross ein Schritt sein **durfte** und
+  worauf hin gedriftet wurde. Ein geloggter Plan war damit nicht nachrechenbar: fuer T-139 musste
+  die Grenze aus den Schrittweiten **zurueckgerechnet** werden, was selbstbestaetigend ist. Dass
+  der Wert zwischenzeitlich geaendert worden war, ging aus dem Log ueberhaupt nicht hervor.
+- **Unterscheidung, die die Aufnahme traegt:** eine **Dauer** ist keine **Uhrzeit**. "90 Minuten
+  Grenze" oder "30 Minuten Vorlauf" verraten nichts ueber Schlaf und stehen deshalb **immer** im
+  Log. Die `wunschzeit` ist dagegen eine Weckzeit und haengt am Zeit-Schalter (T-135), sonst `-1`.
+  Die Regel "kein Uhrwert ohne Schalter" bleibt damit unangetastet - und die drei Dauer-Namen
+  stehen namentlich mit Begruendung im Quelltext-Waechter, nicht als stille Ausnahme.
+- **Wirkung auf T-139:** die dortige Rekonstruktion (90 min) passt exakt auf alle sieben geloggten
+  Werte und die Overrun-Flagge, bleibt aber eine Rueckrechnung. Das naechste Log beantwortet die
+  Frage direkt.
+- **Requirement:** R2
+
 ### T-139 · FR-5s ΔT=0-Regel kappt die Vorausschau — `maxDailyDelta` wird dadurch um 50% gerissen
 
 - [ ] FR-5/FR-7 entscheiden, DANN testgetrieben beheben.
@@ -1525,6 +1545,11 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   ebenfalls 07:30 - ΔT = 0. FR-5 Schritt 2 (*"ein Punkt mit ΔT=0 beendet den Run sofort bei sich
   selbst"*) macht Montag damit zum Ziel, und die Vorausschau endet dort. Dienstags 04:30 kommt in
   FR-7s Machbarkeitspruefung gar nicht mehr vor, also ist jede Drift "machbar".
+- **Vorbehalt zur Rekonstruktion:** `maxDailyDelta` stand nicht im Log (das ist T-140, inzwischen
+  behoben), die 90 Minuten sind aus den Schrittweiten zurueckgerechnet - sie passen exakt auf alle
+  sieben Werte und die Overrun-Flagge, sind aber insofern selbstbestaetigend. Der Maintainer hat
+  den Wert zwischendurch zudem geaendert. Das naechste Log entscheidet es direkt; am Mechanismus
+  (ΔT=0 kappt die Vorausschau) aendert es nichts - der ist unabhaengig von der Zahl.
 - **Keine Regression von T-132 und keine von T-104** - beide eigens geprueft: ohne T-132s
   Abkuerzung kommt derselbe Plan heraus, und T-104 aendert hier nichts, weil der ΔT=0-Punkt ohnehin
   `points.first` ist. Der Fehler ist so alt wie FR-5.

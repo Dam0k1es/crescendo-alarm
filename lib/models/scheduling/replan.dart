@@ -287,6 +287,18 @@ Future<ReplanResult> replan(
 
   // `windowDayCount != distinctDayKeys` ist die Signatur von T-74d/T-76: zwei
   // Fenstertage sind auf denselben Tagesschluessel kollidiert.
+  // docs/TODO.md T-140: die EINGABEN, ohne die der geloggte Plan nicht
+  // nachrechenbar ist. Immer geschrieben - Dauern sind keine Uhrzeiten; die
+  // wunschzeit haengt am Zeit-Schalter und ist sonst -1.
+  Diag.planInputs(
+    maxDailyDeltaMinutes: appState.maxDailyDelta.inMinutes,
+    wakeUpMinutes: durationToWakeUp.inMinutes,
+    getReadyMinutes: durationToGetReady.inMinutes,
+    wunschzeitMinuteOfDay: appState.wunschzeit == null
+        ? -1
+        : appState.wunschzeit!.hour * 60 + appState.wunschzeit!.minute,
+  );
+
   Diag.weekPlanComputed(
     todayAlreadyRang: todayAlreadyRang,
     windowDayCount: window.length,

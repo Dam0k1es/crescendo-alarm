@@ -335,4 +335,34 @@ void main() {
       expect(Diag.records, isEmpty);
     });
   });
+
+  group('Planungs-Eingaben (T-140)', () {
+    test('Dauern stehen immer drin, die wunschzeit nur mit Schalter', () async {
+      await _freshDiag();
+      Diag.planInputs(
+          maxDailyDeltaMinutes: 90,
+          wakeUpMinutes: 30,
+          getReadyMinutes: 0,
+          wunschzeitMinuteOfDay: 540);
+
+      final r = Diag.records.single;
+      expect(r.fields[DiagField.maxDailyDeltaMinutes], 90,
+          reason: 'ohne die Grenze ist ein geloggter Plan nicht nachrechenbar');
+      expect(r.fields[DiagField.wakeUpMinutes], 30);
+      expect(r.fields[DiagField.wunschzeitMinuteOfDay], -1,
+          reason: 'die wunschzeit ist eine Weckzeit - nur mit Schalter');
+    });
+
+    test('mit Schalter steht auch die wunschzeit drin', () async {
+      await _freshDiag();
+      Diag.setIncludeClockTimes(true);
+      Diag.planInputs(
+          maxDailyDeltaMinutes: 90,
+          wakeUpMinutes: 30,
+          getReadyMinutes: 0,
+          wunschzeitMinuteOfDay: 540);
+
+      expect(Diag.records.single.fields[DiagField.wunschzeitMinuteOfDay], 540);
+    });
+  });
 }

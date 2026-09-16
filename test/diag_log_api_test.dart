@@ -96,7 +96,20 @@ void main() {
         // Zeitprotokollierung (Standard aus; der Test dazu steht in
         // diag_log_test.dart). Die konstruktive Zusicherung gilt damit
         // weiterhin fuer die Voreinstellung - aber eben nur noch dort.
-        const erlaubt = {'plannedMinuteOfDay', 'earliestEventMinuteOfDay'};
+        const erlaubt = {
+          'plannedMinuteOfDay',
+          'earliestEventMinuteOfDay',
+          'wunschzeitMinuteOfDay',
+          // Dauern, keine Uhrzeiten (T-140): "90 Minuten Grenze" oder "30
+          // Minuten Vorlauf" verraten nichts ueber Schlaf - sie sind
+          // Einstellwerte, ohne die ein geloggter Plan aber nicht
+          // nachrechenbar ist. Sie stehen deshalb IMMER im Log, nicht nur
+          // hinter dem Zeit-Schalter. Die Regel bleibt: kein Uhrwert ohne
+          // Schalter.
+          'maxDailyDeltaMinutes',
+          'wakeUpMinutes',
+          'getReadyMinutes',
+        };
 
         final offenders = <String>[];
         for (final match

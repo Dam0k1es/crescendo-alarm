@@ -53,6 +53,7 @@ enum DiagEvent {
   weekPlanComputed(12),
   timezoneCheck(13),
   dayPlanned(14),
+  planInputs(15),
   alarmSync(20),
   alarmRang(30),
   alarmDismissed(31),
@@ -136,8 +137,15 @@ enum DiagField {
   daysSinceLastReplan(106),
   // FR-19-loses Tagesprotokoll (docs/TODO.md T-135). NUR diese drei tragen
   // Uhrwerte, und nur bei ausdruecklich eingeschalteter Zeitprotokollierung.
+  // Die EINGABEN einer Planung (docs/TODO.md T-140). Dauern sind keine
+  // Uhrzeiten und stehen immer drin; die wunschzeit ist eine und haengt am
+  // Zeit-Schalter.
+  maxDailyDeltaMinutes(117),
+  wakeUpMinutes(118),
+  getReadyMinutes(119),
   windowDayOffset(120),
   plannedMinuteOfDay(121),
+  wunschzeitMinuteOfDay(123),
   earliestEventMinuteOfDay(122),
   // Fehler
   site(110),
@@ -806,6 +814,31 @@ abstract final class Diag {
       DiagField.earliestEventMinuteOfDay: earliestEventMinuteOfDay,
     });
   }
+
+  /// Die Eingaben, aus denen ein Wochenplan entsteht (docs/TODO.md T-140).
+  ///
+  /// Ohne sie ist ein geloggter Plan nicht nachrechenbar: `maxStepBucket` sagt,
+  /// wie gross der groesste Schritt WAR, aber nicht, wie gross er sein DURFTE.
+  /// Beim ersten echten Geraete-Log musste das Limit aus den Schrittweiten
+  /// zurueckgerechnet werden - und der Maintainer hatte es zwischendurch
+  /// geaendert, was aus dem Log nicht hervorging.
+  ///
+  /// Dauern sind keine Uhrzeiten: "90 Minuten Grenze" verraet nichts ueber
+  /// Schlaf. Die `wunschzeit` dagegen ist eine Weckzeit und steht nur bei
+  /// eingeschalteter Zeitprotokollierung drin, sonst `-1`.
+  static void planInputs({
+    required int maxDailyDeltaMinutes,
+    required int wakeUpMinutes,
+    required int getReadyMinutes,
+    required int wunschzeitMinuteOfDay,
+  }) =>
+      _record(DiagEvent.planInputs, <DiagField, int>{
+        DiagField.maxDailyDeltaMinutes: maxDailyDeltaMinutes,
+        DiagField.wakeUpMinutes: wakeUpMinutes,
+        DiagField.getReadyMinutes: getReadyMinutes,
+        DiagField.wunschzeitMinuteOfDay:
+            _includeClockTimes ? wunschzeitMinuteOfDay : -1,
+      });
 
   static void failure({
     required DiagEvent at,
