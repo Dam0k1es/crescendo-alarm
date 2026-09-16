@@ -1504,6 +1504,40 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   puenktlich bleibt.
 - **Requirement:** R2, R3
 
+### T-139 · FR-5s ΔT=0-Regel kappt die Vorausschau — `maxDailyDelta` wird dadurch um 50% gerissen
+
+- [ ] FR-5/FR-7 entscheiden, DANN testgetrieben beheben.
+- **Woher:** erstes Diagnose-Log vom Geraet mit eingeschalteter Zeitprotokollierung (T-135) - die
+  Funktion hat beim ersten Einsatz einen Fehler gefunden, den die Suite nicht hat.
+- **Gemeldeter Plan** (`wunschzeit` 09:00, `maxDailyDelta` 90min, Vorlaeufe 30min):
+
+  | | Do | Fr | Sa | So | Mo | Di | Mi |
+  |---|---|---|---|---|---|---|---|
+  | Weckzeit | 04:30 | 06:00 | 07:30 | **09:00** | **06:45** | 04:30 | 04:30 |
+  | fruehester Termin | 05:00 | 08:00 | 12:00 | 10:00 | 08:00 | 05:00 | 05:00 |
+
+  Die Schritte So→Mo→Di betragen **−2:15**, erlaubt sind 1:30. `overrunFlag=1`, der Nutzer hat eine
+  Warnung bekommen. **Exakt reproduziert** aus diesen Zahlen.
+- **Ein regelkonformer Plan existiert:** deckelt man den Sonntag bei 07:30, sind alle Schritte
+  <= 90min und es gibt keine Warnung. Der Drift zur `wunschzeit` hat also Budget verbraucht, das
+  der fruehe Dienstag gebraucht haette - genau das, was FR-7s Rueckwaerts-Pruefung verhindern soll.
+- **Warum sie nicht greift:** am Sonntag steht der Wert auf 07:30, und Montags `hardFloor` ist
+  ebenfalls 07:30 - ΔT = 0. FR-5 Schritt 2 (*"ein Punkt mit ΔT=0 beendet den Run sofort bei sich
+  selbst"*) macht Montag damit zum Ziel, und die Vorausschau endet dort. Dienstags 04:30 kommt in
+  FR-7s Machbarkeitspruefung gar nicht mehr vor, also ist jede Drift "machbar".
+- **Keine Regression von T-132 und keine von T-104** - beide eigens geprueft: ohne T-132s
+  Abkuerzung kommt derselbe Plan heraus, und T-104 aendert hier nichts, weil der ΔT=0-Punkt ohnehin
+  `points.first` ist. Der Fehler ist so alt wie FR-5.
+- **Zu entscheiden:** *Darf ein ΔT=0-Punkt die Vorausschau beenden, oder nur den Run?* Die beiden
+  sind nicht dasselbe. FR-5s Satz regelt die **Gruppierung** (er soll nicht mit einem Folgepunkt
+  zusammengefasst werden); dass er zugleich FR-7s **Machbarkeitshorizont** abschneidet, steht
+  nirgends und ist vermutlich unbeabsichtigt. Naheliegende Loesung: FR-7 prueft die Machbarkeit
+  gegen den fruehesten bindenden Punkt im ganzen Fenster, nicht nur gegen das Run-Ziel.
+- **Tragweite:** hoch und alltaeglich. Jedes Muster "frueher Termin - freie Tage - wieder frueher
+  Termin" trifft es, und der Nutzer bekommt zwei Naechte mit dem Anderthalbfachen des erlaubten
+  Schritts plus eine Warnung, die er nicht abstellen kann.
+- **Requirement:** R2
+
 ### T-138 · Snooze (FR-20) — UMGESETZT (2026-09-12)
 
 - [x] `snoozeEnabled`, `snoozeTime`, Ursprungsruf-Merker; Schaltflaeche auf beiden Klingelschirmen;
