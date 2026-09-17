@@ -47,8 +47,7 @@ class ScreenSchedule extends StatefulWidget {
 }
 
 // Define the screen schedule state.
-class _ScreenScheduleState extends State<ScreenSchedule>
-    with SingleTickerProviderStateMixin {
+class _ScreenScheduleState extends State<ScreenSchedule> {
   _ScheduleView _view = _ScheduleView.week;
   late DateTime _displayDate;
 
@@ -82,36 +81,93 @@ class _ScreenScheduleState extends State<ScreenSchedule>
     });
   }
 
-  /// calendar_view paints its header and weekday strip in its own default
-  /// colours - a bright red that has nothing to do with this app's theme, and
-  /// that stays light in dark mode. SfCalendar was handed
-  /// `Theme.of(context).colorScheme.surface` for exactly those surfaces, so
-  /// the migration has to hand the same thing to the replacement or it looks
-  /// like a different app (and an unreadable one after dark).
-  HeaderStyle _headerStyle(BuildContext context) {
+  /// The calendar's colours, derived from the app's own `ColorScheme`.
+  ///
+  /// calendar_view ships its own palette - a bright red header, pink grid
+  /// lines, and weekday/timeline text in a fixed dark grey. On the first run of
+  /// the migrated screen that is exactly what appeared, and in dark mode the
+  /// weekday strip and the hour labels were barely legible against the dark
+  /// background. SfCalendar had been handed `colorScheme.surface` for those
+  /// surfaces, so the replacement has to be told the same thing.
+  ///
+  /// Supplied as Flutter `ThemeExtension`s, which is how the widgets actually
+  /// read them (`Theme.of(context).extension<WeekViewThemeData>()`, see
+  /// calendar_view's `extensions.dart`). The package's own
+  /// `CalendarThemeProvider` looks like the way to do this and is **not**: a
+  /// theme handed to it never reaches the rendering, which a passing test and
+  /// an unchanged screenshot proved the hard way.
+  ///
+  /// One mechanism instead of the individual widget parameters, because these
+  /// extensions cover everything - including the weekday and timeline text
+  /// colours, which have no widget-level parameter at all and were the two that
+  /// went near-invisible in dark mode.
+  List<ThemeExtension<dynamic>> _calendarTheme(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return HeaderStyle(
-      decoration: BoxDecoration(color: scheme.surface),
-      headerTextStyle: TextStyle(
-        color: scheme.onSurface,
-        fontSize: 18,
-        fontWeight: FontWeight.w500,
+    final accent = context.watch<AppState>().accentColor;
+    final grid = Theme.of(context).dividerColor;
+    // The weekday strip and the month grid sit slightly off the page so the
+    // calendar body still reads as a surface of its own.
+    final tile = scheme.surfaceContainerHighest;
+
+    return <ThemeExtension<dynamic>>[
+      WeekViewThemeData(
+        weekDayTileColor: tile,
+        weekDayTextColor: scheme.onSurface,
+        hourLineColor: grid,
+        halfHourLineColor: grid,
+        quarterHourLineColor: grid,
+        liveIndicatorColor: accent,
+        pageBackgroundColor: scheme.surface,
+        headerIconColor: scheme.onSurface,
+        headerTextColor: scheme.onSurface,
+        headerBackgroundColor: scheme.surface,
+        timelineTextColor: scheme.onSurfaceVariant,
+        borderColor: grid,
+        verticalLinesColor: grid,
       ),
-      leftIconConfig: IconDataConfig(color: scheme.onSurface),
-      rightIconConfig: IconDataConfig(color: scheme.onSurface),
-    );
+      DayViewThemeData(
+        hourLineColor: grid,
+        halfHourLineColor: grid,
+        quarterHourLineColor: grid,
+        pageBackgroundColor: scheme.surface,
+        liveIndicatorColor: accent,
+        headerIconColor: scheme.onSurface,
+        headerTextColor: scheme.onSurface,
+        headerBackgroundColor: scheme.surface,
+        timelineTextColor: scheme.onSurfaceVariant,
+      ),
+      MonthViewThemeData(
+        cellInMonthColor: scheme.surface,
+        cellNotInMonthColor: tile,
+        cellTextColor: scheme.onSurface,
+        cellBorderColor: grid,
+        weekDayTileColor: tile,
+        weekDayTextColor: scheme.onSurface,
+        weekDayBorderColor: grid,
+        headerIconColor: scheme.onSurface,
+        headerTextColor: scheme.onSurface,
+        headerBackgroundColor: scheme.surface,
+        cellHighlightColor: accent,
+      ),
+      MultiDayViewThemeData(
+        multiDayTileColor: tile,
+        multiDayTextColor: scheme.onSurface,
+        hourLineColor: grid,
+        halfHourLineColor: grid,
+        quarterHourLineColor: grid,
+        liveIndicatorColor: accent,
+        pageBackgroundColor: scheme.surface,
+        headerIconColor: scheme.onSurface,
+        headerTextColor: scheme.onSurface,
+        headerBackgroundColor: scheme.surface,
+        timelineTextColor: scheme.onSurfaceVariant,
+        borderColor: grid,
+        verticalLinesColor: grid,
+      ),
+    ];
   }
 
   Widget _buildCalendar(BuildContext context) {
-    final background = Theme.of(context).colorScheme.surface;
-    final header = _headerStyle(context);
-    final liveTime =
-        LiveTimeIndicatorSettings(color: context.watch<AppState>().accentColor);
-    // Same reason as the header: the default grid lines are a pink that
-    // belongs to the library, not to this app.
-    final grid = HourIndicatorSettings(
-      color: Theme.of(context).dividerColor,
-    );
     // The key makes a view switch rebuild the widget from scratch, so the newly
     // chosen view opens on the date the user was looking at rather than today.
     final key = ValueKey<String>('${_view.name}-$_displayDate');
@@ -123,10 +179,6 @@ class _ScreenScheduleState extends State<ScreenSchedule>
           controller: _events,
           initialDay: _displayDate,
           onPageChange: _onPageChange,
-          backgroundColor: background,
-          headerStyle: header,
-          liveTimeIndicatorSettings: liveTime,
-          hourIndicatorSettings: grid,
           showLiveTimeLineInAllDays: true,
           heightPerMinute: 1,
         );
@@ -137,11 +189,6 @@ class _ScreenScheduleState extends State<ScreenSchedule>
           controller: _events,
           initialDay: _displayDate,
           onPageChange: _onPageChange,
-          backgroundColor: background,
-          headerStyle: header,
-          weekTitleBackgroundColor: background,
-          liveTimeIndicatorSettings: liveTime,
-          hourIndicatorSettings: grid,
           startDay: WeekDays.monday,
           // `firstDayOfWeek: 1` in SfCalendar terms.
           weekDays: _view == _ScheduleView.workWeek
@@ -162,7 +209,6 @@ class _ScreenScheduleState extends State<ScreenSchedule>
           monthViewStyle: MonthViewStyle(
             initialMonth: _displayDate,
             startDay: WeekDays.monday,
-            headerStyle: header,
           ),
           monthViewBuilders: MonthViewBuilders(onPageChange: _onPageChange),
         );
@@ -208,7 +254,12 @@ class _ScreenScheduleState extends State<ScreenSchedule>
       // Define the body of the screen.
       body: CalendarControllerProvider<Meeting>(
         controller: _events,
-        child: _buildCalendar(context),
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            extensions: _calendarTheme(context),
+          ),
+          child: Builder(builder: _buildCalendar),
+        ),
       ),
     );
   }

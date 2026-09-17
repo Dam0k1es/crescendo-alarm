@@ -53,7 +53,8 @@ void main() {
       );
 
       expect(ok, isTrue);
-      expect(stopped, [7], reason: 'the alarm carrying this id must be cancelled');
+      expect(stopped, [7],
+          reason: 'the alarm carrying this id must be cancelled');
       expect(armed, isEmpty, reason: 'switching off never arms anything');
       expect(alarm.enabled, isFalse);
     });

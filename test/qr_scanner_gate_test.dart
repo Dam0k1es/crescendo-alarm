@@ -82,7 +82,8 @@ void main() {
     await scans.close();
   });
 
-  testWidgets('with no code stored, the first scan is imported', (tester) async {
+  testWidgets('with no code stored, the first scan is imported',
+      (tester) async {
     final appState = await _pumpScanner(tester);
     expect(appState.deactivationCode, isNull);
 
@@ -97,8 +98,8 @@ void main() {
     // The negative case the gate exists for. If a scanned code could overwrite
     // the stored one, the "guaranteed wake-up" would be defeated by printing
     // any QR code at all.
-    final appState = await _pumpScanner(
-        tester, storedCode: DeactivationCode(payload: 'right'));
+    final appState = await _pumpScanner(tester,
+        storedCode: DeactivationCode(payload: 'right'));
 
     scans.add(const ScanResult('wrong'));
     await tester.pumpAndSettle();
@@ -120,8 +121,7 @@ void main() {
   testWidgets('the matching code is accepted', (tester) async {
     // Counter-test against over-correction: a gate that refuses everything
     // would satisfy the test above and lock the user out of their own alarm.
-    await _pumpScanner(tester,
-        storedCode: DeactivationCode(payload: 'right'));
+    await _pumpScanner(tester, storedCode: DeactivationCode(payload: 'right'));
 
     scans.add(const ScanResult('right'));
     await tester.pumpAndSettle();

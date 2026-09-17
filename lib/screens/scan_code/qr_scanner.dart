@@ -67,7 +67,7 @@ class QrScanner extends StatefulWidget {
   State<QrScanner> createState() => _QrScannerState();
 }
 
-class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
+class _QrScannerState extends State<QrScanner> {
   StreamSubscription<Object?>? _subscription;
   late final AppState _appState;
 
@@ -83,9 +83,13 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
     debugPrint("=====initState: Creating new QRScannerState");
     super.initState();
     _appState = Provider.of<AppState>(context, listen: false);
-    // Start listening to lifecycle changes.
-    WidgetsBinding.instance.addObserver(this);
 
+    // No lifecycle observer any more: ReaderWidget starts and stops its own
+    // camera with the app lifecycle. The previous scanner needed one, and its
+    // handler was the mechanism behind half of docs/TODO.md T-16 - an
+    // `inactive` -> `resumed` pair cancelled the injected test stream and
+    // re-listened to the camera instead.
+    //
     // The camera is driven by ReaderWidget in build(); only the injected test
     // stream needs a subscription here.
     _subscription = QrScanner.debugScanStreamOverride?.listen(_handleScan);
@@ -93,9 +97,6 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    // Stop listening to lifecycle changes.
-    WidgetsBinding.instance.removeObserver(this);
-
     // Stop listening to the injected events, if any. ReaderWidget disposes of
     // its own camera controller.
     unawaited(_subscription?.cancel());
@@ -197,14 +198,6 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
           '=====validateDeactivationCode: An alarm is still ringing after stop attempts!');
     }
     return !stillRinging;
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Nothing to do any more: ReaderWidget starts and stops its own camera
-    // with the lifecycle. The observer stays registered because the previous
-    // scanner needed one, and removing the hook is a behaviour change worth
-    // keeping visible rather than silently deleting.
   }
 
   @override

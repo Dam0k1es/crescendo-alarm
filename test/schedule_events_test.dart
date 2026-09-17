@@ -83,8 +83,8 @@ void main() {
           [localFrom.hour, localFrom.minute],
           reason: 'calendar_view draws raw fields - a value left in another '
               'frame is drawn at the wrong hour');
-      expect(event.date,
-          DateTime(localFrom.year, localFrom.month, localFrom.day));
+      expect(
+          event.date, DateTime(localFrom.year, localFrom.month, localFrom.day));
     });
 
     test('an all-day appointment becomes a full-day event', () {
@@ -112,8 +112,7 @@ void main() {
       // right and the hand-written fixture was not - re-derived rather than
       // pasted from the failure message.
       final localTo = tz.TZDateTime(berlin, 2026, 3, 12, 17, 0).toLocal();
-      expect(event.endDate,
-          DateTime(localTo.year, localTo.month, localTo.day),
+      expect(event.endDate, DateTime(localTo.year, localTo.month, localTo.day),
           reason: 'otherwise a conference disappears after its first day');
     });
 

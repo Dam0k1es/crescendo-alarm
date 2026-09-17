@@ -34,9 +34,12 @@ now. Adding a name to that test's list is a licence decision and the list says w
 
 The remaining direct dependencies are BSD-3, MIT or Apache-2.0 - the permissive licences GPLv3
 absorbs without further conditions. That includes the Flutter SDK and first-party plugins
-(`camera`, `shared_preferences`, `permission_handler`, `image_picker`), `alarm`, `audioplayers`,
-`device_calendar`, `awesome_notifications`, `provider`, `timezone`, `intl`, `qr_flutter`, `uuid`,
-`flutter_colorpicker` and `flutter_markdown_plus`.
+(`shared_preferences`, `permission_handler`), `alarm`, `audioplayers`, `device_calendar`,
+`awesome_notifications`, `provider`, `timezone`, `intl`, `qr_flutter`, `uuid`,
+`flutter_colorpicker`, `flutter_markdown_plus`, and the two replacements themselves,
+`calendar_view` and `flutter_zxing`. (`camera` and `image_picker` are no longer declared directly -
+they arrive with `flutter_zxing` - and `image_picker`'s own manifest entry is stripped again, see
+`docs/TODO.md` T-49.)
 
 What this document does **not** claim: that every transitive dependency has been individually
 audited. R8 scopes that out deliberately. The claim is narrower and checkable - no dependency in

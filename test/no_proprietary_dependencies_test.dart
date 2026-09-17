@@ -29,11 +29,10 @@ const _forbidden = <String, String>{
   'syncfusion_flutter_core': 'see syncfusion_flutter_calendar',
   'syncfusion_flutter_datepicker': 'see syncfusion_flutter_calendar',
   'syncfusion_localizations': 'see syncfusion_flutter_calendar',
-  'mobile_scanner':
-      'links com.google.mlkit:barcode-scanning (bundled) or '
-          'play-services-mlkit-barcode-scanning - proprietary Google binaries '
-          'inside a GPLv3 APK. Replaced by flutter_zxing (MIT, zxing-cpp '
-          'under Apache-2.0).',
+  'mobile_scanner': 'links com.google.mlkit:barcode-scanning (bundled) or '
+      'play-services-mlkit-barcode-scanning - proprietary Google binaries '
+      'inside a GPLv3 APK. Replaced by flutter_zxing (MIT, zxing-cpp '
+      'under Apache-2.0).',
 };
 
 String _pubspec() => File('pubspec.yaml').readAsStringSync();
