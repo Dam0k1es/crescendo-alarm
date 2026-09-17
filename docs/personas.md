@@ -4,68 +4,67 @@
 > out inline. See `docs/TODO.md` for anything tracked as a bug rather than
 > a documentation gap.
 
-# Marie, die Krankenschwester
-## Steckbrief
+# Marie, the Nurse
+## Profile
 - Name: Marie
-- Alter: 32 Jahre
-- Beruf: Krankenschwester
-- Familienstand: Ledig, keine Kinder
-- Wohnort: Großstadt, nahe dem Krankenhaus
-- Hobbies: Fitness, Lesen
-- Schlafmuster: Aufgrund ihrer Arbeit im Schichtdienst hat Marie einen sehr unregelmäßigen Schlaf. Sie arbeitet oft Nachtschichten, Frühschichten und gelegentlich auch Tagesschichten.
+- Age: 32
+- Occupation: Nurse
+- Marital status: Single, no children
+- Location: Major city, near the hospital
+- Hobbies: Fitness, reading
+- Sleep pattern: Due to her shift work, Marie has very irregular sleep. She often works night shifts, early shifts, and occasionally day shifts.
 
-## Bedürfnisse und Ziele
-Marie benötigt eine zuverlässige Wecker-App, die sich an ihre wechselnden Arbeitszeiten anpassen kann und sie zuverlässig aufweckt, unabhängig davon, ob sie morgens, nachmittags oder nachts arbeitet. Sie sucht nach einer Lösung, die ihr hilft, rechtzeitig aufzuwachen und energiegeladen zur Arbeit zu gehen, auch wenn sie wenig Schlaf hatte.
+## Needs and Goals
+Marie needs a reliable alarm app that can adapt to her changing work hours and wake her reliably, regardless of whether she works mornings, afternoons, or nights. She is looking for a solution that helps her wake up on time and go to work as rested as possible, even when she's had little sleep.
 
-## Herausforderungen
-Maries unregelmäßiger Schlafrhythmus macht es schwierig, einen konstanten Schlafplan einzuhalten und sicherzustellen, dass sie ausreichend ausgeruht ist, um bei der Arbeit ihre volle Leistung zu erbringen. Sie hat Schwierigkeiten, eine Wecker-App zu finden, die flexibel genug ist, um sich an ihre wechselnden Arbeitszeiten anzupassen und sie dennoch zuverlässig aufzuwecken.
+## Challenges
+Marie's irregular sleep rhythm makes it difficult to maintain a consistent sleep schedule and ensure she is sufficiently rested to perform at her best at work. She struggles to find an alarm app flexible enough to adapt to her changing work hours while still waking her reliably.
 
-## Ziele mit der App "Wakey Wakey"
-Marie möchte eine Wecker-App verwenden, die sich nahtlos in ihren unregelmäßigen Schlafrhythmus integrieren lässt und ihr hilft, sich rechtzeitig aufzuwecken, auch wenn sie in der Nacht arbeitet. Sie sucht nach einer Lösung, die sie sanft und effektiv aufweckt, um den Tag zu beginnen, ohne dabei von einem lauten Weckton erschreckt zu werden.
+## Goals with the "Wakey Wakey" App
+Marie wants to use an alarm app that integrates seamlessly with her irregular sleep rhythm and helps her wake up on time, even when working nights. She is looking for a solution that wakes her gently and effectively to start the day, without being startled by a loud alarm tone.
 
 
-# Tom, der Geschäftsreisende
-## Steckbrief
+# Tom, the Business Traveler
+## Profile
 - Name: Tom
-- Alter: 38 Jahre
-- Beruf: Geschäftsreisender, IT-Consultant
-- Familienstand: Verheiratet, keine Kinder
-- Wohnort: Großstadt, nahe dem Flughafen
-- Hobbies: Reisen, Fotografie
-- Schlafmuster: Als Geschäftsreisender hat Tom oft mit Jetlag zu kämpfen. Sein Schlafmuster ist unregelmäßig und wird durch häufige Reisen und Aufenthalte in verschiedenen Zeitzonen beeinflusst. Manchmal vergisst er, wo er gerade aufwacht.
+- Age: 38
+- Occupation: Business traveler, IT consultant
+- Marital status: Married, no children
+- Location: Major city, near the airport
+- Hobbies: Travel, photography
+- Sleep pattern: As a business traveler, Tom often struggles with jet lag. His sleep pattern is irregular and affected by frequent travel and stays in different time zones. He sometimes forgets where he is when he wakes up.
 
-## Bedürfnisse und Ziele
-Tom benötigt eine Wecker-App, die ihm hilft, seinen Schlafplan anzupassen und ihm dabei hilft, sich an verschiedene Zeitzonen anzupassen, während er auf Geschäftsreise ist. Er sucht nach einer Lösung, die ihm hilft, trotz Jetlag rechtzeitig aufzuwachen und energiegeladen den Tag zu beginnen, damit er bei seinen Geschäftsmeetings und Kundenbesuchen seine volle Leistung erbringen kann.
+## Needs and Goals
+Tom needs an alarm app that helps him adjust his sleep schedule and adapt to different time zones while on business trips. He is looking for a solution that helps him wake up on time despite jet lag and start the day energized, so he can perform at his best in business meetings and client visits.
 
-## Herausforderungen
-Toms unregelmäßiges Schlafmuster und häufige Reisen machen es schwierig, einen konstanten Schlafplan einzuhalten und ausreichend ausgeruht zu sein, um bei der Arbeit produktiv zu sein. Er hat Schwierigkeiten, eine Wecker-App zu finden, die flexibel genug ist, um sich an seine wechselnden Zeitpläne anzupassen und ihn dennoch zuverlässig aufzuwecken, auch wenn er sich in verschiedenen Zeitzonen befindet.
+## Challenges
+Tom's irregular sleep pattern and frequent travel make it difficult to maintain a consistent sleep schedule and be sufficiently rested to be productive at work. He struggles to find an alarm app flexible enough to adapt to his changing schedules while still waking him reliably, even across different time zones.
 
-## Ziele mit der App "Wakey Wakey"
-Tom möchte eine Wecker-App verwenden, die ihm hilft, seinen Schlafplan anzupassen und ihm dabei hilft, sich an verschiedene Zeitzonen anzupassen, während er auf Geschäftsreise ist. Er sucht nach einer Lösung, die ihn sanft und effektiv aufweckt, um den Tag zu beginnen, auch wenn er unter Jetlag leidet und wenig Schlaf hatte.
+## Goals with the "Wakey Wakey" App
+Tom wants to use an alarm app that helps him adjust his sleep schedule and adapt to different time zones while on business trips. He is looking for a solution that wakes him gently and effectively to start the day, even when suffering from jet lag and having had little sleep.
 
-> **Anmerkung (2026-09):** Die App liest beim Start lediglich die aktuelle Zeitzone des Geräts aus
-> und interpretiert Kalendereinträge entsprechend - das ist Standardverhalten jeder
-> kalenderbasierten App, kein dediziertes Jetlag-Feature. Es gibt keinen Algorithmus, der
-> Nutzer:innen aktiv beim Anpassen an eine neue Zeitzone unterstützt (z. B. schrittweise
-> Weckzeit-Verschiebung, Warnungen bei Zeitzonenwechsel). Toms Bedürfnis nach aktiver
-> Jetlag-Unterstützung ist damit nur teilweise abgedeckt.
+> **Note (2026-09):** The app only reads the device's current time zone at startup and
+> interprets calendar entries accordingly - this is standard behaviour for any calendar-based
+> app, not a dedicated jet-lag feature. There is no algorithm that actively helps users adjust
+> to a new time zone (e.g. gradual wake-time shifting, warnings on time zone change). Tom's
+> need for active jet-lag support is therefore only partially covered.
 
 
-# Emma, die Studentin
-## Steckbrief
+# Emma, the Student
+## Profile
 - Name: Emma
-- Alter: 25 Jahre
-- Beruf: Studentin, Studiengang: Informatik
-- Familienstand: Ledig, keine Kinder
-- Wohnort: Universitätsstadt, in der Nähe des Campus
-- Hobbies: Musik, Video-Streaming
-- Schlafmuster: Als Studentin hat Emma einen unregelmäßigen Zeitplan. Sie arbeitet oft spät in der Nacht an Projekten oder hat frühmorgens Vorlesungen.
+- Age: 25
+- Occupation: Student, Computer Science
+- Marital status: Single, no children
+- Location: University town, near campus
+- Hobbies: Music, video streaming
+- Sleep pattern: As a student, Emma has an irregular schedule. She often works late into the night on projects or has early-morning lectures.
 
-## Bedürfnisse und Ziele
-Emma benötigt eine Wecker-App, die flexibel genug ist, um sich an ihre wechselnden Schlafgewohnheiten anzupassen und sie rechtzeitig zu ihren Vorlesungen oder Arbeitszeiten zu wecken. Sie sucht nach einer Lösung, die ihr hilft, ihren unregelmäßigen Zeitplan zu bewältigen und trotzdem rechtzeitig aufzuwachen, um produktiv zu sein und ihre Aufgaben zu erledigen.
+## Needs and Goals
+Emma needs an alarm app flexible enough to adapt to her changing sleep habits and wake her in time for lectures or work. She is looking for a solution that helps her manage her irregular schedule while still waking up on time to be productive and get her tasks done.
 
-## Herausforderungen
-Emmas unregelmäßiger Zeitplan und lange Stunden am Computer, als auch die Belastung durch das Blaulicht machen es schwierig, einen konstanten Schlafplan einzuhalten und ausreichend ausgeruht zu sein, um bei den Vorlesungen aufmerksam zu sein. Sie hat Schwierigkeiten, eine Wecker-App zu finden, die sie zuverlässig aufweckt, auch wenn sie spät in der Nacht arbeitet oder wenig Schlaf hatte.
+## Challenges
+Emma's irregular schedule, long hours at the computer, and exposure to blue light make it difficult to maintain a consistent sleep schedule and be sufficiently rested to stay attentive during lectures. She struggles to find an alarm app that wakes her reliably, even when she has worked late into the night or had little sleep.
 
-## Ziele mit der App "Wakey Wakey"
-Emma möchte eine Wecker-App verwenden, die flexibel genug ist, um sich an ihre wechselnden Schlafgewohnheiten anzupassen und sie dennoch rechtzeitig zu ihren Vorlesungen oder Arbeitszeiten zu wecken. Sie sucht nach einer Lösung, die sie sanft und effektiv aufweckt, um den Tag zu beginnen, auch wenn sie spät in der Nacht gearbeitet hat und wenig Schlaf hatte.
+## Goals with the "Wakey Wakey" App
+Emma wants to use an alarm app flexible enough to adapt to her changing sleep habits while still waking her in time for lectures or work. She is looking for a solution that wakes her gently and effectively to start the day, even when she has worked late into the night and had little sleep.

@@ -45,7 +45,7 @@
 
 - Preview of the Calendar to Sync with
 
-- (Algorithm to calculate alarm time based on sleep goal, duration to wake up and duration to get ready)
+- Algorithm to calculate alarm time based on sleep goal, duration to wake up and duration to get ready
 
   
 

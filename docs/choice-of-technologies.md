@@ -5,13 +5,13 @@
 > into the shipped app - see `CLAUDE.md` for what's actually in use today.
 
 # Flutter (Frontend)
-- Flutter wird verwendet, um das Frontend der App zu entwickeln
-- Mit Flutter kann eine ansprechende und konsistente Benutzeroberfläche erstellt werden, die auf verschiedenen Geräten und Plattformen reibungslos läuft. Die plattformübergreifende Verwendung von Flutter ermöglicht es Zeit und Ressourcen zu sparen, indem eine einzige Codebasis für iOS und Android verwendet werden kann
+- Flutter is used to develop the app's frontend.
+- Flutter makes it possible to build an appealing and consistent user interface that runs smoothly across various devices and platforms. Flutter's cross-platform approach saves time and resources by allowing a single codebase to be used for iOS and Android.
 
-> **Anmerkung (2026-09):** Der iOS-Teil dieser Begründung ist unverifiziert - iOS besitzt zwar das
-> Projekt-Grundgerüst, wurde aber nie gebaut oder ausgeführt (kein Mac/Xcode in dieser Umgebung
-> verfügbar), siehe `CLAUDE.md`, "Supported platforms". Die plattformübergreifende Ersparnis gilt
-> bisher nur nachweislich für Android + den lokalen Linux-Debug-Loop.
+> **Note (2026-09):** The iOS part of this reasoning is unverified - iOS has the project
+> scaffolding, but has never been built or run (no Mac/Xcode available in this environment),
+> see `CLAUDE.md`, "Supported platforms". The cross-platform saving is so far demonstrated
+> only for Android and the local Linux debug loop.
 
 # Firebase (Backend Services) - **not used**
-- Ursprünglich für Backend-Services (Benutzerkonten, Einstellungs-Sync, Weckerspeicherung) in Betracht gezogen. Tatsächlich umgesetzt wurde stattdessen eine vollständig lokale, offline-fähige App ohne jegliche Netzwerkkommunikation (siehe `CLAUDE.md`) - Firebase kommt nirgends zum Einsatz.
+- Originally considered for backend services (user accounts, settings sync, alarm storage). What was actually implemented instead is a fully local, offline-capable app with no network communication at all (see `CLAUDE.md`) - Firebase is not used anywhere.
