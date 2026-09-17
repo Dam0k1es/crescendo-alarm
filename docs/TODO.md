@@ -1103,12 +1103,29 @@ that is the basis a decision can be formulated against.
 
 ## P3 — housekeeping
 
-### T-29 · Record the provenance and licence of bundled assets
+### T-29 · Record the provenance and licence of bundled assets — MOSTLY RESOLVED (2026-09-17)
 
-- [ ] Track down where `assets/sounds/*.mp3` and the icon assets came from, and under what licence.
-- **Why:** R10 is unverified and no record exists. Needed before public distribution, and it
-  interacts with T-05.
-- **Done when:** every bundled asset has a documented source and licence, or is replaced.
+- [x] `assets/sounds/*.mp3`: all six replaced with sources under `assets/sounds/CREDITS.md`.
+- [ ] The icon assets (`assets/icons/icon.png`, `icon_no_shadow.png`) still have no recorded source
+      or licence - inspection found no embedded metadata either way (see below).
+- **Why:** R10 was unverified and no record existed for either the sounds or the icons.
+- **What inspection actually found, not just "unknown":** ID3-tag inspection (`ffprobe`) on the six
+  original sound files turned up real evidence, not just an absence of one. `annoying_alarm.mp3`
+  carried `title=Annoying Alarm`, `publisher=__KIKO__`, `comment=Rate And Subscribe` - the signature
+  of a YouTube-to-MP3 rip, not a licensed asset. A PRIV frame in `wakeywakey.mp3`
+  (`{"note":"","date":"2021-04-27T10:49:17.637Z"}`) led to identifying both `wakeywakey.mp3` and
+  `wakeywakey2.mp3` as sourced from the "Wakey Wakey it's time for school" meme (originally a
+  private family video) via a fan remix ("Wakey Wakey it's time for scoo Meme (J.JAX Remix)") -
+  neither the original video nor the remix carries any redistribution licence, and the original
+  traces to an identifiable real person. The remaining three (`lollipop.mp3`,
+  `old_telephone_ring.mp3`, `wake_up.mp3`) carried no metadata either way, but given this track
+  record for the set, all six were replaced rather than assuming the unlabelled three were clean.
+- **Fix:** all six replaced with Mixkit Sound Effects Free License tracks (free commercial use, no
+  attribution required) - see `assets/sounds/CREDITS.md` for the exact source URL per file.
+  Filenames kept unchanged so no other reference (`pubspec.yaml`, `AppState`'s default tone,
+  `page_alarmtones.dart`, `screen_alarms.dart`, test fixtures) needed to change.
+- **Still open:** the icon assets. `flutter analyze`/`flutter test` unaffected by the sound swap
+  (confirmed).
 - **Requirement:** R10
 
 ### T-30 · Annotate or retire the planning artifacts — PARTIALLY RESOLVED (2026-09-08)
