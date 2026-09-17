@@ -89,11 +89,11 @@ AlarmSyncPlan planAlarmSync({
   required List<ScheduledAlarm> existingScheduledAlarms,
   required DateTime now,
   Set<int>? platformAlarmIds,
-  /// FR-21: Tage, fuer die der Nutzer den Wecker ausdruecklich abgeschaltet
-  /// hat. Sie werden behandelt, als waere fuer sie nichts geplant - der Wert
-  /// selbst bleibt aber stehen (abgeschaltet ist nicht geloescht), damit er
-  /// beim Wiedereinschalten sofort wieder gilt und die Glaettung ihn weiter
-  /// als Anker benutzen kann.
+  /// FR-21: days for which the user has explicitly switched off the alarm.
+  /// They are treated as if nothing were planned for them - but the value
+  /// itself stays in place (switched off is not deleted), so it applies
+  /// again immediately when switched back on, and the smoothing can keep
+  /// using it as an anchor.
   Set<String>? disabledDays,
   String? tone,
   double? volume,
@@ -104,16 +104,15 @@ AlarmSyncPlan planAlarmSync({
 
   final desired = <DateTime>[];
   for (final entry in pendingDayValues.entries) {
-    // FR-21: der Nutzer hat fuer diesen Tag "nicht wecken" gesagt. Das muss
-    // HIER greifen und nicht erst beim Stellen: `applyPlannedAlarms` baut die
-    // Alarmmenge bei jeder Neuplanung aus dieser Liste auf, ein blosses
-    // `Alarm.stop()` an der Oberflaeche haelt also nicht bis zum naechsten
-    // Checkpoint.
+    // FR-21: the user has said "don't wake me" for this day. This must
+    // apply HERE, not only at arming time: `applyPlannedAlarms` rebuilds the
+    // alarm set from this list on every replan, so a bare `Alarm.stop()` at
+    // the surface wouldn't last until the next checkpoint.
     if (disabledDays != null && disabledDays.contains(entry.key)) continue;
     final millis = entry.value;
-    // localFromStored, nicht instantFromStored (docs/TODO.md T-83): diese
-    // Werte landen in ScheduledAlarm.time, und dessen Titel (formatDateTime)
-    // sowie die Alarmliste in der UI lesen die Ziffern als Wanduhrzeit.
+    // localFromStored, not instantFromStored (docs/TODO.md T-83): these
+    // values land in ScheduledAlarm.time, and its title (formatDateTime) as
+    // well as the alarm list in the UI read the digits as wall-clock time.
     final value = localFromStored(millis);
     if (value == null) continue;
     if (!_toMinute(value).isAfter(nowMinute)) continue;
@@ -129,10 +128,9 @@ AlarmSyncPlan planAlarmSync({
       (tone == null || alarm.tone == tone) &&
       (volume == null || alarm.volume == volume) &&
       (gentleWake == null || alarm.gentlewake == gentleWake) &&
-      // docs/TODO.md T-96: nur relevant, solange Gentle Wake ueberhaupt an
-      // ist - bei ausgeschaltetem Gentle Wake benutzt `_setAlarm` die Rampe
-      // gar nicht, ein Unterschied darin waere also kein Grund, einen Alarm
-      // neu zu setzen.
+      // docs/TODO.md T-96: only relevant while Gentle Wake is on at all -
+      // with Gentle Wake off, `_setAlarm` doesn't use the ramp at all, so a
+      // difference in it would be no reason to re-arm an alarm.
       (gentleWakeDuration == null ||
           alarm.gentlewake == false ||
           alarm.gentleWakeDuration == gentleWakeDuration);
@@ -144,31 +142,31 @@ AlarmSyncPlan planAlarmSync({
       onPlatform(alarm) &&
       propertiesMatch(alarm);
 
-  // Jeder geplante Wert kann von hoechstens EINEM Alarm belegt werden
+  // Every planned value can be claimed by at most ONE alarm
   // (docs/TODO.md T-116).
   //
-  // Vorher war das eine blosse Mengenzugehoerigkeit: liegen zwei Alarme auf
-  // derselben Minute, galten *beide* als behaltenswert, keiner als
-  // ueberzaehlig - und weil damit auch `toAdd` leer blieb, war der Zustand ein
-  // stabiler Fixpunkt: jede weitere Neuplanung bestaetigte das Duplikat, der
-  // Nutzer wurde dauerhaft zweimal geweckt. FR-18s Kopfsatz verlangt aber eine
-  // Aussage ueber die MENGE ("angeglichen, dass sie **genau** den geplanten
-  // Werten entspricht"), und dieser Funktion eigener Vertrag sagt "matches
+  // Previously this was mere set membership: if two alarms sat on the same
+  // minute, *both* counted as worth keeping, neither as surplus - and
+  // because that also left `toAdd` empty, the state was a stable fixed
+  // point: every further replan confirmed the duplicate, and the user was
+  // woken twice, permanently. FR-18's lead sentence, though, demands a
+  // statement about the SET ("reconciled so that it matches **exactly** the
+  // planned values"), and this function's own contract says "matches
   // [pendingDayValues] **exactly**".
   //
-  // Reihenfolge-abhaengig und das mit Absicht: der erste passende Alarm belegt
-  // den Wert, jeder weitere faellt weg. Entfernt wird ueber die Alarm-ID
-  // (`applyPlannedAlarms` -> `appState.removeAlarm`), deshalb ist wichtig, dass
-  // der Ueberlebende gerade NICHT in `toRemove` steht - sonst stoppte das
-  // Entfernen ihn auf der Plattform gleich mit.
+  // Order-dependent, and deliberately so: the first matching alarm claims
+  // the value, every further one is dropped. Removal is by alarm id
+  // (`applyPlannedAlarms` -> `appState.removeAlarm`), so it matters that the
+  // survivor specifically is NOT in `toRemove` - otherwise removal would
+  // stop it on the platform too.
   final claimedMinutes = <DateTime>{};
   final toRemove = <ScheduledAlarm>[];
   for (final alarm in existingScheduledAlarms) {
     final minute = _toMinute(alarm.time);
-    // FR-18, sicherheitskritisch: ein Alarm in der Vergangenheit wird NIE
-    // entfernt - er koennte gerade klingeln, und `Alarm.stop()` wuerde das
-    // garantierte Aufwachen aushebeln. Er belegt deshalb auch keinen Wert:
-    // `desired` enthaelt ohnehin nur Zeitpunkte nach jetzt.
+    // FR-18, safety-critical: an alarm in the past is NEVER removed - it
+    // could be ringing right now, and `Alarm.stop()` would defeat the
+    // guaranteed wake-up. It therefore also never claims a value: `desired`
+    // only ever contains instants after now anyway.
     if (!minute.isAfter(nowMinute)) continue;
     if (matchesPlan(alarm) && claimedMinutes.add(minute)) continue;
     toRemove.add(alarm);
@@ -261,9 +259,9 @@ Future<void> applyPlannedAlarms(
     }
   }
 
-  // docs/TODO.md T-89: T-64 waere hier als grosses `toRemove` bei `toAdd == 0`
-  // sofort sichtbar gewesen, T-74e als `platformStateUnknown` bzw. als
-  // Divergenz zwischen `existingAlarms` und dem, was die Plattform kennt.
+  // docs/TODO.md T-89: T-64 would have been immediately visible here as a
+  // large `toRemove` with `toAdd == 0`, T-74e as `platformStateUnknown` or
+  // as a divergence between `existingAlarms` and what the platform knows.
   Diag.alarmSync(
     desiredAlarms: plan.toAdd.length + existing.length - plan.toRemove.length,
     existingAlarms: existing.length,
@@ -280,15 +278,15 @@ Future<void> applyPlannedAlarms(
       "=====applyPlannedAlarms: removed ${plan.toRemove.length}, added ${plan.toAdd.length}");
 }
 
-/// Die groesste Abweichung zwischen einem `ScheduledAlarm` in `AppState` und
-/// dem, was die Plattform fuer dieselbe ID kennt - in Minuten, Eingabe fuer das
-/// Bucket-Feld `plannedVsPlatformBucket` (docs/TODO.md T-89).
+/// The largest deviation between a `ScheduledAlarm` in `AppState` and what
+/// the platform knows for the same id - in minutes, input for the
+/// `plannedVsPlatformBucket` bucket field (docs/TODO.md T-89).
 ///
-/// Das ist genau die Frame-Grenze, an der T-61 sass: ein Planwert ist ein
-/// UTC-getaggter Instant, `AlarmSettings.dateTime` eine lokale Wanduhrzeit.
-/// Eine Abweichung von exakt einer Stunde oder exakt einem Geraeteversatz ist
-/// die Signatur dieses Fehlers - und sie ist im Log sichtbar, ohne dass
-/// irgendein Zeitpunkt selbst aufgezeichnet wird.
+/// This is exactly the frame boundary T-61 sat on: a planned value is a
+/// UTC-tagged instant, `AlarmSettings.dateTime` a local wall-clock time. A
+/// deviation of exactly one hour, or exactly one device offset, is that
+/// bug's signature - and it's visible in the log without any instant itself
+/// ever being recorded.
 int _worstPlatformDriftMinutes(
     List<ScheduledAlarm> alarms, Map<int, DateTime> platformTimes) {
   var worst = 0;

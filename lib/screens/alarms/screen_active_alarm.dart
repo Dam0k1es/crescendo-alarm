@@ -72,8 +72,8 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(),
-              // FR-20: Snooze steht ueber dem Stop-Knopf und verschwindet, sobald
-              // das Budget erschoepft ist.
+              // FR-20: snooze sits above the stop button and disappears once
+              // the budget is exhausted.
               SnoozeButton(
                 alarmId: widget.alarmId,
                 onSnoozed: () {

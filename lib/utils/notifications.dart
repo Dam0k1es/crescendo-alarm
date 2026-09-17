@@ -21,15 +21,15 @@ import 'package:wakeywakey/utils/utils.dart';
 @pragma('vm:entry-point')
 Future<void> onNotificationCreatedMethod(
     ReceivedNotification receivedNotification) async {
-  // docs/TODO.md T-89: der Einstiegspunkt dieses Isolates ist die einzige
-  // richtige Stelle fuer `Diag.init` - es setzt globalen Zustand (Prefs-Handle
-  // und Isolate-Kennung), und dieses Isolate hat seinen eigenen, anderen
-  // Ringpuffer als das Haupt-Isolate (dieselbe Falle wie T-69, nur eine Ebene
-  // tiefer). Deshalb ein eigener Prefs-Schluessel und ein Merge beim Lesen.
+  // docs/TODO.md T-89: this isolate's entry point is the one correct place
+  // for `Diag.init` - it sets global state (a prefs handle and the isolate
+  // identity), and this isolate has its own ring buffer, different from the
+  // main isolate's (the same trap as T-69, just one level deeper). Hence a
+  // dedicated prefs key and a merge on read.
   try {
     await Diag.init(isolate: LogIsolate.background);
   } catch (e) {
-    // Ohne Logger laeuft der Checkpoint trotzdem - er ist die Hauptaufgabe.
+    // Without the logger the checkpoint still runs - that's the main job.
     debugPrint("=====onNotificationCreatedMethod: Diag.init failed: ${e.runtimeType}");
   }
   await runTimezoneCheckpoint2();

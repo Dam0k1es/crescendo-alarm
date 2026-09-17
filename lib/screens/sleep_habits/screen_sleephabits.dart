@@ -83,9 +83,9 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           _appState.maxDailyDelta =
               Duration(hours: pickedTime.hour, minutes: pickedTime.minute);
           break;
-        // docs/TODO.md T-96: wie lange die Gentle-Wake-Rampe braucht, also wie
-        // lange der Alarm leise bleibt. War vorher festverdrahtet.
-        // FR-20: um wie viel ein Druck auf Snooze verschiebt.
+        // docs/TODO.md T-96: how long the gentle-wake ramp takes, i.e. how
+        // long the alarm stays quiet. Used to be hardcoded.
+        // FR-20: by how much pressing snooze postpones.
         case 'snoozeTime':
           _appState.snoozeTime =
               Duration(hours: pickedTime.hour, minutes: pickedTime.minute);
@@ -126,16 +126,15 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              // Drei ursaechliche Gruppen (docs/TODO.md T-95). Die vorherige
-              // Reihenfolge fuehrte in die Irre: "Sleep Goal" stand oben,
-              // beeinflusst aber die Alarmzeit gar nicht - es verschiebt nur
-              // die Bettgeh-Erinnerung - und war von "Enable Reminder", seiner
-              // anderen Haelfte derselben Rechnung, durch drei fremde
-              // Eintraege getrennt.
+              // Three causal groups (docs/TODO.md T-95). The previous order
+              // was misleading: "Sleep Goal" was at the top, but doesn't
+              // affect the alarm time at all - it only shifts the bedtime
+              // reminder - and was separated from "Enable Reminder", its
+              // other half of the same calculation, by three unrelated
+              // entries.
               _buildSectionHeader("Wake-up time"),
-              // Zuerst das Ziel, auf das FR-4 zudriftet: die einzige
-              // Einstellung, die ein Nutzer ohne Kalendertermine ueberhaupt
-              // braucht.
+              // First the target FR-4 drifts toward: the only setting a user
+              // needs at all without calendar appointments.
               _buildTile(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,9 +160,9 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                 ),
               ),
               const SizedBox(height: 16.0),
-              // Direkt darunter die Schranke, wie schnell sich die Weckzeit
-              // diesem Ziel naehern darf (FR-6) - sie qualifiziert den Eintrag
-              // darueber und ist ohne ihn sinnlos.
+              // Directly below it, the bound on how fast the wake time may
+              // approach this target (FR-6) - it qualifies the entry above
+              // and is meaningless without it.
               _buildTile(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,19 +190,19 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                 ),
               ),
               const SizedBox(height: 16.0),
-              // Dann die zwei Vorlaufzeiten. Sie greifen nur an Tagen MIT
-              // Termin (FR-2) und stehen deshalb nach dem Ziel - in der
-              // Reihenfolge, in der sie real anfallen und in der `hardFloor`
-              // sie abzieht: erst aufwachen, dann fertig werden.
+              // Then the two lead times. They only apply on days WITH an
+              // appointment (FR-2) and therefore come after the target - in
+              // the order they actually occur in and in which `hardFloor`
+              // subtracts them: wake up first, then get ready.
               _buildTile(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildLabel("Duration to wake up"),
                     _buildTimePicker("wakeUp", _appState.durationToWakeUp),
-                    // FR-20: dieselbe Dauer ist das Snooze-Budget. Der
-                    // Zusammenhang ist nicht zu erraten, also steht er da -
-                    // aber nur, wenn Snooze ueberhaupt an ist.
+                    // FR-20: this same duration is the snooze budget. The
+                    // connection isn't guessable, so it's spelled out here -
+                    // but only while snooze is actually on.
                     if (_appState.snoozeEnabled)
                       const Padding(
                         padding: EdgeInsets.only(top: 4.0),
@@ -229,10 +228,10 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               ),
 
               _buildSectionHeader("Bedtime reminder"),
-              // Das Schlafziel definiert die Bettzeit
-              // (Weckzeit - sleepGoal - reminderDuration, siehe
-              // lib/utils/sleep_reminder.dart) und beruehrt die Alarmzeit
-              // NICHT. Deshalb hier und nicht in der Gruppe darueber.
+              // The sleep goal defines the bedtime
+              // (wake time - sleepGoal - reminderDuration, see
+              // lib/utils/sleep_reminder.dart) and does NOT touch the alarm
+              // time. Hence here, not in the group above.
               _buildTile(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,8 +242,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                 ),
               ),
               const SizedBox(height: 16.0),
-              // Der Vorlauf misst sich von der Bettzeit aus, die der Eintrag
-              // darueber festlegt - beide gehoeren nebeneinander.
+              // The lead time is measured from the bedtime the entry above
+              // sets - the two belong side by side.
               _buildTile(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,7 +253,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                       _appState.reminderEnabled,
                       (value) {
                         _appState.reminderEnabled = value;
-                        // FR-16 "Voraussetzung": scheduled unconditionally -
+                        // FR-16 "precondition": scheduled unconditionally -
                         // silently (no visible notification) when disabled,
                         // still needed as Checkpoint 2's hook.
                         scheduleSleepReminder(_appState);
@@ -282,9 +281,9 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                             trigger: CheckpointTrigger.settingsChanged);
                       },
                     ),
-                    // docs/TODO.md T-96: nur sichtbar, wenn Gentle Wake an ist -
-                    // ohne die Rampe hat die Dauer keine Bedeutung. Gleiches
-                    // Muster wie beim Reminder-Schalter darueber.
+                    // docs/TODO.md T-96: only visible while Gentle Wake is
+                    // on - without the ramp, the duration has no meaning.
+                    // Same pattern as the reminder switch above.
                     if (_appState.gentleWakeUpEnabled) ...[
                       _buildLabel("Ramp duration"),
                       _buildTimePicker(
@@ -294,9 +293,9 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                           minute: _appState.gentleWakeUpDuration.inMinutes % 60,
                         ),
                       ),
-                      // Wie bei maxDailyDelta (T-88): das erzwungene Minimum
-                      // darf nicht unsichtbar sein. Das Alarm-Plugin verlangt
-                      // eine echt positive Dauer, der Picker laesst aber 00:00 zu.
+                      // As with maxDailyDelta (T-88): the enforced minimum
+                      // must not be invisible. The alarm plugin requires a
+                      // genuinely positive duration, but the picker allows 00:00.
                       const Padding(
                         padding: EdgeInsets.only(top: 4.0),
                         child: Text(
@@ -310,9 +309,9 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                 ),
               ),
               const SizedBox(height: 16.0),
-              // FR-20. Gehoert hierher und nicht zur Weckzeit-Gruppe: Snooze
-              // beschreibt, was beim Klingeln passiert, nicht wann geklingelt
-              // wird (dieselbe kausale Gruppierung wie T-95).
+              // FR-20. Belongs here, not in the wake-time group: snooze
+              // describes what happens when the alarm rings, not when it
+              // rings (the same causal grouping as T-95).
               _buildTile(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,12 +320,12 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                       "Snooze",
                       _appState.snoozeEnabled,
                       (value) {
-                        // Der Setter hebt `durationToWakeUp` beim Einschalten
-                        // von 00:00 auf 00:10 - sonst waere das Budget null
-                        // und die Funktion von Anfang an tot.
+                        // The setter raises `durationToWakeUp` from 00:00 to
+                        // 00:10 on switching on - otherwise the budget would
+                        // be zero and the feature dead from the start.
                         _appState.snoozeEnabled = value;
-                        // Die Weckzeit selbst aendert sich dadurch (FR-2 zieht
-                        // `durationToWakeUp` ab), also muss neu geplant werden.
+                        // The wake time itself changes as a result (FR-2
+                        // subtracts `durationToWakeUp`), so a replan is needed.
                         runCheckpointSafely(_appState,
                             trigger: CheckpointTrigger.settingsChanged);
                       },
@@ -457,10 +456,10 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
     );
   }
 
-  /// Ueberschrift einer Eintragsgruppe. Ohne sie waere die Gruppierung fuer
-  /// den Nutzer unsichtbar und die Reihenfolge nur eine andere, keine
-  /// erklaerte (docs/TODO.md T-95). Der Abstand oben ist groesser als der
-  /// zwischen den Kacheln, damit die Gruppen optisch auseinandertreten.
+  /// A heading for a group of entries. Without it, the grouping would be
+  /// invisible to the user and the order just a different one, not an
+  /// explained one (docs/TODO.md T-95). The top spacing is larger than the
+  /// spacing between tiles, so the groups visually stand apart.
   Widget _buildSectionHeader(String text) => Padding(
         padding: const EdgeInsets.only(top: 24.0, bottom: 8.0, left: 4.0),
         child: Align(

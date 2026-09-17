@@ -45,8 +45,9 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
         setState(() {
           final newCode = DeactivationCode();
           _appState.deactivationCode = newCode;
-          // docs/TODO.md T-89: hier ENTSTEHT das Geheimnis - ein Log-Snapshot
-          // ab dieser Stelle reicht dauerhaft. Nur die Tatsache loggen.
+          // docs/TODO.md T-89: this is where the secret is BORN - a log
+          // snapshot from this point on would be permanently sufficient.
+          // Only log the fact.
           debugPrint('=====pageDeactivationCode: new QR code generated');
         });
       },

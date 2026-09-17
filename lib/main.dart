@@ -209,12 +209,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         debugPrint("=====initState: Notifications().init() failed: ${e.runtimeType}");
       }
 
-      // docs/TODO.md T-89: den Ereignis-Logger scharf stellen, bevor der
-      // erste Checkpoint laeuft - sonst faellt genau der Kaltstart aus dem
-      // Protokoll, also der Zustand, den FR-17s Erholungspfad reparieren
-      // soll. Registriert ausserdem die Alarmtypen, damit der Logger sie als
-      // stabilen Zahlencode fuehren kann statt als Namen (unter
-      // R8-Obfuskierung waere ein Name ohnehin Muell).
+      // docs/TODO.md T-89: arm the event logger before the first checkpoint
+      // runs - otherwise exactly the cold start drops out of the log, i.e.
+      // the state FR-17's recovery path is meant to repair. Also registers
+      // the alarm types, so the logger can carry them as a stable numeric
+      // code instead of a name (under R8 obfuscation a name would be
+      // garbage anyway).
       try {
         Diag.registerType(ScheduledAlarm, 1);
         Diag.registerType(ManualAlarm, 2);
@@ -237,8 +237,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       final String localTimeZone = DateTime.now().timeZoneName;
       final tz.Location location = getLocationFromAbbreviation(localTimeZone);
       _appState.currentTimeZone = location.name;
-      // docs/TODO.md T-89: der Zonenname ist regional identifizierend - eine
-      // Historie daraus ist eine Reisespur. Nur die Tatsache loggen.
+      // docs/TODO.md T-89: the zone name is regionally identifying - a
+      // history of these is a travel trace. Only log the fact.
       debugPrint("=====initState: timezone resolved");
 
       // FR-17 (docs/scheduling-v2-spec.md): a conditional third Checkpoint-1
@@ -275,12 +275,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       unawaited(runCheckpointSafely(_appState,
           trigger: CheckpointTrigger.appForeground));
     }
-    // docs/TODO.md T-89: beim Verlassen der App den Ereignis-Puffer
-    // persistieren. Der Checkpoint tut das am Ende seiner Sequenz selbst;
-    // dieser Aufruf faengt alles, was seither dazugekommen ist (Klingeln,
-    // QR-Gate, Kalenderzugriffe) - sonst waere es beim naechsten Prozesstod
-    // verloren, und genau die Ereignisse rund um einen Alarm sind die
-    // interessanten.
+    // docs/TODO.md T-89: persist the event buffer when the app is left. The
+    // checkpoint already does this itself at the end of its own sequence;
+    // this call catches everything that's been added since (ringing, the QR
+    // gate, calendar access) - otherwise it would be lost on the next
+    // process death, and the events around an alarm are exactly the
+    // interesting ones.
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       unawaited(Diag.flush());

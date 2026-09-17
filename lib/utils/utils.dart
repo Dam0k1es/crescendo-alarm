@@ -55,20 +55,21 @@ Duration durationFromString(String time) {
   return Duration(hours: hours, minutes: minutes);
 }
 
-/// Kurze Rueckmeldung an den Nutzer, die nach [duration] von selbst verschwindet.
+/// A short message to the user that disappears on its own after [duration].
 ///
-/// `persist: false` ist hier **nicht** redundant, auch wenn eine Dauer gesetzt
-/// ist (docs/TODO.md T-136). `SnackBar` belegt `persist` mit
-/// `persist ?? action != null` vor, und `ScaffoldMessenger` bricht seinen
-/// Ausblend-Timer mit `if (snackBar.persist) return;` ab - ein SnackBar MIT
-/// Aktion ignoriert also seine eigene `duration`. Das Framework sagt es
-/// ausdruecklich: "If not provided, but the snackbar action is not null, the
-/// snackbar will persist as well."
+/// `persist: false` is **not** redundant here, even with a duration set
+/// (docs/TODO.md T-136). `SnackBar` pre-fills `persist` with
+/// `persist ?? action != null`, and `ScaffoldMessenger` aborts its own
+/// fade-out timer with `if (snackBar.persist) return;` - so a SnackBar WITH
+/// an action ignores its own `duration`. The framework says so explicitly:
+/// "If not provided, but the snackbar action is not null, the snackbar will
+/// persist as well."
 ///
-/// Weil diese Funktion einen "Dismiss"-Knopf mitgibt, blieben Meldungen wie
-/// "Can not edit scheduled alarms!" seit dem ersten Commit stehen, bis der
-/// Nutzer sie wegtippte - obwohl die 5 Sekunden die ganze Zeit dastanden. Wer
-/// den Knopf hier entfernt oder die Zeile anfasst, nimmt das wieder mit.
+/// Because this function also supplies a "Dismiss" button, messages like
+/// "Can not edit scheduled alarms!" stayed on screen since the very first
+/// commit until the user tapped them away - even though the 5 seconds had
+/// been sitting there the whole time. Whoever removes the button here, or
+/// touches this line, brings that back.
 void displayToast(BuildContext context, String message) {
   final scaffold = ScaffoldMessenger.of(context);
   scaffold.showSnackBar(

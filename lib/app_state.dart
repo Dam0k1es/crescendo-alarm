@@ -111,8 +111,8 @@ class AppState extends ChangeNotifier {
 
   bool get gentleWakeUpEnabled => _gentleWakeUpEnabled;
 
-  /// Wie lange die Gentle-Wake-Rampe braucht, bis die volle Lautstaerke
-  /// erreicht ist - also wie lange der Alarm leise bleibt (docs/TODO.md T-96).
+  /// How long the gentle-wake ramp takes to reach full volume - i.e. how
+  /// long the alarm stays quiet (docs/TODO.md T-96).
   Duration get gentleWakeUpDuration => _gentleWakeUpDuration;
 
   bool get calendarsInitialized => _calendarsInitialized;
@@ -127,12 +127,11 @@ class AppState extends ChangeNotifier {
 
   TimeOfDay get durationToWakeUp => _durationToWakeUp;
 
-  /// FR-20: darf der Nutzer den Wecker verschieben? Vorgabe **aus**.
-  /// FR-21: Tage (als `isoDate`), fuer die der Nutzer den geplanten Wecker
-  /// abgeschaltet hat. Bewusst neben `pendingDayValues` und nicht darin: dort
-  /// hiesse `null` "nichts geplant", und die naechste Planung wuerde den
-  /// Eintrag aus der Rechnung heraus ueberschreiben - das Veto des Nutzers
-  /// verschwaende dabei.
+  /// FR-21: days (as `isoDate`) for which the user has switched off the
+  /// planned alarm. Deliberately beside `pendingDayValues`, not inside it:
+  /// there, `null` would mean "nothing planned", and the next planning run
+  /// would overwrite the entry out of its own arithmetic - the user's veto
+  /// would vanish with it.
   Set<String> get disabledDays => _disabledDays;
 
   bool isDayDisabled(String isoDay) => _disabledDays.contains(isoDay);
@@ -148,8 +147,8 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// FR-21 + docs/TODO.md T-82: dieselbe Aufbewahrungsgrenze wie fuer die
-  /// geplanten Werte - sonst waechst die Menge unbegrenzt.
+  /// FR-21 + docs/TODO.md T-82: the same retention bound as for the planned
+  /// values - otherwise the set grows without limit.
   void pruneDisabledDays(String oldestKeptDay) {
     final kept = _disabledDays.where((d) => d.compareTo(oldestKeptDay) >= 0).toSet();
     if (kept.length == _disabledDays.length) return;
@@ -157,19 +156,20 @@ class AppState extends ChangeNotifier {
     _prefs.setStringList('disabledDays', _disabledDays.toList()..sort());
   }
 
+  /// FR-20: may the user postpone the alarm? Default **off**.
   bool get snoozeEnabled => _snoozeEnabled;
 
-  /// FR-20: um wie viel ein Druck auf Snooze verschiebt. Vorgabe 5 Minuten.
+  /// FR-20: by how much pressing snooze postpones. Default 5 minutes.
   Duration get snoozeTime => _snoozeTime;
 
-  /// FR-20: der **urspruengliche** Weckzeitpunkt eines gerade verschobenen
-  /// Rufes. Traegt das Restbudget ueber mehrere Snooze-Vorgaenge und ueber
-  /// einen Prozesstod hinweg - ohne ihn haette der Nutzer nach einem Neustart
-  /// wieder das volle Budget, und Snooze waere unbegrenzt.
+  /// FR-20: the **original** wake instant of a call currently postponed.
+  /// Carries the remaining budget across several snoozes and across a
+  /// process death - without it, the user would have the full budget again
+  /// after a restart, and snooze would be unbounded.
   DateTime? snoozeOriginFor(int alarmId) => _snoozeOriginOf[alarmId];
 
   void rememberSnoozeOrigin(int alarmId, DateTime originalRing) {
-    if (_snoozeOriginOf.containsKey(alarmId)) return; // nur der ERSTE Ruf zaehlt
+    if (_snoozeOriginOf.containsKey(alarmId)) return; // only the FIRST call counts
     _snoozeOriginOf = {..._snoozeOriginOf, alarmId: originalRing};
     _saveSnoozeOrigins();
     notifyListeners();
@@ -252,27 +252,27 @@ class AppState extends ChangeNotifier {
   /// forever: with no alarms left there is no ring checkpoint to reset it.
   bool get safetyValveNotificationSent => _safetyValveNotificationSent;
 
-  /// Ob der PII-freie Ereignis-Logger aufzeichnet (`docs/TODO.md` T-89).
+  /// Whether the PII-free event logger records (`docs/TODO.md` T-89).
   ///
-  /// Standardmaessig an: das Log verlaesst das Geraet nur, wenn der Nutzer es
-  /// in den Einstellungen ausdruecklich kopiert, und es kann konstruktiv keine
-  /// personenbezogenen Daten enthalten - die Aufzeichnungs-API nimmt keinen
-  /// einzigen String. Der Schalter existiert trotzdem, weil "an, aber
-  /// abschaltbar und einsehbar" die einzige ehrliche Voreinstellung ist.
+  /// On by default: the log only ever leaves the device when the user
+  /// explicitly copies it in settings, and it structurally cannot contain
+  /// personal data - the recording API takes not a single String. The
+  /// switch exists anyway, because "on, but switchable off and inspectable"
+  /// is the only honest default.
   bool get diagnosticsEnabled => _diagnosticsEnabled;
 
-  /// Schreibt das Log auch Weckzeiten und fruehe Terminzeiten
-  /// (`docs/TODO.md` T-135)? Standard **aus**, und getrennt von
-  /// [diagnosticsEnabled] mit Absicht.
+  /// Does the log also record wake times and early appointment times
+  /// (`docs/TODO.md` T-135)? Default **off**, and deliberately separate from
+  /// [diagnosticsEnabled].
   ///
-  /// Das uebrige Log ist konstruktiv frei von personenbezogenen Daten - es
-  /// gibt keinen String-Parameter und keinen Uhrwert, also auch keinen Kanal.
-  /// Eine Historie aus Weckzeiten und fruehesten Terminzeiten ist dagegen ein
-  /// Schlafmuster samt Tagesablauf, identifizierend ohne jeden Namen. Und das
-  /// Log ist ausdruecklich per Zwischenablage exportierbar - ein Nutzer, der
-  /// es an einen Fehlerbericht haengt, wuerde das mitschicken. Deshalb
-  /// ausdruecklich einzuschalten und nicht an der allgemeinen Diagnose
-  /// mitzuhaengen.
+  /// The rest of the log is structurally free of personal data - there is
+  /// no String parameter and no clock value, so no channel either. A
+  /// history of wake times and earliest appointment times, by contrast, is
+  /// a sleep pattern with a daily routine, identifying with no name at all.
+  /// And the log is explicitly exportable via the clipboard - a user who
+  /// attaches it to a bug report would send that along too. Hence
+  /// explicitly opt-in, and deliberately not folded into the general
+  /// diagnostics toggle.
   bool get diagnosticsIncludeClockTimes => _diagnosticsIncludeClockTimes;
 
   TimeOfDay? get preferredWakeUpTime => _preferredWakeUpTime;
@@ -322,9 +322,9 @@ class AppState extends ChangeNotifier {
   }
 
   set gentleWakeUpDuration(Duration value) {
-    // Nach unten geklammert (docs/TODO.md T-96): das Alarm-Plugin verlangt
-    // `fadeDuration > Duration.zero`, der hh:mm-Picker laesst aber 00:00 zu -
-    // und im Release-Build wuerde die Assertion nicht greifen.
+    // Bounded below (docs/TODO.md T-96): the alarm plugin requires
+    // `fadeDuration > Duration.zero`, but the hh:mm picker allows 00:00 -
+    // and in the release build the assertion wouldn't fire anyway.
     _gentleWakeUpDuration =
         value < _gentleWakeUpDurationMinimum ? _gentleWakeUpDurationMinimum : value;
     _prefs.setInt('gentleWakeUpSeconds', _gentleWakeUpDuration.inSeconds);
@@ -435,11 +435,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// FR-20. Wird Snooze eingeschaltet und ist [durationToWakeUp] dabei
-  /// `00:00`, wird es auf 10 Minuten gehoben: sonst waere das Budget null und
-  /// die gerade eingeschaltete Funktion von Anfang an tot. Ein bereits
-  /// gesetzter Wert bleibt unangetastet - und Ausschalten setzt nichts
-  /// zurueck, damit eine kurze Abschaltung die Einstellung nicht verliert.
+  /// FR-20. If snooze is switched on while [durationToWakeUp] is `00:00`,
+  /// it's raised to 10 minutes: otherwise the budget would be zero and the
+  /// feature just switched on would be dead from the start. A value already
+  /// set is left untouched - and switching off resets nothing, so a brief
+  /// off period doesn't lose the setting.
   set snoozeEnabled(bool value) {
     _snoozeEnabled = value;
     _prefs.setBool('snoozeEnabled', value);
@@ -792,10 +792,10 @@ class AppState extends ChangeNotifier {
       // reinterpreting its raw digits as local (see alarmPlatformTime).
       dateTime: alarmPlatformTime(alarmDateTime),
       assetAudioPath: alarm.tone,
-      // docs/TODO.md T-96: die Rampendauer kam bisher als festverdrahtete
-      // `Duration(seconds: 60)` von hier. Jetzt traegt sie der Alarm selbst,
-      // damit `planAlarmSync` eine Aenderung als Abweichung erkennen und den
-      // Alarm ersetzen kann (die Lehre aus T-84).
+      // docs/TODO.md T-96: the ramp duration used to come from here as a
+      // hardcoded `Duration(seconds: 60)`. Now the alarm carries it itself,
+      // so `planAlarmSync` can recognize a change as a deviation and
+      // replace the alarm (the lesson from T-84).
       volumeSettings: alarm.gentlewake
           ? VolumeSettings.fade(
               volume: alarm.volume,
@@ -816,15 +816,15 @@ class AppState extends ChangeNotifier {
     await Alarm.set(alarmSettings: alarmSettings);
   }
 
-  /// FR-20: stellt den **verschobenen** Weckruf als reinen Plattform-Alarm.
+  /// FR-20: arms the **postponed** wake call as a plain platform alarm.
   ///
-  /// Bewusst ohne Eintrag in [scheduledAlarms] oder [manualAlarms]: FR-18
-  /// entfernt jeden `ScheduledAlarm` in der Zukunft ohne geplantes Gegenstueck,
-  /// und ein verschobener Ruf hat keines. Ein Plattform-Eintrag, den die App
-  /// nicht als eigenen Alarm fuehrt, bleibt dagegen unberuehrt (T-127).
+  /// Deliberately with no entry in [scheduledAlarms] or [manualAlarms]:
+  /// FR-18 removes every `ScheduledAlarm` in the future with no planned
+  /// counterpart, and a postponed call has none. A platform entry the app
+  /// doesn't track as its own alarm, by contrast, is left untouched (T-127).
   ///
-  /// Ton, Lautstaerke und Rampe kommen aus den aktuellen Einstellungen - der
-  /// verschobene Ruf soll klingen wie der, den er ersetzt.
+  /// Tone, volume, and ramp come from the current settings - the postponed
+  /// call should sound like the one it replaces.
   Future<void> setSnoozeAlarm(int id, DateTime at) async {
     await Alarm.set(
       alarmSettings: AlarmSettings(

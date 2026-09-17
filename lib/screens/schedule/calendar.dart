@@ -21,9 +21,9 @@ Future initCalendars(AppState appState) async {
 
   if (result.isSuccess) {
     calendars = result.data;
-    // docs/TODO.md T-89: device_calendar liefert fuer Google-/Exchange-Konten
-    // den Kontonamen als Calendar.name, also regelmaessig die echte
-    // Mailadresse des Nutzers. Nur die Anzahl loggen.
+    // docs/TODO.md T-89: for Google/Exchange accounts, device_calendar
+    // returns the account name as Calendar.name, i.e. regularly the user's
+    // real email address. Only log the count.
     debugPrint("======initCalendars: Found ${calendars.length} calendar(s)");
     if (calendars.isNotEmpty) {
       appState.calendarsInitialized = true;
@@ -69,8 +69,8 @@ Future<List<Meeting>> getCalendarEntries(
           if (!appState.meetings.contains(meeting)) {
             meetingCollection.add(meeting);
           } else {
-            // docs/TODO.md T-89: eventName ist der Termintitel aus dem
-            // Geraetekalender ("Onkologie Nachsorge"). Nie loggen.
+            // docs/TODO.md T-89: eventName is the appointment title from the
+            // device calendar ("Oncology follow-up"). Never log it.
             debugPrint(
                 "=====getCalendarEntries: meeting already in list, skipping");
           }
@@ -142,14 +142,14 @@ Future<List<Meeting>> fetchMeetingsUncached(
     }
   }
 
-  // docs/TODO.md T-89: nur Anzahlen und ein Ergebnis-Enum - niemals ein
-  // Termintitel, ein Ort oder ein Kalendername (Letzterer ist auf Android
-  // regelmaessig die Konto-Mailadresse des Nutzers).
+  // docs/TODO.md T-89: only counts and an outcome enum - never an
+  // appointment title, a location, or a calendar name (the latter is,
+  // regularly, the user's account email address on Android).
   //
-  // Diagnostischer Wert: `calendarCount == 0` erklaert auf einen Blick eine
-  // ganze Woche leerer Plaene - genau der Zustand, in dem der alte Motor
-  // stillschweigend alle Alarme loeschte (T-64), und der auf dem CI-Emulator
-  // der Normalfall ist.
+  // Diagnostic value: `calendarCount == 0` explains a whole week of empty
+  // plans at a glance - exactly the state in which the old engine silently
+  // deleted every alarm (T-64), and which is the normal case on the CI
+  // emulator.
   Diag.calendarRead(
     outcome: calendars.isEmpty
         ? CalendarOutcome.noCalendars

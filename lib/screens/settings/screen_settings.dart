@@ -63,9 +63,9 @@ class _ScreenSettingsState extends State<ScreenSettings>
                   color: context.watch<AppState>().accentColor),
               text: 'About Page',
             ),
-            // docs/TODO.md T-89: die Einsicht in das PII-freie Ereignis-Log.
-            // Sichtbar und nicht versteckt, weil der Nutzer sehen koennen
-            // muss, was er beim Kopieren weitergibt.
+            // docs/TODO.md T-89: the view into the PII-free event log.
+            // Visible, not hidden, because the user must be able to see
+            // what they're passing on when they copy it.
             Tab(
               icon: Icon(Icons.bug_report,
                   color: context.watch<AppState>().accentColor),

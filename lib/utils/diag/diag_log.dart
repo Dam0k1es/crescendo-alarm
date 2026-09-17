@@ -1,48 +1,48 @@
-// Ein PII-freier Ereignis-Logger fuer die Entwicklung (docs/TODO.md T-89).
+// A PII-free event logger for development (docs/TODO.md T-89).
 //
-// Warum es den ueberhaupt gibt: aus einem installierten Release-Build kam
-// bisher NICHTS zurueck. Alle Diagnosen liefen ueber `debugPrint`, und
-// `lib/main.dart` ersetzt das im Release durch eine leere Funktion. Ein
-// Geraetetest konnte also nur zeigen, DASS etwas schiefging, nie warum.
+// Why it exists at all: nothing at all came back from an installed release
+// build. Every diagnostic went through `debugPrint`, and `lib/main.dart`
+// replaces that with an empty function in release. A device test could
+// therefore only show THAT something went wrong, never why.
 //
-// Warum er keine personenbezogenen Daten erfassen kann - und das ist die
-// tragende Entwurfsentscheidung: die Aufzeichnungs-API nimmt **keinen einzigen
-// String**. Es gibt damit keinen Kanal, durch den ein Termintitel, ein
-// Kalendername, eine Exception-Nachricht oder der QR-Deaktivierungscode
-// hineingeraten koennte. Was nicht darstellbar ist, kann nicht austreten.
-// `test/diag_log_api_test.dart` prueft diese Eigenschaft am Quelltext nach.
+// Why it structurally cannot record personal data - and this is the
+// load-bearing design decision: the recording API takes **not a single
+// String**. There is therefore no channel through which an appointment
+// title, a calendar name, an exception message, or the QR deactivation code
+// could enter it. What cannot be represented cannot leak.
+// `test/diag_log_api_test.dart` checks this property against the source.
 //
-// Warum das trotzdem diagnostisch reicht: **jeder** echte Befund dieses
-// Projekts war ein STRUKTURfehler, kein WERTfehler - eine falsche Anzahl
-// (T-75, T-70), kollidierende Tagesschluessel (T-74d/T-76), ein um genau den
-// Geraeteversatz verschobener Wert (T-61), ein Off-by-one-Tag (T-76),
-// unbegrenztes Wachstum (T-82), auseinanderlaufende Mengen (T-74e/T-88).
-// Keiner davon braucht die tatsaechliche Weckzeit des Nutzers.
+// Why this is still diagnostically sufficient: **every** real finding in
+// this project was a STRUCTURAL bug, not a VALUE bug - a wrong count (T-75,
+// T-70), colliding day keys (T-74d/T-76), a value shifted by exactly the
+// device offset (T-61), an off-by-one day (T-76), unbounded growth (T-82),
+// diverging sets (T-74e/T-88). None of them needs the user's actual wake
+// time.
 //
-// Warum keine Uhrzeiten: eine Historie absoluter Weckzeitpunkte plus
-// Zeitzonen-Versaetze IST ein Schlafmuster und eine Reisespur - identifizierend
-// auch ohne Namen. Deshalb: Tage nur relativ, Zeitpunkte nur als gebucketete
-// Differenzen, der absolute Zeitzonen-Versatz nie, Reihenfolge ueber Zaehler
-// und Grobzeit ueber `Stopwatch` (monoton, keine Uhrablesung).
+// Why no clock times: a history of absolute wake instants plus time zone
+// offsets IS a sleep pattern and a travel trace - identifying even without a
+// name. Hence: days only relative, instants only as bucketed differences,
+// the absolute time zone offset never, ordering via a counter, and coarse
+// timing via `Stopwatch` (monotonic, no clock read).
 //
-// Senke: ein begrenzter In-Memory-Ringpuffer, gebuendelt nach
-// SharedPreferences. Bewusst nicht in eine Datei ueber `path_provider`: FR-16s
-// Checkpoint 2 laeuft in einem Hintergrund-Isolate ohne AppState und redet
-// dort schon heute direkt mit SharedPreferences (`runTimezoneCheckpoint2`) -
-// ein Datei-Logger haenge dort von der Verfuegbarkeit des Plugin-Channels ab,
-// also genau der Fehlerklasse, die T-79 war. Kein Netzcode: die
-// Offline-Eigenschaft der App bleibt unberuehrt, der Export laeuft ueber die
-// Zwischenablage und damit ausschliesslich auf Nutzerwunsch.
+// Sink: a bounded in-memory ring buffer, batched to SharedPreferences.
+// Deliberately not a file via `path_provider`: FR-16's checkpoint 2 runs in
+// a background isolate with no AppState and already talks directly to
+// SharedPreferences there today (`runTimezoneCheckpoint2`) - a file logger
+// there would depend on the plugin channel's availability, exactly the bug
+// class T-79 was. No network code: the app's offline property stays
+// untouched, and export goes via the clipboard, and thus only ever at the
+// user's own request.
 
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-// --------------------------------------------------------------- Ereignisse
+// ------------------------------------------------------------------ Events
 
-/// Jedes Ereignis traegt einen STABILEN Zahlencode. Der Index einer Dart-Enum
-/// verschiebt sich beim Umsortieren, ein exportiertes Log muss aber auch von
-/// einer anderen App-Version noch lesbar sein.
+/// Every event carries a STABLE numeric code. A Dart enum's index shifts
+/// when reordered, but an exported log must still be readable by a
+/// different app version.
 enum DiagEvent {
   boot(1),
   checkpointStarted(2),
@@ -65,7 +65,7 @@ enum DiagEvent {
   final int code;
 }
 
-/// Feldnamen sind ebenfalls Codes, nicht Strings.
+/// Field names are also codes, not strings.
 enum DiagField {
   isolate(1),
   // Checkpoint (T-77, T-71, T-80)
@@ -75,7 +75,7 @@ enum DiagField {
   durationBucket(13),
   outcome(14),
   todayAlreadyRang(15),
-  // Tagesfortschreibung und Fenster (T-75, T-74d, T-76, T-82)
+  // Day-advance and the window (T-75, T-74d, T-76, T-82)
   needsDayAdvance(20),
   hadProgressMarker(21),
   daysProcessed(22),
@@ -95,17 +95,17 @@ enum DiagField {
   safetyValveFlag(44),
   hasPreferredWakeUpTime(45),
   maxStepBucket(46),
-  // Kalender (T-70)
+  // Calendar (T-70)
   calendarCount(50),
   eventCount(51),
   allDayEventCount(52),
   lazyInitTriggered(53),
-  // Zeitzone (FR-16, T-61, T-62)
+  // Time zone (FR-16, T-61, T-62)
   offsetChanged(60),
   offsetChangeShape(61),
   valuesConsidered(62),
   valuesReinterpreted(63),
-  // FR-18 und Plattform (T-63, T-64, T-74e, T-84, T-88)
+  // FR-18 and the platform (T-63, T-64, T-74e, T-84, T-88)
   desiredAlarms(70),
   existingAlarms(71),
   platformStateUnknown(72),
@@ -114,7 +114,7 @@ enum DiagField {
   removeFailures(75),
   addFailures(76),
   plannedVsPlatformBucket(77),
-  // Klingeln, Abschalten, QR
+  // Ringing, dismissal, QR
   alarmTypeCode(80),
   knownToAppState(81),
   stale(82),
@@ -123,7 +123,7 @@ enum DiagField {
   dismissRoute(85),
   stopFailed(86),
   qrOutcome(87),
-  // Meldungen
+  // Notifications
   notificationKind(90),
   suppressedByEpisodeFlag(91),
   sendFailed(92),
@@ -135,11 +135,11 @@ enum DiagField {
   manualAlarmCount(104),
   pendingValueCount(105),
   daysSinceLastReplan(106),
-  // FR-19-loses Tagesprotokoll (docs/TODO.md T-135). NUR diese drei tragen
-  // Uhrwerte, und nur bei ausdruecklich eingeschalteter Zeitprotokollierung.
-  // Die EINGABEN einer Planung (docs/TODO.md T-140). Dauern sind keine
-  // Uhrzeiten und stehen immer drin; die preferredWakeUpTime ist eine und haengt am
-  // Zeit-Schalter.
+  // The FR-19-less daily log (docs/TODO.md T-135). ONLY these three carry
+  // clock values, and only when clock-time logging has been explicitly
+  // switched on. The INPUTS of a planning run (docs/TODO.md T-140).
+  // Durations are not times of day and are always included; preferredWakeUpTime
+  // is one and is gated behind the clock-time switch.
   maxDailyDeltaMinutes(117),
   wakeUpMinutes(118),
   getReadyMinutes(119),
@@ -147,7 +147,7 @@ enum DiagField {
   plannedMinuteOfDay(121),
   preferredWakeUpMinuteOfDay(123),
   earliestEventMinuteOfDay(122),
-  // Fehler
+  // Errors
   site(110),
   errorKind(111),
   exceptionTypeCode(112);
@@ -156,10 +156,10 @@ enum DiagField {
   final int code;
 }
 
-// ------------------------------------------------------------- Wertdomaenen
+// ------------------------------------------------------------- Value domains
 
-/// Dauer einer Operation - logarithmisch, weil die diagnostische Frage
-/// "schnell / langsam / haengt" ist, nie "wie viele Millisekunden genau".
+/// Duration of an operation - logarithmic, because the diagnostic question
+/// is "fast / slow / hanging", never "how many milliseconds exactly".
 enum DurationBucket {
   under50(0),
   under200(1),
@@ -172,10 +172,10 @@ enum DurationBucket {
   final int code;
 }
 
-/// Signierte Grob-Leiter fuer JEDE Wanduhr-Differenz. Die Stufen sind nach den
-/// echten Befunden gewaehlt, nicht nach Bequemlichkeit: 0 = in Ordnung,
-/// eine Stunde = Versatz oder Sommerzeit (die T-61-Signatur), ein Tag =
-/// Tages-Off-by-one (T-74d/T-76).
+/// A signed coarse ladder for ANY wall-clock difference. The steps are
+/// chosen after the real findings, not for convenience: 0 = healthy,
+/// one hour = offset or daylight saving (the T-61 signature), one day =
+/// a day off-by-one (T-74d/T-76).
 enum MinuteBucket {
   minusDay(-6),
   minusHours(-5),
@@ -194,7 +194,7 @@ enum MinuteBucket {
   final int code;
 }
 
-/// Grobe Position im Prozessleben - ersetzt jeden Zeitstempel.
+/// A coarse position in the process's lifetime - replaces every timestamp.
 enum UptimeBucket {
   firstMinute(0),
   under5min(1),
@@ -227,11 +227,12 @@ enum CalendarOutcome {
   final int code;
 }
 
-/// Der ABSOLUTE Versatz wird nie aufgenommen - er pinnt Zeitzone und damit
-/// Region sofort. Diese Form trennt genau die diagnostisch relevante
-/// Unterscheidung (Sommerzeit-Gestalt gegen Umzug oder Reise) und ist als
-/// Reisespur wertlos: eine Stunde bekommt in einem Sommerzeit-Land jeder
-/// zweimal im Jahr, und `otherChange` verschweigt Betrag UND Vorzeichen.
+/// The ABSOLUTE offset is never recorded - it would pin down the time zone,
+/// and thus the region, immediately. This shape draws exactly the
+/// diagnostically relevant distinction (a daylight-saving shape versus a
+/// move or a trip) and is worthless as a travel trace: everyone in a
+/// daylight-saving country gets a one-hour shift twice a year, and
+/// `otherChange` withholds both the amount and the sign.
 enum OffsetChangeShape {
   none(0),
   plusHour(1),
@@ -253,7 +254,7 @@ enum DismissRoute {
   final int code;
 }
 
-/// Kein Wert, keine Laenge, kein Hash des Codes - nur das Ergebnis.
+/// No value, no length, no hash of the code - only the outcome.
 enum QrOutcome {
   imported(0),
   accepted(1),
@@ -311,11 +312,11 @@ enum DiagTrigger {
   final int code;
 }
 
-// --------------------------------------------------------- Reduktionsstufe
+// ------------------------------------------------------------- Bucketing
 
-/// Reine Reduktionsfunktionen: sie nehmen einen Rohwert und geben ein Bucket.
-/// Der Rohwert erreicht die Senke nie. Bewusst hier und nicht an den
-/// Aufrufstellen, damit es genau eine Rundungsregel gibt.
+/// Pure reduction functions: they take a raw value and return a bucket. The
+/// raw value never reaches the sink. Deliberately here and not at the call
+/// sites, so there is exactly one rounding rule.
 MinuteBucket bucketMinutes(int minutes) {
   final magnitude = minutes.abs();
   if (magnitude == 0) return MinuteBucket.zero;
@@ -351,7 +352,7 @@ OffsetChangeShape bucketOffsetChange(Duration before, Duration after) {
   if (delta == 0) return OffsetChangeShape.none;
   if (delta == 60) return OffsetChangeShape.plusHour;
   if (delta == -60) return OffsetChangeShape.minusHour;
-  // Betrag und Vorzeichen bewusst verworfen.
+  // Amount and sign deliberately discarded.
   return OffsetChangeShape.otherChange;
 }
 
@@ -372,8 +373,8 @@ class DiagRecord {
   final UptimeBucket uptime;
   final Map<DiagField, int> fields;
 
-  /// Die einzige Stelle, an der ein Record die In-Memory-Struktur verlaesst -
-  /// als reine Zahlenliste, damit kein Freitext in die Senke gelangen kann.
+  /// The only place a record leaves the in-memory structure - as a plain
+  /// list of numbers, so no free text can ever reach the sink.
   List<int> encode() => <int>[
         boot,
         seq,
@@ -403,11 +404,11 @@ class DiagRecord {
   }
 }
 
-// -------------------------------------------------------------------- Kern
+// --------------------------------------------------------------------- Core
 
 abstract final class Diag {
-  /// Gebunden, nicht wachsend - die Lehre aus T-82. Doppelt wirksam: es frisst
-  /// keinen Speicher, UND aus dem Log laesst sich kein Langzeitprofil gewinnen.
+  /// Bounded, not growing - the lesson from T-82. Doubly effective: it
+  /// doesn't eat memory, AND no long-term profile can be built from the log.
   static const int capacity = 512;
 
   static const String prefsKeyMain = 'diagLogMain';
@@ -423,9 +424,9 @@ abstract final class Diag {
   static bool _enabled = true;
   static bool _dirty = false;
 
-  /// `Type` wird ueber eine Identitaetstabelle auf einen Code abgebildet.
-  /// `toString()` wird auf einem Type NIE gerufen: unter R8-Obfuskierung waere
-  /// der Name ohnehin Muell, und so entsteht auch hier kein String.
+  /// A `Type` is mapped to a code via an identity table. `toString()` is
+  /// NEVER called on a Type: under R8 obfuscation the name would be garbage
+  /// anyway, and this way no String is produced here either.
   static final Map<Type, int> _typeCodes = <Type, int>{};
 
   static void registerType(Type type, int code) => _typeCodes[type] = code;
@@ -450,29 +451,30 @@ abstract final class Diag {
 
   static void setEnabled(bool value) => _enabled = value;
 
-  /// Schreibt [dayPlanned] ueberhaupt Uhrwerte? Standard **aus**.
+  /// Does [dayPlanned] record clock values at all? Default **off**.
   ///
-  /// Getrennt von [setEnabled] mit Absicht: das uebrige Log ist konstruktiv
-  /// frei von personenbezogenen Daten, und das soll die Vorgabe bleiben. Eine
-  /// Historie aus Weckzeiten und fruehesten Terminzeiten ist dagegen ein
-  /// Schlafmuster samt Tagesablauf - identifizierend ohne jeden Namen, und das
-  /// Log ist ausdruecklich per Zwischenablage exportierbar. Wer es einschaltet,
-  /// tut das fuer die eigene Fehlersuche und weiss, was er weitergibt.
+  /// Deliberately separate from [setEnabled]: the rest of the log is
+  /// structurally free of personal data, and that should stay the default.
+  /// A history of wake times and earliest appointment times, by contrast, is
+  /// a sleep pattern with a daily routine - identifying with no name at all,
+  /// and the log is explicitly exportable via the clipboard. Whoever
+  /// switches this on does so for their own troubleshooting and knows what
+  /// they're passing on.
   static bool _includeClockTimes = false;
   static void setIncludeClockTimes(bool value) => _includeClockTimes = value;
   static bool get includeClockTimes => _includeClockTimes;
 
-  /// Nur fuer Tests: setzt den Prozesszustand zurueck.
+  /// Test-only: resets the process-level state.
   static void resetForTest() {
     _ring.clear();
     _seq = 0;
     _boot = 0;
     _dirty = false;
     _enabled = true;
-    // Muss mit zurueckgesetzt werden, sonst leckt der Schalter zwischen Tests
-    // (docs/TODO.md T-135): ein Test, der ihn einschaltet, haette sonst den
-    // naechsten beeinflusst - dieselbe Falle mit globalem Zustand, die T-89
-    // schon einmal gestellt hat.
+    // Must be reset along with the rest, or the switch leaks between tests
+    // (docs/TODO.md T-135): a test that switches it on would otherwise
+    // affect the next one - the same global-state trap T-89 already set
+    // once.
     _includeClockTimes = false;
     _isolate = LogIsolate.main;
     _typeCodes.clear();
@@ -501,8 +503,8 @@ abstract final class Diag {
     return UptimeBucket.longer;
   }
 
-  /// Gebuendelt persistieren, nicht pro Ereignis - der Klingelpfad darf keine
-  /// I/O-Latenz bekommen. Aufrufer: Checkpoint-Ende, App-Pause, Boot.
+  /// Persisted in a batch, not per event - the ring path must not get any
+  /// I/O latency. Callers: checkpoint end, app pause, boot.
   static Future<void> flush() async {
     final prefs = _prefs;
     if (!_dirty || prefs == null) return;
@@ -512,11 +514,11 @@ abstract final class Diag {
     _dirty = false;
   }
 
-  /// Liest beide Senken und mischt sie nach (boot, seq).
+  /// Reads both sinks and merges them by (boot, seq).
   ///
-  /// Zwei Schluessel sind noetig, weil FR-16s Checkpoint 2 in einem eigenen
-  /// Isolate mit eigenem Speicher laeuft - der statische Ringpuffer dort ist
-  /// ein ANDERER. Dieselbe Falle wie T-69, nur eine Ebene tiefer.
+  /// Two keys are needed because FR-16's checkpoint 2 runs in its own
+  /// isolate with its own memory - the static ring buffer there is a
+  /// DIFFERENT one. The same trap as T-69, just one level deeper.
   static Future<List<DiagRecord>> readAll({SharedPreferences? prefs}) async {
     final p = prefs ?? _prefs ?? await SharedPreferences.getInstance();
     final all = <DiagRecord>[];
@@ -529,9 +531,9 @@ abstract final class Diag {
           if (record != null) all.add(record);
         }
       } catch (_) {
-        // Ein beschaedigter Eintrag darf den Export nicht verhindern. Bewusst
-        // ohne Ausgabe: die Ausnahme selbst koennte die Quellzeichenkette
-        // enthalten (die Fehlerklasse aus T-89).
+        // A corrupted entry must not prevent the export. Deliberately no
+        // output: the exception itself could contain the source string
+        // (the bug class from T-89).
       }
     }
     all.sort((a, b) {
@@ -549,8 +551,8 @@ abstract final class Diag {
     await p.remove(prefsKeyIsolate);
   }
 
-  /// Menschenlesbare Darstellung fuer den Export. Die Namen kommen aus den
-  /// Enums dieser Datei, also aus dem Programm selbst - nie aus Nutzerdaten.
+  /// A human-readable rendering for export. The names come from this file's
+  /// own enums, i.e. from the program itself - never from user data.
   static String render(List<DiagRecord> records) {
     final out = StringBuffer()
       ..writeln('WakeyWakey diagnostics (${records.length} events)')
@@ -575,10 +577,9 @@ abstract final class Diag {
 
   // == PUBLIC RECORDING API ==
   //
-  // Nur Enums, `int` (Zaehlungen und RELATIVE Tage), `bool` und `Type`.
-  // Kein String - an keiner Stelle. `_record` ist privat, damit an keiner
-  // Aufrufstelle ein Feld improvisiert werden kann; die Signatur IST das
-  // Schema.
+  // Only enums, `int` (counts and RELATIVE days), `bool`, and `Type`. No
+  // String - anywhere. `_record` is private so no call site can improvise a
+  // field; the signature IS the schema.
 
   static void boot({
     required bool coldStart,
@@ -647,8 +648,8 @@ abstract final class Diag {
         DiagField.durationBucket: took.code,
       });
 
-  /// T-75 haette hier sofort ins Auge gesprungen: `daysProcessed = 0` an einem
-  /// Tag, an dem der Wecker geklingelt hat.
+  /// T-75 would have jumped out here immediately: `daysProcessed = 0` on a
+  /// day the alarm rang.
   static void dayAdvance({
     required bool needsDayAdvance,
     required bool hadProgressMarker,
@@ -668,8 +669,8 @@ abstract final class Diag {
         DiagField.missedAppointmentFlagged: missedAppointmentFlagged ? 1 : 0,
       });
 
-  /// `windowDayCount != distinctDayKeys` ist die Signatur von T-74d/T-76:
-  /// zwei Fenstertage sind auf denselben Tagesschluessel kollidiert.
+  /// `windowDayCount != distinctDayKeys` is the signature of T-74d/T-76:
+  /// two window days collided on the same day key.
   static void weekPlanComputed({
     required bool todayAlreadyRang,
     required int windowDayCount,
@@ -699,9 +700,9 @@ abstract final class Diag {
         DiagField.storedEntriesPruned: storedEntriesPruned,
       });
 
-  /// FR-16 Checkpoint 2. Beantwortet auch T-62 ("feuert die stille
-  /// Notification den Callback ueberhaupt?") - wenn dieses Ereignis im Export
-  /// auftaucht, ist die Antwort ja.
+  /// FR-16 checkpoint 2. Also answers T-62 ("does the silent notification
+  /// even trigger the callback?") - if this event shows up in the export,
+  /// the answer is yes.
   static void timezoneCheck({
     required bool offsetChanged,
     required OffsetChangeShape shape,
@@ -715,8 +716,8 @@ abstract final class Diag {
         DiagField.valuesReinterpreted: valuesReinterpreted,
       });
 
-  /// T-64 waere hier als `toRemove` gross und `toAdd = 0` sichtbar gewesen;
-  /// T-61 als `plannedVsPlatform` genau eine Stunde.
+  /// T-64 would have been visible here as a large `toRemove` with
+  /// `toAdd = 0`; T-61 as `plannedVsPlatform` exactly one hour off.
   static void alarmSync({
     required int desiredAlarms,
     required int existingAlarms,
@@ -762,8 +763,8 @@ abstract final class Diag {
         DiagField.stopFailed: stopFailed ? 1 : 0,
       });
 
-  /// Kein Parameter fuer den Payload. Auch keiner fuer dessen Laenge oder
-  /// Hash - beides waere ein Rueckweg zum Geheimnis.
+  /// No parameter for the payload. None for its length or a hash either -
+  /// both would be a way back to the secret.
   static void qrGate({
     required QrOutcome outcome,
     required bool codeWasSet,
@@ -784,10 +785,6 @@ abstract final class Diag {
         DiagField.sendFailed: sendFailed ? 1 : 0,
       });
 
-  /// Der Ersatz fuer jedes `catch (e)`, das eine Ausnahme in ein Log schrieb:
-  /// die Ausnahme geht als `runtimeType` und Kategorie ein, nie als Nachricht.
-  /// `FormatException.toString()` echot einen Ausschnitt der
-  /// Quellzeichenkette - genau darueber sind in T-89 Nutzdaten ausgetreten.
   /// A single window day: the planned wake time and the day's earliest
   /// appointment, both as a minute of the local day (0..1439), `-1` for
   /// "none" (docs/TODO.md T-135).
@@ -814,17 +811,17 @@ abstract final class Diag {
     });
   }
 
-  /// Die Eingaben, aus denen ein Wochenplan entsteht (docs/TODO.md T-140).
+  /// The inputs a week plan is computed from (docs/TODO.md T-140).
   ///
-  /// Ohne sie ist ein geloggter Plan nicht nachrechenbar: `maxStepBucket` sagt,
-  /// wie gross der groesste Schritt WAR, aber nicht, wie gross er sein DURFTE.
-  /// Beim ersten echten Geraete-Log musste das Limit aus den Schrittweiten
-  /// zurueckgerechnet werden - und der Maintainer hatte es zwischendurch
-  /// geaendert, was aus dem Log nicht hervorging.
+  /// Without them a logged plan can't be checked by recomputation:
+  /// `maxStepBucket` says how big the largest step WAS, but not how big it
+  /// was ALLOWED to be. On the first real device log, the limit had to be
+  /// reverse-engineered from the step sizes - and the maintainer had changed
+  /// it partway through, which the log didn't show at all.
   ///
-  /// Dauern sind keine Uhrzeiten: "90 Minuten Grenze" verraet nichts ueber
-  /// Schlaf. Die `preferredWakeUpTime` dagegen ist eine Weckzeit und steht nur bei
-  /// eingeschalteter Zeitprotokollierung drin, sonst `-1`.
+  /// Durations are not times of day: "90-minute limit" reveals nothing about
+  /// sleep. `preferredWakeUpTime`, by contrast, is a wake time and is only
+  /// included when clock-time logging is switched on, otherwise `-1`.
   static void planInputs({
     required int maxDailyDeltaMinutes,
     required int wakeUpMinutes,
@@ -839,6 +836,10 @@ abstract final class Diag {
             _includeClockTimes ? preferredWakeUpMinuteOfDay : -1,
       });
 
+  /// The replacement for every `catch (e)` that wrote an exception into a
+  /// log: the exception goes in as `runtimeType` and category, never as a
+  /// message. `FormatException.toString()` echoes a slice of the source
+  /// string - exactly that is how payload data leaked in T-89.
   static void failure({
     required DiagEvent at,
     required Type exceptionType,

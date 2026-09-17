@@ -31,14 +31,14 @@ class ScheduledAlarm extends MyAlarm {
       time: time,
       enabled: data['enabled'],
       gentlewake: data['gentlewake'],
-      // Fehlt bei Alarmen, die vor T-96 gespeichert wurden - dann greift der
-      // Default aus MyAlarm (eine Minute, das alte festverdrahtete Verhalten).
+      // Missing for alarms stored before T-96 - then MyAlarm's default
+      // applies (one minute, the old hardcoded behaviour).
       gentleWakeDuration: data['gentleWakeSeconds'] == null
           ? null
           : Duration(seconds: data['gentleWakeSeconds'] as int),
       tone: data['tone'],
-      // Fehlt bei Alarmen, die vor T-84 gespeichert wurden - dann greift
-      // MyAlarms Default.
+      // Missing for alarms stored before T-84 - then MyAlarm's default
+      // applies.
       volume: (data['volume'] as num?)?.toDouble(),
       id: data['id'],
     );

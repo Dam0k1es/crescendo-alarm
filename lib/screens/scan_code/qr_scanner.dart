@@ -204,12 +204,12 @@ class _QrScannerState extends State<QrScanner> {
       return true;
     }
 
-    // docs/TODO.md T-89: nur das Ergebnis, nie der Wert. Diese Zeile feuert
-    // genau dann, wenn der Nutzer morgens den Alarm abschaltet - also
-    // zuverlaessig jeden Tag.
+    // docs/TODO.md T-89: only the outcome, never the value. This line fires
+    // exactly when the user switches off the alarm in the morning - so
+    // reliably every day.
     debugPrint('=====qrValidator: scanned code VALIDATED');
-    // Kein Parameter fuer den Payload - auch keiner fuer dessen Laenge oder
-    // Hash, beides waere ein Rueckweg zum Geheimnis.
+    // No parameter for the payload - none for its length or a hash either,
+    // both would be a way back to the secret.
     Diag.qrGate(outcome: QrOutcome.accepted, codeWasSet: true);
 
     try {
@@ -277,14 +277,14 @@ class _QrScannerState extends State<QrScanner> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // FR-20: Snooze braucht NIE den Code. Der Scan schaltet ab; Snooze
-            // verschiebt nur - und zwar innerhalb eines Budgets, das den Termin
-            // nicht gefaehrden kann. Einen Scan zu verlangen, um WEITER geweckt
-            // zu werden, waere sinnlos und wuerde den Nutzer im Zweifel dazu
-            // bringen, das Geraet ganz abzuschalten.
-            // `alarmId` ist hier nullable: der Schirm wird auch zum blossen
-            // Einlesen eines Codes geoeffnet, ohne dass etwas klingelt. Dann
-            // gibt es nichts zu verschieben.
+            // FR-20: snooze NEVER needs the code. The scan switches off;
+            // snooze only postpones - within a budget that cannot endanger
+            // the appointment. Requiring a scan just to keep being woken up
+            // would be pointless, and would risk pushing the user to switch
+            // the device off entirely.
+            // `alarmId` is nullable here: the screen is also opened for
+            // plain code scanning, with nothing ringing. Then there is
+            // nothing to postpone.
             if (widget.alarmId case final int ringingId)
               SafeArea(
                 child: Align(

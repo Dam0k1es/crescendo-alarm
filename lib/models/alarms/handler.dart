@@ -57,9 +57,9 @@ class Handler {
     // for the rest of the day - FR-15 forbids manual alarms influencing this
     // chain's state.
     final ringing = _appState.getAlarm(event.id);
-    // docs/TODO.md T-89: der Alarmtyp geht als Type-Code ein, nie als Name -
-    // und ohne jeden Zeitstempel. Eine Historie exakter Weckzeitpunkte waere
-    // ein Schlafmuster und damit identifizierend ohne jeden Namen.
+    // docs/TODO.md T-89: the alarm type goes in as a type code, never as a
+    // name - and with no timestamp at all. A history of exact wake instants
+    // would be a sleep pattern, and thus identifying with no name at all.
     Diag.alarmRang(
       alarmType: ringing.runtimeType,
       knownToAppState: ringing != null,
@@ -93,17 +93,17 @@ class Handler {
   Future<void> handleAlarm(AlarmSettings event) async {
     _fireReplanCheckpoint(event);
 
-    // docs/TODO.md T-89: hier stand ein kDebugMode-Diagnoseblock, der zwei
-    // echte Notifications mit Alarmtyp, Weckzeit und Alarm-ID erzeugte. Sie
-    // waren nur durch kDebugMode geschuetzt, nicht durch main.darts
-    // debugPrint-Abschaltung - landeten also im Notification-Shade und damit
-    // auf dem LOCKSCREEN jedes Testers mit einem Debug-APK (ci.yml laedt fuer
-    // `dev` genau so eines als Artefakt hoch). Eine Historie daraus ist ein
-    // Schlafprofil. Dazu loggte er die exakte Aufwachzeit im Klartext.
+    // docs/TODO.md T-89: a kDebugMode diagnostic block used to sit here,
+    // creating two real notifications with alarm type, wake time, and alarm
+    // id. They were only guarded by kDebugMode, not by main.dart's debugPrint
+    // shutoff - so they landed in the notification shade and thus on the
+    // LOCK SCREEN of every tester with a debug APK (ci.yml uploads exactly
+    // one as an artifact for `dev`). A history of these is a sleep profile.
+    // On top of that, it logged the exact wake time in plain text.
     //
-    // Dieselbe Diagnose - und mehr - liefert jetzt der PII-freie
-    // Ereignis-Logger unten (Diag.alarmRang): Alarmtyp als Type-Code, kein
-    // Zeitstempel, keine ID.
+    // The same diagnosis - and more - is now provided by the PII-free event
+    // logger below (Diag.alarmRang): alarm type as a type code, no
+    // timestamp, no id.
 
     bool stoppingAlarmPossible = true;
 
@@ -149,12 +149,12 @@ class Handler {
             "=====handleAlarm: Failed to check if deactivation code is set: ${e.runtimeType}");
       }
 
-      // FR-20: den URSPRUENGLICHEN Weckzeitpunkt festhalten, bevor
-      // irgendein Schirm erscheint. Nur hier ist er ueberhaupt bekannt - die
-      // Schirme bekommen lediglich eine Alarm-ID. Er traegt das Snooze-Budget,
-      // und `rememberSnoozeOrigin` ueberschreibt einen vorhandenen Eintrag
-      // NICHT: klingelt ein bereits verschobener Ruf erneut, bleibt der erste
-      // Zeitpunkt stehen - sonst begaenne das Budget von vorn.
+      // FR-20: record the ORIGINAL wake instant before any screen appears.
+      // Only here is it known at all - the screens only get an alarm id. It
+      // carries the snooze budget, and `rememberSnoozeOrigin` does NOT
+      // overwrite an existing entry: if an already-postponed call rings
+      // again, the first instant stays in place - otherwise the budget
+      // would restart from zero.
       try {
         _appState.rememberSnoozeOrigin(event.id, event.dateTime);
       } catch (e) {

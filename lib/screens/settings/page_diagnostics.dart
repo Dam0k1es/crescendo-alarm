@@ -4,18 +4,18 @@ import 'package:provider/provider.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/utils/diag/diag_log.dart';
 
-/// Die Ansicht des PII-freien Ereignis-Logs (`docs/TODO.md` T-89).
+/// The view for the PII-free event log (`docs/TODO.md` T-89).
 ///
-/// Warum es diese Seite gibt: aus einem installierten Release-Build kam bisher
-/// gar nichts zurueck - alle Diagnosen liefen ueber `debugPrint`, und
-/// `lib/main.dart` ersetzt das im Release durch eine leere Funktion. Ein
-/// Geraetetest konnte damit nur zeigen, DASS etwas schiefging, nie warum.
+/// Why this page exists: nothing at all used to come back from an installed
+/// release build - every diagnostic went through `debugPrint`, and
+/// `lib/main.dart` replaces that with an empty function in release. A device
+/// test could therefore only show THAT something went wrong, never why.
 ///
-/// Warum Anzeigen und Zwischenablage statt Teilen-Dialog: die App macht
-/// bewusst keinen einzigen Netzaufruf, und ein Teilen-Dialog waere eine neue,
-/// lizenzpruefungspflichtige Abhaengigkeit (`share_plus`). Vor allem aber ist
-/// diese Form ehrlicher - der Nutzer liest genau das, was er weitergibt,
-/// statt einer Blackbox zuzustimmen.
+/// Why display + clipboard instead of a share dialog: the app deliberately
+/// makes not a single network call, and a share dialog would be a new
+/// dependency requiring a licence check (`share_plus`). But above all, this
+/// form is more honest - the user reads exactly what they're passing on,
+/// instead of consenting to a black box.
 class PageDiagnostics extends StatefulWidget {
   const PageDiagnostics({super.key});
 
@@ -37,9 +37,9 @@ class _PageDiagnosticsState extends State<PageDiagnostics> {
     setState(() => _loading = true);
     String text;
     try {
-      // Liest beide Senken - der Hintergrund-Isolate von FR-16s Checkpoint 2
-      // schreibt in einen eigenen Schluessel und hat seinen eigenen
-      // Ringpuffer (dieselbe Falle wie T-69, nur eine Ebene tiefer).
+      // Reads both sinks - FR-16 checkpoint 2's background isolate writes
+      // to its own key and has its own ring buffer (the same trap as T-69,
+      // just one level deeper).
       text = Diag.render(await Diag.readAll());
     } catch (e) {
       text = 'Could not read the diagnostics log (${e.runtimeType}).';
@@ -90,9 +90,9 @@ class _PageDiagnosticsState extends State<PageDiagnostics> {
                       appState.diagnosticsEnabled = value;
                     },
                   ),
-                  // docs/TODO.md T-135. Bewusst ein ZWEITER Schalter, nicht
-                  // Teil des ersten: er hebt genau die Eigenschaft auf, die den
-                  // Absatz darueber wahr macht.
+                  // docs/TODO.md T-135. Deliberately a SECOND switch, not
+                  // part of the first: it lifts exactly the property that
+                  // makes the paragraph above true.
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Also record wake and appointment times'),

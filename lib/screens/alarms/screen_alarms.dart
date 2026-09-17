@@ -301,11 +301,10 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
       alarm?.title = titleController.text;
     });
     bool gentleWake = alarm?.gentlewake ?? _appState.gentleWakeUpEnabled;
-    // docs/TODO.md T-96: dieselbe Vorbelegung wie fuer gentlewake, volume und
-    // tone daneben. Fehlte sie, benutzte ein manueller Alarm stur MyAlarms
-    // Default von einer Minute und ignorierte die Einstellung des Nutzers -
-    // die Fehlerklasse aus T-84 (eine Einstellung mit UI, die den Alarm nie
-    // erreicht).
+    // docs/TODO.md T-96: the same pre-filling as for gentlewake, volume, and
+    // tone alongside it. Without it, a manual alarm would stubbornly use
+    // MyAlarm's default of one minute and ignore the user's setting - the
+    // bug class from T-84 (a setting with a UI that never reaches the alarm).
     Duration gentleWakeDuration =
         alarm?.gentleWakeDuration ?? _appState.gentleWakeUpDuration;
     double volume = alarm?.volume ?? _appState.selectedVolume;
