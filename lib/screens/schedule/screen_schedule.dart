@@ -82,8 +82,36 @@ class _ScreenScheduleState extends State<ScreenSchedule>
     });
   }
 
+  /// calendar_view paints its header and weekday strip in its own default
+  /// colours - a bright red that has nothing to do with this app's theme, and
+  /// that stays light in dark mode. SfCalendar was handed
+  /// `Theme.of(context).colorScheme.surface` for exactly those surfaces, so
+  /// the migration has to hand the same thing to the replacement or it looks
+  /// like a different app (and an unreadable one after dark).
+  HeaderStyle _headerStyle(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return HeaderStyle(
+      decoration: BoxDecoration(color: scheme.surface),
+      headerTextStyle: TextStyle(
+        color: scheme.onSurface,
+        fontSize: 18,
+        fontWeight: FontWeight.w500,
+      ),
+      leftIconConfig: IconDataConfig(color: scheme.onSurface),
+      rightIconConfig: IconDataConfig(color: scheme.onSurface),
+    );
+  }
+
   Widget _buildCalendar(BuildContext context) {
     final background = Theme.of(context).colorScheme.surface;
+    final header = _headerStyle(context);
+    final liveTime =
+        LiveTimeIndicatorSettings(color: context.watch<AppState>().accentColor);
+    // Same reason as the header: the default grid lines are a pink that
+    // belongs to the library, not to this app.
+    final grid = HourIndicatorSettings(
+      color: Theme.of(context).dividerColor,
+    );
     // The key makes a view switch rebuild the widget from scratch, so the newly
     // chosen view opens on the date the user was looking at rather than today.
     final key = ValueKey<String>('${_view.name}-$_displayDate');
@@ -96,6 +124,9 @@ class _ScreenScheduleState extends State<ScreenSchedule>
           initialDay: _displayDate,
           onPageChange: _onPageChange,
           backgroundColor: background,
+          headerStyle: header,
+          liveTimeIndicatorSettings: liveTime,
+          hourIndicatorSettings: grid,
           showLiveTimeLineInAllDays: true,
           heightPerMinute: 1,
         );
@@ -107,6 +138,10 @@ class _ScreenScheduleState extends State<ScreenSchedule>
           initialDay: _displayDate,
           onPageChange: _onPageChange,
           backgroundColor: background,
+          headerStyle: header,
+          weekTitleBackgroundColor: background,
+          liveTimeIndicatorSettings: liveTime,
+          hourIndicatorSettings: grid,
           startDay: WeekDays.monday,
           // `firstDayOfWeek: 1` in SfCalendar terms.
           weekDays: _view == _ScheduleView.workWeek
@@ -127,6 +162,7 @@ class _ScreenScheduleState extends State<ScreenSchedule>
           monthViewStyle: MonthViewStyle(
             initialMonth: _displayDate,
             startDay: WeekDays.monday,
+            headerStyle: header,
           ),
           monthViewBuilders: MonthViewBuilders(onPageChange: _onPageChange),
         );

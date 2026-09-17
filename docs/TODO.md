@@ -808,6 +808,28 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   131 packages, no issues; `trufflehog`: 0 verified/unverified secrets).
 - **Requirement:** R1
 
+### T-141 · Past scheduled alarms pile up in the list forever
+
+- [ ] Prune scheduled alarms that are safely in the past, without touching FR-18's rule that a past
+      alarm is never cancelled.
+- **Why:** seen on the Linux desktop build on 2026-09-17: the Scheduled tab listed seven alarms,
+  11. to 17. September, on the 17th. Six of them are for days that are over. They look live - each
+  carries an enabled toggle - and the list only grows.
+- **Cause, and it is a deliberate rule rather than an oversight:** `planAlarmSync` skips every
+  alarm whose minute is not after `now` when computing `toRemove`, because a past alarm might be
+  *ringing at this very moment* and `Alarm.stop()` on it would defeat the guaranteed wake-up
+  (`lib/models/scheduling/apply_alarms.dart`, the `if (!minute.isAfter(nowMinute)) continue;` in
+  the removal loop). Nothing else ever removes them, so `AppState.scheduledAlarms` accumulates.
+  `pendingDayValues` and `disabledDays` both have a retention bound (T-82, FR-21); this list does
+  not.
+- **Interaction worth noting before fixing:** since FR-21 the toggle on a scheduled alarm writes
+  into `disabledDays` for that alarm's day. On a past entry that writes a veto for a day that is
+  gone - harmless, because `pruneDisabledDays` clears it, but it shows these entries are not inert.
+- **Done when:** an alarm older than the retention bound disappears from the list, an alarm from
+  *today* does not (it may still be ringing), and a test covers both - the second case is the one
+  that matters, and a naive "remove everything in the past" fix gets it wrong.
+- **Requirement:** R3
+
 ### T-27 · The global volume setting never reaches calendar-derived alarms
 
 - [ ] Thread the configured volume through to scheduled alarms.

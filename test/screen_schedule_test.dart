@@ -76,6 +76,23 @@ void main() {
     expect(week.weekDays, hasLength(7));
   });
 
+  testWidgets('the header follows the app theme, not the library default',
+      (tester) async {
+    // calendar_view paints its header in its own bright default colour, which
+    // is what the first Linux run of the migrated screen actually showed. In
+    // dark mode that surface would also have stayed light. SfCalendar was
+    // handed `colorScheme.surface` for exactly these surfaces.
+    await _pumpSchedule(tester);
+
+    final context = tester.element(find.byType(WeekView<Meeting>));
+    final surface = Theme.of(context).colorScheme.surface;
+    final week = tester.widget<WeekView<Meeting>>(find.byType(WeekView<Meeting>));
+
+    expect(week.headerStyle?.decoration?.color, surface);
+    expect(week.weekTitleBackgroundColor, surface);
+    expect(week.backgroundColor, surface);
+  });
+
   testWidgets('the week starts on Monday', (tester) async {
     // `firstDayOfWeek: 1` in the SfCalendar configuration this replaced. Easy
     // to lose in a migration and immediately wrong for the user.
