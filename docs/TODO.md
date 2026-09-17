@@ -14,11 +14,13 @@ could not be confirmed from the repository it says so instead of asserting it.
 Conventions:
 
 - IDs (`T-01` …) are stable. Reference them in commit messages; never renumber an existing one.
-- **Der Status steht in der Überschrift**, nicht nur im Rumpf — `BEHOBEN`, `WIDERLEGT`,
-  `BEANTWORTET`, `TEILWEISE`/`GROSSTEILS`, oder `OFFENE SPEC-ENTSCHEIDUNG`. Eine Überschrift ohne
-  solchen Zusatz bedeutet: offen. Wer ein Item schliesst, zieht die Überschrift mit; sonst ist die
-  Liste nicht mehr überfliegbar, und genau das ist ihr ganzer Wert. (Am 2026-09-11 trugen 24 längst
-  erledigte Items ihren Status nur im Rumpf.)
+- **The status belongs in the heading**, not only in the body: `RESOLVED`, `DISPROVEN`,
+  `ANSWERED`, `PARTIALLY`/`LARGELY RESOLVED`, `DECIDED`, or `OPEN SPEC DECISION`. A heading without
+  such a suffix means: open. Whoever closes an item drags the heading along; otherwise the list
+  stops being skimmable, and that is its entire value. (On 2026-09-11, 24 long-finished items
+  carried their status only in the body.)
+  Older headings still use the German words this list was started with (`BEHOBEN`, `WIDERLEGT`,
+  `BEANTWORTET`, `TEILWEISE`/`GROSSTEILS`); they are translated as items get touched.
 - **P0** blocks any push to `master` / production. **P1** must be resolved or consciously accepted
   before a public release. **P2** is real work that does not block a release. **P3** is
   housekeeping.
@@ -129,6 +131,13 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   and `==`. No call site cancels a scheduled alarm.
 - **Done when:** toggling an alarm off cancels it in `Alarm.getAlarms()`, survives an app restart,
   and a test asserts both.
+- **How far the tests actually reach, stated plainly:** the restart half is asserted
+  (`test/disabled_manual_alarm_test.dart`, through a real storage round-trip). The
+  `Alarm.getAlarms()` half is **not** assertable in the unit suite - `Alarm.set` has no platform
+  channel there, so no test can observe a platform alarm appearing or disappearing. What is
+  asserted instead is that the applier calls `stopAlarm` with this alarm's id and arms nothing.
+  The remaining step is a device check, which fits into the run of
+  `scripts/verify-alarm-survival.sh` (T-93).
 - **Requirement:** R3
 
 ### T-04 · Alarm survival across reboot and force-stop is unverified
@@ -158,7 +167,7 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   the foreground.
 - **Requirement:** R3
 
-### T-05 · A direct dependency is not open source — GPLv3 conflict — BEHOBEN (2026-09-17)
+### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
       and `syncfusion_localizations`) is out; the Schedule screen now draws with `calendar_view`
@@ -422,9 +431,19 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   half of this TODO's "done when") remains open and is a code change, out of scope for this pass.
 - **Requirement:** R4
 
-### T-16 · The QR test seam does not isolate the camera, and ships in release builds
+### T-16 · The QR test seam does not isolate the camera, and ships in release builds — LARGELY RESOLVED (2026-09-17)
 
-- [ ] Make the override actually bypass the camera, and keep it out of the release binary.
+- [x] The override now really bypasses the camera. With the scanner swap (T-33) the live preview is
+      not built at all while `debugScanStreamOverride` is set, so nothing can auto-start a
+      controller behind the seam's back, and the lifecycle handler no longer cancels and re-listens
+      - it has nothing left to do, because the replacement widget owns its own camera. The
+      "unrecoverable single-subscription" failure described below cannot occur any more.
+- [x] The seam no longer leaks a scanner package's type: it carries the app's own `ScanResult`.
+- [ ] Still open: it remains a plain mutable static, compiled into release builds. An injected
+      dependency would be the proper fix, but `Handler.handleAlarm` constructs `QrScanner()` with
+      nowhere to thread one through, so this needs a small design decision rather than an edit.
+      What the seam now buys, and did not before, is the gate's negative unit test
+      (`test/qr_scanner_gate_test.dart`, T-08).
 - **Why:** with the override set, the scanner widget still starts the real camera because the
   controller auto-starts — so the "Test mode: never touch the real camera" comment is false. Worse,
   the resulting initialised controller defeats the lifecycle guard, so an `inactive` → `resumed`
@@ -459,7 +478,7 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   `docs/REQUIREMENTS.md` corrected to state what the original review actually covered.
 - **Requirement:** R11
 
-### T-33 · Proprietary Google/ML Kit binaries are a second GPLv3 exposure — BEHOBEN (2026-09-17)
+### T-33 · Proprietary Google/ML Kit binaries are a second GPLv3 exposure — RESOLVED (2026-09-17)
 
 - [x] Assessed **and** resolved. The maintainer chose to replace the scanner rather than grant a
       GPLv3 §7 linking exception, which as sole copyright holder he could have done in a few lines
@@ -608,9 +627,23 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
 - **Done when:** a first-run user can read what is collected before granting anything.
 - **Requirement:** R7, R11
 
-### T-49 · Requirement claims about permissions do not match the built APK — PARTIALLY RESOLVED (2026-09-08)
+### T-49 · Requirement claims about permissions do not match the built APK — PARTIALLY RESOLVED (2026-09-08, again 2026-09-17)
 
-- [ ] Name every permission the shipped app actually holds, and capture traffic during an E2E run.
+- [x] The merged manifest is now compared against what the app actually does, not just read. The
+      scanner swap (T-33) changed the set in three ways, found by diffing `aapt2 dump permissions`
+      on the APKs before and after:
+      **`INTERNET` disappeared** - it came with the proprietary ML Kit stack, so an app that
+      advertises itself as fully offline stopped asking for network access as a side effect of a
+      licence fix (R7 updated);
+      **`RECORD_AUDIO` appeared**, merged in by `camera_android_camerax`, which the new scanner
+      pulls. The scanner creates its controller with `enableAudio: false`, so it is never used -
+      an alarm clock asking for the microphone is exactly the unexplainable permission this item
+      is about, and it is removed again with `tools:node="remove"`;
+      **`WRITE_EXTERNAL_STORAGE` (maxSdk 28) appeared** via `image_picker` and is removed the same
+      way. `image_picker` also lost its direct entry in `pubspec.yaml` - nothing in `lib/` had used
+      it since the gallery button went (T-44).
+- [ ] Still open: the full "name every permission and say why" table, and a traffic capture during
+      an E2E run.
 - **Why:** R7 asserted "no user data leaves the device — met" on the basis of a check scoped to
   Dart source in `lib/`, but the shipped APK declares `INTERNET` and `ACCESS_NETWORK_STATE`, pulled
   in through plugin manifest merging. That does not prove data leaves the device, and the offline
@@ -838,7 +871,7 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
 - **Evidence:** `lib/app_state.dart:487`.
 - **Done when:** the ramp length is either a setting or documented as fixed at 60 seconds.
 
-### T-44 · A dead gallery-scan button would bypass the camera gate if wired in — BEHOBEN (2026-09-17)
+### T-44 · A dead gallery-scan button would bypass the camera gate if wired in — RESOLVED (2026-09-17)
 
 - [x] Gone with the scanner swap (T-33): `scanner_button_widgets.dart` was deleted along with the
       rest of the mobile_scanner-specific widgets, and the replacement's own gallery button is
@@ -1102,8 +1135,9 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   fetched. Once a week-start-date is in `_fetchedCalendarWeeks`, `updateCalendarData`
   (`screen_schedule.dart:257-`) skips fetching it again for as long as the process lives, since
   nothing anywhere ever clears or reassigns that list. A calendar edit for a day already in this set
-  is silently invisible to the app until the next process restart - this affects the *current*
-  Syncfusion-based schedule display today, and would silently break scheduling-v2's FR-11
+  is silently invisible to the app until the next process restart - this affects the schedule
+  display today (unchanged by the move to calendar_view in T-05: the caching sits in
+  `updateCalendarData`, not in the widget), and would silently break scheduling-v2's FR-11
   revisability and FR-8's daily replanning if they reused this same path.
 - **Evidence:** `lib/app_state.dart:28` (`_fetchedCalendarWeeks` field, never cleared/reassigned
   anywhere else in `lib/`); `lib/utils/utils.dart:82-109` (`preloadCalendarData`, marks weeks fetched

@@ -1,4 +1,23 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- docs/TODO.md T-49: permissions a dependency merges in that this app
+         never exercises are removed here, so the shipped manifest lists what
+         the app actually does and nothing more.
+
+         RECORD_AUDIO arrives with camera_android_camerax, which flutter_zxing
+         pulls for the QR scanner (docs/TODO.md T-33). The scanner creates its
+         CameraController with `enableAudio: false`, so the microphone is never
+         opened - but without this line an alarm clock would ask the user for
+         microphone access, which is exactly the kind of permission nobody can
+         explain later.
+
+         WRITE_EXTERNAL_STORAGE (maxSdk 28) arrives with image_picker, a
+         transitive dependency of the same package. The gallery path it exists
+         for is switched off (T-44), and the app writes nothing outside its own
+         sandbox. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
 
     <application
         android:name="${applicationName}"

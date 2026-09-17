@@ -249,8 +249,9 @@ removed the offending AAR from the build, so the workaround lost its reason. Ver
   resolve - any build fails with `Failed to find target with hash string 'android-37'`. Revisit
   once upstream publishes a fixed release.
 - **`timezone: ^0.11.0`** - `device_calendar` (even its latest release) still pins
-  `timezone: ^0.9.0`, while `syncfusion_flutter_calendar` requires `^0.11.0` - a real unresolved
-  conflict between the two packages' declared constraints. Forcing 0.11.x is safe in practice: the
+  `timezone: ^0.9.0`, while this app itself declares `^0.11.0` and relies on 0.11's refreshed IANA
+  data for the frame handling in `lib/models/scheduling/`. (Until 2026-09-17 the other side of this
+  conflict was `syncfusion_flutter_calendar`; that package is gone, this override is not.) Forcing 0.11.x is safe in practice: the
   public API (`TZDateTime`, `Location`, `getLocation`) is unchanged between 0.9.x and 0.11.x, only
   the bundled IANA timezone data was refreshed. Revisit once `device_calendar` allows `^0.11.0`.
 
@@ -284,7 +285,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **310 tests across 32 files**, and CI runs them six times over -
+`flutter test` currently runs **334 tests across 37 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -391,7 +392,8 @@ snapshot file as still accurate.
 ## Project documentation
 
 `docs/` also holds `REQUIREMENTS.md` (essential pre-`master` requirements - check this before any
-production push), `TODO.md` (every known open task, prioritised, with evidence and an acceptance
+production push), `licence-position.md` (the tracked GPLv3 decision for R8/R9 - see "Licence
+position" above), `TODO.md` (every known open task, prioritised, with evidence and an acceptance
 criterion - the living record of what's actually wrong or missing, as opposed to the two frozen
 snapshots above), `device-trial-checklist.md` (the manual counterpart to the E2E suite, with a
 result field per line), `scheduling-v2-spec.md` (FR-1 … FR-21), plus `personas.md`,

@@ -132,9 +132,15 @@ camera for QR deactivation).
   CI emulator runs without audio - `docs/TODO.md` T-15), the QR gate is tested only with the
   correct code and only through a debug seam that does not isolate the real camera (`docs/TODO.md`
   T-08, T-16), and neither dismissal test confirms the alarm actually stopped rather than just
-  navigating away (`docs/TODO.md` T-09). The app's declared `CAMERA` permission also comes from the
-  `mobile_scanner` plugin via manifest merging, not from `android/app/src/main/AndroidManifest.xml`
-  directly (`docs/TODO.md` T-49).
+  navigating away (`docs/TODO.md` T-09). The app's declared `CAMERA` permission comes from the
+  camera plugin behind the QR scanner via manifest merging, not from
+  `android/app/src/main/AndroidManifest.xml` directly (`docs/TODO.md` T-49). Since the scanner swap
+  (T-33) the merged manifest is checked against what the app actually does: `RECORD_AUDIO` and
+  `WRITE_EXTERNAL_STORAGE`, merged in by that plugin's own dependencies and never exercised, are
+  removed again with `tools:node="remove"`.
+
+  The negative half of the QR gate is no longer E2E-only: `test/qr_scanner_gate_test.dart` asserts
+  that a wrong code is not accepted, with `Diag.qrGate` as the oracle.
 
 ## R5 - Quality/stability checks don't degrade the runtime user experience
 
@@ -154,8 +160,10 @@ and the calendar entries the user explicitly grants access to.
   untracked file:
   - No network SDKs are used from `lib/` (though see R7 on the app's declared `INTERNET`
     permission).
-  - No filesystem access outside the app's own sandbox and (for QR-from-gallery, currently
-    unreachable code - `docs/TODO.md` T-44) `READ_EXTERNAL_STORAGE`.
+  - No filesystem access outside the app's own sandbox. The QR-from-gallery path that
+    `READ_EXTERNAL_STORAGE` existed for is gone (`docs/TODO.md` T-44), and the replacement
+    scanner's own gallery button is switched off; `WRITE_EXTERNAL_STORAGE`, which its transitive
+    `image_picker` merged in, is removed from the manifest again.
   - `android:allowBackup` was found unset (defaults to `true`) during an earlier pass - the
     deactivation-code payload and other prefs, stored via `SharedPreferences`, would have been
     included in Android's auto-backup / `adb backup` by default, letting anyone with adb/backup
@@ -177,12 +185,15 @@ No user data leaves the device. The app must be GDPR-compliant.
   handling and has been corrected to match what the app actually collects (calendar reads, camera
   for QR scanning, locally stored alarms/settings/deactivation code) rather than the location/NFC
   data it does not.
-- **Status: partially met, scope narrower than the requirement.** "No data leaves the device" has
-  only been checked against `lib/` Dart source - the built APK additionally declares `INTERNET` and
-  `ACCESS_NETWORK_STATE`, pulled in by a plugin's manifest merge rather than by this project's own
-  code (`docs/TODO.md` T-49). Nothing found so far suggests these permissions are exercised, but
-  that is an absence of evidence, not evidence of absence - a network capture during an E2E run
-  would close this properly. GDPR compliance otherwise follows straightforwardly from "no data ever
+- **Status: partially met, scope narrower than the requirement - but materially better since
+  2026-09-17.** "No data leaves the device" had only been checked against `lib/` Dart source, while
+  the built APK additionally declared `INTERNET` and `ACCESS_NETWORK_STATE`, merged in by a plugin
+  rather than by this project's own code (`docs/TODO.md` T-49). **`INTERNET` is now gone**: it came
+  with the proprietary ML Kit stack, and replacing that scanner for licence reasons (T-33) removed
+  it as a side effect - verified by comparing `aapt2 dump permissions` on the APKs before and
+  after. An app that claims to be fully offline and holds the INTERNET permission is a
+  contradiction a reader can see; that one is resolved. `ACCESS_NETWORK_STATE` remains, and a
+  network capture during an E2E run is still what would close this requirement properly. GDPR compliance otherwise follows straightforwardly from "no data ever
   leaves the device," but this hasn't been reviewed by anyone with actual legal expertise - treat
   "met" here as a technical assessment, not legal sign-off.
 
@@ -257,7 +268,7 @@ manual intervention/override should always remain possible (no fully opaque auto
 
 ---
 
-**Summary of open gaps (R1 partial, R3, R4 partial, R8, R9):** R2 is **no longer** among them - the
+**Summary of open gaps (R1 partial, R3, R4 partial, R7 partial, R9 one condition):** R2 is **no longer** among them - the
 scheduling-v2 rebuild (2026-09) replaced the old engine wholesale and is covered by unit tests; see
 R2 above for the one remaining caveat, which is really R3. R3 and part of R4 are no longer explained
 by "no build has ever run on a device or emulator" - that build now happens on every release and has
@@ -265,9 +276,10 @@ surfaced what's actually still missing: no reboot/force-stop survival test (R3),
 audio/the gentle-wake ramp or a camera-isolated QR test (R4). R1 is only partial now because two
 findings are *accepted* rather than fixed, each with a dated rationale in
 `.github/security-exceptions.json` - not because a check is missing or non-gating; every tool in
-the gate can fail the run, on the branch path and the tag path alike. R8 and R9 are a separate, newly-identified licensing conflict
-(Syncfusion and Google/ML Kit are not open-source, and GPLv3 obligations for the distributed APK
-are unaddressed) - unrelated to device testing and requiring a licensing decision, not more
-testing. R10 remains a separate, still-open documentation gap (asset provenance). See
+the gate can fail the run, on the branch path and the tag path alike. R8 and R9 were a separate licensing conflict (Syncfusion and Google/ML Kit
+are not open-source, and GPLv3 obligations for the distributed APK were unaddressed). That is
+resolved as of 2026-09-17: both dependencies were replaced rather than covered by a licence
+exception, and `docs/licence-position.md` records the decision. One condition remains rather than a
+task - the repository has to be public before the APK reaches anyone else. R10 remains a separate, still-open documentation gap (asset provenance). See
 `docs/TODO.md` for the full, prioritised, evidence-backed list every one of these gaps is now
 tracked under.

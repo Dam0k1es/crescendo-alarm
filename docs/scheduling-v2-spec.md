@@ -3,7 +3,7 @@
 > Status: entworfen, mehrfach simuliert und gegen den tatsächlichen Code/echte Abhängigkeiten
 > (Android, Flutter, `device_calendar`, `awesome_notifications`, `alarm`, `timezone`) auf
 > Realisierbarkeit geprüft. **Phase 0–5 implementiert und anschließend konsolidiert (2026-09).**
-> 18 funktionale Anforderungen (FR-1–18), jede mit exakter Formel/exaktem Verfahren und mindestens
+> 21 funktionale Anforderungen (FR-1–21), jede mit exakter Formel/exaktem Verfahren und mindestens
 > einem durchgerechneten Testfall. Ersetzt `lib/models/scheduling/scheduling.dart`s
 > `getEarliestEvent`/`adjustAlarmTimes`/`getStartTimeForDate` vollständig, nicht nur punktuell.
 > Passend zum projektweiten TDD-Grundsatz (`CLAUDE.md`, "Development process") existiert pro FR
@@ -12,7 +12,7 @@
 > **Was der TDD-Zyklus selbst zutage gebracht hat** (die FR-Texte unten sind entsprechend
 > korrigiert, siehe FR-4, FR-5, FR-6, FR-7, FR-9): mehrere reale Logikfehler, die eine rein
 > textliche Spec-Prüfung nicht gefunden hatte. Phase 4 brachte zwei in Phase 0 übersehene
-> FR-3-Felder nach (`wunschzeit`, `maxDailyDelta`; `lastEffectiveWakeTime` bleibt bewusst kein
+> FR-3-Felder nach (`preferredWakeUpTime`, `maxDailyDelta`; `lastEffectiveWakeTime` bleibt bewusst kein
 > eigenes Feld, sondern wird aus `pendingDayValues` abgeleitet).
 >
 > **Konsolidierungsdurchgang 2026-09-10** (Befunde aus einer Konsistenzprüfung des gesamten
@@ -34,7 +34,7 @@
 >   `runSchedulingCheckpoint({trigger})` (`lib/models/scheduling/checkpoint.dart`). Er ist gegen
 >   sich selbst serialisiert (vorher konnten Ring- und Resume-Auslöser verschränkt laufen) und
 >   führt die Sequenz vollständig aus, inklusive der Bettzeit-Notification.
-> - **T-78:** FR-9s Sicherheitsventil greift nicht bei gesetzter `wunschzeit` (siehe FR-9) - vorher
+> - **T-78:** FR-9s Sicherheitsventil greift nicht bei gesetzter `preferredWakeUpTime` (siehe FR-9) - vorher
 >   war es für solche Nutzer eine Einbahnstraße in einen dauerhaft toten Wecker.
 > - **T-79/T-81/T-82/T-84/T-88:** Plugin-Initialisierung wird abgewartet, FR-9 meldet einmal pro
 >   Episode, `pendingDayValues` ist nach unten begrenzt, und Ton/Lautstärke/Gentle-Wake gehören zum
@@ -116,13 +116,13 @@ dünne AppState-Schicht (Architektur) liest den tatsächlichen, aktuellen Versat
 | Feld | Typ | Bemerkung |
 |---|---|---|
 | `maxDailyDelta` | `Duration` | `> 0`; System-Minimum **15 Minuten** wird erzwungen (bei 0 hätte der Parameter für `hardFloor`-Segmente keine Wirkung mehr - er würde nur dort greifen, wo er am wenigsten gebraucht wird) |
-| `wunschzeit` | `TimeOfDay?` | reine Uhrzeit, **kein** Instant, **kein** Datum/Zone - wird erst am Verwendungsort (FR-4/FR-16) mit Tag+aktueller Zone kombiniert; deshalb "überträgt" FR-16 bei Zeitzonenwechsel nichts an `wunschzeit` selbst |
+| `preferredWakeUpTime` | `TimeOfDay?` | reine Uhrzeit, **kein** Instant, **kein** Datum/Zone - wird erst am Verwendungsort (FR-4/FR-16) mit Tag+aktueller Zone kombiniert; deshalb "überträgt" FR-16 bei Zeitzonenwechsel nichts an `preferredWakeUpTime` selbst |
 | `lastCheckedUtcOffset` | `Duration` | Versatz beim letzten FR-16-Checkpoint |
 | `gapDayCounter` | `int` | rollierender Sicherheitsventil-Zähler (FR-9) |
 | `lastReplanDate` | `Date?` | **nur** FR-17s Tagessperre: "lief heute schon ein Checkpoint?". Von FR-16 Checkpoint 2 **nicht** aktualisiert |
 | `lastProcessedConcludedDay` | `Date?` | Fortschritt der Tagesfortschreibung: bis zu welchem *abgeschlossenen* Tag haben FR-9 und FR-12 gezählt bzw. geprüft? Getrennt von `lastReplanDate` (`docs/TODO.md` T-75), weil beide Bedeutungen auseinanderfallen, sobald ein Checkpoint läuft, für den heute noch nicht abgeschlossen ist |
-| `pendingDayValues` | `Map<Datum, Instant?>` | die geplanten Werte selbst; `null` = kein Alarm für diesen Tag (Lückentag ohne `wunschzeit`, oder FR-9s Ventil). Revidierbar für jeden noch nicht ausgelösten Tag (FR-11), danach für immer fix. Nach unten begrenzt auf "ab vorgestern" (T-82) |
-| `pendingDayInstantAnchored` | `Map<Datum, bool>` | pro geplanten Tag: kam der Wert direkt aus einem echten `hardFloor` (instant-verankert) oder aus `wunschzeit`/der Kurve (wall-clock-verankert)? FR-16 Checkpoint 2 hat keinen Kalenderzugriff und kann das nicht neu ableiten |
+| `pendingDayValues` | `Map<Datum, Instant?>` | die geplanten Werte selbst; `null` = kein Alarm für diesen Tag (Lückentag ohne `preferredWakeUpTime`, oder FR-9s Ventil). Revidierbar für jeden noch nicht ausgelösten Tag (FR-11), danach für immer fix. Nach unten begrenzt auf "ab vorgestern" (T-82) |
+| `pendingDayInstantAnchored` | `Map<Datum, bool>` | pro geplanten Tag: kam der Wert direkt aus einem echten `hardFloor` (instant-verankert) oder aus `preferredWakeUpTime`/der Kurve (wall-clock-verankert)? FR-16 Checkpoint 2 hat keinen Kalenderzugriff und kann das nicht neu ableiten |
 | `disabledDays` | `Set<Datum>` | FR-21: Tage, fuer die der Nutzer den geplanten Wecker ausdruecklich **abgeschaltet** hat. Getrennt von `pendingDayValues`, weil `null` dort "nichts geplant" heisst (FR-9/FR-10) und von der naechsten Planung ueberschrieben wuerde - das Veto des Nutzers darf das nicht |
 | `snoozeEnabled` | `bool` | FR-20: darf der Nutzer den Wecker verschieben? Standard **false** |
 | `snoozeTime` | `Duration` | FR-20: um wie viel ein Druck auf Snooze verschiebt. Standard **5 Minuten** |
@@ -141,29 +141,29 @@ auseinanderlaufen können.
 Ein Tag ohne eigenen `hardFloor`, der nicht innerhalb eines aktiven Glättungs-Segments liegt (FR-7
 legt fest, wann ein Segment beginnt):
 
-- Ohne `wunschzeit`: Wert hält bei `lastEffectiveWakeTime`s Uhrzeit, aber auf dem **echten,
+- Ohne `preferredWakeUpTime`: Wert hält bei `lastEffectiveWakeTime`s Uhrzeit, aber auf dem **echten,
   tatsächlich geplanten Kalendertag** (`lastEffectiveWakeTime`s Datum + 1), nicht auf
   `lastEffectiveWakeTime`s eigenem Datum - sonst trägt der gespeicherte Wert das Datum von gestern,
   obwohl er für heute gilt (in der Implementierung beim TDD-Zyklus selbst als echter Bug gefunden:
   eine erste Fassung ließ das Datum unverändert).
-- Mit `wunschzeit`: Wert driftet Richtung `wunschzeit` (kombiniert mit dem oben genannten
-  tatsächlichen Kalendertag, nicht mit `lastEffectiveWakeTime`s eigenem - `wunschzeit` selbst trägt
+- Mit `preferredWakeUpTime`: Wert driftet Richtung `preferredWakeUpTime` (kombiniert mit dem oben genannten
+  tatsächlichen Kalendertag, nicht mit `lastEffectiveWakeTime`s eigenem - `preferredWakeUpTime` selbst trägt
   ohnehin kein Datum, FR-3), begrenzt durch `maxDailyDelta`/Tag, stoppt bei Erreichen (kein
   Überschießen) - **zusätzlich gedeckelt durch FR-7s Rückwärts-Prüfung**, sofern ein künftiger realer
   `hardFloor` im Fenster existiert: der Drift darf nie mehr Reserve verbrauchen, als für dessen
-  fristgerechte Erreichung noch nötig ist. Der Abstand zu `wunschzeit` wird dabei wie in FR-6
+  fristgerechte Erreichung noch nötig ist. Der Abstand zu `preferredWakeUpTime` wird dabei wie in FR-6
   ausschließlich über die Uhrzeit-Komponenten verglichen (siehe FR-6s Klarstellung), nicht über die
   volle Kalenderdifferenz.
 
 Die folgenden Tests prüfen **isoliert** die Drift-Regel selbst, ohne FR-7s Deckel (kein künftiger
 `hardFloor` vorausgesetzt) - das Zusammenspiel mit dem Deckel testen bereits FR-7s eigene Testfälle.
 
-- **Test:** `V=07:00`, `wunschzeit=null` → unverändert **07:00**.
-- **Test:** `V=07:00`, `wunschzeit=09:00`, `maxDailyDelta=30min` → Distanz 2:00 > 30min → **07:30**.
-- **Test:** `V=07:00`, `wunschzeit=05:00`, `maxDailyDelta=30min` → Distanz 2:00 > 30min → **06:30**.
-- **Test (kein Überschießen):** `V=07:00`, `wunschzeit=07:15`, `maxDailyDelta=30min` → Distanz
+- **Test:** `V=07:00`, `preferredWakeUpTime=null` → unverändert **07:00**.
+- **Test:** `V=07:00`, `preferredWakeUpTime=09:00`, `maxDailyDelta=30min` → Distanz 2:00 > 30min → **07:30**.
+- **Test:** `V=07:00`, `preferredWakeUpTime=05:00`, `maxDailyDelta=30min` → Distanz 2:00 > 30min → **06:30**.
+- **Test (kein Überschießen):** `V=07:00`, `preferredWakeUpTime=07:15`, `maxDailyDelta=30min` → Distanz
   15min < 30min → **exakt 07:15**, nicht 07:30.
-- **Test (Ziel erreicht):** `V=07:00`, `wunschzeit=07:00` → unverändert **07:00**.
+- **Test (Ziel erreicht):** `V=07:00`, `preferredWakeUpTime=07:00` → unverändert **07:00**.
 
 ## FR-5 — Zusammenfassung realer `hardFloor`-Punkte zu Segmenten ("Runs")
 
@@ -174,25 +174,25 @@ Reale `hardFloor`-Punkte im Fenster: `t1, t2, …, tn`, chronologisch. Ausgehend
 Punkt in Frage, dessen Uhrzeit **früher** liegt als `A` (ΔT nach FR-6s Klarstellung, also rein über
 die Uhrzeit-Komponenten). Ein Punkt, der gleich oder später liegt, fordert nichts: wer um 06:45
 aufsteht, erfüllt einen Termin um 11:00 längst. Für einen solchen Tag gilt FR-4 (Drift zur
-`wunschzeit`, begrenzt durch `maxDailyDelta`), und der `hardFloor` wirkt nur noch als **Deckel**
+`preferredWakeUpTime`, begrenzt durch `maxDailyDelta`), und der `hardFloor` wirkt nur noch als **Deckel**
 (FR-2s Obergrenze), nie als Zugseil.
 
 Das folgt unmittelbar aus FR-2 („Der geplante Wert darf früher liegen - **immer erlaubt**") und aus
 Schritt 1s eigenem Satz („`hardFloor` ist ausschließlich eine Obergrenze, nie eine
 Richtungsvorgabe"), stand aber bis 2026-09-11 nirgends als Verfahrensregel - mit der Folge, dass
 jeder Punkt zum Ziel wurde, auch ein späterer. Auf einem echten Kalender lief die Weckzeit dadurch
-von 06:45 über 08:00 auf 11:00, bei `maxDailyDelta` = 30 min und `wunschzeit` = 07:00
+von 06:45 über 08:00 auf 11:00, bei `maxDailyDelta` = 30 min und `preferredWakeUpTime` = 07:00
 (`docs/TODO.md` T-132).
 
 Wichtig zur Abgrenzung: die Punkte werden dadurch **nicht** aus der Liste entfernt. Sie nehmen
 weiterhin an Schritt 1s Verletzungsprüfung teil - genau davor warnt Schritt 1s Absatz über den
 verworfenen „Richtungsfilter". Ausgeschlossen sind sie nur als *Ziel*.
 
-- **Test:** `A=06:45`, `t1(Tag 1)=08:00`, `t2(Tag 2)=11:00`, `wunschzeit=07:00`,
-  `maxDailyDelta=30min` → jeder Tag **07:00** (FR-4 erreicht die `wunschzeit` am ersten Tag und
+- **Test:** `A=06:45`, `t1(Tag 1)=08:00`, `t2(Tag 2)=11:00`, `preferredWakeUpTime=07:00`,
+  `maxDailyDelta=30min` → jeder Tag **07:00** (FR-4 erreicht die `preferredWakeUpTime` am ersten Tag und
   hält), **keine** Overrun-Meldung. Nicht 08:00/11:00.
 - **Test:** derselbe Anker, ein einzelner Termin `05:00` in vier Tagen → Run nach früh:
-  `06:18 / 05:52 / 05:26 / 05:00`, danach Drift zurück zur `wunschzeit`.
+  `06:18 / 05:52 / 05:26 / 05:00`, danach Drift zurück zur `preferredWakeUpTime`.
 
 1. Bestimme den am weitesten in der Zukunft liegenden Punkt `t_m` (m ≥ 1), sodass die gleichmäßige
    Verteilung `A→t_m` (FR-6) **keinen** Zwischenpunkt `t1…t_{m-1}` über seinen eigenen `hardFloor`
@@ -297,33 +297,33 @@ nur Punkte echt vor heute liegend, also ist `N_Rest ≥ 1` immer gegeben) - **ke
 `N_Rest ≤ 1`-Ausnahme, die direkt zu FR-4 durchreicht: eine erste Fassung enthielt eine solche
 Ausnahme, die sich beim Durchrechnen eines mehrtägigen Runs als falsch erwies - sie hätte einen
 bereits laufenden, weiterhin gültigen Run am vorletzten Tag fälschlich abgebrochen und auf reinen
-`wunschzeit`-Drift zurückgesetzt. FR-6s eigene `N=1`-Ausnahme (Einzeltag-Sprung ist kein
+`preferredWakeUpTime`-Drift zurückgesetzt. FR-6s eigene `N=1`-Ausnahme (Einzeltag-Sprung ist kein
 Spezifikationsfehler) bleibt davon unberührt und greift ganz normal, sobald FR-6 selbst mit `N=1`
 aufgerufen wird.
 
 - Prüfe `|Wert_heute − F| / N_Rest ≤ maxDailyDelta` für den vorgesehenen Wert (Halten oder voller
-  `wunschzeit`-Schritt) - auch hier gilt FR-6s Klarstellung: die Differenz ist uhrzeit-, nicht
+  `preferredWakeUpTime`-Schritt) - auch hier gilt FR-6s Klarstellung: die Differenz ist uhrzeit-, nicht
   kalenderbasiert:
   - **Erfüllt:** heute bleibt Lückentag, FR-4 unverändert angewendet.
   - **Bereits beim Halten verletzt:** heute ist **Tag 1 des Runs** - FR-6 direkt angewendet, mit
     `N = N_F − i + 1` (nicht `N_Rest` - der reserviert bewusst einen Tag Puffer, damit ein
-    einzelner `wunschzeit`-Schritt nicht unbemerkt genau die Reserve auffrisst, die der
+    einzelner `preferredWakeUpTime`-Schritt nicht unbemerkt genau die Reserve auffrisst, die der
     übernächste Tag noch braucht).
-  - **Nur der volle `wunschzeit`-Schritt verletzt:** Drift wird auf das größtmögliche Maß reduziert,
+  - **Nur der volle `preferredWakeUpTime`-Schritt verletzt:** Drift wird auf das größtmögliche Maß reduziert,
     das die Bedingung noch erfüllt (im Extremfall 0).
 
 Reicht selbst sofortiges Halten nicht (`N_Rest` bereits verletzt), beginnt der Run sofort heute,
 Überschreitungsregel (FR-6) greift. Das Verfahren behandelt "`F` früher" und "`F` später" als `V`
 symmetrisch - keine gesonderte Politik für eine Richtung.
 
-- **Test (ein `hardFloor`-Punkt):** `wunschzeit=10:00`, `A=07:00` (So), `F(Sa)=05:00`,
+- **Test (ein `hardFloor`-Punkt):** `preferredWakeUpTime=10:00`, `A=07:00` (So), `F(Sa)=05:00`,
   `maxDailyDelta=30min`.
   - Montag (`i=1, N_F=6, N_Rest=5`): Halten erfüllt `24min≤30min`. Voller Drift → `07:30` erfüllt
     `30min≤30min` (Grenze) → **Montag=07:30**.
   - Dienstag (`i=2, N_Rest=4`): Halten bei 07:30 verletzt `37,5min>30min` → **Tag 1 des Runs**,
     `N=5` (Di–Sa): **Di=07:00, Mi=06:30, Do=06:00, Fr=05:30, Sa=05:00.**
 - **Test (zwei `hardFloor`-Punkte, FR-5-Ziel ≠ nächster Punkt):** `A=07:00` (So), `t1(Fr)=06:00`
-  (locker), `t2(Sa)=04:00` (streng), `maxDailyDelta=30min`, keine `wunschzeit`.
+  (locker), `t2(Sa)=04:00` (streng), `maxDailyDelta=30min`, keine `preferredWakeUpTime`.
   - FR-5 (hypothetisch): `t_m=t2` (Verteilung `A→t2` über 6 Tage ergibt an `t1`s Tag 04:30, nicht
     später als `t1`s 06:00) → `F=t2, N_F=6`.
   - Montag (`i=1, N_Rest=5`): Halten bei 07:00 verletzt bereits `36min>30min` (obwohl `t1` allein
@@ -359,24 +359,24 @@ genau diesem Checkpoint, in den Zähler ein - nicht erst später nachgetragen. S
 zurückzusetzender Zustand außer der einen Zahl. Erreicht der Zähler ≥7, wird automatische
 Fortschreibung gestoppt und der Nutzer benachrichtigt.
 
-**Ausnahme: gesetzte `wunschzeit` (nachträglich ergänzt, `docs/TODO.md` T-78).** Das Ventil greift
-nur, wenn *keine* `wunschzeit` gesetzt ist. Begründung: das Ventil ist eine Rückfallebene gegen
+**Ausnahme: gesetzte `preferredWakeUpTime` (nachträglich ergänzt, `docs/TODO.md` T-78).** Das Ventil greift
+nur, wenn *keine* `preferredWakeUpTime` gesetzt ist. Begründung: das Ventil ist eine Rückfallebene gegen
 *blinde* Fortschreibung - gegen ein Weiterdriften ohne jede Orientierung. Eine gesetzte
-`wunschzeit` **ist** diese Orientierung: FR-4 driftet auf sie zu und hält exakt auf ihr an, die
+`preferredWakeUpTime` **ist** diese Orientierung: FR-4 driftet auf sie zu und hält exakt auf ihr an, die
 Fortschreibung ist also von sich aus beschränkt und kann nicht davonlaufen. Ohne diese Ausnahme
-wäre das Ventil für einen Nutzer mit `wunschzeit` und ohne Kalendertermine eine Einbahnstraße in
+wäre das Ventil für einen Nutzer mit `preferredWakeUpTime` und ohne Kalendertermine eine Einbahnstraße in
 einen dauerhaft toten Wecker: alle Fensterwerte werden `null`, FR-18 entfernt daraufhin sämtliche
 Zukunftsalarme, es klingelt nichts mehr - und damit gibt es auch keinen Ring-Checkpoint mehr, über
 den der Zähler je zurückgesetzt werden könnte (nur ein Tag mit realem `hardFloor` setzt ihn
 zurück). Für eine App mit dem Versprechen "garantiertes Aufwachen" ist das der falsche Ausgang.
 
 Der Zähler selbst läuft dabei unverändert weiter und zählt weiterhin termin-lose Tage ehrlich mit -
-entfernt der Nutzer seine `wunschzeit` später wieder, greift das Ventil ab dem nächsten Checkpoint
+entfernt der Nutzer seine `preferredWakeUpTime` später wieder, greift das Ventil ab dem nächsten Checkpoint
 sofort, ohne erst sieben Tage neu sammeln zu müssen.
 
-- **Test:** Zähler ≥7, kein `hardFloor` im Fenster, aber `wunschzeit` gesetzt → **kein** Auslösen,
+- **Test:** Zähler ≥7, kein `hardFloor` im Fenster, aber `preferredWakeUpTime` gesetzt → **kein** Auslösen,
   jeder Fenstertag behält einen Wert.
-- **Test:** derselbe Fall ohne `wunschzeit` → Auslösen wie bisher.
+- **Test:** derselbe Fall ohne `preferredWakeUpTime` → Auslösen wie bisher.
 
 **Akzeptiertes Restrisiko:** `Alarm.ringing` liefert innerhalb einer laufenden
 `_MyHomePageState`-Instanz garantiert genau ein `handleAlarm()` pro neu klingelndem Alarm (bereits
@@ -394,12 +394,12 @@ Sicherheitsventil ist eine konservative Rückfallebene, kein korrektheitskritisc
 Existiert kein `lastEffectiveWakeTime` (allererste Planung), wird **kein** Wert für Tage vor dem
 ersten realen `hardFloor` erfunden:
 
-- Mit `wunschzeit`: diese Tage nutzen sie.
+- Mit `preferredWakeUpTime`: diese Tage nutzen sie.
 - Ohne: kein Alarm geplant.
 - Der erste reale `hardFloor` wird an seinem eigenen Tag gesetzt (FR-2) und wird ab da Anker für
   alle Folgetage.
 
-- **Test:** Tag1–5 termin-los, Tag6 `hardFloor=05:30`, keine `wunschzeit` → Tag1–5 kein Alarm,
+- **Test:** Tag1–5 termin-los, Tag6 `hardFloor=05:30`, keine `preferredWakeUpTime` → Tag1–5 kein Alarm,
   Tag6=05:30 wird neuer Anker.
 
 ## FR-11 — Revisionierbarkeit bis zum tatsächlichen Klingeln
@@ -478,7 +478,7 @@ Zeitzonenwechsel (z. B. Toms Flug landet nachmittags) erst beim nächsten Klinge
 **Verhalten bei erkanntem Wechsel** (verglichen wird der Versatz, nicht der Zonenname - erkennt
 damit echten Ortswechsel und reine Sommerzeit-Änderung einheitlich):
 - **Instant-basierte Werte** (`hardFloor`): unverändert (FR-1) - nur die lokale Anzeige ändert sich.
-- **Wall-Clock-verankerte Werte** (`wunschzeit`, fortgeschriebene Zwischenwerte): werden **mit
+- **Wall-Clock-verankerte Werte** (`preferredWakeUpTime`, fortgeschriebene Zwischenwerte): werden **mit
   gleichbleibenden Ziffern in die neue Zone übertragen** (Alarmuhren-Konvention: "7:00" bleibt
   "7:00", jetzt in neuer Zone), keine vollständige Neuberechnung der Segmente/Runs - die folgt erst
   beim nächsten regulären Planungslauf.
@@ -515,7 +515,7 @@ Zonenregeln des Folgetags, was FR-16s Modell ("Versatz vergleichen, nicht Zonenn
 interpretieren") bewusst nicht kennt.
 
 - **Test (Ortswechsel):** Alarm klingelt 06:00 (Zone A, +1). Um 14:00 landet Tom in Zone B (+9).
-  Der Schlafengehen-Checkpoint erkennt den geänderten Versatz; `wunschzeit` (z. B. 09:00) gilt ab
+  Der Schlafengehen-Checkpoint erkennt den geänderten Versatz; `preferredWakeUpTime` (z. B. 09:00) gilt ab
   da als 09:00 in Zone B. Ohne den zweiten Checkpoint wäre das erst beim nächsten Klingeln (>12h
   später) korrigiert worden.
 - **Test (Sommerzeit):** Zone bleibt "Europe/Berlin", Uhren stellen sich nachts von MEZ (+1) auf
