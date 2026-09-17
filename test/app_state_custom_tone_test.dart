@@ -1,0 +1,93 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakeywakey/app_state.dart';
+import 'package:wakeywakey/models/alarms/custom_tone.dart';
+
+// AppState.importCustomTone wires the pure logic in custom_tone_test.dart to
+// persistence and to path_provider - the latter via an injected
+// [documentsDirectory] callback (the same pattern as this class's other
+// plugin boundaries, e.g. `fetchEvents`/`now`), so these tests never touch a
+// real platform channel.
+
+void main() {
+  Future<AppState> freshAppState() async {
+    SharedPreferences.setMockInitialValues({});
+    final appState = AppState();
+    await appState.initialized;
+    return appState;
+  }
+
+  Future<File> makeSourceFile(Directory dir, String name,
+      [String contents = 'fake audio bytes']) async {
+    final file = File('${dir.path}/$name');
+    await file.writeAsString(contents);
+    return file;
+  }
+
+  late Directory documentsDir;
+
+  setUp(() async {
+    documentsDir = await Directory.systemTemp.createTemp('wakeywakey_docs_');
+  });
+
+  tearDown(() async {
+    if (await documentsDir.exists()) {
+      await documentsDir.delete(recursive: true);
+    }
+  });
+
+  test('customTonePath is null before anything is imported', () async {
+    final appState = await freshAppState();
+    expect(appState.customTonePath, isNull);
+  });
+
+  test('importing a supported file sets customTonePath and notifies', () async {
+    final appState = await freshAppState();
+    final source = await makeSourceFile(documentsDir, 'ringtone.mp3');
+    var notified = false;
+    appState.addListener(() => notified = true);
+
+    await appState.importCustomTone(
+      source.path,
+      documentsDirectory: () async => documentsDir,
+    );
+
+    expect(appState.customTonePath, 'custom_tones/custom_tone.mp3');
+    expect(notified, isTrue);
+  });
+
+  test('customTonePath survives an app restart (persistence round trip)',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final first = AppState();
+    await first.initialized;
+    final source = await makeSourceFile(documentsDir, 'ringtone.wav');
+
+    await first.importCustomTone(
+      source.path,
+      documentsDirectory: () async => documentsDir,
+    );
+
+    final second = AppState();
+    await second.initialized;
+    expect(second.customTonePath, 'custom_tones/custom_tone.wav');
+  });
+
+  test('an unsupported file type propagates and leaves customTonePath unset',
+      () async {
+    final appState = await freshAppState();
+    final source = await makeSourceFile(documentsDir, 'not_audio.txt');
+
+    await expectLater(
+      appState.importCustomTone(
+        source.path,
+        documentsDirectory: () async => documentsDir,
+      ),
+      throwsA(isA<UnsupportedToneFormatException>()),
+    );
+
+    expect(appState.customTonePath, isNull);
+  });
+}

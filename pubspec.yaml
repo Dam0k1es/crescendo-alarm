@@ -48,6 +48,15 @@ dependencies:
   alarm: ^5.12.0
   audioplayers: ^6.0.0
 
+  # A user-imported custom alarm tone (docs/TODO.md T-29 follow-up): MIT
+  # licensed, and picking a single audio file needs no declared Android
+  # permission - it goes through the system document picker (SAF), not
+  # broad storage access. path_provider was already a transitive dependency
+  # (via shared_preferences); declared directly here because this project's
+  # own code now calls it, not just a plugin's internals.
+  file_picker: ^13.1.0
+  path_provider: ^2.1.4
+
   qr_flutter: ^4.1.0
 
   uuid: ^4.4.0

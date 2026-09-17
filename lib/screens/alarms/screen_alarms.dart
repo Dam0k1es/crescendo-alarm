@@ -14,14 +14,14 @@ import 'package:wakeywakey/utils/utils.dart';
 class ScreenAlarms extends StatefulWidget {
   const ScreenAlarms({super.key});
 
-  // "Scheduled" steht vorn: die kalenderabgeleiteten Wecker sind der
-  // eigentliche Produktpfad, manuelle Alarme die Ausnahme.
+  // "Scheduled" comes first: the calendar-derived alarms are the actual
+  // product path, manual alarms the exception.
   //
-  // `const` statt `static int`: die beiden waren veraenderbar und haetten von
-  // ueberall umgesetzt werden koennen, obwohl sie die Tab-Reihenfolge unten
-  // beschreiben. Wer hier tauscht, muss die `tabs:`- und die
-  // `TabBarView.children`-Liste mittauschen - sonst zeigt der Schirm die eine
-  // Liste und der Knopf gehoert zur anderen.
+  // `const` instead of `static int`: the two used to be mutable and could
+  // have been changed from anywhere, even though they describe the tab
+  // order below. Whoever swaps these here must also swap the `tabs:` and
+  // `TabBarView.children` lists - otherwise the screen shows one list while
+  // the button belongs to the other.
   static const int scheduledTabIndex = 0;
   static const int manualTabIndex = 1;
 
@@ -470,6 +470,12 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                                     'assets/sounds/wakeywakey.mp3'),
                                 _buildDropdownItem(context, 'WakeyWakey 2',
                                     'assets/sounds/wakeywakey2.mp3'),
+                                // Only offered once the user has imported one
+                                // (Settings > Alarm Tones) - there is nothing
+                                // to select otherwise.
+                                if (_appState.customTonePath != null)
+                                  _buildDropdownItem(context, 'Custom Tone',
+                                      _appState.customTonePath!),
                               ],
                             ),
                           ],

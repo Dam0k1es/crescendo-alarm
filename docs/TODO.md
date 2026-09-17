@@ -884,6 +884,61 @@ that is the basis a decision can be formulated against.
       week start or the cache stops assuming one.
 - **Requirement:** R2
 
+### T-146 · Custom alarm tone import — IMPLEMENTED (2026-09-17)
+
+- [x] Let the user pick their own audio file as a tone via the system file picker.
+- [x] Copy it into the app's own storage so it keeps working after the source file is gone.
+- [x] Restrict to file types the alarm plugin's player can actually play.
+- [x] Found and removed a dead permission along the way.
+- **Why:** a follow-up to T-29 - the six bundled tones turned out to include an unlicensed meme
+  rip (see that entry). Letting the user supply their own file sidesteps the whole class of
+  problem: the app distributes nothing, the user brings their own content, exactly like any other
+  ringtone app.
+- **Copy, not a reference:** the picked file is copied into
+  `<Documents>/custom_tones/custom_tone.<ext>` immediately (`lib/models/alarms/custom_tone.dart`,
+  `importCustomTone`), and only that copy is ever played from afterward. The source the system
+  picker pointed at - a Downloads folder, an SD card, an SAF URI-scoped grant - can disappear or
+  have its access revoked independently of the app; a file the app owns in its own sandbox cannot.
+  Re-importing replaces the previous copy outright, so switching tones doesn't leave dead files
+  behind.
+- **Why the returned path has no `assets/` prefix and isn't absolute:** `AlarmSettings
+  .assetAudioPath` (package:alarm) resolves an unprefixed relative path against the app's
+  Documents directory on the native side (its own doc comment, and `AudioService.kt`'s
+  `baseAppFlutterPath`) - and warns that an absolute path breaks across an app update, since the
+  app's data directory UUID can change. The stored value therefore doubles as a first-class
+  `MyAlarm.tone`/`AppState.selectedTone` value with no special-casing anywhere else in the
+  scheduling pipeline - `_setAlarm` and `apply_alarms.dart` already treat any non-`assets/`,
+  non-absolute string this way.
+- **Supported types:** `mp3`, `wav`, `m4a`, `aac`, `ogg` - what `android.media.MediaPlayer`
+  (what the plugin's `AudioService.kt` actually uses) plays reliably. Enforced both at the picker
+  (`FileType.custom`/`allowedExtensions`) and again in `importCustomTone` itself
+  (`UnsupportedToneFormatException`), so a caller can't bypass the check by constructing a path
+  directly.
+- **Permissions - the actual finding:** picking a single file needs no Android permission at all
+  (Storage Access Framework); confirmed by diffing `aapt2 dump permissions` on the built debug APK
+  before and after adding `file_picker`/`path_provider` - identical. While checking that,
+  `android.permission.READ_EXTERNAL_STORAGE` turned up already declared in
+  `AndroidManifest.xml`, unconditionally, with no comment, since the very first commit - and no
+  runtime request for it anywhere in the Dart code. It comes from the `alarm` plugin's own
+  manifest, for the case where `assetAudioPath` points into *shared* external storage; this
+  feature deliberately never does that (see "copy, not a reference" above), so nothing in the app
+  needs it. Removed (`tools:node="remove"`, alongside the existing RECORD_AUDIO/
+  WRITE_EXTERNAL_STORAGE entries and their own T-49 rationale) rather than left as unexplained
+  dead weight.
+- **Test:** `test/custom_tone_test.dart` (the pure copy/validation logic - supported/unsupported
+  extensions including case-insensitivity, the copy surviving the source file's deletion,
+  re-import replacing rather than accumulating files, a missing source propagating a clear
+  error) and `test/app_state_custom_tone_test.dart` (the `AppState` wiring: persistence round
+  trip, notifying listeners, an unsupported type leaving `customTonePath` untouched) - both
+  test the real `dart:io` copy against a temporary directory, with `documentsDirectory` injected
+  the same way `fetchEvents`/`now` are elsewhere in this codebase, so neither needs a platform
+  channel or a device.
+- **UI:** `Settings > Alarm Tones` gets a seventh tile that opens the picker if nothing is
+  imported yet, or previews/selects the current import otherwise, plus a folder icon to import a
+  different file at any time. The per-alarm tone dropdown in `screen_alarms.dart` offers it too,
+  once one exists.
+- **Requirement:** R4, R10
+
 ### T-141 · Past scheduled alarms pile up in the list forever
 
 - [ ] Prune scheduled alarms that are safely in the past, without touching FR-18's rule that a past

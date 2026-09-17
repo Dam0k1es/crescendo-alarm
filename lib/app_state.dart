@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakeywakey/models/alarms/custom_tone.dart' as custom_tone;
 import 'package:wakeywakey/models/alarms/manual_alarm.dart';
 import 'package:wakeywakey/models/alarms/manual_alarm_enable.dart';
 import 'package:wakeywakey/models/alarms/myalarm.dart';
@@ -37,9 +40,9 @@ class AppState extends ChangeNotifier {
 
   // Sleep Goal Configuration variables
   TimeOfDay _sleepGoal = const TimeOfDay(hour: 8, minute: 0);
-  // FR-20: Vorgabe 00:00. Ohne Snooze gibt es keinen Grund, den Wecker vor den
-  // Termin zu ziehen; mit Snooze ist diese Dauer das Budget und wird beim
-  // Einschalten auf 00:10 gehoben.
+  // FR-20: default 00:00. Without snooze there is no reason to pull the
+  // alarm ahead of the appointment; with snooze this duration is the budget
+  // and gets raised to 00:10 when snooze is switched on.
   TimeOfDay _durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
   Set<String> _disabledDays = <String>{};
   bool _snoozeEnabled = false;
@@ -68,11 +71,11 @@ class AppState extends ChangeNotifier {
 
   static const _maxDailyDeltaMinimum = Duration(minutes: 15);
 
-  /// docs/TODO.md T-96: das Alarm-Plugin hat `assert(fadeDuration > Duration.zero)`
-  /// (`VolumeSettings.fade`), und der hh:mm-Picker auf dem Sleep-Habits-Schirm
-  /// laesst 00:00 zu. Im Release-Build sind Assertions aus, eine Null kaeme dort
-  /// also ungebremst an - deshalb eine harte Untergrenze. Eine Minute ist
-  /// zugleich der Wert, der vor T-96 festverdrahtet war.
+  /// docs/TODO.md T-96: the alarm plugin has `assert(fadeDuration > Duration.zero)`
+  /// (`VolumeSettings.fade`), and the hh:mm picker on the sleep-habits screen
+  /// allows 00:00. Assertions are off in the release build, so a zero would
+  /// reach it unchecked - hence a hard lower bound. One minute is also the
+  /// value that was hardcoded before T-96.
   static const _gentleWakeUpDurationMinimum = Duration(minutes: 1);
 
   // Theming variables
@@ -82,6 +85,13 @@ class AppState extends ChangeNotifier {
   // Alarm tone and volume variables
   String _selectedTone = 'assets/sounds/lollipop.mp3';
   double _selectedVolume = 0.8;
+
+  /// The user's own imported tone, as a path relative to the app's Documents
+  /// directory (see `custom_tone.dart`'s doc comment for why) - `null` until
+  /// they've imported one. Distinct from [_selectedTone]/a `MyAlarm.tone`,
+  /// which may or may not point at this file: importing one doesn't select
+  /// it anywhere by itself.
+  String? _customTonePath;
 
   // State variables
   bool _permissionsGranted = false;
@@ -282,6 +292,8 @@ class AppState extends ChangeNotifier {
   String get selectedTone => _selectedTone;
 
   double get selectedVolume => _selectedVolume;
+
+  String? get customTonePath => _customTonePath;
 
   // Setter
   set currentPageIndex(int index) {
@@ -551,6 +563,33 @@ class AppState extends ChangeNotifier {
   set selectedVolume(double value) {
     _selectedVolume = value;
     _prefs.setDouble('selectedVolume', _selectedVolume);
+    notifyListeners();
+  }
+
+  /// Copies [sourcePath] (wherever the system file picker pointed at) into
+  /// the app's own storage and remembers it as [customTonePath] - see
+  /// `custom_tone.dart`'s doc comment for why a copy, not a reference.
+  ///
+  /// [documentsDirectory] is injected for testability (the same pattern as
+  /// `fetchEvents`/`now` elsewhere in this class): production code leaves it
+  /// unset and gets the real directory from `path_provider`, tests pass a
+  /// temporary one instead of needing a platform channel.
+  ///
+  /// Rethrows [UnsupportedToneFormatException] for a file type the alarm
+  /// plugin's player can't be relied on to play - the caller (the picker UI)
+  /// is expected to catch it and tell the user, rather than this model layer
+  /// reaching into `BuildContext` to do so itself.
+  Future<void> importCustomTone(
+    String sourcePath, {
+    Future<Directory> Function()? documentsDirectory,
+  }) async {
+    final dir = await (documentsDirectory ?? getApplicationDocumentsDirectory)();
+    final relativePath = await custom_tone.importCustomTone(
+      sourcePath: sourcePath,
+      documentsDirectory: dir,
+    );
+    _customTonePath = relativePath;
+    _prefs.setString('customTonePath', relativePath);
     notifyListeners();
   }
 
@@ -1081,6 +1120,7 @@ class AppState extends ChangeNotifier {
       _scheduledAlarms = _loadScheduledAlarms() ?? _scheduledAlarms;
       _manualAlarms = _loadManualAlarms() ?? _manualAlarms;
       _selectedTone = _prefs.getString('selectedTone') ?? _selectedTone;
+      _customTonePath = _prefs.getString('customTonePath') ?? _customTonePath;
       _selectedVolume = _prefs.getDouble('selectedVolume') ?? _selectedVolume;
       _darkMode = _prefs.getBool('darkMode') ?? _darkMode;
       _accentColor =

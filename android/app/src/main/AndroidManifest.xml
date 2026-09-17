@@ -17,7 +17,17 @@
          image_picker, whose own manifest declares no permissions at all. The
          app writes nothing outside its own sandbox, and image_picker's gallery
          path (switched off, T-44) writes only to the cache directory, so even
-         re-enabling it would not need this. -->
+         re-enabling it would not need this.
+
+         READ_EXTERNAL_STORAGE comes from the `alarm` plugin itself, whose
+         `AlarmSettings.assetAudioPath` doc comment asks for it to cover the
+         case where that path points into shared/external storage. It never
+         did here (this app's only local-file tone is a custom import, and
+         that is deliberately copied into the app's own Documents directory -
+         see `custom_tone.dart` - which every app can already read without
+         any permission), and had no runtime request anywhere in the Dart
+         code either. It sat unused since the very first commit; found and
+         removed while adding that import feature. -->
     <!-- The QR gate is optional: a user who never sets a deactivation code
          never needs a camera. The camera plugin behind the scanner declares
          `android.hardware.camera.any` WITHOUT `android:required`, which
@@ -32,6 +42,7 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
 
     <application
         android:name="${applicationName}"
@@ -91,7 +102,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />

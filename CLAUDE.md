@@ -310,7 +310,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **349 tests across 39 files**, and CI runs them six times over -
+`flutter test` currently runs **371 tests across 41 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -368,6 +368,10 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
 - `test/qr_scanner_validation_test.dart`: real unit tests for `isDeactivationCodeValid`
   (`lib/screens/scan_code/qr_scanner.dart`), the pure comparison at the heart of the "guaranteed
   wake-up" gate, similarly extracted so it's testable without a device.
+- `test/custom_tone_test.dart` and `test/app_state_custom_tone_test.dart` (`docs/TODO.md` T-146):
+  the user-imported-tone copy/validation logic and its `AppState` wiring, both against a real
+  `dart:io` temporary directory rather than a mocked platform channel - `documentsDirectory` is
+  injected the same way `fetchEvents`/`now` are elsewhere.
 - `integration_test/app_test.dart`: real end-to-end tests, driven against an actual Android
   emulator in `.github/workflows/release.yml`'s `e2e-tests` job, gating the signed release build.
   Seven scenarios are covered. Three predate scheduling-v2: a manual alarm firing and being
