@@ -130,6 +130,31 @@ them isn't needed on a fresh clone. Only run this if you change `assets/icons/ic
 dart run flutter_launcher_icons
 ```
 
+## Branches and where work happens
+
+**Work goes on `dev`. `master` is fast-forwarded only when a state is worth the full gate** - a
+signed release build, the E2E emulator run, MobSF. Both branches sit on one linear history; there
+has never been a merge commit, and `master` is only ever a fast-forward of `dev`.
+
+This is not bookkeeping, it is money and meaning. The pipeline is scaled by branch (see below): a
+push to `dev` costs roughly 8 minutes of CI, a push to `master` roughly 45, because `master`
+additionally runs the security gate, a **22-minute Android emulator E2E run**, the signed build and
+MobSF. On a private repository those are billed minutes. In September 2026 this was gotten backwards
+- thirteen commits went straight to `master`, nineteen full runs, and the account's Actions minutes
+appear to have run out: every job began failing after seconds with no step executed. Committing to
+`dev` is also what keeps `master` meaning "this passed the gate" rather than "this is the newest
+thing somebody wrote".
+
+**Worktree layout**, because a branch can live in only one worktree at a time:
+
+| Directory | Branch | Role |
+|---|---|---|
+| `/mnt/wakeywakey` | `master` | the shared-folder checkout; no builds possible here (vboxsf, see the gotcha below), and `current.apk` lives here |
+| `~/projects/wwmaster` | `dev` | the native-filesystem worktree where editing, `flutter test` and builds happen |
+
+So `/mnt/wakeywakey` lags `dev` by exactly the work that has not been promoted yet - that is the
+design, not a mistake. Promote with `git -C /mnt/wakeywakey merge --ff-only dev` and push.
+
 ## CI/CD pipeline
 
 Four workflows under `.github/workflows/`:
