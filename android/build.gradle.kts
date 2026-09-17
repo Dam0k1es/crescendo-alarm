@@ -16,18 +16,18 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 
-// Hier stand ein Override, der jedes Android-Library-Subprojekt auf
-// compileSdk 36 zwang. Grund war `awesome_notifications_core`, das
-// compileSdkVersion 33 hartkodiert hatte und damit die AAR-Metadatenpruefung
-// gegen seine eigenen neueren AndroidX-Abhaengigkeiten reissen liess.
+// An override used to sit here that forced every Android library subproject
+// to compileSdk 36. The reason was `awesome_notifications_core`, which
+// hardcoded compileSdkVersion 33 and thereby made the AAR metadata check fail
+// against its own newer AndroidX dependencies.
 //
-// Entfallen im Hygiene-Durchgang 2026-09-10 (docs/TODO.md T-97):
-// `awesome_notifications` 0.12.1 fordert `awesome_notifications_core`
-// ueberhaupt nicht - der Eintrag in pubspec.yaml war Altlast aus der
-// 0.9.x/0.10.x-Zeit, als das Hauptpaket ihn noch brauchte. Ohne die
-// Abhaengigkeit ist die stoerende AAR aus dem Build, und der Behelf hat seinen
-// Grund verloren. Verifiziert mit einem `flutter clean`-Release-Build, nicht
-// nur inkrementell.
+// Removed in the 2026-09-10 hygiene pass (docs/TODO.md T-97):
+// `awesome_notifications` 0.12.1 does not require `awesome_notifications_core`
+// at all - the entry in pubspec.yaml was leftover cruft from the
+// 0.9.x/0.10.x era, when the main package still needed it. Without that
+// dependency the offending AAR is out of the build, and the workaround lost
+// its reason to exist. Verified with a `flutter clean` release build, not
+// just an incremental one.
 
 subprojects {
     project.evaluationDependsOn(":app")

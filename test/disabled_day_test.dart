@@ -8,9 +8,9 @@ import 'package:wakeywakey/models/scheduling/day_marker.dart';
 import 'package:wakeywakey/models/scheduling/replan.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 
-// FR-21 (docs/scheduling-v2-spec.md), docs/TODO.md T-03: ein abgeschalteter
-// geplanter Wecker klingelt nicht. Die Faelle stammen aus den "Test:"-Punkten
-// der Anforderung.
+// FR-21 (docs/scheduling-v2-spec.md), docs/TODO.md T-03: a switched-off
+// planned alarm does not ring. The cases come from the requirement's
+// "Test:" bullets.
 
 DateTime _utc(int h, int m, {int day = 10}) => DateTime.utc(2026, 3, day, h, m);
 
@@ -33,10 +33,10 @@ Future<AppState> _fresh() async {
 }
 
 void main() {
-  group('FR-21: der Plan stellt keinen abgeschalteten Tag', () {
+  group('FR-21: the plan does not arm a switched-off day', () {
     final now = DateTime(2026, 3, 10, 6, 0);
 
-    test('ein abgeschalteter Tag wird nicht angelegt', () {
+    test('a switched-off day is not armed', () {
       final planned = DateTime(2026, 3, 11, 7, 30);
       final plan = planAlarmSync(
         pendingDayValues: {isoDate(planned): planned.millisecondsSinceEpoch},
@@ -46,11 +46,11 @@ void main() {
       );
 
       expect(plan.toAdd, isEmpty,
-          reason: 'der Nutzer hat fuer diesen Tag "nicht wecken" gesagt');
+          reason: 'the user said "do not wake me" for this day');
     });
 
-    test('ein bereits gestellter Alarm dieses Tages wird entfernt', () {
-      // Die "sofort"-Zusicherung auf der Ebene, die sie durchsetzt.
+    test('an already-armed alarm for this day is removed', () {
+      // The "immediately" assurance at the level that enforces it.
       final planned = DateTime(2026, 3, 11, 7, 30);
       final plan = planAlarmSync(
         pendingDayValues: {isoDate(planned): planned.millisecondsSinceEpoch},
@@ -64,24 +64,24 @@ void main() {
       expect(plan.toAdd, isEmpty);
     });
 
-    test('andere Tage bleiben unberuehrt', () {
-      // Gegenprobe gegen eine Ueberkorrektur.
-      final aus = DateTime(2026, 3, 11, 7, 30);
-      final an = DateTime(2026, 3, 12, 7, 30);
+    test('other days stay untouched', () {
+      // Counter-check against overcorrection.
+      final off = DateTime(2026, 3, 11, 7, 30);
+      final on = DateTime(2026, 3, 12, 7, 30);
       final plan = planAlarmSync(
         pendingDayValues: {
-          isoDate(aus): aus.millisecondsSinceEpoch,
-          isoDate(an): an.millisecondsSinceEpoch,
+          isoDate(off): off.millisecondsSinceEpoch,
+          isoDate(on): on.millisecondsSinceEpoch,
         },
         existingScheduledAlarms: const [],
-        disabledDays: {isoDate(aus)},
+        disabledDays: {isoDate(off)},
         now: now,
       );
 
-      expect(plan.toAdd, [an]);
+      expect(plan.toAdd, [on]);
     });
 
-    test('ohne abgeschaltete Tage aendert sich nichts', () {
+    test('nothing changes without any switched-off days', () {
       final planned = DateTime(2026, 3, 11, 7, 30);
       final plan = planAlarmSync(
         pendingDayValues: {isoDate(planned): planned.millisecondsSinceEpoch},
@@ -94,16 +94,16 @@ void main() {
     });
   });
 
-  group('FR-21: dauerhaft und ueber Neustarts', () {
-    test('der naechste Planungslauf stellt ihn nicht wieder', () async {
-      // Die Zusicherung, an der ein blosses Alarm.stop() scheitert: FR-18 baut
-      // die Alarmmenge bei JEDER Neuplanung neu auf.
+  group('FR-21: permanent and across restarts', () {
+    test('the next planning run does not arm it again', () async {
+      // The assurance that a bare Alarm.stop() fails on: FR-18 rebuilds
+      // the alarm set on EVERY re-plan.
       final appState = await _fresh();
       final ringDay = _utc(0, 0, day: 10);
-      final morgen = dayMarker(ringDay, 1);
+      final tomorrow = dayMarker(ringDay, 1);
 
       appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
-      appState.setDayEnabled(isoDate(morgen), false);
+      appState.setDayEnabled(isoDate(tomorrow), false);
 
       await replan(
         appState,
@@ -114,15 +114,15 @@ void main() {
       );
 
       expect(
-        appState.scheduledAlarms.where((a) => isoDate(a.time) == isoDate(morgen)),
+        appState.scheduledAlarms.where((a) => isoDate(a.time) == isoDate(tomorrow)),
         isEmpty,
-        reason: 'FR-21: der naechste Planungslauf darf ihn nicht wiederholen',
+        reason: 'FR-21: the next planning run must not repeat it',
       );
-      expect(appState.pendingDayValues[isoDate(morgen)], isNotNull,
-          reason: 'der geplante Wert bleibt - abgeschaltet ist nicht geloescht');
+      expect(appState.pendingDayValues[isoDate(tomorrow)], isNotNull,
+          reason: 'the planned value stays - switched off is not deleted');
     });
 
-    test('der Zustand ueberlebt einen Neustart', () async {
+    test('the state survives a restart', () async {
       final first = await _fresh();
       first.setDayEnabled('2026-03-11', false);
 
@@ -131,7 +131,7 @@ void main() {
       expect(second.isDayDisabled('2026-03-11'), isTrue);
     });
 
-    test('wieder eingeschaltet gilt sofort wieder der geplante Wert', () async {
+    test('switched back on, the planned value applies again immediately', () async {
       final appState = await _fresh();
       appState.setDayEnabled('2026-03-11', false);
       appState.setDayEnabled('2026-03-11', true);

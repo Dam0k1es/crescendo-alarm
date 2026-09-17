@@ -2,9 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakeywakey/utils/diag/diag_log.dart';
 
-// docs/TODO.md T-89: Verhalten des PII-freien Ereignis-Loggers. Die
-// strukturelle Zusicherung (keine String-Parameter) prueft
-// test/diag_log_api_test.dart am Quelltext; hier geht es um die Semantik.
+// docs/TODO.md T-89: behavior of the PII-free event logger. The
+// structural assertion (no String parameters) is checked against the
+// source by test/diag_log_api_test.dart; this file is about the semantics.
 
 class _Boom implements Exception {}
 
@@ -19,8 +19,8 @@ Future<void> _freshDiag({
 }
 
 void main() {
-  group('Ringpuffer', () {
-    test('haelt hoechstens `capacity` Ereignisse und verwirft die aeltesten',
+  group('ring buffer', () {
+    test('holds at most `capacity` events and discards the oldest',
         () async {
       await _freshDiag();
 
@@ -29,13 +29,13 @@ void main() {
       }
 
       expect(Diag.records.length, Diag.capacity);
-      // Die ersten 88 sind hinausgerollt: die kleinste noch vorhandene
-      // Sequenznummer ist 88.
+      // The first 88 have rolled out: the smallest remaining sequence
+      // number is 88.
       expect(Diag.records.first.seq, 88);
       expect(Diag.records.last.seq, Diag.capacity + 87);
     });
 
-    test('abgeschaltet wird nichts aufgezeichnet', () async {
+    test('nothing is recorded when disabled', () async {
       await _freshDiag(enabled: false);
 
       Diag.qrGate(outcome: QrOutcome.accepted, codeWasSet: true);
@@ -45,7 +45,7 @@ void main() {
       expect(Diag.records, isEmpty);
     });
 
-    test('jedes Ereignis traegt Boot-Nummer, Sequenz und Isolate', () async {
+    test('every event carries boot number, sequence, and isolate', () async {
       await _freshDiag();
 
       Diag.alarmDismissed(route: DismissRoute.qrScan, stopFailed: false);
@@ -54,11 +54,11 @@ void main() {
       expect(record.boot, Diag.bootSeq);
       expect(record.seq, 0);
       expect(record.fields[DiagField.isolate], LogIsolate.main.code);
-      // Kein Zeitstempel-Feld - nur ein grobes Uptime-Bucket.
+      // No timestamp field - only a coarse uptime bucket.
       expect(record.uptime, UptimeBucket.firstMinute);
     });
 
-    test('die Boot-Nummer zaehlt ueber App-Starts hinweg hoch', () async {
+    test('the boot number counts up across app starts', () async {
       await _freshDiag();
       final first = Diag.bootSeq;
       await _freshDiag(clearPrefs: false);
@@ -67,8 +67,8 @@ void main() {
     });
   });
 
-  group('Kodierung', () {
-    test('encode/decode ist verlustfrei', () async {
+  group('encoding', () {
+    test('encode/decode is lossless', () async {
       await _freshDiag();
       Diag.dayAdvance(
         needsDayAdvance: true,
@@ -90,7 +90,7 @@ void main() {
       expect(decoded.fields[DiagField.missedAppointmentFlagged], 1);
     });
 
-    test('encode liefert ausschliesslich Zahlen', () async {
+    test('encode produces only numbers', () async {
       await _freshDiag();
       Diag.calendarRead(
         outcome: CalendarOutcome.ok,
@@ -104,20 +104,20 @@ void main() {
       expect(Diag.records.single.encode(), everyElement(isA<int>()));
     });
 
-    test('ein unbekannter Ereigniscode wird beim Dekodieren verworfen', () {
-      // Vorwaertskompatibilitaet: ein Log aus einer neueren App-Version darf
-      // eine aeltere nicht zum Absturz bringen.
+    test('an unknown event code is discarded on decode', () {
+      // Forward compatibility: a log from a newer app version must not
+      // crash an older one.
       expect(DiagRecord.decode(<int>[1, 0, 9999, 0]), isNull);
       expect(DiagRecord.decode(<int>[1, 0]), isNull);
     });
   });
 
-  group('Persistenz und Isolate-Merge', () {
-    // FR-16s Checkpoint 2 laeuft in einem EIGENEN Isolate mit eigenem
-    // Speicher - der statische Ringpuffer dort ist ein anderer. Dieselbe
-    // Falle wie T-69, nur eine Ebene tiefer. Deshalb zwei Prefs-Schluessel
-    // und ein Merge beim Lesen.
-    test('Haupt- und Hintergrund-Isolate landen gemischt im Export', () async {
+  group('persistence and isolate merge', () {
+    // FR-16's checkpoint 2 runs in its OWN isolate with its own memory -
+    // the static ring buffer there is a different one. The same trap as
+    // T-69, just one level deeper. Hence two prefs keys and a merge on
+    // read.
+    test('main and background isolate end up merged in the export', () async {
       await _freshDiag(isolate: LogIsolate.background);
       Diag.timezoneCheck(
         offsetChanged: true,
@@ -127,7 +127,7 @@ void main() {
       );
       await Diag.flush();
 
-      // Zweiter "Start", diesmal im Haupt-Isolate, dieselben Preferences.
+      // Second "start", this time in the main isolate, the same preferences.
       await _freshDiag(clearPrefs: false);
       Diag.alarmRang(
         alarmType: Object,
@@ -141,13 +141,13 @@ void main() {
       final all = await Diag.readAll();
       expect(all.map((r) => r.event),
           containsAll(<DiagEvent>[DiagEvent.timezoneCheck, DiagEvent.alarmRang]));
-      // Sortiert nach (boot, seq): der Hintergrund-Eintrag stammt aus dem
-      // frueheren Boot und steht deshalb vorn.
+      // Sorted by (boot, seq): the background entry comes from the
+      // earlier boot and therefore sits first.
       expect(all.first.event, DiagEvent.timezoneCheck);
       expect(all.first.fields[DiagField.isolate], LogIsolate.background.code);
     });
 
-    test('clear() entfernt beide Senken', () async {
+    test('clear() removes both sinks', () async {
       await _freshDiag();
       Diag.qrGate(outcome: QrOutcome.rejected, codeWasSet: true);
       await Diag.flush();
@@ -160,27 +160,27 @@ void main() {
     });
   });
 
-  group('Reduktion auf Buckets', () {
-    test('die Stufen entsprechen den echten Fehlersignaturen', () {
-      // 0 = gesund
+  group('reduction to buckets', () {
+    test('the steps match the real bug signatures', () {
+      // 0 = healthy
       expect(bucketMinutes(0), MinuteBucket.zero);
-      // eine Stunde = Versatz oder Sommerzeit -> die T-61-Signatur
+      // one hour = offset or DST -> the T-61 signature
       expect(bucketMinutes(60), MinuteBucket.plusHour);
       expect(bucketMinutes(-60), MinuteBucket.minusHour);
-      // ein Tag = Tages-Off-by-one -> T-74d/T-76
+      // one day = day off-by-one -> T-74d/T-76
       expect(bucketMinutes(1440), MinuteBucket.plusDay);
       expect(bucketMinutes(-1440), MinuteBucket.minusDay);
-      // dazwischen und darueber
+      // in between and beyond
       expect(bucketMinutes(5), MinuteBucket.plusFew);
       expect(bucketMinutes(30), MinuteBucket.plusQuarter);
       expect(bucketMinutes(240), MinuteBucket.plusHours);
       expect(bucketMinutes(5000), MinuteBucket.overflow);
     });
 
-    test('der absolute Zeitzonen-Versatz wird nie abgebildet', () {
-      // Nur die *Gestalt* der Aenderung. Eine Stunde bekommt in einem
-      // Sommerzeit-Land jeder zweimal im Jahr; alles andere verschweigt
-      // Betrag UND Vorzeichen, ist als Reisespur also wertlos.
+    test('the absolute time zone offset is never recorded', () {
+      // Only the *shape* of the change. Everyone gets a one-hour change
+      // twice a year in a DST country; anything else withholds both
+      // magnitude AND sign, so it is worthless as a travel trace.
       expect(bucketOffsetChange(const Duration(hours: 1), const Duration(hours: 2)),
           OffsetChangeShape.plusHour);
       expect(bucketOffsetChange(const Duration(hours: 2), const Duration(hours: 1)),
@@ -193,7 +193,7 @@ void main() {
           OffsetChangeShape.none);
     });
 
-    test('Dauern sind logarithmisch gebucketet', () {
+    test('durations are bucketed logarithmically', () {
       expect(bucketMillis(10), DurationBucket.under50);
       expect(bucketMillis(150), DurationBucket.under200);
       expect(bucketMillis(2500), DurationBucket.under3s);
@@ -201,8 +201,8 @@ void main() {
     });
   });
 
-  group('Export (Canary)', () {
-    test('der gerenderte Export besteht nur aus Enum-Namen und Zahlen',
+  group('export (canary)', () {
+    test('the rendered export consists only of enum names and numbers',
         () async {
       await _freshDiag();
       Diag.registerType(_Boom, 7);
@@ -235,7 +235,7 @@ void main() {
 
       final text = Diag.render(Diag.records);
 
-      // Jede Ereigniszeile: bN.M [uptime] eventName feld=zahl feld=zahl ...
+      // Every event line: bN.M [uptime] eventName field=number field=number ...
       final eventLines = text
           .split('\n')
           .where((l) => RegExp(r'^b\d+\.\d+ ').hasMatch(l))
@@ -246,19 +246,19 @@ void main() {
           RegExp(r'^b\d+\.\d+ \[[A-Za-z0-9]+\] [A-Za-z]+( [A-Za-z]+=-?\d+)*( \(bg\))?$')
               .hasMatch(line),
           isTrue,
-          reason: 'Der Export darf nur Enum-Namen und Zahlen enthalten - '
-              'kein Freitext, keine Uhrzeit. Zeile: $line',
+          reason: 'The export may only contain enum names and numbers - '
+              'no free text, no clock time. Line: $line',
         );
       }
 
-      // Und explizit: nichts, was nach einem Zeitpunkt oder Datum aussieht.
+      // And explicitly: nothing that looks like a moment or a date.
       expect(RegExp(r'\d{4}-\d{2}-\d{2}').hasMatch(text), isFalse);
       expect(RegExp(r'\d{1,2}:\d{2}').hasMatch(text), isFalse);
     });
 
-    test('der Kopf sagt ausdruecklich, was NICHT enthalten ist', () async {
-      // Damit ein Nutzer, der den Export vor dem Teilen ansieht, die
-      // Zusicherung schwarz auf weiss hat.
+    test('the header explicitly states what is NOT included', () async {
+      // So that a user viewing the export before sharing it has the
+      // assertion in black and white.
       await _freshDiag();
       final text = Diag.render(Diag.records);
 
@@ -267,29 +267,29 @@ void main() {
     });
   });
 
-  group('Uhrwerte nur auf ausdruecklichen Wunsch (T-135)', () {
-    // Das uebrige Log ist konstruktiv frei von personenbezogenen Daten. Eine
-    // Historie aus Weckzeiten und fruehesten Terminzeiten ist dagegen ein
-    // Schlafmuster samt Tagesablauf - identifizierend ohne jeden Namen - und
-    // das Log ist ausdruecklich per Zwischenablage exportierbar. Deshalb ein
-    // eigener Schalter, und deshalb steht er standardmaessig aus.
+  group('clock values only on explicit request (T-135)', () {
+    // The rest of the log is constructively free of personal data. A
+    // history of wake times and earliest appointment times, on the other
+    // hand, is a sleep pattern plus daily routine - identifying without
+    // any name - and the log is explicitly exportable via clipboard.
+    // Hence a dedicated switch, and hence it defaults to off.
 
-    test('Voreinstellung: dayPlanned schreibt nichts', () async {
+    test('default: dayPlanned writes nothing', () async {
       await _freshDiag();
 
       expect(Diag.includeClockTimes, isFalse,
-          reason: 'die Voreinstellung ist die tragende Zusicherung');
+          reason: 'the default is the load-bearing assertion');
       Diag.dayPlanned(
           dayOffset: 1, plannedMinuteOfDay: 405, earliestEventMinuteOfDay: 480);
 
       expect(Diag.records, isEmpty);
     });
 
-    test('eingeschaltet werden beide Zahlen aufgezeichnet', () async {
+    test('when switched on, both numbers are recorded', () async {
       await _freshDiag();
       Diag.setIncludeClockTimes(true);
 
-      // 06:45 geplant, fruehester Termin 08:00.
+      // 06:45 planned, earliest appointment 08:00.
       Diag.dayPlanned(
           dayOffset: 2, plannedMinuteOfDay: 405, earliestEventMinuteOfDay: 480);
 
@@ -301,8 +301,8 @@ void main() {
       expect(r.fields[DiagField.earliestEventMinuteOfDay], 480);
     });
 
-    test('"kein Wert"/"kein Termin" ist -1, nicht 0', () async {
-      // 0 waere Mitternacht und damit eine gueltige Uhrzeit.
+    test('"no value"/"no appointment" is -1, not 0', () async {
+      // 0 would be midnight and therefore a valid time of day.
       await _freshDiag();
       Diag.setIncludeClockTimes(true);
 
@@ -314,18 +314,18 @@ void main() {
       expect(r.fields[DiagField.earliestEventMinuteOfDay], -1);
     });
 
-    test('der Export sagt selbst, ob Uhrwerte darin stehen', () async {
+    test('the export itself states whether clock values are in it', () async {
       await _freshDiag();
       expect(Diag.render(Diag.records), contains('no wake times by design'));
 
       Diag.setIncludeClockTimes(true);
       expect(Diag.render(Diag.records), contains('ARE'),
-          reason: 'wer das Log weitergibt, soll es der Kopfzeile ansehen');
+          reason: 'anyone passing the log along should see it in the header');
     });
 
-    test('der Schalter wirkt auch abgeschaltet nicht als Umgehung', () async {
-      // Gegenprobe: `includeClockTimes` darf den Hauptschalter nicht
-      // aushebeln.
+    test('the switch does not act as a bypass even when disabled', () async {
+      // Counter-check: `includeClockTimes` must not override the main
+      // switch.
       await _freshDiag(enabled: false);
       Diag.setIncludeClockTimes(true);
 
@@ -336,8 +336,8 @@ void main() {
     });
   });
 
-  group('Planungs-Eingaben (T-140)', () {
-    test('Dauern stehen immer drin, die preferredWakeUpTime nur mit Schalter', () async {
+  group('planning inputs (T-140)', () {
+    test('durations are always in, preferredWakeUpTime only with the switch', () async {
       await _freshDiag();
       Diag.planInputs(
           maxDailyDeltaMinutes: 90,
@@ -347,13 +347,13 @@ void main() {
 
       final r = Diag.records.single;
       expect(r.fields[DiagField.maxDailyDeltaMinutes], 90,
-          reason: 'ohne die Grenze ist ein geloggter Plan nicht nachrechenbar');
+          reason: 'without the cap a logged plan cannot be recomputed');
       expect(r.fields[DiagField.wakeUpMinutes], 30);
       expect(r.fields[DiagField.preferredWakeUpMinuteOfDay], -1,
-          reason: 'die preferredWakeUpTime ist eine Weckzeit - nur mit Schalter');
+          reason: 'preferredWakeUpTime is a wake time - only with the switch');
     });
 
-    test('mit Schalter steht auch die preferredWakeUpTime drin', () async {
+    test('with the switch, preferredWakeUpTime is in too', () async {
       await _freshDiag();
       Diag.setIncludeClockTimes(true);
       Diag.planInputs(

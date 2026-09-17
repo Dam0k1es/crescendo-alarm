@@ -4,8 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/models/alarms/snooze.dart';
 
-// FR-20 (docs/scheduling-v2-spec.md), docs/TODO.md T-138: Zustand und
-// Vorgaben rund um Snooze.
+// FR-20 (docs/scheduling-v2-spec.md), docs/TODO.md T-138: state and
+// defaults around snooze.
 
 Future<AppState> _fresh() async {
   SharedPreferences.setMockInitialValues({});
@@ -15,32 +15,32 @@ Future<AppState> _fresh() async {
 }
 
 void main() {
-  group('FR-20: Vorgaben', () {
-    test('Snooze ist aus, snoozeTime 5 Minuten, durationToWakeUp 00:00',
+  group('FR-20: defaults', () {
+    test('snooze is off, snoozeTime 5 minutes, durationToWakeUp 00:00',
         () async {
       final appState = await _fresh();
 
       expect(appState.snoozeEnabled, isFalse);
       expect(appState.snoozeTime, const Duration(minutes: 5));
       expect(appState.durationToWakeUp, const TimeOfDay(hour: 0, minute: 0),
-          reason: 'FR-20 setzt die Vorgabe auf 00:00 - ohne Snooze gibt es '
-              'keinen Grund, den Wecker vorzuziehen');
+          reason: 'FR-20 sets the default to 00:00 - without snooze there '
+              'is no reason to wake up early');
     });
   });
 
-  group('FR-20: Einschalten macht das Budget brauchbar', () {
-    test('bei 00:00 wird durationToWakeUp auf 00:10 armed', () async {
+  group('FR-20: switching on makes the budget usable', () {
+    test('at 00:00, durationToWakeUp is armed to 00:10', () async {
       final appState = await _fresh();
       expect(appState.durationToWakeUp, const TimeOfDay(hour: 0, minute: 0));
 
       appState.snoozeEnabled = true;
 
       expect(appState.durationToWakeUp, const TimeOfDay(hour: 0, minute: 10),
-          reason: 'sonst waere das Budget null und die gerade eingeschaltete '
-              'Funktion von Anfang an tot');
+          reason: 'otherwise the budget would be zero and the feature just '
+              'switched on would be dead from the start');
     });
 
-    test('ein bereits gesetzter Wert bleibt unangetastet', () async {
+    test('an already-set value stays untouched', () async {
       final appState = await _fresh();
       appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 45);
 
@@ -49,9 +49,9 @@ void main() {
       expect(appState.durationToWakeUp, const TimeOfDay(hour: 0, minute: 45));
     });
 
-    test('Ausschalten setzt das Budget nicht zurueck', () async {
-      // Gegenprobe: der Nutzer soll seine Einstellung behalten, wenn er
-      // Snooze nur kurz abschaltet.
+    test('switching off does not reset the budget', () async {
+      // Counter-check: the user should keep their setting if they only
+      // briefly switch snooze off.
       final appState = await _fresh();
       appState.snoozeEnabled = true;
       expect(appState.durationToWakeUp, const TimeOfDay(hour: 0, minute: 10));
@@ -62,8 +62,8 @@ void main() {
     });
   });
 
-  group('FR-20: Persistenz', () {
-    test('snoozeEnabled und snoozeTime ueberstehen einen Neustart', () async {
+  group('FR-20: persistence', () {
+    test('snoozeEnabled and snoozeTime survive a restart', () async {
       final first = await _fresh();
       first.snoozeEnabled = true;
       first.snoozeTime = const Duration(minutes: 12);
@@ -74,9 +74,9 @@ void main() {
       expect(second.snoozeTime, const Duration(minutes: 12));
     });
 
-    test('der Ursprungsruf ueberlebt einen Prozesstod', () async {
-      // Ohne ihn haette der Nutzer nach einem Neustart wieder das volle
-      // Budget - Snooze waere dann unbegrenzt.
+    test('the origin wake call survives a process death', () async {
+      // Without it, the user would get the full budget back after a
+      // restart - snooze would then be unlimited.
       final first = await _fresh();
       final ring = DateTime(2026, 9, 14, 6, 0);
       first.rememberSnoozeOrigin(4711, ring);
@@ -86,7 +86,7 @@ void main() {
       expect(second.snoozeOriginFor(4711), ring);
     });
 
-    test('ein abgeschlossener Weckruf wird vergessen', () async {
+    test('a completed wake call is forgotten', () async {
       final appState = await _fresh();
       appState.rememberSnoozeOrigin(4711, DateTime(2026, 9, 14, 6, 0));
 
@@ -96,7 +96,7 @@ void main() {
     });
   });
 
-  group('FR-20: der Vorgang selbst', () {
+  group('FR-20: the process itself', () {
     late List<({int id, DateTime at})> armed;
     late List<int> stopped;
 
@@ -114,14 +114,14 @@ void main() {
         now: () => now,
         newId: () => 999,
         setAlarm: (id, at) async {
-          if (settingFails) throw StateError('Plattform weg');
+          if (settingFails) throw StateError('platform gone');
           armed.add((id: id, at: at));
         },
         stopAlarm: (id) async => stopped.add(id),
       );
     }
 
-    test('verschiebt um snoozeTime und beendet den alten Ruf', () async {
+    test('postpones by snoozeTime and ends the old wake call', () async {
       final appState = await _fresh();
       appState.snoozeEnabled = true; // setzt das Budget auf 00:10
       final ring = DateTime(2026, 9, 14, 6, 0);
@@ -134,8 +134,9 @@ void main() {
       expect(stopped, [1]);
     });
 
-    test('der Ursprungsruf wandert auf die neue ID mit', () async {
-      // Ohne das begaenne das Budget bei jedem Snooze von vorn.
+    test('the origin wake call moves along to the new id', () async {
+      // Without this, the budget would restart from scratch on every
+      // snooze.
       final appState = await _fresh();
       appState.snoozeEnabled = true;
       final ring = DateTime(2026, 9, 14, 6, 0);
@@ -147,10 +148,10 @@ void main() {
       expect(appState.snoozeOriginFor(1), isNull);
     });
 
-    test('am Budgetende wird nicht mehr verschoben - und nichts stopped',
+    test('at the end of the budget nothing is postponed any more - and nothing is stopped',
         () async {
       final appState = await _fresh();
-      appState.snoozeEnabled = true; // Budget 10min
+      appState.snoozeEnabled = true; // budget 10min
       final ring = DateTime(2026, 9, 14, 6, 0);
 
       final ok = await snooze(appState,
@@ -159,11 +160,11 @@ void main() {
       expect(ok, isFalse, reason: '06:06 + 5min = 06:11 > 06:10');
       expect(armed, isEmpty);
       expect(stopped, isEmpty,
-          reason: 'FR-20: Snooze schaltet nie ab - scheitert es, klingelt der '
-              'Wecker weiter');
+          reason: 'FR-20: snooze never disables - if it fails, the alarm '
+              'keeps ringing');
     });
 
-    test('scheitert das Stellen, bleibt der alte Wecker scharf', () async {
+    test('if arming fails, the old alarm stays armed', () async {
       final appState = await _fresh();
       appState.snoozeEnabled = true;
 
@@ -175,11 +176,11 @@ void main() {
 
       expect(ok, isFalse);
       expect(stopped, isEmpty,
-          reason: 'sonst stuende der Nutzer ohne jeden Wecker da');
+          reason: 'otherwise the user would be left with no alarm at all');
     });
 
-    test('abgeschaltet passiert nichts', () async {
-      final appState = await _fresh(); // snoozeEnabled ist aus
+    test('nothing happens when switched off', () async {
+      final appState = await _fresh(); // snoozeEnabled is off
 
       final ok = await snooze(appState,
           alarmId: 1,

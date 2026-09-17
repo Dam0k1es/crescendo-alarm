@@ -1,5 +1,5 @@
 // AppState-aware scheduling-v2 orchestration (docs/scheduling-v2-spec.md,
-// "Architektur", "AppState-bewusste Orchestrierung"). Unlike scheduling_v2.dart,
+// "Architecture", "AppState-aware orchestration"). Unlike scheduling_v2.dart,
 // these functions DO take AppState directly and perform I/O (calendar reads) -
 // but every external dependency (calendar fetch, current time, device offset)
 // is injectable, so they stay unit-testable without a device/emulator or a
@@ -45,8 +45,8 @@ class ReplanResult {
 ///
 /// The day that "just rang" (or, on FR-17's recovery path, today's real
 /// calendar date) is [now]'s date - it becomes the new fixed anchor (FR-11:
-/// "Erst der tatsächlich ausgelöste Wert ist für immer fix"), and the fresh
-/// 7-day window (FR-8: "kein erweiterter Berechnungshorizont") starts the day
+/// "only the value that has actually been triggered is fixed forever"), and the fresh
+/// 7-day window (FR-8: "no extended computation horizon") starts the day
 /// after it. If more than one calendar day has elapsed since
 /// [AppState.lastProcessedConcludedDay] (e.g. a reboot gap, FR-17), every
 /// skipped day in between is walked individually so FR-9's `gapDayCounter` and
@@ -84,32 +84,29 @@ Future<ReplanResult> replan(
   final markerDay =
       lastProcessedDay == null ? null : midnight(lastProcessedDay);
 
-  // Welcher Tag zuletzt abgeschlossen ist, ist eine Frage des ZUSTANDS, nicht
-  // des Auslösers (docs/TODO.md T-114).
+  // Which day most recently concluded is a question of STATE, not of the
+  // TRIGGER (docs/TODO.md T-114).
   //
-  // docs/TODO.md T-71 bleibt gültig, sagt aber etwas anderes, als diese Zeile
-  // früher daraus machte: ein Checkpoint darf nicht *annehmen*, heute sei
-  // abgeschlossen - deshalb `todayAlreadyRang`. Ob heute abgeschlossen *ist*,
-  // steht dagegen im Fortschrittsmarker, und wenn der heute schon auf heute
-  // steht, hat heute nachweislich geklingelt. Ihn dann zu ignorieren, machte
-  // den Anker für morgen zu einem Wert, der nie geklingelt hat - genau die
-  // "zweite Quelle", vor der FR-3 warnt ("`lastEffectiveWakeTime` ist bewusst
-  // kein eigenes Feld … würde als zweite Quelle nur auseinanderlaufen
-  // können"). Gemessen wurde dabei ein Tagesschritt vom Doppelten bis zum
-  // Sechsfachen von `maxDailyDelta`.
+  // docs/TODO.md T-71 still holds, but says something different from what
+  // this line used to make of it: a checkpoint must not *assume* today has
+  // concluded - hence `todayAlreadyRang`. Whether today *has* concluded, by
+  // contrast, is what the progress marker says, and if it already points to
+  // today, today has demonstrably rung. Ignoring it then turned tomorrow's
+  // anchor into a value that never rang - exactly the "second source" that
+  // FR-3 warns against ("`lastEffectiveWakeTime` is deliberately not its own
+  // field ... as a second source could only drift apart from it"). Measured
+  // as a daily step of double to sixfold `maxDailyDelta`.
   //
-  // Ein Marker in der ZUKUNFT zählt nie (`dayDistance <= 0`): er ist ein
-  // gerätelokales Ziffern-Datum ohne Klammerung und rutscht bei einer
-  // Uhrzeitkorrektur zurück oder einem Zonenwechsel über die Datumsgrenze vor
-  // das heutige Datum - dieselbe Ursache wie T-109. Ohne die Klammerung gälte
-  // dann das ganze Fenster als abgeschlossen und es würde überhaupt nichts
-  // mehr geplant.
+  // A marker in the FUTURE never counts (`dayDistance <= 0`): it's a
+  // device-local digit date with no clamping, and can slip past today's date
+  // on a clock correction or a zone change across the date boundary - the
+  // same cause as T-109. Without the clamp, the whole window would then count
+  // as concluded and nothing at all would be planned anymore.
   //
-  // Verglichen wird durchgehend über `dayDistance` statt über `isAfter`: der
-  // Marker kommt lokal getaggt aus den Preferences, `currentTime` kann ein
-  // `tz.TZDateTime` sein, und ein Instant-Vergleich zweier Mitternachten aus
-  // verschiedenen Frames ist genau die Fehlerklasse dieses Moduls
-  // (T-61/T-76/T-83).
+  // Compared throughout via `dayDistance` rather than `isAfter`: the marker
+  // comes locally tagged from the preferences, `currentTime` can be a
+  // `tz.TZDateTime`, and an instant comparison of two midnights from
+  // different frames is exactly this module's error class (T-61/T-76/T-83).
   final concludedByTrigger =
       todayAlreadyRang ? today : dayMarker(today, -1);
   final lastConcludedDay = (markerDay != null &&
@@ -118,19 +115,19 @@ Future<ReplanResult> replan(
       ? markerDay
       : concludedByTrigger;
 
-  // Hier - und nur hier - entsteht FR-11s "erst der tatsaechlich ausgeloeste
-  // Wert ist fuer immer fix" (docs/TODO.md T-106): das Fenster beginnt hinter
-  // dem zuletzt abgeschlossenen Tag, also kann ein abgeschlossener Tag gar
-  // nicht mehr neu berechnet oder ueberschrieben werden.
+  // Here - and only here - is where FR-11's "only the value that has actually
+  // been triggered is fixed forever" (docs/TODO.md T-106) actually arises:
+  // the window starts after the most recently concluded day, so a concluded
+  // day can no longer be recomputed or overwritten at all.
   //
-  // Zwischenzeitlich stand die Zusicherung stattdessen als Schreibsperre im
-  // Merge weiter unten. Seit [lastConcludedDay] dem Zustand folgt (T-114), war
-  // die nachweislich toter Code - `windowStart` liegt per Konstruktion hinter
-  // jedem abgeschlossenen Tag, die Bedingung konnte nie wahr werden. Eine
-  // Mutationsprobe bestaetigte es: die Sperre zu entfernen liess jeden Test
-  // gruen. Sie ist deshalb entfernt worden, statt als Schein-Sicherung stehen
-  // zu bleiben. Wer hier die Fensterbildung aendert, nimmt FR-11 mit - die
-  // Regressionstests dazu stehen in test/replan_audit_test.dart.
+  // In the meantime this guarantee instead lived as a write-lock in the merge
+  // further below. Once [lastConcludedDay] started following state (T-114),
+  // that was demonstrably dead code - `windowStart` lies, by construction,
+  // after every concluded day, so the condition could never be true. A
+  // mutation test confirmed it: removing the lock left every test green. It
+  // was therefore removed rather than left standing as a false sense of
+  // safety. Whoever changes the window formation here takes FR-11 along with
+  // it - the regression tests for it live in test/replan_audit_test.dart.
   final windowStart = dayMarker(lastConcludedDay, 1);
   final window = List.generate(7, (i) => dayMarker(windowStart, i));
 
@@ -150,7 +147,7 @@ Future<ReplanResult> replan(
   var daysWithHardFloor = 0;
   final gapCounterBefore = appState.gapDayCounter;
 
-  // FR-9 says "heutiger Tag zählt nicht mit" (today doesn't count yet, since
+  // FR-9 says "today itself does not count" (today doesn't count yet, since
   // it hasn't concluded) - but from THIS function's own perspective, `ringDay`
   // (the day whose alarm just rang) HAS just concluded, right now: this is
   // the one and only moment its hardFloor status is ever known/processed (see
@@ -195,10 +192,9 @@ Future<ReplanResult> replan(
     }
   }
 
-  // docs/TODO.md T-89: `daysProcessed == 0` an einem Tag, an dem der Wecker
-  // geklingelt hat, IST die Signatur von T-75 (ein verlorener Tag). Genau
-  // dieser Befund liess sich vorher nur durch einen handgeschriebenen
-  // Probe-Test nachweisen.
+  // docs/TODO.md T-89: `daysProcessed == 0` on a day whose alarm rang IS the
+  // signature of T-75 (a lost day). Previously this finding could only be
+  // proven with a hand-written probe test.
   Diag.dayAdvance(
     needsDayAdvance: needsDayAdvance,
     hadProgressMarker: lastProcessedDay != null,
@@ -231,8 +227,8 @@ Future<ReplanResult> replan(
   // every still-future value in this map, so dropping it would delete today's
   // not-yet-rung alarm on the next checkpoint (e.g. FR-17 after an
   // early-morning reboot) and the user would oversleep. See
-  // test/apply_alarms_test.dart's "heutiger, noch nicht geklingelter Alarm
-  // bleibt erhalten" regression test before changing this.
+  // test/apply_alarms_test.dart's "today's not-yet-rung alarm survives"
+  // regression test before changing this.
   //
   // Kept bounded all the same (docs/TODO.md T-82): everything strictly before
   // yesterday is unreachable - `lastEffectiveWakeTime` only ever reads
@@ -244,19 +240,19 @@ Future<ReplanResult> replan(
   final oldestKeptDay = isoDate(dayMarker(lastConcludedDay, -1));
   bool worthKeeping(String day) => day.compareTo(oldestKeptDay) >= 0;
 
-  // FR-11, zweite Haelfte: "Erst der tatsaechlich ausgeloeste Wert ist fuer
-  // immer fix" - und "fuer immer" schliesst den Rest desselben Tages ein
+  // FR-11, second half: "only the value that has actually been triggered is
+  // fixed forever" - and "forever" includes the rest of that same day
   // (docs/TODO.md T-106).
   //
-  // Nur der Ring setzt `todayAlreadyRang`. Fuer `settingsChanged` und
-  // `manualSync` beginnt das Fenster deshalb wieder bei HEUTE, auch wenn heute
-  // vor zehn Minuten geklingelt hat - und der Merge unten schrieb dann den
-  // bereits ausgeloesten Wert neu. Folgen: ein zweiter Alarm am selben Morgen
-  // (FR-18 plant jeden noch zukuenftigen Wert), und - schwerer - unter dem
-  // Klingeltag steht danach ein Wert, der nie geklingelt hat. Genau den liest
-  // der naechste Checkpoint als `lastEffectiveWakeTime` (FR-3: "immer der
-  // Eintrag in `pendingDayValues` fuer den zuletzt abgeschlossenen Tag"), also
-  // haengt die ganze Folgewoche an einem erfundenen Anker.
+  // Only the ring sets `todayAlreadyRang`. For `settingsChanged` and
+  // `manualSync` the window therefore starts at TODAY again, even if today
+  // rang ten minutes ago - and the merge below would then overwrite the
+  // already-triggered value. Consequences: a second alarm the same morning
+  // (FR-18 schedules every still-future value), and - worse - the ring day
+  // then holds a value that never rang. The next checkpoint reads exactly
+  // that as `lastEffectiveWakeTime` (FR-3: "always the entry in
+  // `pendingDayValues` for the most recently concluded day"), so the entire
+  // following week hangs off a made-up anchor.
   //
   final mergedValues = <String, int?>{
     for (final entry in appState.pendingDayValues.entries)
@@ -267,13 +263,13 @@ Future<ReplanResult> replan(
     mergedValues[isoDate(day)] = toStored(result.valuesByDay[day]);
   }
   appState.pendingDayValues = mergedValues;
-  // FR-21 + T-82: abgeschaltete Tage mit derselben Grenze aufraeumen wie die
-  // Werte - ein vergangener abgeschalteter Tag interessiert niemanden mehr.
+  // FR-21 + T-82: clean up switched-off days with the same bound as the
+  // values - a switched-off day in the past interests nobody anymore.
   appState.pruneDisabledDays(oldestKeptDay);
 
-  // FR-16: derselbe Merge wie oben (samt derselben Grenze), damit Checkpoint 2
-  // auch für den heutigen (noch nicht geklingelten) Tag weiß, ob dessen Wert
-  // instant- oder ziffern-verankert ist.
+  // FR-16: the same merge as above (with the same bound), so checkpoint 2
+  // also knows, for today's (not-yet-rung) day too, whether its value is
+  // instant- or digit-anchored.
   final mergedAnchors = <String, bool>{
     for (final entry in appState.pendingDayInstantAnchored.entries)
       if (worthKeeping(entry.key)) entry.key: entry.value,
@@ -288,11 +284,11 @@ Future<ReplanResult> replan(
   }
   appState.pendingDayInstantAnchored = mergedAnchors;
 
-  // `windowDayCount != distinctDayKeys` ist die Signatur von T-74d/T-76: zwei
-  // Fenstertage sind auf denselben Tagesschluessel kollidiert.
-  // docs/TODO.md T-140: die EINGABEN, ohne die der geloggte Plan nicht
-  // nachrechenbar ist. Immer geschrieben - Dauern sind keine Uhrzeiten; die
-  // preferredWakeUpTime haengt am Zeit-Schalter und ist sonst -1.
+  // `windowDayCount != distinctDayKeys` is the signature of T-74d/T-76: two
+  // window days collided onto the same day key.
+  // docs/TODO.md T-140: the INPUTS without which the logged plan cannot be
+  // recomputed. Always written - durations are not times of day; the
+  // preferredWakeUpTime depends on whether it's set and is -1 otherwise.
   Diag.planInputs(
     maxDailyDeltaMinutes: appState.maxDailyDelta.inMinutes,
     wakeUpMinutes: durationToWakeUp.inMinutes,
@@ -317,21 +313,21 @@ Future<ReplanResult> replan(
     storedEntriesPruned: prunedCount,
   );
 
-  // docs/TODO.md T-135: pro Fenstertag die geplante Weckzeit und den fruehesten
-  // Termin des Tages, beide als Minute des LOKALEN Tages. Schreibt nur, wenn
-  // die Zeitprotokollierung ausdruecklich eingeschaltet ist - `Diag.dayPlanned`
-  // ist sonst ein No-op.
+  // docs/TODO.md T-135: per window day, the planned wake time and the day's
+  // earliest appointment, both as a minute of the LOCAL day. Only writes when
+  // clock-time logging is explicitly switched on - `Diag.dayPlanned` is a
+  // no-op otherwise.
   //
-  // Warum ueberhaupt: aus Zaehlungen und Buckets laesst sich nicht
-  // rekonstruieren, WARUM an einem Tag diese Weckzeit steht. Genau daran hing
-  // die Diagnose von T-132, die nur ueber Bildschirmfotos und Handrechnung
-  // moeglich war. Mit diesen beiden Zahlen ist ein Wochenplan nachrechenbar:
-  // liegt der Wert am Termin (dann sind beide gekoppelt), an der Kurve oder an
-  // der Wunschzeit?
+  // Why at all: counts and buckets alone can't reconstruct WHY a day ended up
+  // with this wake time. That was exactly what T-132's diagnosis hinged on,
+  // and it was only possible via screenshots and hand arithmetic. With these
+  // two numbers a week's plan can be recomputed: does the value sit at the
+  // appointment (then the two are coupled), on the curve, or at
+  // preferredWakeUpTime?
   //
-  // Lokale Ablesung ueber denselben Versatz, mit dem geplant wurde - das ist
-  // die Zahl, die der Nutzer in der Alarmliste sieht (FR-1/T-83s Trennung von
-  // Instant und Wanduhr).
+  // Read locally via the same offset that was used to plan - that's the
+  // number the user sees in the alarm list (FR-1/T-83's separation of
+  // instant and wall clock).
   if (Diag.includeClockTimes) {
     int minuteOfDay(DateTime instant) {
       final local = instant.toUtc().add(offset);
@@ -380,14 +376,14 @@ Future<ReplanResult> replan(
   );
 }
 
-// docs/TODO.md T-87: runAlarmRingCheckpoint(), onAppForegroundCheckpoint() und
-// runForegroundCheckpointSafely() standen hier. Sie sind in den einen
-// Einstiegspunkt runSchedulingCheckpoint() (checkpoint.dart) aufgegangen -
-// dieselbe Sequenz, aber genau einmal formuliert, serialisiert (T-77) und
-// vollständig (T-80). Was sie unterschied, ist dort CheckpointTrigger.
+// docs/TODO.md T-87: runAlarmRingCheckpoint(), onAppForegroundCheckpoint() and
+// runForegroundCheckpointSafely() used to live here. They have been folded
+// into the one entry point runSchedulingCheckpoint() (checkpoint.dart) - the
+// same sequence, but formulated exactly once, serialized (T-77) and complete
+// (T-80). What told them apart is now CheckpointTrigger there.
 //
-// Diese Datei ist damit wieder auf ihre eigentliche Aufgabe reduziert: WAS
-// geplant wird (FR-8 und FR-16s Checkpoint 2), nicht WANN und WORAUFHIN.
+// This file is thereby reduced back to its actual job: WHAT gets planned
+// (FR-8 and FR-16's checkpoint 2), not WHEN and TRIGGERED BY WHAT.
 
 /// FR-16 Checkpoint 2 (docs/scheduling-v2-spec.md): fires at the computed
 /// sleep-time notification (Phase 5 step 22's `onNotificationCreatedMethod`),
@@ -398,8 +394,8 @@ Future<ReplanResult> replan(
 /// (`lastCheckedUtcOffsetMinutes`), so a later, normal `AppState` load in the
 /// main isolate picks up whatever this checkpoint last wrote.
 ///
-/// Per FR-16's own text, Checkpoint 2 "löst ausschließlich den
-/// Zeitzonen-Vergleich aus, keine Neuplanung, keinen Kalenderzugriff" - it
+/// Per FR-16's own text, Checkpoint 2 "triggers only the time zone
+/// comparison, no replanning, no calendar access" - it
 /// never calls [replan] and never reads the calendar. What it *does* do on a
 /// detected change is FR-16's second half, applied to the still-pending days:
 ///
@@ -408,7 +404,7 @@ Future<ReplanResult> replan(
 ///   zone" - via [reinterpretForNewOffset];
 /// - **instant-anchored** values (taken straight from a real `hardFloor`) keep
 ///   their **instant**: the appointment does not move, only its local display
-///   does (FR-16, "Instant-basierte Werte: unverändert").
+///   does (FR-16, "Instant-based values: unchanged").
 ///
 /// Which is which cannot be re-derived here without calendar access, so
 /// `computeWeekPlan` records it per day and [replan] persists it next to the
@@ -418,7 +414,7 @@ Future<ReplanResult> replan(
 ///
 /// Known limitation, inherent to FR-16's own design: this corrects the stored
 /// plan, not the alarms already handed to the platform - FR-16 explicitly
-/// defers "die vollständige Neuberechnung" to the next regular planning run,
+/// defers "the full recomputation" to the next regular planning run,
 /// so an alarm that fires between the offset change and the next
 /// replan/[applyPlannedAlarms] still uses the pre-change moment.
 Future<void> runTimezoneCheckpoint2({
@@ -466,15 +462,15 @@ Future<void> runTimezoneCheckpoint2({
           await p.setString('pendingDayValues', jsonEncode(updated));
         }
 
-        // docs/TODO.md T-62/T-89: taucht dieses Ereignis im Export auf, ist
-        // belegt, dass die stille Notification den Callback wirklich
-        // ausgeloest hat - die Frage, die T-62 seit Phase 5 offen haelt.
+        // docs/TODO.md T-62/T-89: if this event shows up in the export, it
+        // proves that the silent notification really did trigger the
+        // callback - the question T-62 has left open since Phase 5.
         //
-        // `Diag.init` steht bewusst NICHT hier, sondern am Einstiegspunkt des
-        // Isolates (`onNotificationCreatedMethod`, lib/utils/notifications.dart):
-        // init setzt globalen Zustand (Prefs-Handle, Isolate-Kennung), und
-        // diese Funktion wird auch direkt aus Tests im Haupt-Isolate gerufen -
-        // dort wuerde sie den Logger des Haupt-Isolates umschalten.
+        // `Diag.init` is deliberately NOT here, but at the isolate's entry
+        // point (`onNotificationCreatedMethod`, lib/utils/notifications.dart):
+        // init sets global state (the prefs handle, the isolate id), and this
+        // function is also called directly from tests in the main isolate -
+        // there it would switch over the main isolate's logger.
         Diag.timezoneCheck(
           offsetChanged: true,
           shape: bucketOffsetChange(previousOffset, offset),
@@ -495,15 +491,15 @@ Future<void> runTimezoneCheckpoint2({
   await p.setInt('lastCheckedUtcOffsetMinutes', offset.inMinutes);
 }
 
-/// Der groesste Tagesschritt im Plan, in Minuten - Eingabe fuer das
-/// Bucket-Feld `maxStepBucket` (docs/TODO.md T-89).
+/// The largest daily step in the plan, in minutes - input for the
+/// `maxStepBucket` bucket field (docs/TODO.md T-89).
 ///
-/// Es geht ausschliesslich um die **Differenz** zweier Planwerte, nie um einen
-/// Zeitpunkt selbst: eine Historie von Weckzeitpunkten waere ein Schlafmuster.
-/// Der nominale Tagesabstand wird herausgerechnet, damit uebrig bleibt, was
-/// FR-6 begrenzt - die Verschiebung der Weckzeit pro Tag. Uebersprungene Tage
-/// (Lueckentage ohne Wert) werden dabei mitgezaehlt, sonst waere der Schritt um
-/// ein Vielfaches von 24 Stunden zu gross.
+/// This is exclusively about the **difference** between two planned values,
+/// never about an instant itself: a history of wake instants would be a
+/// sleep pattern. The nominal day distance is factored out, leaving exactly
+/// what FR-6 bounds - the shift in wake time per day. Skipped days (gap days
+/// with no value) are counted along the way, otherwise the step would be too
+/// large by a multiple of 24 hours.
 int _maxStepMinutes(
     Map<DateTime, DateTime?> valuesByDay, List<DateTime> window) {
   const minutesPerDay = 24 * 60;

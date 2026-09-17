@@ -5,23 +5,23 @@ import 'package:wakeywakey/models/alarms/handler.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
 import 'package:wakeywakey/utils/notifications.dart';
 
-// docs/TODO.md T-64 (Phase 6): der schwerste Befund des Konsistenz-Durchgangs.
+// docs/TODO.md T-64 (Phase 6): the most severe finding of the consistency pass.
 //
-// `Handler.onAlarmHandled()` rief den ALTEN `Scheduler.scheduleAlarms()` auf
-// (hinter `rescheduleOnAlarm`, das per Default `true` ist und keine UI hat).
-// Der löscht **zuerst** alle ScheduledAlarms (scheduling.dart:164-169) und
-// kehrt danach an zwei Stellen zurück, ohne etwas neu zu setzen:
-// `existingTimes.isEmpty` (:212-215, "No events in calendar. Aborting.") und
-// `adjustAlarmTimes() == null` (:254-267). Gelesen wird dabei
-// `appState.meetings`, das in einem vom Alarm gestarteten Prozess
-// typischerweise leer ist.
+// `Handler.onAlarmHandled()` used to call the OLD `Scheduler.scheduleAlarms()`
+// (behind `rescheduleOnAlarm`, which defaults to `true` and has no UI). That
+// function **first** deletes all ScheduledAlarms (scheduling.dart:164-169)
+// and then returns at two places without setting anything new:
+// `existingTimes.isEmpty` (:212-215, "No events in calendar. Aborting.") and
+// `adjustAlarmTimes() == null` (:254-267). In doing so it reads
+// `appState.meetings`, which is typically empty in a process started by the
+// alarm.
 //
-// Ablauf in der echten App: scheduling-v2 setzt die Wochenalarme -> der Nutzer
-// dismisst den Morgenalarm -> onAlarmHandled -> alles gelöscht, Abbruch ->
-// **kein einziger Alarm mehr**. Für eine App mit dem Versprechen
-// "garantiertes Aufwachen" der schlimmstmögliche Ausgang.
+// Sequence in the real app: scheduling-v2 sets the week's alarms -> the user
+// dismisses the morning alarm -> onAlarmHandled -> everything deleted, abort
+// -> **not a single alarm left**. For an app that promises "guaranteed
+// wake-up", the worst possible outcome.
 //
-// Dieser Test hätte gegen den unveränderten Code fehlgeschlagen.
+// This test would have failed against the unmodified code.
 
 class _SilentNotifications implements Notifications {
   @override
@@ -59,12 +59,12 @@ ScheduledAlarm _alarm(DateTime time, int id) => ScheduledAlarm(
     );
 
 void main() {
-  test('T-64: ein Dismiss löscht die geplanten Alarme NICHT', () async {
+  test('T-64: a dismiss does NOT delete the planned alarms', () async {
     final appState = await _freshAppState();
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     final dayAfter = DateTime.now().add(const Duration(days: 2));
-    // Der gerade geklingelte Alarm ist selbst noch in der Liste - genau der
-    // Fall, in dem onAlarmHandled früher scheduleAlarms() anwarf.
+    // The alarm that just rang is itself still in the list - exactly the
+    // case in which onAlarmHandled used to kick off scheduleAlarms().
     appState.scheduledAlarms = [_alarm(tomorrow, 501), _alarm(dayAfter, 502)];
 
     Handler.onAlarmHandled(appState, 501,
@@ -76,8 +76,8 @@ void main() {
     }
 
     expect(appState.scheduledAlarms.map((a) => a.id), [501, 502],
-        reason: 'beide geplanten Alarme müssen erhalten bleiben - '
-            'bekommen ${appState.scheduledAlarms.map((a) => a.id).toList()}');
+        reason: 'both planned alarms must be preserved - '
+            'got ${appState.scheduledAlarms.map((a) => a.id).toList()}');
   });
 
   test('T-64: das gilt auch bei leerem Kalender (der reale Fall)', () async {

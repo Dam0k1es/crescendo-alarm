@@ -20,7 +20,7 @@ class AlarmSyncPlan {
   const AlarmSyncPlan({required this.toRemove, required this.toAdd});
 
   /// Existing `ScheduledAlarm`s that no longer correspond to a planned value
-  /// (a revised day, a day that became a Lückentag/safety-valve `null`, or a
+  /// (a revised day, a day that became a gap day/safety-valve `null`, or a
   /// stale alarm that already lies in the past).
   final List<ScheduledAlarm> toRemove;
 
@@ -48,8 +48,8 @@ DateTime _toMinute(DateTime t) {
 ///
 /// Only values strictly after [now] are ever scheduled: a day whose value
 /// already lies in the past has, by definition, either already rung (FR-11:
-/// "erst der tatsächlich ausgelöste Wert ist für immer fix" - re-setting it
-/// would be pointless) or been missed entirely, and the alarm plugin rejects
+/// "only the value that has actually been triggered is fixed forever" -
+/// re-setting it would be pointless) or been missed entirely, and the alarm plugin rejects
 /// past times anyway. A `null` value (FR-9's safety valve, or FR-10's cold
 /// start without a `preferredWakeUpTime`) means "no alarm planned for that day", so any
 /// existing alarm for it gets removed rather than kept.
@@ -215,8 +215,8 @@ Future<void> applyPlannedAlarms(
     disabledDays: appState.disabledDays,
     now: nowFn(),
     platformAlarmIds: platformIds,
-    // docs/TODO.md T-84: die Alarm-Eigenschaften gehören zum Abgleich, sonst
-    // wirkt eine geänderte Einstellung nur auf ohnehin neu geplante Tage.
+    // docs/TODO.md T-84: the alarm properties belong in the reconciliation,
+    // otherwise a changed setting only affects days that get freshly planned anyway.
     tone: appState.selectedTone,
     volume: appState.selectedVolume,
     gentleWake: appState.gentleWakeUpEnabled,

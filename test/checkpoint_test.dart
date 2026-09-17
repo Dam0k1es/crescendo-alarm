@@ -8,25 +8,25 @@ import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 import 'package:wakeywakey/utils/notifications.dart';
 
-// docs/TODO.md T-77 + T-80 + T-87: runSchedulingCheckpoint() ist der eine
-// Einstiegspunkt für jeden Auslöser (Ring, App-Vordergrund,
-// Einstellungsänderung). Vorher gab es fünf Einstiegspunkte, die sich in vier
-// orthogonalen Dimensionen unterschieden (Versatz schreiben? heute
-// abgeschlossen? melden? Reminder neu planen? Fehler schlucken?) - genau diese
-// Matrix hat T-67, T-71 und T-80 produziert, dreimal denselben Fehler in
-// derselben Struktur.
+// docs/TODO.md T-77 + T-80 + T-87: runSchedulingCheckpoint() is the one entry
+// point for every trigger (ring, app foreground, setting change). Previously
+// there were five entry points that differed in four orthogonal dimensions
+// (record the offset? treat today as concluded? report? reschedule the
+// reminder? swallow errors?) - exactly this matrix produced T-67, T-71, and
+// T-80, the same bug three times in the same structure.
 //
-// Die zwei Eigenschaften, die diese Datei absichert:
-//  * T-77: die Sequenz ist serialisiert. Vier Auslöser, drei davon
-//    fire-and-forget - und FR-17s Tagessperre konnte sie nicht schützen, weil
-//    sie `lastReplanDate` liest, das erst am ENDE von replan() geschrieben
-//    wird. Klingelt ein Alarm, holt Android die App per Full-Screen-Intent nach
-//    vorn -> zweiter Checkpoint, während der erste noch im Kalender-I/O hängt.
-//  * T-80: die Sequenz ist vollständig. scheduleSleepReminder() lief nur aus
-//    initState, dem Reminder-Schalter und onAlarmHandled - nicht aus den
-//    Checkpoints selbst. Auf dem Resume-Pfad wurde also neu geplant, während
-//    die Bettzeit-Notification (FR-16 Checkpoint 2s Aufhänger) auf der alten
-//    Zeit stehen blieb.
+// The two properties this file guards:
+//  * T-77: the sequence is serialized. Four triggers, three of them
+//    fire-and-forget - and FR-17's daily lock couldn't protect them, because
+//    it reads `lastReplanDate`, which is only written at the END of
+//    replan(). If an alarm rings, Android brings the app forward via a
+//    full-screen intent -> a second checkpoint while the first is still
+//    hanging in calendar I/O.
+//  * T-80: the sequence is complete. scheduleSleepReminder() used to run
+//    only from initState, the reminder switch, and onAlarmHandled - not
+//    from the checkpoints themselves. So on the resume path a replan
+//    happened while the bedtime notification (FR-16 checkpoint 2's hook)
+//    stayed stuck on the old time.
 
 DateTime _utc(int hour, int minute, {int day = 10}) =>
     DateTime.utc(2026, 3, day, hour, minute);
@@ -34,8 +34,8 @@ DateTime _utc(int hour, int minute, {int day = 10}) =>
 class _RecordingNotifications implements Notifications {
   _RecordingNotifications({this.observe});
 
-  /// Läuft bei jedem scheduleNotification-Aufruf - so lässt sich prüfen, in
-  /// welchem Zustand der AppState zum Zeitpunkt der Benachrichtigung war.
+  /// Runs on every scheduleNotification call - this makes it possible to
+  /// check what state AppState was in at the moment of notification.
   final void Function()? observe;
 
   final List<DateTime?> scheduledDates = [];
@@ -77,19 +77,19 @@ Future<AppState> _freshAppState() async {
 }
 
 void main() {
-  group('T-77: Serialisierung', () {
+  group('T-77: serialization', () {
     test(
-        'zwei gleichzeitige Vordergrund-Checkpoints zählen den Tag nur einmal fort',
+        'two simultaneous foreground checkpoints only advance the day once',
         () async {
       final appState = await _freshAppState();
-      // Vorgeschichte: Tag7 ist der letzte verarbeitete Tag. Der Checkpoint
-      // läuft als Erholung an Tag9, heute gilt also nicht als abgeschlossen
-      // (T-71) - genau ein Tag (Tag8) ist neu zu verarbeiten.
+      // History: day 7 is the last processed day. The checkpoint runs as
+      // recovery on day 9, so today does not count as concluded (T-71) -
+      // exactly one day (day 8) needs processing.
       appState.lastProcessedConcludedDay = _utc(0, 0, day: 7);
       appState.lastReplanDate = _utc(0, 0, day: 7);
 
-      // Der erste Checkpoint hängt im Kalender-I/O, bis wir ihn freigeben -
-      // genau das Fenster, in dem der zweite Auslöser hereinkommt.
+      // The first checkpoint hangs in calendar I/O until we release it -
+      // exactly the window in which the second trigger comes in.
       final gate = Completer<void>();
       var fetchCount = 0;
       Future<List<Meeting>> slowFetch(DateTime start, DateTime end) async {
@@ -106,7 +106,7 @@ void main() {
         fetchEvents: slowFetch,
         notifications: _RecordingNotifications(),
       );
-      // Dem ersten Aufruf Zeit geben, bis in den fetch zu laufen.
+      // Give the first call time to run into the fetch.
       await Future<void>.delayed(Duration.zero);
       final second = runSchedulingCheckpoint(
         appState,
@@ -121,16 +121,16 @@ void main() {
       final results = await Future.wait([first, second]);
 
       expect(fetchCount, 1,
-          reason: 'der zweite Auslöser darf nicht parallel in den Kalender '
-              'laufen, bekommen $fetchCount Aufrufe');
+          reason: 'the second trigger must not run into the calendar in '
+              'parallel, got $fetchCount calls');
       expect(results.where((r) => r != null).length, 1,
-          reason: 'genau einer der beiden plant wirklich');
+          reason: 'exactly one of the two actually replans');
       expect(appState.gapDayCounter, 1,
-          reason: 'genau Tag8 ist abgeschlossen und termin-los');
+          reason: 'exactly day 8 is concluded and appointment-free');
       expect(appState.lastProcessedConcludedDay, _utc(0, 0, day: 8));
     });
 
-    test('eine Einstellungsänderung wartet auf einen laufenden Ring-Checkpoint',
+    test('a setting change waits for a running ring checkpoint',
         () async {
       final appState = await _freshAppState();
       appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
@@ -168,13 +168,13 @@ void main() {
       await Future.wait([ring, settings]);
 
       expect(order, ['ring-fetch', 'settings-fetch'],
-          reason: 'strikt hintereinander, nicht verschränkt');
-      // Eine Einstellungsänderung unterliegt FR-17s Tagessperre NICHT - sie
-      // muss also trotz des Rings am selben Tag wirklich neu planen.
+          reason: 'strictly one after another, not interleaved');
+      // A setting change is NOT subject to FR-17's daily lock - so it must
+      // genuinely replan despite the ring on the same day.
       expect(order.contains('settings-fetch'), isTrue);
     });
 
-    test('ein Fehler im ersten Checkpoint blockiert den nächsten nicht',
+    test('an error in the first checkpoint does not block the next',
         () async {
       final appState = await _freshAppState();
 
@@ -184,7 +184,7 @@ void main() {
           trigger: CheckpointTrigger.alarmRing,
           now: () => _utc(7, 0, day: 9),
           deviceUtcOffset: Duration.zero,
-          fetchEvents: (start, end) async => throw StateError('Kalender kaputt'),
+          fetchEvents: (start, end) async => throw StateError('calendar broken'),
           notifications: _RecordingNotifications(),
         ),
         throwsA(isA<StateError>()),
@@ -203,8 +203,8 @@ void main() {
     });
   });
 
-  group('T-80: vollständige Sequenz', () {
-    test('der Ring-Checkpoint plant die Bettzeit-Notification neu', () async {
+  group('T-80: complete sequence', () {
+    test('the ring checkpoint replans the bedtime notification', () async {
       final appState = await _freshAppState();
       appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
       final notifications = _RecordingNotifications();
@@ -221,10 +221,10 @@ void main() {
       expect(notifications.callCount, 1);
       expect(notifications.scheduledDates.single, isNotNull);
       expect(notifications.cancelAllCount, 0,
-          reason: 'niemals global stornieren (T-74b)');
+          reason: 'never cancel globally (T-74b)');
     });
 
-    test('der Vordergrund-Checkpoint plant sie ebenfalls neu', () async {
+    test('the foreground checkpoint replans it too', () async {
       final appState = await _freshAppState();
       appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
       final notifications = _RecordingNotifications();
@@ -241,7 +241,7 @@ void main() {
       expect(notifications.callCount, 1);
     });
 
-    test('die Bettzeit wird NACH dem Plan bestimmt, nicht davor', () async {
+    test('the bedtime is determined AFTER the plan, not before', () async {
       final appState = await _freshAppState();
       appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
       var pendingCountAtNotification = -1;
@@ -260,11 +260,11 @@ void main() {
       );
 
       expect(pendingCountAtNotification, 7,
-          reason: 'der Reminder leitet sich aus dem frischen Plan ab');
+          reason: 'the reminder is derived from the fresh plan');
     });
 
     test(
-        'FR-17s Tagessperre verhindert beim Vordergrund-Auslöser auch den Reminder-Neuaufbau nicht doppelt',
+        'FR-17\'s daily lock also prevents rebuilding the reminder twice on the foreground trigger',
         () async {
       final appState = await _freshAppState();
       appState.lastReplanDate = _utc(0, 0, day: 9);
@@ -280,18 +280,18 @@ void main() {
         notifications: notifications,
       );
 
-      expect(result, isNull, reason: 'FR-17: heute schon geplant -> No-op');
+      expect(result, isNull, reason: 'FR-17: already planned today -> no-op');
       expect(notifications.callCount, 0,
-          reason: 'ohne Neuplanung gibt es auch nichts neu zu terminieren');
+          reason: 'without a replan there is nothing new to schedule either');
     });
   });
 
-  // Portiert aus den entfallenen Einstiegspunkten (runAlarmRingCheckpoint,
+  // Ported from the entry points that no longer exist (runAlarmRingCheckpoint,
   // onAppForegroundCheckpoint, runForegroundCheckpointSafely,
-  // onSchedulingSettingsChanged) - die Zusicherungen bleiben, nur der
-  // Aufrufweg ist jetzt einheitlich.
-  group('FR-16 Checkpoint 1 (Ring)', () {
-    test('ein erkannter Versatzwechsel wird persistiert', () async {
+  // onSchedulingSettingsChanged) - the assertions remain, only the call path
+  // is now unified.
+  group('FR-16 checkpoint 1 (ring)', () {
+    test('a detected offset change is persisted', () async {
       final appState = await _freshAppState();
       appState.lastCheckedUtcOffset = const Duration(hours: 1);
 
@@ -307,7 +307,7 @@ void main() {
       expect(appState.lastCheckedUtcOffset, const Duration(hours: 9));
     });
 
-    test('der Ring plant in jedem Fall auch neu (T-61: Instant, nicht Ziffern)',
+    test('the ring also always replans (T-61: instant, not digits)',
         () async {
       final appState = await _freshAppState();
       appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
@@ -322,16 +322,16 @@ void main() {
         notifications: _RecordingNotifications(),
       );
 
-      // windowStart = Tag11; Kaltstart mit preferredWakeUpTime setzt Tag11 auf 07:00
-      // **lokal**. Bei deviceUtcOffset = +9 ist das der Instant 22:00 UTC am
-      // Vortag - genau der T-61-Fix (gespeichert wird ein echter Instant,
-      // preferredWakeUpTime ist eine geräte-lokale Uhrzeit).
+      // windowStart = day 11; a cold start with preferredWakeUpTime sets day
+      // 11 to 07:00 **local**. At deviceUtcOffset = +9 that's the instant
+      // 22:00 UTC the day before - exactly the T-61 fix (a real instant is
+      // stored, preferredWakeUpTime is a device-local time of day).
       expect(appState.pendingDayValues['2026-03-11'],
           DateTime.utc(2026, 3, 10, 22, 0).millisecondsSinceEpoch);
       expect(appState.lastReplanDate, _utc(0, 0, day: 10));
     });
 
-    test('unveränderter Versatz lässt den bereits geklingelten Wert unberührt',
+    test('an unchanged offset leaves the already-rung value untouched',
         () async {
       final appState = await _freshAppState();
       appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
@@ -361,8 +361,8 @@ void main() {
     });
   });
 
-  group('FR-17 (App-Vordergrund)', () {
-    test('gestern zuletzt geplant -> löst genau einen Checkpoint aus', () async {
+  group('FR-17 (app foreground)', () {
+    test('last planned yesterday -> triggers exactly one checkpoint', () async {
       final appState = await _freshAppState();
       appState.lastReplanDate = _utc(0, 0, day: 8);
 
@@ -379,7 +379,7 @@ void main() {
       expect(appState.lastReplanDate, _utc(0, 0, day: 10));
     });
 
-    test('heute bereits geplant -> gar kein Kalenderzugriff', () async {
+    test('already planned today -> no calendar access at all', () async {
       final appState = await _freshAppState();
       appState.lastReplanDate = _utc(0, 0, day: 10);
       final pendingBefore = Map.of(appState.pendingDayValues);
@@ -398,7 +398,7 @@ void main() {
       expect(appState.pendingDayValues, pendingBefore);
     });
 
-    test('Regression: zweiter App-Start direkt nach dem ersten bleibt aus',
+    test('regression: a second app start right after the first does not fire',
         () async {
       final appState = await _freshAppState();
       appState.lastReplanDate = _utc(0, 0, day: 8);
@@ -429,8 +429,8 @@ void main() {
     });
   });
 
-  group('T-65 (Einstellungsänderung)', () {
-    test('plant sofort neu, ohne FR-17s Tagessperre abzuwarten', () async {
+  group('T-65 (setting change)', () {
+    test('replans immediately, without waiting on FR-17\'s daily lock', () async {
       final appState = await _freshAppState();
       appState.lastReplanDate = _utc(0, 0, day: 10);
       appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
@@ -448,7 +448,7 @@ void main() {
       expect(appState.pendingDayValues['2026-03-11'], isNotNull);
     });
 
-    test('ein längeres Schlafziel verschiebt die Bettzeit nach vorn', () async {
+    test('a longer sleep goal moves the bedtime earlier', () async {
       final appState = await _freshAppState();
       appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
@@ -481,11 +481,11 @@ void main() {
   });
 
   group('runCheckpointSafely', () {
-    test('ein fehlschlagender Kalenderzugriff bricht nicht durch', () async {
+    test('a failing calendar access does not propagate', () async {
       final appState = await _freshAppState();
 
-      // Wirft KEINE Exception nach außen - ein durchschlagender Fehler würde
-      // hier den App-Start abbrechen bzw. die auslösende UI abstürzen lassen.
+      // Throws NO exception outward - a propagating error here would abort
+      // the app start, or crash the triggering UI.
       final result = await runCheckpointSafely(
         appState,
         trigger: CheckpointTrigger.appForeground,
@@ -500,10 +500,10 @@ void main() {
     });
 
     test(
-        'FR-16s Aufhänger wird selbst dann geplant, wenn die Neuplanung scheitert',
+        'FR-16\'s hook is scheduled even when the replan itself fails',
         () async {
-      // Sonst hätte ein frischer Install nach einem Kalenderfehler dauerhaft
-      // keine Bettzeit-Notification - und damit keinen Checkpoint 2.
+      // Otherwise a fresh install would permanently have no bedtime
+      // notification after a calendar error - and thus no checkpoint 2.
       final appState = await _freshAppState();
       final notifications = _RecordingNotifications();
 
@@ -512,7 +512,7 @@ void main() {
         trigger: CheckpointTrigger.settingsChanged,
         now: () => _utc(9, 0, day: 10),
         deviceUtcOffset: Duration.zero,
-        fetchEvents: (start, end) async => throw StateError('kaputt'),
+        fetchEvents: (start, end) async => throw StateError('broken'),
         notifications: notifications,
       );
 
@@ -520,17 +520,17 @@ void main() {
     });
   });
 
-  // Portiert aus replan_notifications_test.dart: dort war der Meldepfad über
-  // injizierte `checkpoint`/`report`-Nähte geprüft, die es nicht mehr gibt.
-  // Jetzt geht der Test durch die echte Verdrahtung - stärker als vorher.
-  group('T-67: Melden auf dem Erholungspfad (FR-12)', () {
-    test('ein verspätet bekannter Termin für einen abgeschlossenen Tag wird gemeldet',
+  // Ported from replan_notifications_test.dart: there, the reporting path
+  // was checked via injected `checkpoint`/`report` seams that no longer
+  // exist. Now the test runs through the real wiring - stronger than before.
+  group('T-67: reporting on the recovery path (FR-12)', () {
+    test('an appointment discovered late for a concluded day is reported',
         () async {
       final appState = await _freshAppState();
       final notifications = _RecordingNotifications();
       appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
-      // Tag9 klingelt, leerer Kalender -> Tag10 auf 07:00 geplant.
+      // Day 9 rings, empty calendar -> day 10 planned at 07:00.
       await runSchedulingCheckpoint(
         appState,
         trigger: CheckpointTrigger.alarmRing,
@@ -540,8 +540,8 @@ void main() {
         notifications: _RecordingNotifications(),
       );
 
-      // Tag11, App wird geöffnet: jetzt taucht ein Termin für Tag10 (bereits
-      // geklingelt) mit strengerem hardFloor auf.
+      // Day 11, the app is opened: now an appointment for day 10 (already
+      // rung) appears, with a stricter hardFloor.
       await runSchedulingCheckpoint(
         appState,
         trigger: CheckpointTrigger.appForeground,
@@ -559,15 +559,15 @@ void main() {
         notifications: notifications,
       );
 
-      // Eine FR-12-Meldung plus die Bettzeit-Notification.
+      // One FR-12 report plus the bedtime notification.
       expect(notifications.callCount, 2);
       expect(notifications.ids, contains(isNull),
-          reason: 'die FR-12-Warnung läuft ohne feste id');
+          reason: 'the FR-12 warning runs without a fixed id');
     });
   });
 
-  group('Auslöser-Semantik', () {
-    test('nur der Ring behandelt heute als abgeschlossen (T-71)', () async {
+  group('trigger semantics', () {
+    test('only the ring treats today as concluded (T-71)', () async {
       final appState = await _freshAppState();
       appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
 
@@ -580,11 +580,11 @@ void main() {
         notifications: _RecordingNotifications(),
       );
 
-      // Erholung: heute (Tag9) bleibt revidierbar, ist also im Fenster.
+      // Recovery: today (day 9) stays revisable, i.e. it's in the window.
       expect(appState.pendingDayValues['2026-03-09'], isNotNull);
     });
 
-    test('jeder Auslöser hält den geprüften Zeitzonen-Versatz fest (FR-16)',
+    test('every trigger records the checked time zone offset (FR-16)',
         () async {
       final appState = await _freshAppState();
 

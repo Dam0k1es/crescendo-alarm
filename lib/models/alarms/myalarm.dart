@@ -6,20 +6,20 @@ abstract class MyAlarm {
   bool enabled;
   bool gentlewake;
 
-  /// Wie lange die Gentle-Wake-Rampe braucht, bis sie [volume] erreicht -
-  /// also wie lange der Alarm leise bleibt (docs/TODO.md T-96).
+  /// How long the gentle-wake ramp takes to reach [volume] - i.e. how long
+  /// the alarm stays quiet (docs/TODO.md T-96).
   ///
-  /// Bewusst eine Eigenschaft des ALARMS und nicht nur eine AppState-Vorgabe:
-  /// `planAlarmSync` entscheidet anhand der Alarm-Eigenschaften, ob ein bereits
-  /// gesetzter Alarm ersetzt werden muss. Läge der Wert nur im AppState, könnte
-  /// eine Änderung dort nie als Abweichung erkannt werden - die Einstellung
-  /// hätte eine UI, würde aber auf bestehende Alarme niemals wirken. Genau das
-  /// war T-84 bei Ton und Lautstärke.
+  /// Deliberately a property of the ALARM, not just an AppState default:
+  /// `planAlarmSync` decides whether an already-armed alarm must be replaced
+  /// based on the alarm's own properties. If the value lived only in
+  /// AppState, a change there could never be recognized as a deviation - the
+  /// setting would have a UI but would never affect existing alarms. That's
+  /// exactly what T-84 was, for tone and volume.
   Duration gentleWakeDuration;
 
   String tone;
   double volume;
-  int id; // Neue ID-Eigenschaft hinzugefügt
+  int id; // Added id property
 
   MyAlarm({
     required this.time,
@@ -33,8 +33,8 @@ abstract class MyAlarm {
   })  : title = title ?? 'Alarm',
         enabled = enabled ?? true,
         gentlewake = gentlewake ?? false,
-        // Der bisher festverdrahtete Wert aus app_state.dart - so klingen
-        // bestehende Installationen unverändert weiter.
+        // The previously hardcoded value from app_state.dart - so existing
+        // installations keep sounding unchanged.
         gentleWakeDuration = gentleWakeDuration ?? const Duration(minutes: 1),
         tone = tone ?? 'Default',
         volume = volume ?? 0.6,

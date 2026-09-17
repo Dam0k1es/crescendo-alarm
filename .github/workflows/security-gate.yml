@@ -1,22 +1,21 @@
 name: Security gate (reusable)
-# Aufgerufen von ci.yml (master-Pushes und PRs) UND von release.yml.
+# Called by ci.yml (master pushes and PRs) AND by release.yml.
 #
-# Warum wiederverwendbar und nicht zweimal hingeschrieben: der Tag-getriggerte
-# Release-Pfad hatte ueberhaupt kein SCA-, Secret- und SAST-Tor - release.yml
-# fuhr nur `flutter analyze`, `flutter test` und die E2E-Suite. Ein per Tag
-# gebautes, signiertes und an ein GitHub-Release angehaengtes APK konnte also
-# eine verwundbare Abhaengigkeit oder ein eingechecktes Geheimnis enthalten,
-# obwohl derselbe Commit auf `master` daran gescheitert waere. Genau die Art
-# Luecke, die zweimal formulierter Zustand erzeugt - deshalb steht das Tor
-# jetzt genau einmal hier.
+# Why reusable rather than written out twice: the tag-triggered release path
+# used to have no SCA, secret, or SAST gate at all - release.yml only ran
+# `flutter analyze`, `flutter test`, and the E2E suite. An APK built,
+# signed, and attached to a GitHub Release via a tag could therefore carry
+# a vulnerable dependency or a checked-in secret, even though the same
+# commit would have failed that check on `master`. Exactly the kind of gap
+# that duplicated state creates - so the gate now lives here exactly once.
 #
-# Was hier rot werden kann, ist echtes Tor:
-#   osv-scanner    - bekannte Verwundbarkeiten in pubspec.lock
-#   trufflehog     - verifizierte und unbekannte Geheimnisse (--fail)
-#   mobsfscan      - Android-SAST, gegen .github/security-exceptions.json
-#                    gefiltert (mobsfscans eigener Exit-Code unterscheidet
-#                    akzeptierte nicht von neuen Befunden, deshalb --no-fail
-#                    plus der eigene Prueflauf danach)
+# What can turn red here is a real gate:
+#   osv-scanner    - known vulnerabilities in pubspec.lock
+#   trufflehog     - verified and unknown secrets (--fail)
+#   mobsfscan      - Android SAST, filtered against
+#                    .github/security-exceptions.json (mobsfscan's own exit
+#                    code doesn't distinguish accepted findings from new
+#                    ones, hence --no-fail plus its own check step afterward)
 
 on:
   workflow_call:

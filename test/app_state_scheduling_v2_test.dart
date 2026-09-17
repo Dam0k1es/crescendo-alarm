@@ -5,16 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakeywakey/app_state.dart';
 
-// Phase 0, Schritt 2 (docs/scheduling-v2-spec.md, "Implementierungsreihenfolge"):
-// Persistenz-Rundreise für die vier neuen Scheduling-v2-Felder (FR-3), nach
-// demselben Muster wie die bestehenden AppState-Felder (int -> setInt/getInt,
-// String-kodiert für alles andere). pendingDayValues wird zusätzlich direkt
-// über eine frische SharedPreferences-Instanz zurückgelesen (nicht über
-// AppState) - das simuliert genau den Zugriff, den der Hintergrund-Isolate
-// aus FR-16 später braucht (siehe Architektur, "Reale Anbindung" Fund 1).
+// Phase 0, step 2 (docs/scheduling-v2-spec.md, "Implementation order"):
+// persistence round-trip for the four new scheduling-v2 fields (FR-3),
+// following the same pattern as the existing AppState fields (int ->
+// setInt/getInt, string-encoded for everything else). pendingDayValues is
+// additionally read back directly via a fresh SharedPreferences instance
+// (not via AppState) - that simulates exactly the access the background
+// isolate from FR-16 will need later (see Architecture, "real wiring" finding 1).
 
 void main() {
-  group('Scheduling-v2 AppState-Felder (FR-3) - Persistenz-Rundreise', () {
+  group('scheduling-v2 AppState fields (FR-3) - persistence round-trip', () {
     test('gapDayCounter (FR-9)', () async {
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
@@ -43,7 +43,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
       await first.initialized;
-      expect(first.lastReplanDate, isNull); // vor der allerersten Neuplanung
+      expect(first.lastReplanDate, isNull); // before the very first replan
 
       final today = DateTime.utc(2026, 1, 15);
       first.lastReplanDate = today;
@@ -53,24 +53,24 @@ void main() {
       expect(second.lastReplanDate, today);
     });
 
-    test('pendingDayValues (FR-11) - über AppState und direkt über SharedPreferences lesbar', () async {
+    test('pendingDayValues (FR-11) - readable via AppState and directly via SharedPreferences', () async {
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
       await first.initialized;
 
       final values = <String, int?>{
         '2026-01-16': DateTime.utc(2026, 1, 16, 7, 0).millisecondsSinceEpoch,
-        '2026-01-17': null, // kein Alarm geplant (z. B. Kaltstart, FR-10)
+        '2026-01-17': null, // no alarm planned (e.g. cold start, FR-10)
       };
       first.pendingDayValues = values;
 
-      // Über eine neue AppState-Instanz (simuliert App-Neustart):
+      // Via a new AppState instance (simulates an app restart):
       final second = AppState();
       await second.initialized;
       expect(second.pendingDayValues, values);
 
-      // Direkt über SharedPreferences, ohne AppState - genau der Zugriff, den
-      // der Hintergrund-Isolate aus FR-16 Checkpoint 2 braucht:
+      // Directly via SharedPreferences, without AppState - exactly the
+      // access the background isolate from FR-16 checkpoint 2 needs:
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString('pendingDayValues');
       expect(raw, isNotNull);
@@ -78,13 +78,13 @@ void main() {
       expect(decoded, values);
     });
 
-    // Phase 4 (docs/scheduling-v2-spec.md, "Implementierungsreihenfolge"):
+    // Phase 4 (docs/scheduling-v2-spec.md, "Implementation order"):
     // replan() needs preferredWakeUpTime/maxDailyDelta from AppState directly (FR-3) -
     // Phase 0 deliberately added only the 4 fields that don't need a settings
     // UI first (lastEffectiveWakeTime is derived from pendingDayValues
     // instead, see replan_test.dart); these two are added now, following the
     // exact same persistence pattern as the others.
-    test('wunschzeit (FR-3/FR-4) - kein Standardwert, revisionierbar auf null', () async {
+    test('preferredWakeUpTime (FR-3/FR-4) - no default value, revisable to null', () async {
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
       await first.initialized;
@@ -101,19 +101,20 @@ void main() {
       expect(third.preferredWakeUpTime, isNull);
     });
 
-    // FR-16/Phase 5 Schritt 22: Checkpoint 2 läuft im Hintergrund-Isolate ohne
-    // AppState und muss unterscheiden können, welche Tageswerte instant- und
-    // welche ziffern-verankert sind - daher persistiert, mit demselben
-    // direkt-über-SharedPreferences-lesbaren Format wie pendingDayValues.
-    test('pendingDayInstantAnchored (FR-16) - über AppState und direkt lesbar', () async {
+    // FR-16/Phase 5 step 22: checkpoint 2 runs in the background isolate
+    // without AppState and must be able to tell which daily values are
+    // instant-anchored and which are digit-anchored - hence persisted, with
+    // the same directly-readable-via-SharedPreferences format as
+    // pendingDayValues.
+    test('pendingDayInstantAnchored (FR-16) - readable via AppState and directly', () async {
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
       await first.initialized;
       expect(first.pendingDayInstantAnchored, isEmpty);
 
       final anchored = <String, bool>{
-        '2026-01-16': true, // Wert kam direkt aus einem echten hardFloor
-        '2026-01-17': false, // preferredWakeUpTime/Kurve
+        '2026-01-16': true, // the value came directly from a real hardFloor
+        '2026-01-17': false, // preferredWakeUpTime/the curve
       };
       first.pendingDayInstantAnchored = anchored;
 
@@ -127,14 +128,14 @@ void main() {
       expect(jsonDecode(raw!), anchored);
     });
 
-    // docs/TODO.md T-96: die Dauer der Gentle-Wake-Rampe war in
-    // app_state.dart als `Duration(seconds: 60)` festverdrahtet.
-    test('gentleWakeUpDuration - Rundreise und erzwungenes Minimum', () async {
+    // docs/TODO.md T-96: the gentle-wake ramp duration was hardcoded in
+    // app_state.dart as `Duration(seconds: 60)`.
+    test('gentleWakeUpDuration - round-trip and enforced minimum', () async {
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
       await first.initialized;
-      // Standard = das bisher festverdrahtete Verhalten, damit bestehende
-      // Installationen sich nicht plötzlich anders anhören.
+      // Default = the previously hardcoded behaviour, so existing
+      // installations don't suddenly sound different.
       expect(first.gentleWakeUpDuration, const Duration(minutes: 1));
 
       first.gentleWakeUpDuration = const Duration(minutes: 10);
@@ -142,38 +143,38 @@ void main() {
       await second.initialized;
       expect(second.gentleWakeUpDuration, const Duration(minutes: 10));
 
-      // Das Alarm-Plugin hat `assert(fadeDuration > Duration.zero)`. Der
-      // hh:mm-Picker auf dem Sleep-Habits-Schirm lässt aber 00:00 zu, und im
-      // Release-Build sind Assertions aus - eine Null käme also ungebremst im
-      // Plugin an. Deshalb dieselbe Klammer wie bei maxDailyDelta.
+      // The alarm plugin has `assert(fadeDuration > Duration.zero)`. But the
+      // hh:mm picker on the sleep-habits screen allows 00:00, and assertions
+      // are off in the release build - so a zero would reach the plugin
+      // unchecked. Hence the same bound as for maxDailyDelta.
       second.gentleWakeUpDuration = Duration.zero;
       expect(second.gentleWakeUpDuration, const Duration(minutes: 1));
     });
 
-    test('maxDailyDelta (FR-3) - System-Minimum 15 Minuten wird erzwungen', () async {
+    test('maxDailyDelta (FR-3) - the system minimum of 15 minutes is enforced', () async {
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
       await first.initialized;
-      expect(first.maxDailyDelta, const Duration(minutes: 15)); // Standardwert = Minimum
+      expect(first.maxDailyDelta, const Duration(minutes: 15)); // default = minimum
 
       first.maxDailyDelta = const Duration(minutes: 45);
       final second = AppState();
       await second.initialized;
       expect(second.maxDailyDelta, const Duration(minutes: 45));
 
-      // Ein Versuch, unter das Minimum zu gehen, wird auf 15min angehoben.
+      // An attempt to go below the minimum is raised to 15min.
       second.maxDailyDelta = const Duration(minutes: 5);
       expect(second.maxDailyDelta, const Duration(minutes: 15));
     });
   });
 
-  group('FR-3-Felder ohne Rundreise-Test (T-108)', () {
-    // Die Pruefung 2026-09 fand drei der zehn FR-3-Felder ohne
-    // Persistenz-Rundreise. Funktional benutzt werden sie in replan_test,
-    // checkpoint_test und replan_notifications_test - aber keiner davon baut
-    // AppState neu auf, prueft also nie, ob der Wert einen App-Neustart
-    // ueberlebt. Beide bool-Merker tragen FR-6s bzw. FR-9s "einmalig"-Zusage
-    // ueber genau diese Grenze.
+  group('FR-3 fields without a round-trip test (T-108)', () {
+    // The 2026-09 review found three of the ten FR-3 fields with no
+    // persistence round-trip. They are used functionally in replan_test,
+    // checkpoint_test, and replan_notifications_test - but none of those
+    // rebuild AppState, so none of them ever check whether the value
+    // survives an app restart. Both bool markers carry FR-6's and FR-9's
+    // "once" promise across exactly this boundary.
 
     test('lastProcessedConcludedDay (FR-9, T-75)', () async {
       SharedPreferences.setMockInitialValues({});
@@ -189,10 +190,9 @@ void main() {
       expect(second.lastProcessedConcludedDay, day);
     });
 
-    test('lastProcessedConcludedDay ist von lastReplanDate unabhaengig (T-75)',
+    test('lastProcessedConcludedDay is independent of lastReplanDate (T-75)',
         () async {
-      // Der eigentliche Punkt von T-75: die beiden duerfen sich nicht wieder
-      // zu einem Wert verschmelzen.
+      // The actual point of T-75: the two must not merge back into a single value.
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
       await first.initialized;
@@ -217,7 +217,7 @@ void main() {
       final second = AppState();
       await second.initialized;
       expect(second.overrunNotificationSent, isTrue,
-          reason: 'FR-6 "einmalig" muss einen Neustart ueberdauern');
+          reason: 'FR-6 "once" must survive a restart');
     });
 
     test('safetyValveNotificationSent (FR-9, T-81)', () async {
@@ -231,19 +231,19 @@ void main() {
       final second = AppState();
       await second.initialized;
       expect(second.safetyValveNotificationSent, isTrue,
-          reason: 'FR-9 "einmalig" muss einen Neustart ueberdauern');
+          reason: 'FR-9 "once" must survive a restart');
     });
   });
 
-  group('Diagnose-Schalter (T-135)', () {
-    test('diagnosticsIncludeClockTimes: Standard aus, Rundreise haelt',
+  group('diagnostics switch (T-135)', () {
+    test('diagnosticsIncludeClockTimes: off by default, round-trip holds',
         () async {
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
       await first.initialized;
       expect(first.diagnosticsIncludeClockTimes, isFalse,
-          reason: 'die Voreinstellung ist die tragende Zusicherung: ohne '
-              'ausdrueckliches Einschalten enthaelt das Log keine Uhrwerte');
+          reason: 'the default is the load-bearing guarantee: without '
+              'explicitly switching it on, the log contains no clock values');
 
       first.diagnosticsIncludeClockTimes = true;
 
@@ -252,7 +252,7 @@ void main() {
       expect(second.diagnosticsIncludeClockTimes, isTrue);
     });
 
-    test('der allgemeine Diagnoseschalter bleibt davon unabhaengig', () async {
+    test('the general diagnostics switch stays independent of it', () async {
       SharedPreferences.setMockInitialValues({});
       final appState = AppState();
       await appState.initialized;
@@ -261,8 +261,7 @@ void main() {
       expect(appState.diagnosticsEnabled, isTrue);
       appState.diagnosticsEnabled = false;
       expect(appState.diagnosticsIncludeClockTimes, isTrue,
-          reason: 'zwei getrennte Schalter - der eine schaltet den anderen '
-              'nicht um');
+          reason: 'two separate switches - one does not flip the other');
     });
   });
 }

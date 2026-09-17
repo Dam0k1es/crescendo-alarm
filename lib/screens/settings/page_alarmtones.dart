@@ -34,7 +34,7 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
 
   void _playOrStopAudio(String path) async {
     debugPrint(
-        "Attempting to play audio from path: $path"); // Debug-Befehl hinzugefügt
+        "Attempting to play audio from path: $path"); // Debug statement added
     if (_currentlyPlaying == path) {
       _stopAudio();
     } else {
@@ -128,10 +128,10 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
                 onChanged: (value) {
                   if (value) {
                     _appState.selectedTone = path;
-                    // docs/TODO.md T-84: die geplanten Alarme tragen den Ton
-                    // als eigene Eigenschaft - ohne Checkpoint würde die
-                    // Änderung erst greifen, wenn ein Tag ohnehin neu geplant
-                    // wird (also unter Umständen nie).
+                    // docs/TODO.md T-84: planned alarms carry the tone as
+                    // their own property - without a checkpoint the change
+                    // would only take effect once a day gets replanned
+                    // anyway (so possibly never).
                     runCheckpointSafely(_appState,
                         trigger: CheckpointTrigger.settingsChanged);
                   }
@@ -165,8 +165,8 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
               onChanged: (value) {
                 _appState.selectedVolume = value;
               },
-              // Erst beim Loslassen neu planen, nicht bei jedem Rasterschritt
-              // während des Ziehens (docs/TODO.md T-84).
+              // Only replan on release, not on every step of the drag
+              // (docs/TODO.md T-84).
               onChangeEnd: (value) {
                 runCheckpointSafely(_appState,
                     trigger: CheckpointTrigger.settingsChanged);

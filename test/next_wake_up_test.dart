@@ -3,14 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wakeywakey/models/alarms/manual_alarm.dart';
 import 'package:wakeywakey/models/scheduling/next_wake_up.dart';
 
-// docs/TODO.md T-66: Ersatz für Scheduler.nextAlarmTime(), von dem
-// scheduleSleepReminder() (FR-16 Checkpoint 2) abhängt - Phase 6 würde die
-// alte Scheduler-Klasse löschen. Der Ersatz muss BEIDE Quellen
-// berücksichtigen: scheduling-v2s geplante Tageswerte UND manuelle Alarme.
-// Letzteres ist kein FR-15-Verstoß: FR-15 verbietet der *Planungslogik*,
-// ManualAlarms anzufassen - eine Schlafenszeit-Erinnerung darf sie lesen,
-// sonst würde sie für Nutzer, die nur manuelle Alarme stellen, ins Leere
-// planen.
+// docs/TODO.md T-66: replacement for Scheduler.nextAlarmTime(), which
+// scheduleSleepReminder() (FR-16 checkpoint 2) depends on - Phase 6 would
+// delete the old Scheduler class. The replacement must consider BOTH
+// sources: scheduling-v2's planned daily values AND manual alarms. The
+// latter is not an FR-15 violation: FR-15 forbids the *planning logic* from
+// touching ManualAlarms - a bedtime reminder is allowed to read them,
+// otherwise it would plan into a void for users who only set manual alarms.
 
 String _iso(DateTime day) =>
     '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
@@ -19,7 +18,7 @@ void main() {
   group('nextWakeUpTime (T-66)', () {
     final now = DateTime(2026, 3, 10, 6, 0);
 
-    test('nur geplante v2-Werte -> der früheste zukünftige', () {
+    test('only planned v2 values -> the earliest future one', () {
       final soon = DateTime(2026, 3, 11, 7, 0);
       final later = DateTime(2026, 3, 12, 6, 30);
 
@@ -35,7 +34,7 @@ void main() {
       expect(result, soon);
     });
 
-    test('vergangene und null-Werte werden ignoriert', () {
+    test('past and null values are ignored', () {
       final past = DateTime(2026, 3, 9, 7, 0);
       final future = DateTime(2026, 3, 11, 7, 0);
 
@@ -52,7 +51,7 @@ void main() {
       expect(result, future);
     });
 
-    test('nur ManualAlarm, Uhrzeit heute noch zukünftig -> heute', () {
+    test('only a ManualAlarm, time still ahead today -> today', () {
       final result = nextWakeUpTime(
         pendingDayValues: const {},
         manualAlarms: [ManualAlarm(time: const TimeOfDay(hour: 8, minute: 15))],
@@ -62,7 +61,7 @@ void main() {
       expect(result, DateTime(2026, 3, 10, 8, 15));
     });
 
-    test('nur ManualAlarm, Uhrzeit heute schon vorbei -> morgen', () {
+    test('only a ManualAlarm, time already past today -> tomorrow', () {
       final result = nextWakeUpTime(
         pendingDayValues: const {},
         manualAlarms: [ManualAlarm(time: const TimeOfDay(hour: 5, minute: 0))],
@@ -72,7 +71,7 @@ void main() {
       expect(result, DateTime(2026, 3, 11, 5, 0));
     });
 
-    test('beide Quellen, geplanter Wert ist früher -> geplanter Wert', () {
+    test('both sources, planned value is earlier -> planned value', () {
       final planned = DateTime(2026, 3, 10, 7, 0);
 
       final result = nextWakeUpTime(
@@ -84,7 +83,7 @@ void main() {
       expect(result, planned);
     });
 
-    test('beide Quellen, ManualAlarm ist früher -> ManualAlarm gewinnt', () {
+    test('both sources, ManualAlarm is earlier -> ManualAlarm wins', () {
       final planned = DateTime(2026, 3, 11, 7, 0);
 
       final result = nextWakeUpTime(
@@ -96,7 +95,7 @@ void main() {
       expect(result, DateTime(2026, 3, 10, 6, 30));
     });
 
-    test('mehrere ManualAlarms -> der früheste zählt', () {
+    test('several ManualAlarms -> the earliest counts', () {
       final result = nextWakeUpTime(
         pendingDayValues: const {},
         manualAlarms: [
@@ -109,7 +108,7 @@ void main() {
       expect(result, DateTime(2026, 3, 10, 7, 45));
     });
 
-    test('keine Quelle liefert etwas -> null', () {
+    test('no source yields anything -> null', () {
       final result = nextWakeUpTime(
         pendingDayValues: const {'2026-03-11': null},
         manualAlarms: const [],

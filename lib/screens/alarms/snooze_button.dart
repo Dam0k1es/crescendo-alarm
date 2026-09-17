@@ -4,34 +4,34 @@ import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/models/alarms/snooze.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
-/// FR-20: die Snooze-Schaltfläche des Klingelschirms.
+/// FR-20: the ring screen's snooze button.
 ///
-/// Bewusst **ein** Widget für beide Schirme (Standard-Overlay und QR-Scanner)
-/// statt zweier Kopien: die beiden unterscheiden sich nur darin, wie
-/// *abgeschaltet* wird, nicht darin, wie verschoben wird. Zwei Kopien wären
-/// zwei Orte, an denen die Budgetprüfung auseinanderlaufen kann - genau die
-/// Fehlerklasse, die dieses Projekt bei den fünf Checkpoint-Einstiegspunkten
-/// schon einmal getroffen hat (T-87).
+/// Deliberately **one** widget for both screens (default overlay and QR
+/// scanner) instead of two copies: the two only differ in how the alarm gets
+/// *switched off*, not in how it gets postponed. Two copies would be two
+/// places where the budget check could drift apart - exactly the bug class
+/// this project already hit once with the five checkpoint entry points
+/// (T-87).
 ///
-/// Sie erscheint **nur**, wenn noch Budget da ist. Ist es aufgebraucht, gibt es
-/// keinen Knopf - der Wecker klingelt weiter, und es bleibt nur das reguläre
-/// Abschalten (auf dem QR-Schirm also mit Scan).
+/// It appears **only** while there is still budget left. Once it's used up,
+/// there is no button - the alarm keeps ringing, and only the regular
+/// switch-off remains (on the QR screen, that means a scan).
 class SnoozeButton extends StatelessWidget {
   const SnoozeButton({super.key, required this.alarmId, this.onSnoozed});
 
   final int alarmId;
 
-  /// Läuft nach einer erfolgreichen Verschiebung - die Schirme schliessen sich
-  /// darüber selbst.
+  /// Runs after a successful postponement - the screens close themselves in
+  /// response to it.
   final VoidCallback? onSnoozed;
 
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    // Ohne festgehaltenen Ursprungsruf (etwa nach einem Prozesstod, bei dem
-    // der Handler nicht mehr lief) gilt JETZT als Ursprung. Das ist die
-    // konservative Seite: das Budget beginnt dann neu, aber es beginnt - ein
-    // stiller Ausfall der Funktion wäre die schlechtere Wahl.
+    // Without a recorded origin call (e.g. after a process death during
+    // which the handler didn't run), NOW counts as the origin. That's the
+    // conservative side: the budget then restarts, but it does start - a
+    // silent failure of the feature would be the worse choice.
     final origin = appState.snoozeOriginFor(alarmId) ?? DateTime.now();
 
     if (!canSnooze(
@@ -65,7 +65,7 @@ class SnoozeButton extends StatelessWidget {
           );
           if (!context.mounted) return;
           if (!moved) {
-            // FR-20: es wurde NICHTS abgeschaltet - der Wecker klingelt weiter.
+            // FR-20: NOTHING was switched off - the alarm keeps ringing.
             displayToast(context, 'Snooze is used up - time to get up.');
             return;
           }

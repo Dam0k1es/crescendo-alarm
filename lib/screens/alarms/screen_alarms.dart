@@ -217,11 +217,12 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
             fontWeight: FontWeight.bold,
           ),
         ),
-        // Phase 6 (docs/TODO.md T-64/FR-11): ein Tab-Wechsel plant NICHTS neu.
-        // Vorher warf er den alten Scheduler an, der dabei alle geplanten
-        // Alarme löschen und ohne Ersatz abbrechen konnte. Kalenderänderungen
-        // haben bewusst keinen eigenen Auslöser (FR-11) - sie wirken beim
-        // nächsten Checkpoint, den das App-Öffnen ohnehin auslöst (FR-17).
+        // Phase 6 (docs/TODO.md T-64/FR-11): switching tabs replans NOTHING.
+        // It used to kick off the old Scheduler, which in doing so could
+        // delete all planned alarms and abort with no replacement. Calendar
+        // changes deliberately have no trigger of their own (FR-11) - they
+        // take effect at the next checkpoint, which opening the app triggers
+        // anyway (FR-17).
         bottom: TabBar(
           controller: _tabController,
           labelColor: Theme.of(context).colorScheme.onSurface,
@@ -263,9 +264,9 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
           : FloatingActionButton(
               tooltip: 'Sync Alarms',
               backgroundColor: Theme.of(context).colorScheme.surface,
-              // Die ausdrückliche Nutzeraktion "jetzt neu abgleichen" -
-              // umgeht FR-17s Tagessperre absichtlich (Phase 6, T-64: vorher
-              // lief hier der alte Scheduler).
+              // The explicit user action "reconcile now" - deliberately
+              // bypasses FR-17's daily lock (Phase 6, T-64: the old
+              // Scheduler used to run here).
               onPressed: () => runCheckpointSafely(_appState,
                   trigger: CheckpointTrigger.manualSync),
               child: Icon(Icons.sync,

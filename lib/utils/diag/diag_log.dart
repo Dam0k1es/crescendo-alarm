@@ -296,10 +296,10 @@ enum LogIsolate {
   final int code;
 }
 
-/// Welcher Auslöser den Checkpoint angestossen hat. Absichtlich eine eigene
-/// Enum und nicht `CheckpointTrigger` aus checkpoint.dart: der Logger soll
-/// nicht in die Scheduling-Schicht importieren, und dieser Code muss stabil
-/// bleiben, auch wenn dort ein Wert dazukommt.
+/// Which trigger kicked off the checkpoint. Deliberately its own enum, not
+/// `CheckpointTrigger` from checkpoint.dart: the logger should not import the
+/// scheduling layer, and this code must stay stable even if a value is added
+/// there.
 enum DiagTrigger {
   alarmRing(0),
   appForeground(1),

@@ -49,20 +49,20 @@ EOF
 
 adb wait-for-device
 
-# Gesundheitspruefung, bevor irgendetwas gemessen wird (docs/TODO.md T-129).
+# Health check, before anything gets measured (docs/TODO.md T-129).
 #
-# `adb wait-for-device` kehrt schon zurueck, wenn der Geraeteeintrag existiert -
-# nicht erst, wenn das System benutzbar ist. In Lauf 34622327599 kam der
-# adb-Daemon gar nicht hoch ("Unable to connect to adb daemon on port: 5037",
-# danach "device 'emulator-5554' not found"), der Lauf ging trotzdem weiter, und
-# scheiterte spaeter an einer Zusicherung, die wie ein Produktfehler aussieht:
-# "Alarm … was created in AppState but never reached the native alarm plugin".
-# Dass es keiner war, liess sich nur dadurch zeigen, dass `lib/` gegenueber dem
-# vorigen, gruenen Lauf byteweise identisch war.
+# `adb wait-for-device` already returns once the device entry exists - not
+# only once the system is actually usable. In run 34622327599 the adb
+# daemon never came up at all ("Unable to connect to adb daemon on port:
+# 5037", then "device 'emulator-5554' not found"), the run proceeded
+# anyway, and later failed on an assertion that looks like a product bug:
+# "Alarm … was created in AppState but never reached the native alarm
+# plugin". That it wasn't one could only be shown by the fact that `lib/`
+# was byte-identical to the previous, green run.
 #
-# Ein Beweismittel, das eine Umgebungsstoerung als Produktfehler ausgibt, ist
-# schlimmer als eines, das nichts findet. Deshalb hier abbrechen, mit einer
-# Meldung, die keine Verwechslung zulaesst.
+# A piece of evidence that reports an environment glitch as a product bug
+# is worse than one that finds nothing. Hence abort here, with a message
+# that leaves no room for confusion.
 for _ in $(seq 1 60); do
   if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
     break
@@ -71,8 +71,8 @@ for _ in $(seq 1 60); do
 done
 BOOTED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
 if [ "$BOOTED" != "1" ]; then
-  echo "::error::EMULATOR NICHT BENUTZBAR - sys.boot_completed='$BOOTED'."
-  echo "::error::Das ist eine Umgebungsstoerung, KEIN Testergebnis."
+  echo "::error::EMULATOR NOT USABLE - sys.boot_completed='$BOOTED'."
+  echo "::error::This is an environment glitch, NOT a test result."
   adb devices -l || true
   exit 1
 fi
@@ -175,22 +175,23 @@ trap stop_evidence_collection EXIT
 # `flutter test` below re-installs the same already-built APK over this one
 # (adb install -r, not an uninstall+reinstall), which preserves permissions
 # granted here.
-# docs/TODO.md T-92: die Geraetezeitzone auf eine Zone MIT Sommerzeit und
-# ganzstuendigem Versatz stellen, bevor die App das erste Mal laeuft.
+# docs/TODO.md T-92: set the device timezone to a zone WITH daylight saving
+# and a whole-hour offset before the app runs for the first time.
 #
-# Der Grund ist die dominante Fehlerklasse dieses Projekts: drei echte Bugs
-# (docs/TODO.md T-61, T-74d, T-76) waren auf UTC+0 PRINZIPIELL unsichtbar, und
-# der Emulator laeuft standardmaessig auf UTC. Ohne diesen Schritt beweist das
-# Szenario "T-61: the registered alarm carries the local reading of the planned
-# instant" nichts - es waere trivial wahr.
+# The reason is this project's dominant bug class: three real bugs
+# (docs/TODO.md T-61, T-74d, T-76) were STRUCTURALLY invisible at UTC+0, and
+# the emulator runs on UTC by default. Without this step, the scenario
+# "T-61: the registered alarm carries the local reading of the planned
+# instant" proves nothing - it would be trivially true.
 #
-# `deviceUtcOffset` im Test zu injizieren reicht dafuer ausdruecklich NICHT:
-# dieser Wert wandert nur durch die Domaenenschicht, waehrend
-# `alarmPlatformTime` (lib/utils/utils.dart) die echte Geraetezone liest.
-# `setprop persist.sys.timezone` als normaler Shell-Nutzer wirkt nicht - im
-# ersten Lauf mit dieser Zeile stand danach weiterhin `Etc/UTC` im Beweis
-# (docs/TODO.md T-99). Auf einem google_apis-Image (kein playstore) laesst sich
-# das per `adb root` beheben; die Rueckmeldung unten sagt, ob es geklappt hat.
+# Injecting `deviceUtcOffset` in the test explicitly does NOT suffice for
+# this: that value only travels through the domain layer, while
+# `alarmPlatformTime` (lib/utils/utils.dart) reads the real device zone.
+# `setprop persist.sys.timezone` as a normal shell user has no effect - in
+# the first run with this line, the evidence still showed `Etc/UTC`
+# afterward (docs/TODO.md T-99). On a google_apis image (no Play Store)
+# this can be fixed via `adb root`; the feedback below says whether it
+# worked.
 adb root >/dev/null 2>&1 || true
 adb wait-for-device
 adb shell settings put global auto_time_zone 0 || true
@@ -199,9 +200,10 @@ adb shell su 0 setprop persist.sys.timezone "Europe/Berlin" 2>/dev/null \
 DEVICE_TZ=$(adb shell getprop persist.sys.timezone | tr -d '\r')
 echo "device timezone now: $DEVICE_TZ" | tee -a "$EVIDENCE_DIR/manifest.log"
 if [[ "$DEVICE_TZ" != "Europe/Berlin" ]]; then
-  # Bewusst nur eine Warnung, kein Abbruch: die Suite ist auch auf UTC
-  # gueltig - nur beweist das T-61-Szenario dort nichts, weil seine Zusicherung
-  # trivial wahr wird. Das muss im Beweis stehen, statt still zu passieren.
+  # Deliberately just a warning, not an abort: the suite is also valid on
+  # UTC - only the T-61 scenario proves nothing there, because its
+  # assertion becomes trivially true. That has to show up in the evidence
+  # rather than pass silently.
   echo "WARNING: device timezone is '$DEVICE_TZ', not Europe/Berlin - the T-61" \
     "scenario is VACUOUS in this run (see docs/TODO.md T-99)." \
     | tee -a "$EVIDENCE_DIR/manifest.log"
@@ -218,20 +220,20 @@ adb shell appops set "$PACKAGE" SCHEDULE_EXACT_ALARM allow || true
 flutter test integration_test/app_test.dart -d emulator-5554 2>&1 | tee "$EVIDENCE_DIR/test_output.log"
 TEST_EXIT_CODE=${PIPESTATUS[0]}
 
-# docs/TODO.md T-93 / docs/REQUIREMENTS.md R3: Ueberlebt ein gesetzter Alarm
-# einen Reboot? Bis heute unverifiziert - und es ist die letzte offene Frage
-# des Produktversprechens "garantiertes Aufwachen".
+# docs/TODO.md T-93 / docs/REQUIREMENTS.md R3: does a set alarm survive a
+# reboot? Unverified to this day - and it's the last open question of the
+# "guaranteed wake-up" product promise.
 #
-# Der Trick, der das billig und deterministisch macht: NICHT auf ein Klingeln
-# warten, sondern `dumpsys alarm` auswerten. Damit ist pruefbar, OB ein Alarm
-# registriert ist, ohne Zeit zu verbrauchen.
+# The trick that makes this cheap and deterministic: NOT waiting for a
+# ring, but evaluating `dumpsys alarm` instead. That way it's checkable
+# WHETHER an alarm is registered, without spending any time.
 #
-# Bewusst NICHT gatend (kein Einfluss auf TEST_EXIT_CODE): das Verhalten ist
-# auf diesem Emulator-Image noch nie gemessen worden, und ein unverifiziertes
-# Bein darf keinen Release blockieren. Es sammelt zuerst Beweise; sobald es
-# einmal reproduzierbar gruen war, gehoert es scharf gestellt.
-# Erst einen Alarm scharf stellen und STEHEN lassen - app_test.dart raeumt in
-# tearDown konsequent auf, aus ihm heraus bleibt also nichts registriert.
+# Deliberately NOT gating (no effect on TEST_EXIT_CODE): this behaviour has
+# never been measured on this emulator image before, and an unverified leg
+# must not block a release. It gathers evidence first; once it has been
+# reproducibly green, it belongs gated for real.
+# First arm an alarm and LEAVE it standing - app_test.dart consistently
+# cleans up in tearDown, so nothing stays registered coming out of it.
 flutter test integration_test/arm_alarm_test.dart -d emulator-5554 \
   2>&1 | tee "$EVIDENCE_DIR/arm_alarm.log" || true
 bash .github/scripts/check_alarm_survival.sh "$PACKAGE" "$EVIDENCE_DIR" || true

@@ -160,13 +160,13 @@ DateTime _instantOf(DateTime localReading, Duration deviceUtcOffset) =>
 /// [v] and the return value are absolute instants (FR-1); [preferredWakeUpTime] is a
 /// bare device-local `TimeOfDay` with no date or zone of its own (FR-3). That
 /// mismatch is exactly why [deviceUtcOffset] is needed here (`docs/TODO.md`
-/// T-61): combining wunschzeit's digits with `v`'s *raw* fields would compare a
+/// T-61): combining preferredWakeUpTime's digits with `v`'s *raw* fields would compare a
 /// device-local wall clock against a UTC one and drift by the offset on any
 /// device outside UTC+0. Everything below therefore happens in the local
 /// reading, and only the result is converted back to an instant.
 ///
 /// [distribute]/[groupTarget] need no offset by contrast - they only ever
-/// compare two instants in the same frame, and their `Tag_i` date advance
+/// compare two instants in the same frame, and their `day_i` date advance
 /// yields the identical instant whether computed in the local or the raw frame.
 DateTime applyGapDayDrift({
   required DateTime v,
@@ -202,9 +202,9 @@ DateTime applyGapDayDrift({
 /// FR-2: which of [allEvents] fall on [day], bucketed by [deviceUtcOffset] -
 /// **never** by an event's own zone (that's already baked into `.from` as an
 /// absolute instant by existing, unchanged conversion code, see FR-2
-/// "Termin-eigene Zeitzone"). [deviceUtcOffset] is an explicit parameter
+/// "The appointment's own time zone"). [deviceUtcOffset] is an explicit parameter
 /// rather than `DateTime.toLocal()` so this stays deterministic regardless of
-/// the host machine's own configured timezone (see FR-2 "Testbarkeit").
+/// the host machine's own configured timezone (see FR-2 "Testability").
 List<Meeting> eventsForDay(
   DateTime day, {
   required List<Meeting> allEvents,
@@ -219,7 +219,7 @@ List<Meeting> eventsForDay(
 }
 
 /// FR-2: the upper bound ("not later than") for [day], or null if [day] is a
-/// Lückentag (only all-day events, or none at all).
+/// gap day (only all-day events, or none at all).
 DateTime? hardFloor({
   required DateTime day,
   required List<Meeting> allEvents,
@@ -264,8 +264,8 @@ DateTime? hardFloor({
 ///
 /// No separate "same direction as anchor" pre-filter: `hardFloor` is always
 /// just an upper bound (FR-2), never a required direction of movement, so the
-/// per-point violation check below already fully captures FR-5's "keinen
-/// Zwischenpunkt verletzen" requirement on its own. An explicit
+/// per-point violation check below already fully captures FR-5's "shifts no
+/// intermediate point past its own `hardFloor`" requirement on its own. An explicit
 /// anchor-relative direction filter was tried and removed - once a run is
 /// already partway through (anchor is no longer the run's original start,
 /// but yesterday's actual, already-progressed value, per FR-8's daily
@@ -281,8 +281,8 @@ HardFloorPoint groupTarget({
 
   // FR-5 step 2: a ΔT=0 point (same wall-clock reading as the anchor - real
   // calendar dates necessarily differ, since points are always strictly ahead
-  // of the anchor) ends its own run immediately and "wird nie mit einem
-  // Folgepunkt zusammengefasst".
+  // of the anchor) ends its own run immediately and "is never grouped with
+  // a following point".
   //
   // That sentence carries no positional caveat, so the run is capped at the
   // FIRST such point wherever it sits - not only when it happens to be
@@ -370,31 +370,30 @@ GapOrRunStartResult planGapOrRunStartDay({
   );
   final f = grouped.value;
 
-  // FR-2, und das ist der ganze Sinn des Wortes "Obergrenze"
-  // (docs/TODO.md T-132): ein `hardFloor`, der NICHT frueher liegt als der
-  // heutige Wert, fordert nichts. Wer um 06:45 aufsteht, erfuellt einen Termin
-  // um 11:00 laengst - es gibt keinen Grund, dafuer auszuschlafen, und schon
-  // gar keinen, dafuer `maxDailyDelta` zu reissen.
+  // FR-2, and that's the whole point of the word "upper bound"
+  // (docs/TODO.md T-132): a `hardFloor` that is NOT earlier than today's
+  // value demands nothing. Someone who gets up at 06:45 has long since
+  // satisfied an appointment at 11:00 - there's no reason to sleep in for
+  // it, and certainly none to blow `maxDailyDelta` for it.
   //
-  //   FR-2: "Der geplante Wert darf frueher liegen (IMMER erlaubt), aber
-  //          niemals spaeter."
-  //   FR-5: "`hardFloor` ist ausschliesslich eine Obergrenze (FR-2), NIE eine
-  //          Richtungsvorgabe."
+  //   FR-2: "The planned value may be earlier (ALWAYS allowed), but
+  //          never later."
+  //   FR-5: "`hardFloor` is exclusively an upper bound (FR-2), NEVER a
+  //          directional requirement."
   //
-  // Genau dagegen lief der Run: er behandelte jeden Punkt als Ziel, auch einen
-  // spaeteren, und zog die Weckzeit zu ihm hinauf. Auf einem echten Kalender
-  // sah das so aus: 06:45 -> 08:00 -> 11:00, bei `maxDailyDelta` von 30
-  // Minuten und einer `preferredWakeUpTime` von 07:00.
+  // That is exactly what the run used to get wrong: it treated every point
+  // as a target, even a later one, and pulled the wake time up toward it. On
+  // a real calendar this looked like: 06:45 -> 08:00 -> 11:00, with
+  // `maxDailyDelta` of 30 minutes and a `preferredWakeUpTime` of 07:00.
   //
-  // Nach spaet bewegt die Weckzeit ausschliesslich FR-4s Drift zur
-  // `preferredWakeUpTime`, begrenzt durch `maxDailyDelta`. Die Tagesobergrenze wirkt
-  // weiter - aber als Deckel (die Kappung in `computeWeekPlan`), nicht als
-  // Zugseil.
+  // Toward later, the wake time is moved exclusively by FR-4's drift toward
+  // `preferredWakeUpTime`, bounded by `maxDailyDelta`. The day's upper bound
+  // still applies - but as a cap (the capping in `computeWeekPlan`), not as
+  // a pull.
   //
-  // FR-5s Warnung vor einem "Richtungsfilter" bleibt gewahrt: die Punkte
-  // werden NICHT aus `remainingPoints` entfernt, nehmen also weiter an
-  // `groupTarget`s Verletzungspruefung teil. Nur als *Ziel* kommen sie nicht in
-  // Frage.
+  // FR-5's warning against a "directional filter" is preserved: the points
+  // are NOT removed from `remainingPoints`, so they still take part in
+  // `groupTarget`'s violation check. They are only excluded as a *target*.
   if (_wallClockDelta(v, f) >= Duration.zero) return gapDay();
 
   // FR-7: N_Rest = N_F - i. `grouped.dayOffset` is v-relative (the genuine
@@ -430,7 +429,7 @@ GapOrRunStartResult planGapOrRunStartDay({
       ).overrunNotificationNeeded;
 
   if (!feasible(v)) {
-    // Bereits beim bloßen Halten verletzt: heute ist Tag 1 des Runs.
+    // Already violated by mere holding: today is day 1 of the run.
     final n = nRest + 1; // FR-7: N = N_F - i + 1, today-relative = nRest + 1.
     final curve = distribute(anchor: v, target: f, n: n, maxDailyDelta: maxDailyDelta);
     return GapOrRunStartResult(
@@ -448,14 +447,14 @@ GapOrRunStartResult planGapOrRunStartDay({
     return GapOrRunStartResult(value: drifted, overrunNotificationNeeded: false);
   }
 
-  // Nur der volle preferredWakeUpTime-Schritt verletzt: auf das größtmögliche Maß
-  // kappen, das die Bedingung noch erfüllt (binäre Suche, da |V+d*sign - F|
-  // als Funktion von d konvex ist und bei d=0 erfüllt, bei d=fullStep verletzt).
-  // Gearbeitet wird ausschließlich in Wall-Clock-Differenzen (nicht
-  // `drifted.difference(v)`, das die von applyGapDayDrift eingeführte
-  // Datums-Fortschreibung um v.day+1 mit einschließen würde) - candidates
-  // werden entsprechend auf dem echten Folgetag aufgebaut, nicht via
-  // `v.add(...)` (das fälschlich bei v's eigenem Datum bliebe).
+  // Only the full preferredWakeUpTime step violates it: cap at the largest
+  // amount that still satisfies the condition (binary search, since
+  // |V+d*sign - F| is convex as a function of d, satisfied at d=0, violated
+  // at d=fullStep). Work happens exclusively in wall-clock differences (not
+  // `drifted.difference(v)`, which would include the date advance to
+  // v.day+1 introduced by applyGapDayDrift) - candidates are built
+  // accordingly on the real following day, not via `v.add(...)` (which would
+  // wrongly stay on v's own date).
   final today = _dateTimeLike(
     v,
     day: v.day + 1,
@@ -539,7 +538,7 @@ class WeekPlanResult {
   /// Days whose value came **directly from a real `hardFloor`** and is
   /// therefore instant-anchored: it denotes a fixed real moment (the
   /// appointment), so FR-16 must leave it alone when the device's UTC offset
-  /// changes - "nur die lokale Anzeige ändert sich". Every other planned day
+  /// changes - "only the local display changes". Every other planned day
   /// is wall-clock-anchored (`preferredWakeUpTime`/curve) and has to keep its local
   /// digits instead, via `reinterpretForNewOffset`. Checkpoint 2
   /// (`runTimezoneCheckpoint2`) cannot tell the two apart on its own - it has
@@ -553,14 +552,14 @@ class WeekPlanResult {
 /// [gapDayCounter] must already reflect every already-concluded day up to
 /// today (FR-9) - this function never increments it for days still being
 /// planned, only ever consults it.
-/// FR-9s Schwelle: "Erreicht der Zaehler **>= 7**, wird automatische
-/// Fortschreibung gestoppt und der Nutzer benachrichtigt."
+/// FR-9's threshold: "Once the counter reaches **>= 7**, automatic
+/// advancement is stopped and the user is notified."
 ///
-/// Benannt, weil sie an zwei Stellen geprueft wird (mit und ohne Anker) und
-/// die beiden nicht auseinanderlaufen duerfen - eine stille Aenderung auf 6
-/// wuerde den Wecker einen Tag zu frueh abschalten, und bis 2026-09 haette
-/// kein Test das bemerkt: die Suite rief `computeWeekPlan` nur mit 0, 7 und 42
-/// auf, nie mit 6 (docs/TODO.md T-107).
+/// Named this way because it's checked in two places (with and without an
+/// anchor) and the two must not diverge - a silent change to 6 would switch
+/// the alarm off a day too early, and until 2026-09 no test would have
+/// noticed: the suite only called `computeWeekPlan` with 0, 7, and 42, never
+/// with 6 (docs/TODO.md T-107).
 const int gapDayValveThreshold = 7;
 
 WeekPlanResult computeWeekPlan({
@@ -629,15 +628,15 @@ WeekPlanResult computeWeekPlan({
         // `reportReplanNotifications` reads that as "episode over" and clears
         // `safetyValveNotificationSent`, so a notification that failed on day
         // one is never retried: a permanently silent alarm clock with no
-        // message at all, which FR-9's own rationale calls "der falsche
-        // Ausgang".
+        // message at all, which FR-9's own rationale calls "the wrong
+        // outcome".
         //
         // The same expression also covers the case where no anchor ever
         // existed (fresh install, calendar permission granted but no
         // appointments, no preferredWakeUpTime): FR-9 states exactly one exception to
-        // "Zaehler >= 7 -> gestoppt und benachrichtigt", namely a set
+        // "counter >= 7 -> stopped and notified", namely a set
         // `preferredWakeUpTime`. FR-10 governs only the *values* in this branch
-        // ("Ohne: kein Alarm geplant"), never the notification.
+        // ("Without: no alarm planned"), never the notification.
         safetyValveTriggered:
             gapDayCounter >= gapDayValveThreshold && preferredWakeUpTime == null,
         instantAnchoredDays: const {},
@@ -688,17 +687,17 @@ WeekPlanResult computeWeekPlan({
         // since the counter itself keeps counting regardless.
         preferredWakeUpTime == null) {
       // FR-9: safety valve - no future anchor visible anywhere in the
-      // window, and already 7 elapsed termin-lose days. Stop auto-continuing.
+      // window, and already 7 elapsed appointment-free days. Stop auto-continuing.
       valuesByDay[day] = null;
       safetyValveTriggered = true;
       continue;
     }
 
     if (remaining.isEmpty) {
-      // Auch hier ist FR-2s Obergrenze ein Deckel, kein Ziel (docs/TODO.md
-      // T-132): frueher wurde der eigene `hardFloor` unbesehen zugewiesen,
-      // also auch dann, wenn er SPAETER lag als der heutige Wert - der Nutzer
-      // haette ohne jeden Anlass ausgeschlafen.
+      // Here too FR-2's upper bound is a cap, not a target (docs/TODO.md
+      // T-132): previously the day's own `hardFloor` was assigned unconditionally,
+      // even when it lay LATER than today's value - the user would have slept in
+      // for no reason at all.
       final drifted = applyGapDayDrift(
           v: anchor!,
           preferredWakeUpTime: preferredWakeUpTime,
@@ -711,9 +710,9 @@ WeekPlanResult computeWeekPlan({
         // FR-6's reporting duty, which this branch used to skip entirely
         // (docs/TODO.md T-105). Assigning a day its own hardFloor is a
         // legitimate jump of any size - FR-6 explicitly permits it when the
-        // distance is a single day - but the requirement reads "bei JEDER
-        // Ueberschreitung von maxDailyDelta (N=1 ODER verteilt) wird der
-        // Nutzer einmalig benachrichtigt". The N=1 exemption is about not
+        // distance is a single day - but the requirement reads "on EVERY
+        // excess over maxDailyDelta (N=1 OR distributed) the user is
+        // notified once". The N=1 exemption is about not
         // being able to spread the jump, not about staying silent.
         //
         // Same formula as `distribute` uses, so the two paths cannot drift
@@ -745,23 +744,23 @@ WeekPlanResult computeWeekPlan({
     final value = clampedToOwnHardFloor ? ownHardFloor : candidate.value;
     if (clampedToOwnHardFloor) {
       instantAnchoredDays.add(day);
-      // FR-6s Meldepflicht auch hier (docs/TODO.md T-133). T-105 hat sie fuer
-      // den Zweig ohne Folgepunkte nachgetragen; dieser zweite Weg, auf dem
-      // ein Tageswert an einem Termin gedeckelt wird, blieb stumm.
+      // FR-6's reporting duty applies here too (docs/TODO.md T-133). T-105 added
+      // it for the branch with no following points; this second path, where a
+      // day's value is capped by an appointment, stayed silent.
       //
-      // FR-6 laesst keinen Zweifel: "Bei JEDER Ueberschreitung von
-      // `maxDailyDelta` (`N=1` oder verteilt) wird der Nutzer einmalig
-      // benachrichtigt." Die Kappung ist inhaltlich richtig - FR-2s Obergrenze
-      // muss gelten -, nur eben meldepflichtig, wenn sie mehr als einen
-      // Tagesschritt kostet.
+      // FR-6 leaves no doubt: "On EVERY excess over `maxDailyDelta` (`N=1` or
+      // distributed) the user is notified once." The capping is correct in
+      // substance - FR-2's upper bound must hold - just notifiable when it
+      // costs more than a single day's step.
       //
-      // Der Alltagsfall dahinter: die Weckzeit ist ueber terminlose Tage bis
-      // zur `preferredWakeUpTime` gedriftet, danach wird ein Termin nachgetragen. Der
-      // erste Arbeitstag wird dann in einem Schritt zurueckgeholt - gemessen
-      // 45 Minuten bei erlaubten 30, und der Nutzer erfuhr nichts davon.
+      // The everyday case behind this: the wake time has drifted over
+      // appointment-free days toward `preferredWakeUpTime`, then an
+      // appointment is discovered late. The first working day is then pulled
+      // back in one step - measured at 45 minutes against an allowed 30, and
+      // the user never heard about it.
       //
-      // Dieselbe division-freie Formel wie im Nachbarzweig und in
-      // `distribute`, damit die drei nicht auseinanderlaufen koennen.
+      // The same division-free formula as in the neighboring branch and in
+      // `distribute`, so the three cannot drift apart from each other.
       final n = dayDistance(day, anchorDay);
       final delta = _wallClockDelta(anchor, value).abs();
       if (n >= 1 && delta.inMicroseconds > maxDailyDelta.inMicroseconds * n) {

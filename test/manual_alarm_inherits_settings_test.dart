@@ -5,15 +5,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/screens/alarms/screen_alarms.dart';
 
-// docs/TODO.md T-96: der Dialog zum Anlegen eines manuellen Alarms
-// vorbelegt gentlewake, volume und tone aus dem AppState
-// (screen_alarms.dart:265-267) - die neue Rampendauer aber zunaechst nicht.
-// Ein manueller Alarm haette damit stur die Default-Minute benutzt und die
-// Einstellung des Nutzers ignoriert. Das ist genau die Fehlerklasse aus T-84:
-// eine Einstellung mit UI, die den Alarm nie erreicht.
+// docs/TODO.md T-96: the dialog for creating a manual alarm pre-fills
+// gentlewake, volume and tone from the AppState (screen_alarms.dart:265-267)
+// - but not, initially, the new ramp duration. A manual alarm would
+// therefore have stubbornly used the default minute and ignored the
+// user's setting. That is exactly the bug class from T-84: a setting with
+// a UI that never reaches the alarm.
 
 void main() {
-  testWidgets('ein neuer manueller Alarm erbt Rampendauer, Lautstaerke und Ton',
+  testWidgets('a new manual alarm inherits ramp duration, volume, and tone',
       (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final appState = AppState();
@@ -30,10 +30,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Seit T-137 oeffnet der Schirm auf "Scheduled"; der Add-Knopf gehoert zum
-    // Manual-Reiter (auf "Scheduled" sitzt dort der Sync-Knopf). Also erst
-    // dorthin wechseln - die Zusicherung dieses Tests bleibt unveraendert, nur
-    // der Weg zum Dialog ist ein Schritt laenger.
+    // Since T-137 the screen opens on "Scheduled"; the Add button belongs
+    // to the Manual tab (on "Scheduled" that spot holds the sync button).
+    // So switch there first - this test's assertion is unchanged, only
+    // the path to the dialog is one step longer.
     await tester.tap(find.text('Manual'));
     await tester.pumpAndSettle();
 
@@ -45,10 +45,10 @@ void main() {
     final created = appState.manualAlarms.single;
     expect(created.gentlewake, isTrue);
     expect(created.gentleWakeDuration, const Duration(minutes: 9),
-        reason: 'die konfigurierte Rampendauer muss am Alarm ankommen - '
-            'sonst ist es T-84 noch einmal');
-    // Die beiden, die schon vorher uebernommen wurden - als Absicherung, dass
-    // die Vorbelegung insgesamt intakt bleibt.
+        reason: 'the configured ramp duration must reach the alarm - '
+            'otherwise it is T-84 all over again');
+    // The other two, which were already carried over before - as a
+    // safeguard that the pre-fill as a whole stays intact.
     expect(created.volume, 0.42);
     expect(created.tone, appState.selectedTone);
   });

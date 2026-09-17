@@ -3,8 +3,8 @@ import 'package:wakeywakey/models/alarms/snooze.dart';
 
 // docs/scheduling-v2-spec.md FR-20, docs/TODO.md T-138.
 //
-// Die Zahlen stammen aus den durchgerechneten Testfaellen der Anforderung,
-// nicht aus dem Code.
+// The numbers come from the requirement's worked-out test cases, not from
+// the code.
 
 DateTime at(int h, int m) => DateTime(2026, 9, 14, h, m);
 
@@ -12,8 +12,8 @@ void main() {
   const fiveMinutes = Duration(minutes: 5);
   const thirtyMinutes = Duration(minutes: 30);
 
-  group('FR-20: das Budget ist durationToWakeUp', () {
-    test('vom ersten Druck an moeglich', () {
+  group('FR-20: the budget is durationToWakeUp', () {
+    test('possible from the first press', () {
       expect(
         canSnooze(
           now: at(6, 0),
@@ -26,8 +26,8 @@ void main() {
       );
     });
 
-    test('die letzte Verschiebung trifft die Grenze genau und ist erlaubt', () {
-      // 06:25 + 5min = 06:30 = 06:00 + 30min -> erlaubt (einschliesslich).
+    test('the last postponement hits the limit exactly and is allowed', () {
+      // 06:25 + 5min = 06:30 = 06:00 + 30min -> allowed (inclusive).
       expect(
         canSnooze(
           now: at(6, 25),
@@ -40,7 +40,7 @@ void main() {
       );
     });
 
-    test('eine Minute darueber ist nicht mehr erlaubt', () {
+    test('one minute over is no longer allowed', () {
       // 06:26 + 5min = 06:31 > 06:30.
       expect(
         canSnooze(
@@ -54,9 +54,9 @@ void main() {
       );
     });
 
-    test('das Budget zaehlt ab dem URSPRUNGSruf, nicht ab dem letzten Druck',
+    test('the budget counts from the ORIGINAL wake call, not the last press',
         () {
-      // Wer bis 06:28 klingeln laesst, hat nichts gespart: 06:33 > 06:30.
+      // Letting it ring until 06:28 saves nothing: 06:33 > 06:30.
       expect(
         canSnooze(
           now: at(6, 28),
@@ -69,7 +69,7 @@ void main() {
       );
     });
 
-    test('abgeschaltet ist nie moeglich', () {
+    test('never possible when switched off', () {
       expect(
         canSnooze(
           now: at(6, 0),
@@ -82,7 +82,7 @@ void main() {
       );
     });
 
-    test('Budget null heisst kein Snooze - die Voreinstellung', () {
+    test('zero budget means no snooze - the default', () {
       expect(
         canSnooze(
           now: at(6, 0),
@@ -92,12 +92,12 @@ void main() {
           snoozeEnabled: true,
         ),
         isFalse,
-        reason: 'durationToWakeUp = 00:00 ist die Vorgabe; ohne Budget gibt es '
-            'nichts zu verschieben',
+        reason: 'durationToWakeUp = 00:00 is the default; with no budget '
+            'there is nothing to postpone',
       );
     });
 
-    test('genau sechs Verschiebungen bei 30/5', () {
+    test('exactly six postponements at 30/5', () {
       var now = at(6, 0);
       var count = 0;
       while (canSnooze(
@@ -109,10 +109,10 @@ void main() {
       )) {
         now = snoozedRingTime(now: now, snoozeTime: fiveMinutes);
         count++;
-        if (count > 20) break; // Schutz gegen eine Endlosschleife im Test
+        if (count > 20) break; // guard against an infinite loop in the test
       }
       expect(count, 6);
-      expect(now, at(6, 30), reason: 'die letzte Verschiebung endet am Budget');
+      expect(now, at(6, 30), reason: 'the last postponement ends at the budget');
     });
   });
 }

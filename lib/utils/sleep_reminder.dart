@@ -64,36 +64,33 @@ Future<void> scheduleSleepReminder(
       dateTime = dateTime.subtract(const Duration(minutes: 30));
     }
 
-    // docs/TODO.md T-110: eine Bettzeit in der VERGANGENHEIT darf hier nicht
-    // weitergereicht werden.
+    // docs/TODO.md T-110: a bedtime in the PAST must not be passed on here.
     //
-    // Erreichbar, sobald `sleepGoal + reminderDuration` groesser ist als der
-    // Abstand bis zum naechsten Weckzeitpunkt - etwa: der Nutzer aendert um
-    // 22:00 eine Einstellung, geplant ist 05:00, Schlafziel 9 Stunden. Der
-    // Auslöser `settingsChanged` unterliegt keiner Tagessperre, laeuft also.
+    // Reachable as soon as `sleepGoal + reminderDuration` is greater than the
+    // distance to the next wake instant - e.g.: the user changes a setting at
+    // 22:00, the plan says 05:00, sleep goal 9 hours. The trigger
+    // `settingsChanged` is not subject to any daily lock, so it runs.
     //
-    // Was dann passiert, ist im AAR nachgelesen, nicht vermutet:
-    // `CronUtils.getNextCalendar` liefert fuer ein vollstaendig bestimmtes
-    // Datum vor "jetzt" `null`, `NotificationScheduler.doInBackground` ruft
-    // daraufhin `cancelSchedule`, loggt "Date is not more valid." und bricht
-    // ab - das Created-Ereignis kommt nur im Nicht-null-Zweig. Die alte
-    // Notification ist zu dem Zeitpunkt schon storniert. Fuer diese Nacht
-    // haette FR-16s Checkpoint 2 damit gar keinen Einsprungpunkt mehr, und ein
-    // untertags eingetretener Zeitzonenwechsel faellt erst beim Klingeln auf -
-    // genau das Szenario, gegen das der zweite Checkpoint gebaut wurde.
+    // What happens then is read from the AAR, not guessed:
+    // `CronUtils.getNextCalendar` returns `null` for a fully determined date
+    // before "now", `NotificationScheduler.doInBackground` then calls
+    // `cancelSchedule`, logs "Date is not more valid." and aborts - the
+    // Created event only comes on the non-null branch. The old notification
+    // is already cancelled by that point. For that night, FR-16's checkpoint
+    // 2 would then have no entry point at all, and a time zone change that
+    // happened during the day would only be noticed at the next ring -
+    // exactly the scenario the second checkpoint was built against.
     //
-    // Zwei Minuten Vorlauf, nicht eine: `alarmPlatformTime` schneidet auf
-    // ganze Minuten ab, eine Minute koennte dabei bis auf Sekunden
-    // zusammenschrumpfen.
+    // Two minutes of lead time, not one: `alarmPlatformTime` truncates to
+    // whole minutes, so one minute could shrink down to mere seconds.
     //
-    // Die SPEC entscheidet diesen Fall nicht - FR-16 sagt nur, wann der
-    // Checkpoint laufen soll, nicht was gilt, wenn dieser Zeitpunkt vorbei
-    // ist. Gewaehlt ist die Lesart, die FR-16s Zweck am naechsten kommt: den
-    // Aufhaenger so frueh wie moeglich nachholen. Sichtbar ist er dabei
-    // bewusst NICHT - eine "Zeit zu schlafen"-Meldung Stunden nach dem
-    // gemeinten Zeitpunkt waere irrefuehrend, und FR-16 trennt Sichtbarkeit
-    // ausdruecklich vom Aufhaenger ("unabhaengig davon, ob die Erinnerung
-    // aktiviert ist").
+    // The SPEC does not decide this case - FR-16 only says when the
+    // checkpoint should run, not what applies once that instant has passed.
+    // The reading chosen is the one closest to FR-16's purpose: catch up the
+    // hook as early as possible. It is deliberately NOT made visible while
+    // doing so - a "time to sleep" message hours after the intended instant
+    // would be misleading, and FR-16 explicitly separates visibility from the
+    // hook ("regardless of whether the reminder itself is enabled").
     final missedBedtime = !dateTime.isAfter(DateTime.now());
     if (missedBedtime) {
       dateTime = DateTime.now().add(const Duration(minutes: 2));

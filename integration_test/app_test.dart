@@ -119,10 +119,10 @@ Future<void> createManualAlarmOneMinuteFromNow(
     WidgetTester tester, AppState appState) async {
   expect(find.byType(ScreenAlarms), findsOneWidget);
 
-  // docs/TODO.md T-137: der Schirm oeffnet seit der Umstellung auf
-  // "Scheduled"; der Add-Knopf gehoert zum Manual-Reiter (auf "Scheduled"
-  // sitzt dort der Sync-Knopf). Ohne diesen Wechsel findet der Tipp unten
-  // nichts - genau daran ist Lauf 34721191411 gescheitert.
+  // docs/TODO.md T-137: since the switch, the screen opens on "Scheduled";
+  // the Add button belongs to the Manual tab (on "Scheduled" the Sync
+  // button sits there instead). Without this tab switch, the tap below
+  // finds nothing - exactly what run 34721191411 failed on.
   await tester.tap(find.text('Manual'));
   await tester.pumpAndSettle();
 
@@ -156,10 +156,9 @@ Future<void> createManualAlarmOneMinuteFromNow(
 }
 
 
-/// Nimmt Benachrichtigungen still entgegen. Ohne das wuerde jedes
-/// Engine-Szenario echte Notifications auf dem Testgeraet erzeugen (und die
-/// Bettzeit-Notification aus FR-16s Voraussetzung feuert bei jedem
-/// Checkpoint).
+/// Silently swallows notifications. Without this, every engine scenario
+/// would produce real notifications on the test device (and the bedtime
+/// notification from FR-16's precondition fires on every checkpoint).
 class _SilentNotifications implements Notifications {
   @override
   Future<int> scheduleNotification({
@@ -180,24 +179,24 @@ class _SilentNotifications implements Notifications {
   Future<void> init() async {}
 }
 
-/// Bringt die Engine mit **einem** injizierten Kalendertermin in einen exakt
-/// vorhersagbaren Zustand und gibt dessen `hardFloor` (= den Terminbeginn)
-/// zurueck.
+/// Brings the engine into an exactly predictable state with **one** injected
+/// calendar appointment, and returns its `hardFloor` (= the appointment
+/// start).
 ///
-/// Warum das deterministisch ist: mit `durationToWakeUp` und
-/// `durationToGetReady` auf null ist der `hardFloor` genau der Terminbeginn
-/// (FR-2), und ohne `preferredWakeUpTime` und ohne Vorgeschichte greift FR-10s
-/// Kaltstart - der erste Tag mit echtem `hardFloor` bekommt **exakt** diesen
-/// Wert, die Folgetage halten dieselbe Wanduhrzeit (FR-4 ohne Ziel). Aus einem
-/// Termin entstehen so mehrere Alarme, was fuer die T-64-Pruefung sogar
-/// gebraucht wird: es muss "die anderen Alarme" geben, die ein Dismiss nicht
-/// loeschen darf.
+/// Why this is deterministic: with `durationToWakeUp` and
+/// `durationToGetReady` at null, `hardFloor` is exactly the appointment start
+/// (FR-2), and without `preferredWakeUpTime` and with no history, FR-10's
+/// cold start applies - the first day with a real `hardFloor` gets **exactly**
+/// this value, and the following days hold the same wall-clock time (FR-4
+/// with no target). One appointment thus produces several alarms, which is
+/// even needed for the T-64 check: there must be "the other alarms" that a
+/// dismiss must not delete.
 ///
-/// `manualSync` als Auslöser ist wesentlich: FR-17s Tagessperre hat beim
-/// App-Start schon zugeschlagen (main.dart fuhr einen appForeground-Checkpoint
-/// gegen den leeren Geraetekalender), ein zweiter appForeground waere also ein
-/// reines No-op. `manualSync` unterliegt der Sperre nicht und behandelt heute
-/// nicht als abgeschlossen, das Fenster beginnt damit **heute**.
+/// `manualSync` as the trigger is essential: FR-17's daily lock has already
+/// kicked in at app start (main.dart ran an appForeground checkpoint against
+/// the empty device calendar), so a second appForeground would be a pure
+/// no-op. `manualSync` is not subject to the lock and does not treat today as
+/// concluded, so the window begins **today**.
 Future<DateTime> planOneCalendarEvent(
   AppState appState, {
   Duration leadTime = const Duration(hours: 2),
@@ -206,9 +205,9 @@ Future<DateTime> planOneCalendarEvent(
   appState.durationToGetReady = const TimeOfDay(hour: 0, minute: 0);
   appState.preferredWakeUpTime = null;
 
-  // Ein echter Zukunftszeitpunkt ist Pflicht: AppState.addAlarm verwirft einen
-  // ScheduledAlarm, dessen Zeit nicht nach dem ECHTEN DateTime.now() liegt -
-  // nicht nach einem injizierten "now".
+  // A real future instant is mandatory: AppState.addAlarm rejects a
+  // ScheduledAlarm whose time is not after the REAL DateTime.now() - not
+  // after an injected "now".
   final eventStart = DateTime.now().toUtc().add(leadTime);
 
   await runSchedulingCheckpoint(
@@ -370,14 +369,14 @@ void main() {
   );
 
   // ------------------------------------------------------------------------
-  // scheduling-v2 auf dem Geraet (docs/TODO.md T-91).
+  // scheduling-v2 on the device (docs/TODO.md T-91).
   //
-  // Warum das hier hingehoert und nicht in die Unit-Suite: KEIN Unit-Test
-  // mockt den Kanal des `alarm`-Plugins. In `flutter test` wirft
-  // `Alarm.set()`/`Alarm.getAlarms()` und wird geschluckt (apply_alarms.dart) -
-  // die Unit-Suite prueft also ausschliesslich AppState-Listen. Alles zwischen
-  // `appState.addAlarm` und einem wirklich registrierten Alarm war bis hier
-  // unbelegt, und Phase 6 hat gerade den alten Motor geloescht.
+  // Why this belongs here and not in the unit suite: NO unit test mocks the
+  // `alarm` plugin's channel. In `flutter test`, `Alarm.set()`/
+  // `Alarm.getAlarms()` throws and is swallowed (apply_alarms.dart) - so the
+  // unit suite only ever checks AppState lists. Everything between
+  // `appState.addAlarm` and an actually registered alarm was unproven up to
+  // this point, and Phase 6 has just deleted the old engine.
 
   testWidgets(
       'T-63: an injected calendar event becomes real, registered alarms',
@@ -386,37 +385,36 @@ void main() {
 
     final eventStart = await planOneCalendarEvent(appState);
 
-    // Der Plan ist in AppState angekommen ...
+    // The plan has arrived in AppState ...
     expect(appState.scheduledAlarms, isNotEmpty,
-        reason: 'FR-18 muss aus dem berechneten Plan echte ScheduledAlarms '
-            'machen - genau das fehlte in T-63 vollstaendig.');
-    // ... UND auf der Plattform. Das ist die Aussage, die kein Unit-Test
-    // treffen kann.
+        reason: 'FR-18 must turn the computed plan into real ScheduledAlarms '
+            '- that is exactly what T-63 was missing entirely.');
+    // ... AND on the platform. That's the assertion no unit test can make.
     final onPlatform = await Alarm.getAlarms();
     for (final alarm in appState.scheduledAlarms) {
       expect(onPlatform.map((a) => a.id), contains(alarm.id),
-          reason: 'ScheduledAlarm ${alarm.id} steht in AppState, aber nicht '
-              'im Alarm-Plugin - genau die Divergenz aus T-74e.');
+          reason: 'ScheduledAlarm ${alarm.id} is in AppState, but not in the '
+              'alarm plugin - exactly the divergence from T-74e.');
     }
-    // Der Termintag selbst traegt exakt den hardFloor (FR-2 als Obergrenze,
-    // hier mit Vorlaufzeiten von null also der Terminbeginn).
+    // The appointment day itself carries exactly the hardFloor (FR-2 as an
+    // upper bound, here with lead times of zero, so the appointment start).
     expect(platformAlarmTimes(onPlatform), contains(alarmPlatformTime(eventStart)),
-        reason: 'erwartet einen Alarm auf ${alarmPlatformTime(eventStart)}, '
-            'bekommen ${platformAlarmTimes(onPlatform)}');
+        reason: 'expected an alarm at ${alarmPlatformTime(eventStart)}, '
+            'got ${platformAlarmTimes(onPlatform)}');
   });
 
   testWidgets(
       'T-61: the registered alarm carries the local reading of the planned instant',
       (tester) async {
-    // Die Frame-Grenze, an der T-61 sass: ein Planwert ist ein UTC-getaggter
-    // Instant, `AlarmSettings.dateTime` wird vom Plugin als lokale Wanduhrzeit
-    // gelesen. Wurden die UTC-Ziffern einfach als lokal uebernommen, klingelte
-    // der Alarm um den Geraeteversatz falsch.
+    // The frame boundary T-61 sat on: a planned value is a UTC-tagged
+    // instant, `AlarmSettings.dateTime` is read by the plugin as a local
+    // wall-clock time. If the UTC digits were simply carried over as local,
+    // the alarm rang off by the device offset.
     //
-    // Diese Zusicherung hat nur Aussagekraft, wenn das Geraet NICHT auf UTC
-    // steht - deshalb setzt .github/scripts/run_e2e_tests.sh die
-    // Emulator-Zeitzone auf Europe/Berlin. Auf einem UTC-Geraet ist der Test
-    // trivial wahr; die Zeitzone wird darum mitgemeldet.
+    // This assertion only has any power if the device is NOT on UTC -
+    // that's why .github/scripts/run_e2e_tests.sh sets the emulator's time
+    // zone to Europe/Berlin. On a UTC device the test is trivially true; the
+    // time zone is therefore reported alongside.
     final appState = await pumpFreshApp(tester);
 
     final eventStart = await planOneCalendarEvent(appState);
@@ -426,13 +424,13 @@ void main() {
     expect(
       platformAlarmTimes(onPlatform),
       contains(expected),
-      reason: 'Geraetezone: ${DateTime.now().timeZoneName} '
-          '(${DateTime.now().timeZoneOffset}). Der geplante Instant '
-          '$eventStart entspricht lokal $expected; das Plugin hat '
-          '${platformAlarmTimes(onPlatform)}. Weichen die um genau den '
-          'Geraeteversatz ab, ist T-61 zurueck.',
+      reason: 'Device zone: ${DateTime.now().timeZoneName} '
+          '(${DateTime.now().timeZoneOffset}). The planned instant '
+          '$eventStart corresponds locally to $expected; the plugin has '
+          '${platformAlarmTimes(onPlatform)}. If these differ by exactly '
+          'the device offset, T-61 is back.',
     );
-    // Und der Wert ist wirklich ein lokaler, kein UTC-getaggter.
+    // And the value really is a local one, not UTC-tagged.
     expect(expected.isUtc, isFalse);
   });
 
@@ -453,43 +451,43 @@ void main() {
     for (final alarm in ours) {
       expect(alarm.assetAudioPath, 'assets/sounds/annoying_alarm.mp3');
       expect(alarm.volumeSettings.volume, closeTo(0.35, 0.001),
-          reason: 'ScheduledAlarm hatte vor T-84 gar kein volume-Feld - alle '
-              'geplanten Alarme klangen mit dem Default 0.6 und ignorierten '
-              'appState.selectedVolume, obwohl es dafuer eine UI gibt.');
+          reason: 'ScheduledAlarm had no volume field at all before T-84 - '
+              'every planned alarm rang with the default 0.6 and ignored '
+              'appState.selectedVolume, even though there is a UI for it.');
     }
   });
 
   testWidgets(
       'T-64: dismissing a ringing alarm leaves the planned week registered',
       (tester) async {
-    // Der schwerste Befund des Konsistenz-Durchgangs, hier auf dem Geraet:
-    // `onAlarmHandled` rief den alten Scheduler, der zuerst ALLE
-    // ScheduledAlarms loeschte und dann ohne Ersatz abbrach, weil
-    // `appState.meetings` leer war. Nach einem Dismiss stand der Nutzer ohne
-    // jeden Alarm da.
+    // The most severe finding of the consistency pass, here on the device:
+    // `onAlarmHandled` called the old Scheduler, which first deleted ALL
+    // ScheduledAlarms and then aborted with no replacement, because
+    // `appState.meetings` was empty. After a dismiss, the user was left
+    // without a single alarm.
     final appState = await pumpFreshApp(tester);
     await planOneCalendarEvent(appState);
 
     final plannedIds = appState.scheduledAlarms.map((a) => a.id).toSet();
     expect(plannedIds, isNotEmpty);
 
-    // Ein manueller Alarm klingelt und wird ueber das Overlay abgeschaltet -
-    // derselbe Pfad, der `Handler.onAlarmHandled` aufruft.
+    // A manual alarm rings and is switched off via the overlay - the same
+    // path that calls `Handler.onAlarmHandled`.
     await createManualAlarmOneMinuteFromNow(tester, appState);
     await pumpUntilFound(tester, find.byType(ScreenAlarmActive));
     await tester.tap(find.text('Stop'));
     await tester.pumpAndSettle();
     await pumpUntilGone(tester, find.byType(ScreenAlarmActive));
 
-    // Die geplanten Alarme muessen samt und sonders noch da sein - in
-    // AppState UND auf der Plattform.
+    // The planned alarms must all still be there, without exception - in
+    // AppState AND on the platform.
     expect(appState.scheduledAlarms.map((a) => a.id).toSet(), plannedIds,
-        reason: 'ein Dismiss darf die geplante Woche nicht antasten (T-64)');
+        reason: 'a dismiss must not touch the planned week (T-64)');
     final stillOnPlatform = (await Alarm.getAlarms()).map((a) => a.id).toSet();
     for (final id in plannedIds) {
       expect(stillOnPlatform, contains(id),
-          reason: 'ScheduledAlarm $id ist nach dem Dismiss von der Plattform '
-              'verschwunden - genau der Ausgang, den T-64 beschreibt.');
+          reason: 'ScheduledAlarm $id disappeared from the platform after '
+              'the dismiss - exactly the outcome T-64 describes.');
     }
   });
 }

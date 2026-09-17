@@ -1,768 +1,760 @@
-# Scheduling-Logik v2: Anforderungen, Architektur, Implementierung
+# Scheduling Logic v2: Requirements, Architecture, Implementation
 
-> Status: entworfen, mehrfach simuliert und gegen den tatsächlichen Code/echte Abhängigkeiten
-> (Android, Flutter, `device_calendar`, `awesome_notifications`, `alarm`, `timezone`) auf
-> Realisierbarkeit geprüft. **Phase 0–5 implementiert und anschließend konsolidiert (2026-09).**
-> 21 funktionale Anforderungen (FR-1–21), jede mit exakter Formel/exaktem Verfahren und mindestens
-> einem durchgerechneten Testfall. Ersetzt `lib/models/scheduling/scheduling.dart`s
-> `getEarliestEvent`/`adjustAlarmTimes`/`getStartTimeForDate` vollständig, nicht nur punktuell.
-> Passend zum projektweiten TDD-Grundsatz (`CLAUDE.md`, "Development process") existiert pro FR
-> mindestens ein `test()`-Block, geschrieben vor der jeweiligen Regel.
+> Status: designed, simulated multiple times, and checked for feasibility against the actual
+> code/real dependencies (Android, Flutter, `device_calendar`, `awesome_notifications`, `alarm`,
+> `timezone`). **Phases 0–5 implemented and subsequently consolidated (2026-09).**
+> 21 functional requirements (FR-1–21), each with an exact formula/exact procedure and at least
+> one fully worked test case. Fully replaces `lib/models/scheduling/scheduling.dart`'s
+> `getEarliestEvent`/`adjustAlarmTimes`/`getStartTimeForDate`, not just in part.
+> In keeping with the project-wide TDD principle (`CLAUDE.md`, "Development process"), each FR
+> has at least one `test()` block, written before the corresponding rule.
 >
-> **Was der TDD-Zyklus selbst zutage gebracht hat** (die FR-Texte unten sind entsprechend
-> korrigiert, siehe FR-4, FR-5, FR-6, FR-7, FR-9): mehrere reale Logikfehler, die eine rein
-> textliche Spec-Prüfung nicht gefunden hatte. Phase 4 brachte zwei in Phase 0 übersehene
-> FR-3-Felder nach (`preferredWakeUpTime`, `maxDailyDelta`; `lastEffectiveWakeTime` bleibt bewusst kein
-> eigenes Feld, sondern wird aus `pendingDayValues` abgeleitet).
+> **What the TDD cycle itself brought to light** (the FR text below is corrected accordingly, see
+> FR-4, FR-5, FR-6, FR-7, FR-9): several real logic errors that a purely textual spec review had not
+> found. Phase 4 added two FR-3 fields that had been missed in Phase 0 (`preferredWakeUpTime`,
+> `maxDailyDelta`; `lastEffectiveWakeTime` deliberately remains not a field of its own, but is
+> derived from `pendingDayValues`).
 >
-> **Konsolidierungsdurchgang 2026-09-10** (Befunde aus einer Konsistenzprüfung des gesamten
-> Umbaus, `docs/TODO.md` T-75 bis T-88; alle im Code behoben):
+> **Consolidation pass 2026-09-10** (findings from a consistency review of the whole rebuild,
+> `docs/TODO.md` T-75 through T-88; all fixed in the code):
 >
-> - **T-61 ist geschlossen.** Die frühere Einschätzung "Kern behoben" war falsch gewesen -
->   `hardFloor` gab `Meeting.from` als `TZDateTime` in der *Termin-eigenen* Zone weiter, während
->   jeder andere Wert UTC-getaggt ist und `_wallClockDelta` Ziffernfelder vergleicht. Normalisiert
->   an vier Frame-Grenzen; die Annahme "gilt nur für Geräte in UTC+0" gilt **nicht** mehr. Damit
->   das nicht zurückfällt, tragen die beiden erlaubten Lesarten eines gespeicherten Werts jetzt
->   Namen (`lib/models/scheduling/stored_values.dart`, T-83).
-> - **T-76:** die Tagesarithmetik läuft vollständig über Kalenderfelder
->   (`lib/models/scheduling/day_marker.dart`), nicht über absolute Dauern - sonst zählte
->   `computeWeekPlan` über eine Sommerzeit-Umstellung einen Fenstertag zu wenig.
-> - **T-75:** FR-17s Tagessperre und der Fortschritt der Tagesfortschreibung sind getrennte Felder
->   (`lastReplanDate` bzw. `lastProcessedConcludedDay`) - vorher verbrauchte ein
->   Erholungs-Replan den Marker, ohne fortzuschreiben, und der Tag war für FR-9/FR-12 verloren.
-> - **T-77/T-80/T-87:** es gibt genau **einen** Einstiegspunkt,
->   `runSchedulingCheckpoint({trigger})` (`lib/models/scheduling/checkpoint.dart`). Er ist gegen
->   sich selbst serialisiert (vorher konnten Ring- und Resume-Auslöser verschränkt laufen) und
->   führt die Sequenz vollständig aus, inklusive der Bettzeit-Notification.
-> - **T-78:** FR-9s Sicherheitsventil greift nicht bei gesetzter `preferredWakeUpTime` (siehe FR-9) - vorher
->   war es für solche Nutzer eine Einbahnstraße in einen dauerhaft toten Wecker.
-> - **T-79/T-81/T-82/T-84/T-88:** Plugin-Initialisierung wird abgewartet, FR-9 meldet einmal pro
->   Episode, `pendingDayValues` ist nach unten begrenzt, und Ton/Lautstärke/Gentle-Wake gehören zum
->   FR-18-Abgleich (vorher klangen alle geplanten Alarme mit dem Default 0.6).
+> - **T-61 is closed.** The earlier assessment "core fixed" had been wrong -
+>   `hardFloor` passed `Meeting.from` on as a `TZDateTime` in the *appointment's own* zone, while
+>   every other value is UTC-tagged and `_wallClockDelta` compares digit fields. Normalized at four
+>   frame boundaries; the assumption "only applies to devices on UTC+0" no longer holds. So this
+>   doesn't regress, the two permitted readings of a stored value now carry names
+>   (`lib/models/scheduling/stored_values.dart`, T-83).
+> - **T-76:** day arithmetic runs entirely over calendar fields
+>   (`lib/models/scheduling/day_marker.dart`), not over absolute durations - otherwise
+>   `computeWeekPlan` counted one window day too few across a daylight-saving transition.
+> - **T-75:** FR-17's daily lock and the day-advance's progress are separate fields
+>   (`lastReplanDate` and `lastProcessedConcludedDay` respectively) - previously a recovery replan
+>   consumed the marker without advancing, and the day was lost for FR-9/FR-12.
+> - **T-77/T-80/T-87:** there is exactly **one** entry point,
+>   `runSchedulingCheckpoint({trigger})` (`lib/models/scheduling/checkpoint.dart`). It is serialized
+>   against itself (previously the ring and resume triggers could run interleaved) and runs the
+>   full sequence, including the bedtime notification.
+> - **T-78:** FR-9's safety valve does not fire when `preferredWakeUpTime` is set (see FR-9) -
+>   previously it was a one-way street into a permanently dead alarm for such users.
+> - **T-79/T-81/T-82/T-84/T-88:** plugin initialization is awaited, FR-9 reports once per episode,
+>   `pendingDayValues` is bounded from below, and tone/volume/gentle-wake are part of the FR-18
+>   reconciliation (previously every planned alarm rang with the 0.6 default).
 >
-> **Noch offen:** `docs/TODO.md` T-62 (die tatsächliche Auslösung von
-> `onNotificationCreatedMethod` durch eine stille Notification ist noch nicht auf einem echten oder
-> emulierten Gerät bestätigt - laut Spec "empfohlen", kein TDD-Blocker) und Phase 6 (Ablösung des
-> alten `Scheduler`, `docs/TODO.md` T-64/T-86).
+> **Still open:** `docs/TODO.md` T-62 (whether `onNotificationCreatedMethod` is actually triggered
+> by a silent notification is not yet confirmed on a real or emulated device - "recommended" per
+> spec, not a TDD blocker) and Phase 6 (retiring the old `Scheduler`, `docs/TODO.md` T-64/T-86).
 
-## Geltungsbereich
+## Scope
 
-Betrifft ausschließlich kalenderabgeleitete Alarme (`ScheduledAlarm`). `ManualAlarm`s sind
-komplett ausgenommen: Sie werden von dieser Logik weder gelesen noch geschrieben, noch beeinflusst
-sie deren Zustand (**FR-15**).
+Applies exclusively to calendar-derived alarms (`ScheduledAlarm`). `ManualAlarm`s are entirely
+excluded: this logic neither reads nor writes them, nor does it influence their state (**FR-15**).
 
-## Grundbegriffe
+## Basic concepts
 
-**Zeitwerte** werden durchgehend als absolute Zeitpunkte behandelt (Datum + Uhrzeit als konkreter
-Instant, z. B. UTC-basiert), nie als bloße Uhrzeit-Ziffern ohne Datumsbezug (**FR-1**). Ohne diese
-Festlegung sind "früher"/"später" und Zeitdifferenzen für jeden Tagesübergang über Mitternacht sowie
-für jeden Zeitzonenwechsel nicht definiert. FR-1 legt nur die Arithmetik fest; wann ein
-Zeitzonenwechsel selbst erkannt wird und wie wall-clock-verankerte Werte dabei behandelt werden,
-regelt FR-16.
+**Time values** are treated throughout as absolute instants (date + time as a concrete instant,
+e.g. UTC-based), never as bare time-of-day digits without a date (**FR-1**). Without this
+convention, "earlier"/"later" and time differences are undefined across any midnight day boundary
+and any time zone change. FR-1 only fixes the arithmetic; when a time zone change itself is
+detected and how wall-clock-anchored values are handled then is governed by FR-16.
 
 ---
 
-## FR-1 — Absolute Zeitpunkte, keine Uhrzeit-Ziffern
+## FR-1 — Absolute instants, not time-of-day digits
 
-Jeder verwendete Zeitwert (`hardFloor`, `lastEffectiveWakeTime`, Segment-Anker, Zwischenwerte) ist
-ein absoluter Zeitpunkt (Datum+Uhrzeit, intern z. B. über eine UTC-Repräsentation vergleichbar).
-"Früher"/"später" und `ΔT` (Zeitdifferenz) werden ausschließlich über die absolute Differenz
-zweier solcher Zeitpunkte berechnet.
+Every time value used (`hardFloor`, `lastEffectiveWakeTime`, segment anchors, intermediate values)
+is an absolute instant (date+time, internally comparable e.g. via a UTC representation).
+"Earlier"/"later" and `ΔT` (time difference) are computed exclusively via the absolute difference
+between two such instants.
 
-- **Test:** Anker 22:00, `hardFloor` am Folgetag 05:00 → `ΔT = 7h, Richtung "später"`, nicht
-  `ΔT = 17h, Richtung "früher"` (reiner Ziffernvergleich ohne Tageswechsel).
-- **Test:** Anker 07:00 vor einem Zeitzonenwechsel (MEZ), `hardFloor` danach 07:00 in neuer Zone
-  (JST, +8h Versatz) → `ΔT = 8h` (Instants unterscheiden sich um 8h), nicht `ΔT = 0`.
+- **Test:** anchor 22:00, `hardFloor` the next day at 05:00 → `ΔT = 7h, direction "later"`, not
+  `ΔT = 17h, direction "earlier"` (a pure digit comparison with no day change).
+- **Test:** anchor 07:00 before a time zone change (CET), `hardFloor` afterwards 07:00 in the new
+  zone (JST, +8h offset) → `ΔT = 8h` (the instants differ by 8h), not `ΔT = 0`.
 
-## FR-2 — `hardFloor(Tag)`: Definition und Bedeutung als Obergrenze
+## FR-2 — `hardFloor(day)`: definition and meaning as an upper bound
 
-Nur definiert für Tage mit mindestens einem echten, **nicht-ganztägigen** Kalendertermin. Ein Tag
-mit ausschließlich ganztägigen Terminen (`isAllDay=true`) oder ganz ohne Termin ist ein
-**Lückentag** ohne `hardFloor`.
+Only defined for days with at least one real, **non-all-day** calendar appointment. A day with
+only all-day appointments (`isAllDay=true`) or with no appointment at all is a **gap day** with no
+`hardFloor`.
 
 ```
-hardFloor(Tag) = frühester nicht-ganztägiger Termin an diesem Tag
+hardFloor(day) = earliest non-all-day appointment on this day
                  − durationToWakeUp − durationToGetReady
 ```
 
-`hardFloor` ist eine **Obergrenze** ("nicht später als"). Der geplante Wert darf früher liegen
-(immer erlaubt), aber **niemals später** (ein späterer Wert bedeutet, einen echten Termin zu
-verpassen).
+`hardFloor` is an **upper bound** ("no later than"). The planned value may be earlier (always
+allowed), but **never later** (a later value means missing a real appointment).
 
-**Termin-eigene Zeitzone:** Die **eigene Zone eines Termins** bestimmt ausschließlich die
-Umrechnung seines Beginns in einen absoluten Instant (bereits vorhandene Funktionalität,
-`convertToTZDateTime` in `lib/utils/utils.dart`). Die **Geräte-Zeitzone zum Auswertungszeitpunkt**
-(derselbe Versatz, den FR-16 prüft) - **niemals** die Zone des Termins selbst - entscheidet, welchem
-Kalendertag der Instant zugeordnet wird. Begründung: wer geweckt werden muss, ist physisch dort, wo
-das Gerät ist, nicht dort, wo der Termin verortet ist.
+**The appointment's own time zone:** the **appointment's own zone** exclusively determines the
+conversion of its start into an absolute instant (already existing functionality,
+`convertToTZDateTime` in `lib/utils/utils.dart`). The **device's time zone at the moment of
+evaluation** (the same offset FR-16 checks) - **never** the appointment's own zone - decides which
+calendar day the instant is assigned to. Rationale: whoever needs to be woken up is physically
+wherever the device is, not wherever the appointment is located.
 
-**Testbarkeit:** die reine Funktion (`eventsForDay`) nimmt den Geräte-Versatz als **expliziten
-Parameter** entgegen, statt intern `DateTime.toLocal()` aufzurufen - Letzteres hinge an der
-Systemzeitzone der ausführenden Maschine und wäre damit nicht deterministisch testbar. Nur die
-dünne AppState-Schicht (Architektur) liest den tatsächlichen, aktuellen Versatz (`DateTime.now()
-.timeZoneOffset`) und reicht ihn als Wert weiter.
+**Testability:** the pure function (`eventsForDay`) takes the device offset as an **explicit
+parameter**, rather than calling `DateTime.toLocal()` internally - the latter would depend on the
+executing machine's system time zone and would therefore not be deterministically testable. Only
+the thin AppState layer (architecture) reads the actual, current offset (`DateTime.now()
+.timeZoneOffset`) and passes it on as a value.
 
-- **Test:** Zwei nicht-ganztägige Termine (09:00, 07:00), `durationToWakeUp=15min`,
-  `durationToGetReady=15min` → `hardFloor` = 07:00 − 30min = **06:30** (der frühere zählt).
-- **Test:** Ein ganztägiger + ein nicht-ganztägiger Termin (08:00), gleiche Offsets → `hardFloor` =
-  08:00 − 30min = **07:30** (der ganztägige fließt nie ein).
-- **Test:** Nur ein ganztägiger Termin → kein `hardFloor`, Lückentag.
-- **Test (Termin-eigene Zeitzone):** Tom (Gerät in `Europe/Berlin`) hat einen Termin mit
-  `startTimeZone=Asia/Tokyo`, Beginn 03:00 JST = 19:00 CET **am Vortag** → zählt für `hardFloor` zum
-  Berlin-Vortag, nicht zum Tokyo-Datum.
+- **Test:** two non-all-day appointments (09:00, 07:00), `durationToWakeUp=15min`,
+  `durationToGetReady=15min` → `hardFloor` = 07:00 − 30min = **06:30** (the earlier one counts).
+- **Test:** one all-day + one non-all-day appointment (08:00), same offsets → `hardFloor` =
+  08:00 − 30min = **07:30** (the all-day one never enters).
+- **Test:** only an all-day appointment → no `hardFloor`, gap day.
+- **Test (appointment's own time zone):** Tom (device on `Europe/Berlin`) has an appointment with
+  `startTimeZone=Asia/Tokyo`, starting 03:00 JST = 19:00 CET **the day before** → counts toward
+  `hardFloor` for the Berlin day before, not the Tokyo date.
 
-## FR-3 — Zustand
+## FR-3 — State
 
-| Feld | Typ | Bemerkung |
+| Field | Type | Note |
 |---|---|---|
-| `maxDailyDelta` | `Duration` | `> 0`; System-Minimum **15 Minuten** wird erzwungen (bei 0 hätte der Parameter für `hardFloor`-Segmente keine Wirkung mehr - er würde nur dort greifen, wo er am wenigsten gebraucht wird) |
-| `preferredWakeUpTime` | `TimeOfDay?` | reine Uhrzeit, **kein** Instant, **kein** Datum/Zone - wird erst am Verwendungsort (FR-4/FR-16) mit Tag+aktueller Zone kombiniert; deshalb "überträgt" FR-16 bei Zeitzonenwechsel nichts an `preferredWakeUpTime` selbst |
-| `lastCheckedUtcOffset` | `Duration` | Versatz beim letzten FR-16-Checkpoint |
-| `gapDayCounter` | `int` | rollierender Sicherheitsventil-Zähler (FR-9) |
-| `lastReplanDate` | `Date?` | **nur** FR-17s Tagessperre: "lief heute schon ein Checkpoint?". Von FR-16 Checkpoint 2 **nicht** aktualisiert |
-| `lastProcessedConcludedDay` | `Date?` | Fortschritt der Tagesfortschreibung: bis zu welchem *abgeschlossenen* Tag haben FR-9 und FR-12 gezählt bzw. geprüft? Getrennt von `lastReplanDate` (`docs/TODO.md` T-75), weil beide Bedeutungen auseinanderfallen, sobald ein Checkpoint läuft, für den heute noch nicht abgeschlossen ist |
-| `pendingDayValues` | `Map<Datum, Instant?>` | die geplanten Werte selbst; `null` = kein Alarm für diesen Tag (Lückentag ohne `preferredWakeUpTime`, oder FR-9s Ventil). Revidierbar für jeden noch nicht ausgelösten Tag (FR-11), danach für immer fix. Nach unten begrenzt auf "ab vorgestern" (T-82) |
-| `pendingDayInstantAnchored` | `Map<Datum, bool>` | pro geplanten Tag: kam der Wert direkt aus einem echten `hardFloor` (instant-verankert) oder aus `preferredWakeUpTime`/der Kurve (wall-clock-verankert)? FR-16 Checkpoint 2 hat keinen Kalenderzugriff und kann das nicht neu ableiten |
-| `disabledDays` | `Set<Datum>` | FR-21: Tage, fuer die der Nutzer den geplanten Wecker ausdruecklich **abgeschaltet** hat. Getrennt von `pendingDayValues`, weil `null` dort "nichts geplant" heisst (FR-9/FR-10) und von der naechsten Planung ueberschrieben wuerde - das Veto des Nutzers darf das nicht |
-| `snoozeEnabled` | `bool` | FR-20: darf der Nutzer den Wecker verschieben? Standard **false** |
-| `snoozeTime` | `Duration` | FR-20: um wie viel ein Druck auf Snooze verschiebt. Standard **5 Minuten** |
-| `snoozeOriginOf` | `Map<int, Instant>` | FR-20: je klingelndem Alarm der **ursprüngliche** Weckzeitpunkt. Trägt das Restbudget über App-Neustarts und über mehrere Snooze-Vorgänge hinweg - ohne ihn wäre nach einem Prozesstod wieder das volle Budget da |
-| `overrunNotificationSent` | `bool` | FR-6 fordert "einmalig" - Merker für die laufende Overrun-Episode |
-| `safetyValveNotificationSent` | `bool` | dasselbe für FR-9 (`docs/TODO.md` T-81) |
+| `maxDailyDelta` | `Duration` | `> 0`; a system minimum of **15 minutes** is enforced (at 0 the parameter would have no effect left on `hardFloor` segments - it would only apply where it's least needed) |
+| `preferredWakeUpTime` | `TimeOfDay?` | a bare time of day, **not** an instant, **not** a date/zone - is only combined with a day + the current zone at the point of use (FR-4/FR-16); that's why FR-16 doesn't "carry over" anything onto `preferredWakeUpTime` itself on a time zone change |
+| `lastCheckedUtcOffset` | `Duration` | the offset at the last FR-16 checkpoint |
+| `gapDayCounter` | `int` | rolling safety-valve counter (FR-9) |
+| `lastReplanDate` | `Date?` | **only** FR-17's daily lock: "has a checkpoint already run today?". **Not** updated by FR-16 checkpoint 2 |
+| `lastProcessedConcludedDay` | `Date?` | the day-advance's progress: up to which *concluded* day have FR-9 and FR-12 counted/checked? Separate from `lastReplanDate` (`docs/TODO.md` T-75), because the two meanings diverge as soon as a checkpoint runs for a day not yet concluded today |
+| `pendingDayValues` | `Map<Date, Instant?>` | the planned values themselves; `null` = no alarm for this day (a gap day without `preferredWakeUpTime`, or FR-9's valve). Revisable for any day not yet triggered (FR-11), fixed forever after that. Bounded from below at "from the day before yesterday" (T-82) |
+| `pendingDayInstantAnchored` | `Map<Date, bool>` | per planned day: did the value come directly from a real `hardFloor` (instant-anchored), or from `preferredWakeUpTime`/the curve (wall-clock-anchored)? FR-16 checkpoint 2 has no calendar access and cannot re-derive this |
+| `disabledDays` | `Set<Date>` | FR-21: days for which the user has explicitly **switched off** the planned alarm. Separate from `pendingDayValues`, because `null` there means "nothing planned" (FR-9/FR-10) and would be overwritten by the next planning run - the user's veto must not be |
+| `snoozeEnabled` | `bool` | FR-20: is the user allowed to postpone the alarm? Default **false** |
+| `snoozeTime` | `Duration` | FR-20: by how much pressing snooze postpones. Default **5 minutes** |
+| `snoozeOriginOf` | `Map<int, Instant>` | FR-20: per ringing alarm, the **original** wake instant. Carries the remaining budget across app restarts and across multiple snoozes - without it, a process death would restore the full budget |
+| `overrunNotificationSent` | `bool` | FR-6 requires "once" - a marker for the current overrun episode |
+| `safetyValveNotificationSent` | `bool` | the same for FR-9 (`docs/TODO.md` T-81) |
 
-Bezieht sich ausschließlich auf die `ScheduledAlarm`-Kette.
+Refers exclusively to the `ScheduledAlarm` chain.
 
-`lastEffectiveWakeTime` ist bewusst **kein** eigenes Feld: es ist immer der Eintrag in
-`pendingDayValues` für den zuletzt abgeschlossenen Tag und würde als zweite Quelle nur
-auseinanderlaufen können.
+`lastEffectiveWakeTime` is deliberately **not** its own field: it is always the entry in
+`pendingDayValues` for the most recently concluded day, and as a second source could only drift
+apart from it.
 
-## FR-4 — Tage ohne jede Notwendigkeit
+## FR-4 — Days with no requirement of their own
 
-Ein Tag ohne eigenen `hardFloor`, der nicht innerhalb eines aktiven Glättungs-Segments liegt (FR-7
-legt fest, wann ein Segment beginnt):
+A day with no `hardFloor` of its own, that does not fall within an active smoothing segment (FR-7
+determines when a segment begins):
 
-- Ohne `preferredWakeUpTime`: Wert hält bei `lastEffectiveWakeTime`s Uhrzeit, aber auf dem **echten,
-  tatsächlich geplanten Kalendertag** (`lastEffectiveWakeTime`s Datum + 1), nicht auf
-  `lastEffectiveWakeTime`s eigenem Datum - sonst trägt der gespeicherte Wert das Datum von gestern,
-  obwohl er für heute gilt (in der Implementierung beim TDD-Zyklus selbst als echter Bug gefunden:
-  eine erste Fassung ließ das Datum unverändert).
-- Mit `preferredWakeUpTime`: Wert driftet Richtung `preferredWakeUpTime` (kombiniert mit dem oben genannten
-  tatsächlichen Kalendertag, nicht mit `lastEffectiveWakeTime`s eigenem - `preferredWakeUpTime` selbst trägt
-  ohnehin kein Datum, FR-3), begrenzt durch `maxDailyDelta`/Tag, stoppt bei Erreichen (kein
-  Überschießen) - **zusätzlich gedeckelt durch FR-7s Rückwärts-Prüfung**, sofern ein künftiger realer
-  `hardFloor` im Fenster existiert: der Drift darf nie mehr Reserve verbrauchen, als für dessen
-  fristgerechte Erreichung noch nötig ist. Der Abstand zu `preferredWakeUpTime` wird dabei wie in FR-6
-  ausschließlich über die Uhrzeit-Komponenten verglichen (siehe FR-6s Klarstellung), nicht über die
-  volle Kalenderdifferenz.
+- Without `preferredWakeUpTime`: the value holds at `lastEffectiveWakeTime`'s time of day, but on
+  the **real, actually planned calendar day** (`lastEffectiveWakeTime`'s date + 1), not on
+  `lastEffectiveWakeTime`'s own date - otherwise the stored value carries yesterday's date even
+  though it applies to today (found as a genuine bug during the TDD cycle itself: an initial
+  version left the date unchanged).
+- With `preferredWakeUpTime`: the value drifts toward `preferredWakeUpTime` (combined with the
+  actual calendar day mentioned above, not with `lastEffectiveWakeTime`'s own -
+  `preferredWakeUpTime` itself carries no date anyway, FR-3), bounded by `maxDailyDelta`/day,
+  stops once reached (no overshoot) - **additionally capped by FR-7's backward check**, if a future
+  real `hardFloor` exists within the window: the drift must never consume more reserve than is
+  still needed to reach it in time. The distance to `preferredWakeUpTime` is compared here, as in
+  FR-6, exclusively via the time-of-day components (see FR-6's clarification), not via the full
+  calendar difference.
 
-Die folgenden Tests prüfen **isoliert** die Drift-Regel selbst, ohne FR-7s Deckel (kein künftiger
-`hardFloor` vorausgesetzt) - das Zusammenspiel mit dem Deckel testen bereits FR-7s eigene Testfälle.
+The following tests check the drift rule itself **in isolation**, without FR-7's cap (assuming no
+future `hardFloor`) - the interplay with the cap is already tested by FR-7's own test cases.
 
-- **Test:** `V=07:00`, `preferredWakeUpTime=null` → unverändert **07:00**.
-- **Test:** `V=07:00`, `preferredWakeUpTime=09:00`, `maxDailyDelta=30min` → Distanz 2:00 > 30min → **07:30**.
-- **Test:** `V=07:00`, `preferredWakeUpTime=05:00`, `maxDailyDelta=30min` → Distanz 2:00 > 30min → **06:30**.
-- **Test (kein Überschießen):** `V=07:00`, `preferredWakeUpTime=07:15`, `maxDailyDelta=30min` → Distanz
-  15min < 30min → **exakt 07:15**, nicht 07:30.
-- **Test (Ziel erreicht):** `V=07:00`, `preferredWakeUpTime=07:00` → unverändert **07:00**.
+- **Test:** `V=07:00`, `preferredWakeUpTime=null` → unchanged **07:00**.
+- **Test:** `V=07:00`, `preferredWakeUpTime=09:00`, `maxDailyDelta=30min` → distance 2:00 > 30min → **07:30**.
+- **Test:** `V=07:00`, `preferredWakeUpTime=05:00`, `maxDailyDelta=30min` → distance 2:00 > 30min → **06:30**.
+- **Test (no overshoot):** `V=07:00`, `preferredWakeUpTime=07:15`, `maxDailyDelta=30min` → distance
+  15min < 30min → **exactly 07:15**, not 07:30.
+- **Test (goal reached):** `V=07:00`, `preferredWakeUpTime=07:00` → unchanged **07:00**.
 
-## FR-5 — Zusammenfassung realer `hardFloor`-Punkte zu Segmenten ("Runs")
+## FR-5 — Grouping real `hardFloor` points into segments ("runs")
 
-Reale `hardFloor`-Punkte im Fenster: `t1, t2, …, tn`, chronologisch. Ausgehend vom aktuellen Anker
-`A` (Tag 0):
+Real `hardFloor` points within the window: `t1, t2, …, tn`, chronological. Starting from the
+current anchor `A` (day 0):
 
-**Vorbedingung: nur ein bindender Punkt kann Ziel sein.** Als Ziel `t_m` kommt ausschließlich ein
-Punkt in Frage, dessen Uhrzeit **früher** liegt als `A` (ΔT nach FR-6s Klarstellung, also rein über
-die Uhrzeit-Komponenten). Ein Punkt, der gleich oder später liegt, fordert nichts: wer um 06:45
-aufsteht, erfüllt einen Termin um 11:00 längst. Für einen solchen Tag gilt FR-4 (Drift zur
-`preferredWakeUpTime`, begrenzt durch `maxDailyDelta`), und der `hardFloor` wirkt nur noch als **Deckel**
-(FR-2s Obergrenze), nie als Zugseil.
+**Precondition: only a binding point can be a target.** Only a point whose time of day lies
+**earlier** than `A` (ΔT per FR-6's clarification, i.e. purely via the time-of-day components)
+qualifies as a target `t_m`. A point that is equal to or later than `A` demands nothing: someone
+who gets up at 06:45 has long since satisfied an appointment at 11:00. FR-4 applies to such a day
+(drift toward `preferredWakeUpTime`, bounded by `maxDailyDelta`), and the `hardFloor` then acts
+only as a **cap** (FR-2's upper bound), never as a pull.
 
-Das folgt unmittelbar aus FR-2 („Der geplante Wert darf früher liegen - **immer erlaubt**") und aus
-Schritt 1s eigenem Satz („`hardFloor` ist ausschließlich eine Obergrenze, nie eine
-Richtungsvorgabe"), stand aber bis 2026-09-11 nirgends als Verfahrensregel - mit der Folge, dass
-jeder Punkt zum Ziel wurde, auch ein späterer. Auf einem echten Kalender lief die Weckzeit dadurch
-von 06:45 über 08:00 auf 11:00, bei `maxDailyDelta` = 30 min und `preferredWakeUpTime` = 07:00
+This follows directly from FR-2 ("the planned value may be earlier - **always allowed**") and from
+step 1's own sentence ("`hardFloor` is exclusively an upper bound, never a directional
+requirement"), but until 2026-09-11 was nowhere codified as a procedural rule - with the result
+that every point became a target, even a later one. On a real calendar this made the wake time run
+from 06:45 through 08:00 to 11:00, with `maxDailyDelta` = 30 min and `preferredWakeUpTime` = 07:00
 (`docs/TODO.md` T-132).
 
-Wichtig zur Abgrenzung: die Punkte werden dadurch **nicht** aus der Liste entfernt. Sie nehmen
-weiterhin an Schritt 1s Verletzungsprüfung teil - genau davor warnt Schritt 1s Absatz über den
-verworfenen „Richtungsfilter". Ausgeschlossen sind sie nur als *Ziel*.
+Important distinction: this does **not** remove the points from the list. They still take part in
+step 1's violation check - exactly what step 1's paragraph about the discarded "directional filter"
+warns against. They are excluded only as a *target*.
 
-- **Test:** `A=06:45`, `t1(Tag 1)=08:00`, `t2(Tag 2)=11:00`, `preferredWakeUpTime=07:00`,
-  `maxDailyDelta=30min` → jeder Tag **07:00** (FR-4 erreicht die `preferredWakeUpTime` am ersten Tag und
-  hält), **keine** Overrun-Meldung. Nicht 08:00/11:00.
-- **Test:** derselbe Anker, ein einzelner Termin `05:00` in vier Tagen → Run nach früh:
-  `06:18 / 05:52 / 05:26 / 05:00`, danach Drift zurück zur `preferredWakeUpTime`.
+- **Test:** `A=06:45`, `t1(day 1)=08:00`, `t2(day 2)=11:00`, `preferredWakeUpTime=07:00`,
+  `maxDailyDelta=30min` → every day **07:00** (FR-4 reaches `preferredWakeUpTime` on the first day
+  and holds), **no** overrun notification. Not 08:00/11:00.
+- **Test:** same anchor, a single appointment at `05:00` in four days → run toward earlier:
+  `06:18 / 05:52 / 05:26 / 05:00`, then drifts back toward `preferredWakeUpTime`.
 
-1. Bestimme den am weitesten in der Zukunft liegenden Punkt `t_m` (m ≥ 1), sodass die gleichmäßige
-   Verteilung `A→t_m` (FR-6) **keinen** Zwischenpunkt `t1…t_{m-1}` über seinen eigenen `hardFloor`
-   hinaus verschiebt. Ist das für den nächstmöglichen `t_m` verletzt, wird `m` verkleinert, bis
-   erfüllt (schlimmstenfalls `m=1`). **Keine** zusätzliche Prüfung, ob `t1…t_m` "alle in dieselbe
-   Richtung wie `A`" zeigen: eine erste Fassung enthielt einen solchen Richtungsfilter, der sich beim
-   Durchrechnen eines mehrtägigen Runs als falsch erwies - sobald `A` (der *heutige*, bereits
-   fortgeschrittene Wert, nicht der ursprüngliche Run-Start, siehe FR-7) an einem Zwischenpunkt
-   `hardFloor` bereits vorbeigedriftet ist, kann dieser Punkt "auf der falschen Seite" von `A` liegen,
-   ohne tatsächlich verletzt zu sein - ein Richtungsfilter hätte ihn dann fälschlich ausgeschlossen.
-   `hardFloor` ist ausschließlich eine Obergrenze (FR-2), nie eine Richtungsvorgabe - die
-   Verletzungsprüfung allein genügt.
-2. Ein Punkt mit `ΔT=0` relativ zu `A` beendet den Run sofort bei sich selbst - zählt für keine
-   Richtung als kompatibel, wird nie mit einem Folgepunkt zusammengefasst.
-3. `A→t_m` wird nach FR-6 verteilt. `t_m`s Tag wird neuer Anker für den nächsten Run, beginnend bei
-   `t_{m+1}`. Zurück zu Schritt 1.
-4. Sind alle realen Punkte verarbeitet, gilt für alle Tage danach FR-4.
+1. Determine the point `t_m` (m ≥ 1) furthest in the future such that the even distribution
+   `A→t_m` (FR-6) shifts **no** intermediate point `t1…t_{m-1}` past its own `hardFloor`. If this is
+   violated for the next possible `t_m`, `m` is reduced until it holds (worst case `m=1`). **No**
+   additional check of whether `t1…t_m` all "point in the same direction as `A`": an initial version
+   contained such a directional filter, which proved wrong when working through a multi-day run -
+   once `A` (the *current*, already advanced value, not the original run start, see FR-7) has
+   already drifted past an intermediate point's `hardFloor`, that point can lie "on the wrong side"
+   of `A` without actually being violated - a directional filter would have wrongly excluded it.
+   `hardFloor` is exclusively an upper bound (FR-2), never a directional requirement - the violation
+   check alone suffices.
+2. A point with `ΔT=0` relative to `A` ends the run immediately at itself - it never counts as
+   compatible with either direction, and is never grouped with a following point.
+3. `A→t_m` is distributed per FR-6. `t_m`'s day becomes the new anchor for the next run, starting at
+   `t_{m+1}`. Back to step 1.
+4. Once all real points have been processed, FR-4 applies to every day after that.
 
-Dieses Verfahren (insbesondere Schritt 1) hat zwei Aufrufer: **real**, wenn ein Run tatsächlich
-beginnt; und **hypothetisch**, täglich neu, aus FR-7s Rückwärts-Prüfung heraus, mit dem *heutigen*
-Wert als Anker - um zu bestimmen, welches Ziel FR-7 heranziehen muss.
+This procedure (step 1 in particular) has two callers: **real**, when a run actually begins; and
+**hypothetical**, freshly every day, out of FR-7's backward check, using *today's* value as the
+anchor - to determine which target FR-7 must use.
 
-- **Test:** `A=08:00`, `t1(Tag2)=07:00`, `t2(Tag4)=06:00` - beide früher als `A`, Verteilung `A→t2`
-  verletzt `t1` nicht → `t_m=t2`, ein Run über beide.
-- **Test (Schrumpfung):** `A=09:00`, `t1(Mi)=06:00` (streng), `t2(Fr)=08:00` (lockerer) - naive
-  Verteilung `A→t2` über 5 Tage ergäbe für Mittwoch ca. 08:24, verletzt `t1`s `hardFloor` (06:00) →
-  `t_m` muss auf `t1` schrumpfen: erstes Segment `A→t1` allein, danach neuer Run ab `t1` Richtung
+- **Test:** `A=08:00`, `t1(day2)=07:00`, `t2(day4)=06:00` - both earlier than `A`, distributing
+  `A→t2` does not violate `t1` → `t_m=t2`, one run over both.
+- **Test (shrinking):** `A=09:00`, `t1(Wed)=06:00` (strict), `t2(Fri)=08:00` (looser) - a naive
+  distribution `A→t2` over 5 days would give Wednesday roughly 08:24, violating `t1`'s `hardFloor`
+  (06:00) → `t_m` must shrink to `t1`: first segment `A→t1` alone, then a new run from `t1` toward
   `t2`.
-- **Test (`ΔT=0`):** `A=07:00`, `t1(Di)=07:00`, `t2(Fr)=09:00` → `t1` beendet seinen eigenen Run bei
-  sich selbst; `t2` beginnt komplett neuen Run mit Anker=`t1`.
+- **Test (`ΔT=0`):** `A=07:00`, `t1(Tue)=07:00`, `t2(Fri)=09:00` → `t1` ends its own run right at
+  itself; `t2` starts a completely new run with anchor=`t1`.
 
-## FR-6 — Verteilung innerhalb eines Runs
+## FR-6 — Distribution within a run
 
-Für einen Run von Anker `A` (Tag 0) zu Ziel `F` (Tag `N`):
+For a run from anchor `A` (day 0) to target `F` (day `N`):
 
 ```
 ΔT = |A − F|
-Tag_i = A + Vorzeichen × (ΔT / N) × i,   für i = 1..N
+day_i = A + sign × (ΔT / N) × i,   for i = 1..N
 ```
 
-Ist `ΔT/N > maxDailyDelta`: die Differenz wird **ebenfalls gleichmäßig** auf alle `N` Tage verteilt
-(kein Sprung an einem Tag, **außer** bei `N=1` - dort ist ein Sprung mathematisch unvermeidbar und
-**kein** Verstoß gegen diese Regel: "kein Sprung an einem Tag" begründet nur die Verteilungslogik
-bei `N>1`, ist keine eigenständige Garantie). Bei jeder Überschreitung von `maxDailyDelta` (`N=1`
-oder verteilt) wird der Nutzer **einmalig** benachrichtigt.
+If `ΔT/N > maxDailyDelta`: the difference is **likewise distributed evenly** over all `N` days (no
+jump on a single day, **except** for `N=1` - there a jump is mathematically unavoidable and is
+**not** a violation of this rule: "no jump on a single day" only justifies the distribution logic
+for `N>1`, it is not a standalone guarantee). On every excess over `maxDailyDelta` (`N=1` or
+distributed) the user is notified **once**.
 
-**Klarstellung `ΔT` und `Tag_i`s Datum (in der Implementierung als echter Bug gefunden, nicht schon
-beim Entwurf):** `A` und `F` tragen als echte kalenderabgeleitete `hardFloor`-Punkte oft real weit
-auseinanderliegende Datumswerte (`F` kann Tage nach `A` liegen). `ΔT = |A − F|` meint hier
-**ausschließlich die Uhrzeit-Komponenten** von `A` und `F` (Stunde/Minute/Sekunde), **nie** deren
-volle Kalenderdifferenz - eine naive `F − A`-Instant-Differenz über mehrere reale Tage hinweg würde
-einen unsinnigen, von der Tagesanzahl dominierten Wert liefern statt der eigentlich gemeinten
-kleinen täglichen Uhrzeit-Verschiebung. Die Mehrdeutigkeit bei der Richtungsbestimmung wird wie in
-FR-1 aufgelöst (die Variante mit `|Δ| ≤ 12h` gewinnt). Symmetrisch dazu bekommt jeder `Tag_i` sein
-**eigenes, echtes Kalenderdatum** `A`s Datum `+ i` - **nie** `F`s eigenes (ggf. weit entferntes)
-Datum. `F`s eigenes Datum wird nirgends für die Berechnung selbst gebraucht, nur dafür, `F` an der
-richtigen Stelle im Fenster zu verorten.
+**Clarification of `ΔT` and `day_i`'s date (found as a genuine bug during implementation, not
+already at design time):** `A` and `F`, as real calendar-derived `hardFloor` points, often carry
+dates that are genuinely far apart (`F` can be days after `A`). `ΔT = |A − F|` here means
+**exclusively the time-of-day components** of `A` and `F` (hour/minute/second), **never** their
+full calendar difference - a naive `F − A` instant difference across several real days would yield
+a nonsensical value dominated by the day count, instead of the actually intended small daily
+time-of-day shift. The ambiguity in determining direction is resolved as in FR-1 (the variant with
+`|Δ| ≤ 12h` wins). Symmetrically, each `day_i` gets its **own, real calendar date**, `A`'s date `+
+i` - **never** `F`'s own (possibly far-off) date. `F`'s own date is nowhere needed for the
+calculation itself, only to place `F` at the right position in the window.
 
-**Implementierungshinweis (UTC-Erhalt):** wird beim Aufbau von `Tag_i` (oder allgemein einem "gleiche
-Uhrzeit, neues Datum"-Wert) versehentlich ein lokaler statt ein UTC-Konstruktor verwendet, obwohl `A`
-selbst UTC-basiert war, entsteht ein reales, aber nur auf Maschinen mit von UTC abweichender
-Systemzeitzone sichtbares Instant-Mismatch (in der Implementierung ebenfalls als echter Bug
-gefunden) - jede solche Konstruktion muss `A`s (bzw. der jeweiligen Referenz) `isUtc`-Flag erhalten.
+**Implementation note (UTC preservation):** if, when constructing `day_i` (or generally a "same
+time of day, new date" value), a local constructor is accidentally used instead of a UTC one, even
+though `A` itself was UTC-based, a real instant mismatch results - visible only on machines whose
+system time zone differs from UTC (also found as a genuine bug during implementation) - every such
+construction must carry over `A`'s (or the relevant reference's) `isUtc` flag.
 
-- **Test (früher):** `A=08:00, F=04:30, N=5, maxDailyDelta=60min` → `ΔT=3:30, ΔT/N=42min` (< 60min,
-  kein Overrun) → Tag1=07:18, Tag2=06:36, Tag3=05:54, Tag4=05:12, Tag5=04:30.
-- **Test (später):** `A=06:00, F=09:00, N=3, maxDailyDelta=90min` → `ΔT=3:00, ΔT/N=60min` (kein
-  Overrun) → Tag1=07:00, Tag2=08:00, Tag3=09:00.
-- **Test (Overrun, `N>1`):** `A=08:00, F=04:30, N=3, maxDailyDelta=60min` → `ΔT/N=70min > 60min` →
-  Tag1=06:50, Tag2=05:40, Tag3=04:30, Benachrichtigung.
-- **Test (Overrun, `N=1`):** `A=08:00, F=02:00, N=1, maxDailyDelta=60min` → voller 6h-Sprung,
-  Benachrichtigung - **kein** Spezifikationsfehler.
+- **Test (earlier):** `A=08:00, F=04:30, N=5, maxDailyDelta=60min` → `ΔT=3:30, ΔT/N=42min` (< 60min,
+  no overrun) → day1=07:18, day2=06:36, day3=05:54, day4=05:12, day5=04:30.
+- **Test (later):** `A=06:00, F=09:00, N=3, maxDailyDelta=90min` → `ΔT=3:00, ΔT/N=60min` (no
+  overrun) → day1=07:00, day2=08:00, day3=09:00.
+- **Test (overrun, `N>1`):** `A=08:00, F=04:30, N=3, maxDailyDelta=60min` → `ΔT/N=70min > 60min` →
+  day1=06:50, day2=05:40, day3=04:30, notification.
+- **Test (overrun, `N=1`):** `A=08:00, F=02:00, N=1, maxDailyDelta=60min` → full 6h jump,
+  notification - **not** a spec defect.
 
-## FR-7 — Wann beginnt ein Run tatsächlich? ("So spät wie nötig")
+## FR-7 — When does a run actually begin? ("As late as necessary")
 
-Ein Run beginnt **nicht** an einem vorab fixierten Tag, sondern wird bei **jeder** täglichen
-Neuplanung frisch aus einer Rückwärts-Prüfung abgeleitet - strukturell wie FR-5s Schrumpfung, nur
-gegen die verbleibende Distanz statt gegen einen Zwischenpunkt geprüft.
+A run does **not** begin on a day fixed in advance; instead it is freshly derived at **every**
+daily replan from a backward check - structurally like FR-5's shrinking, just checked against the
+remaining distance instead of an intermediate point.
 
-Sei `(F, N_F)` das Ergebnis von FR-5s Gruppierungsverfahren, **hypothetisch** angewendet mit dem
-heutigen Wert `V` als Anker (`F = t_m`, `N_F` = dessen Tagesabstand) - **nicht** einfach "der
-nächste reale `hardFloor`-Punkt": FR-5 kann einen weiter entfernten, strengeren Punkt wählen, wenn
-ein näherer Zwischenpunkt lockerer ist. Für den heutigen Tag `i` (`i=1` am ersten Tag nach dem
-Anker):
+Let `(F, N_F)` be the result of FR-5's grouping procedure, applied **hypothetically** with today's
+value `V` as the anchor (`F = t_m`, `N_F` = its day distance) - **not** simply "the next real
+`hardFloor` point": FR-5 can choose a farther, stricter point if a nearer intermediate one is
+looser. For today's day `i` (`i=1` on the first day after the anchor):
 
 ```
-N_Rest = N_F − i     (Tage von morgen bis F, F eingeschlossen)
+N_remaining = N_F − i     (days from tomorrow to F, F included)
 ```
 
-**Implementierungshinweis (als echter Bug gefunden, nicht schon beim Entwurf):** `N_F` ist hier
-zwingend **`V`-relativ** (die echte Kalendertage-Distanz von `V` zu `F`) - dieselbe Zahl, die auch
-`groupTarget`/`distribute` für ihre eigene Datumsplatzierung brauchen (FR-5/FR-6). `i` ist bei jedem
-Aufruf von planGapOrRunStartDay implizit immer `1` (die Funktion entscheidet immer nur genau den
-einen Tag unmittelbar nach `V`, nie einen weiter entfernten) - `N_Rest` ist also **immer** `N_F − 1`,
-nicht `N_F` selbst. Eine erste Implementierung verwechselte `N_F` (V-relativ) direkt mit `N_Rest`
-(ohne das `−1`) - isolierte Testfälle mit nur einem einzigen `hardFloor`-Punkt haben das nicht
-aufgedeckt (kompensierender Fehler in den Testdaten selbst), erst ein voller, aus `computeWeekPlan`
-mehrtägig durchgerechneter Testfall hat die Diskrepanz sichtbar gemacht.
+**Implementation note (found as a genuine bug, not already at design time):** `N_F` here is
+necessarily **relative to `V`** (the real calendar-day distance from `V` to `F`) - the same number
+that `groupTarget`/`distribute` also need for their own date placement (FR-5/FR-6). `i` is
+implicitly always `1` on every call to `planGapOrRunStartDay` (the function always decides only the
+one day immediately after `V`, never one further out) - so `N_remaining` is **always** `N_F − 1`,
+never `N_F` itself. An initial implementation confused `N_F` (relative to V) directly with
+`N_remaining` (without the `−1`) - isolated test cases with only a single `hardFloor` point did not
+reveal this (a compensating error in the test data itself); only a full, multi-day test case worked
+through via `computeWeekPlan` made the discrepancy visible.
 
-Die Prüfung greift **einheitlich für jedes `N_Rest ≥ 1`** (`remainingPoints` enthält per Definition
-nur Punkte echt vor heute liegend, also ist `N_Rest ≥ 1` immer gegeben) - **keine** gesonderte
-`N_Rest ≤ 1`-Ausnahme, die direkt zu FR-4 durchreicht: eine erste Fassung enthielt eine solche
-Ausnahme, die sich beim Durchrechnen eines mehrtägigen Runs als falsch erwies - sie hätte einen
-bereits laufenden, weiterhin gültigen Run am vorletzten Tag fälschlich abgebrochen und auf reinen
-`preferredWakeUpTime`-Drift zurückgesetzt. FR-6s eigene `N=1`-Ausnahme (Einzeltag-Sprung ist kein
-Spezifikationsfehler) bleibt davon unberührt und greift ganz normal, sobald FR-6 selbst mit `N=1`
-aufgerufen wird.
+The check applies **uniformly for every `N_remaining ≥ 1`** (`remainingPoints` by definition
+contains only points genuinely before today, so `N_remaining ≥ 1` always holds) - **no** separate
+`N_remaining ≤ 1` exception that passes straight through to FR-4: an initial version contained such
+an exception, which proved wrong when working through a multi-day run - it would have wrongly
+aborted an already-running, still-valid run on the second-to-last day and reset it to plain
+`preferredWakeUpTime` drift. FR-6's own `N=1` exception (a single-day jump is not a spec defect) is
+unaffected by this and applies as normal as soon as FR-6 itself is called with `N=1`.
 
-- Prüfe `|Wert_heute − F| / N_Rest ≤ maxDailyDelta` für den vorgesehenen Wert (Halten oder voller
-  `preferredWakeUpTime`-Schritt) - auch hier gilt FR-6s Klarstellung: die Differenz ist uhrzeit-, nicht
-  kalenderbasiert:
-  - **Erfüllt:** heute bleibt Lückentag, FR-4 unverändert angewendet.
-  - **Bereits beim Halten verletzt:** heute ist **Tag 1 des Runs** - FR-6 direkt angewendet, mit
-    `N = N_F − i + 1` (nicht `N_Rest` - der reserviert bewusst einen Tag Puffer, damit ein
-    einzelner `preferredWakeUpTime`-Schritt nicht unbemerkt genau die Reserve auffrisst, die der
-    übernächste Tag noch braucht).
-  - **Nur der volle `preferredWakeUpTime`-Schritt verletzt:** Drift wird auf das größtmögliche Maß reduziert,
-    das die Bedingung noch erfüllt (im Extremfall 0).
+- Check `|today's value − F| / N_remaining ≤ maxDailyDelta` for the intended value (holding, or a
+  full `preferredWakeUpTime` step) - here too FR-6's clarification applies: the difference is
+  time-of-day-based, not calendar-based:
+  - **Satisfied:** today stays a gap day, FR-4 applies unchanged.
+  - **Already violated by holding:** today is **day 1 of the run** - FR-6 applied directly, with
+    `N = N_F − i + 1` (not `N_remaining` - that deliberately reserves one day of buffer, so that a
+    single `preferredWakeUpTime` step doesn't unnoticed eat exactly the reserve the day after next
+    still needs).
+  - **Only the full `preferredWakeUpTime` step violates it:** the drift is reduced to the largest
+    amount that still satisfies the condition (0 in the extreme case).
 
-Reicht selbst sofortiges Halten nicht (`N_Rest` bereits verletzt), beginnt der Run sofort heute,
-Überschreitungsregel (FR-6) greift. Das Verfahren behandelt "`F` früher" und "`F` später" als `V`
-symmetrisch - keine gesonderte Politik für eine Richtung.
+If even holding immediately is not enough (`N_remaining` already violated), the run begins today
+immediately, and FR-6's overrun rule applies. The procedure treats "`F` earlier" and "`F` later"
+than `V` symmetrically - no separate policy for either direction.
 
-- **Test (ein `hardFloor`-Punkt):** `preferredWakeUpTime=10:00`, `A=07:00` (So), `F(Sa)=05:00`,
+- **Test (one `hardFloor` point):** `preferredWakeUpTime=10:00`, `A=07:00` (Sun), `F(Sat)=05:00`,
   `maxDailyDelta=30min`.
-  - Montag (`i=1, N_F=6, N_Rest=5`): Halten erfüllt `24min≤30min`. Voller Drift → `07:30` erfüllt
-    `30min≤30min` (Grenze) → **Montag=07:30**.
-  - Dienstag (`i=2, N_Rest=4`): Halten bei 07:30 verletzt `37,5min>30min` → **Tag 1 des Runs**,
-    `N=5` (Di–Sa): **Di=07:00, Mi=06:30, Do=06:00, Fr=05:30, Sa=05:00.**
-- **Test (zwei `hardFloor`-Punkte, FR-5-Ziel ≠ nächster Punkt):** `A=07:00` (So), `t1(Fr)=06:00`
-  (locker), `t2(Sa)=04:00` (streng), `maxDailyDelta=30min`, keine `preferredWakeUpTime`.
-  - FR-5 (hypothetisch): `t_m=t2` (Verteilung `A→t2` über 6 Tage ergibt an `t1`s Tag 04:30, nicht
-    später als `t1`s 06:00) → `F=t2, N_F=6`.
-  - Montag (`i=1, N_Rest=5`): Halten bei 07:00 verletzt bereits `36min>30min` (obwohl `t1` allein
-    fälschlich 15min/Tag suggerieren würde) → **sofort Tag 1 des Runs**, `N=6`: **Mo=06:30,
-    Di=06:00, Mi=05:30, Do=05:00, Fr=04:30, Sa=04:00.**
+  - Monday (`i=1, N_F=6, N_remaining=5`): holding satisfies `24min≤30min`. Full drift → `07:30`
+    satisfies `30min≤30min` (boundary) → **Monday=07:30**.
+  - Tuesday (`i=2, N_remaining=4`): holding at 07:30 violates `37.5min>30min` → **day 1 of the
+    run**, `N=5` (Tue–Sat): **Tue=07:00, Wed=06:30, Thu=06:00, Fri=05:30, Sat=05:00.**
+- **Test (two `hardFloor` points, FR-5 target ≠ next point):** `A=07:00` (Sun), `t1(Fri)=06:00`
+  (loose), `t2(Sat)=04:00` (strict), `maxDailyDelta=30min`, no `preferredWakeUpTime`.
+  - FR-5 (hypothetical): `t_m=t2` (distributing `A→t2` over 6 days gives 04:30 on `t1`'s day, not
+    later than `t1`'s 06:00) → `F=t2, N_F=6`.
+  - Monday (`i=1, N_remaining=5`): holding at 07:00 already violates `36min>30min` (even though
+    `t1` alone would falsely suggest 15min/day) → **immediately day 1 of the run**, `N=6`:
+    **Mon=06:30, Tue=06:00, Wed=05:30, Thu=05:00, Fri=04:30, Sat=04:00.**
 
-## FR-8 — Kein erweiterter Berechnungshorizont
+## FR-8 — No extended computation horizon
 
-Nur das sichtbare 7-Tage-Fenster, kein größerer Horizont. Neuplanung **täglich**, ausgelöst durch
-das **tatsächliche Klingeln** des Alarms (`Handler.handleAlarm()`, ausgelöst über den
-`Alarm.ringing`-Stream in `lib/main.dart` - feuert **immer**), **nicht** dessen Dismiss-Zeitpunkt
-(`Handler.onAlarmHandled()` - feuert nur bei In-App-Dismiss, nicht beim nativen Wisch-Pfad, nicht
-bei Overlay-Mount-Timeout; dort hängt die heutige v1-Neuplanung, unzuverlässig). Derselbe
-Ring-Zeitpunkt bildet auch FR-16s ersten Checkpoint. Ein `hardFloor` außerhalb des Fensters wirkt
-sich erst aus, sobald er durch die tägliche Verschiebung ins Fenster rutscht - auch wenn dann ggf.
-nicht mehr genug Vorlauf für FR-7 besteht und FR-6 sofort greift.
+Only the visible 7-day window, no larger horizon. Replanning happens **daily**, triggered by the
+alarm's **actual ringing** (`Handler.handleAlarm()`, triggered via the `Alarm.ringing` stream in
+`lib/main.dart` - **always** fires), **not** its dismiss instant (`Handler.onAlarmHandled()` -
+fires only on an in-app dismiss, not on the native swipe path, not on an overlay-mount timeout; the
+current v1 replan hangs on that, unreliably). The same ring instant also forms FR-16's first
+checkpoint. A `hardFloor` outside the window only takes effect once it slides into the window via
+the daily shift - even if by then there may no longer be enough lead time for FR-7, and FR-6 kicks
+in immediately.
 
-## FR-9 — Sicherheitsventil (rollierender Zähler, nicht fensterbezogen)
+## FR-9 — Safety valve (rolling counter, not window-relative)
 
 ```
-Zähler(heute) = Anzahl unmittelbar aufeinanderfolgender, bereits abgeschlossener Tage
-                unmittelbar vor heute ohne realen hardFloor,
-                zurückgesetzt auf 0 am zuletzt abgeschlossenen Tag mit realem hardFloor.
+counter(today) = number of immediately consecutive, already concluded days
+                 immediately before today with no real hardFloor,
+                 reset to 0 on the most recently concluded day with a real hardFloor.
 ```
 
-Ein rein fensterbezogener Zähler würde am Tag *vor* einem echten, gerade außerhalb des Fensters
-liegenden Termin fälschlich auslösen (Fenster an diesem Tag zufällig leer, obwohl ein legitimer Run
-bereits laufen sollte) - deshalb persistent und rollierend, nicht als Fenster-Momentaufnahme.
-Heutiger Tag zählt **nicht** mit (noch nicht abgeschlossen) - "heute" meint hier den Tag, für den
-gerade das neue Fenster geplant wird (den ersten Tag *nach* dem Tag, dessen Alarm soeben geklingelt
-hat); Letzterer selbst ist zu diesem Zeitpunkt bereits abgeschlossen und fließt genau einmal, in
-genau diesem Checkpoint, in den Zähler ein - nicht erst später nachgetragen. Selbstheilend: kein manuell
-zurückzusetzender Zustand außer der einen Zahl. Erreicht der Zähler ≥7, wird automatische
-Fortschreibung gestoppt und der Nutzer benachrichtigt.
+A purely window-relative counter would fire incorrectly on the day *before* a real appointment
+that happens to lie just outside the window (the window on that day happens to be empty, even
+though a legitimate run should already be running) - hence it's persistent and rolling, not a
+window snapshot. Today itself does **not** count (not yet concluded) - "today" here means the day
+for which the new window is currently being planned (the first day *after* the day whose alarm has
+just rung); the latter day is itself already concluded at this point and enters the counter exactly
+once, in exactly this checkpoint - not added retroactively later. Self-healing: no state that needs
+manual resetting other than this one number. Once the counter reaches ≥7, automatic advancement is
+stopped and the user is notified.
 
-**Ausnahme: gesetzte `preferredWakeUpTime` (nachträglich ergänzt, `docs/TODO.md` T-78).** Das Ventil greift
-nur, wenn *keine* `preferredWakeUpTime` gesetzt ist. Begründung: das Ventil ist eine Rückfallebene gegen
-*blinde* Fortschreibung - gegen ein Weiterdriften ohne jede Orientierung. Eine gesetzte
-`preferredWakeUpTime` **ist** diese Orientierung: FR-4 driftet auf sie zu und hält exakt auf ihr an, die
-Fortschreibung ist also von sich aus beschränkt und kann nicht davonlaufen. Ohne diese Ausnahme
-wäre das Ventil für einen Nutzer mit `preferredWakeUpTime` und ohne Kalendertermine eine Einbahnstraße in
-einen dauerhaft toten Wecker: alle Fensterwerte werden `null`, FR-18 entfernt daraufhin sämtliche
-Zukunftsalarme, es klingelt nichts mehr - und damit gibt es auch keinen Ring-Checkpoint mehr, über
-den der Zähler je zurückgesetzt werden könnte (nur ein Tag mit realem `hardFloor` setzt ihn
-zurück). Für eine App mit dem Versprechen "garantiertes Aufwachen" ist das der falsche Ausgang.
+**Exception: `preferredWakeUpTime` set (added later, `docs/TODO.md` T-78).** The valve only fires
+if *no* `preferredWakeUpTime` is set. Rationale: the valve is a fallback against *blind*
+advancement - against drifting onward with no orientation at all. A set `preferredWakeUpTime`
+**is** that orientation: FR-4 drifts toward it and stops exactly there, so the advancement is
+inherently bounded and cannot run away. Without this exception, the valve would be a one-way street
+into a permanently dead alarm for a user with a `preferredWakeUpTime` and no calendar appointments:
+every window value becomes `null`, FR-18 then removes every future alarm, nothing rings anymore -
+and with that there is no more ring checkpoint through which the counter could ever be reset (only
+a day with a real `hardFloor` resets it). For an app that promises "guaranteed wake-up", that is
+the wrong outcome.
 
-Der Zähler selbst läuft dabei unverändert weiter und zählt weiterhin termin-lose Tage ehrlich mit -
-entfernt der Nutzer seine `preferredWakeUpTime` später wieder, greift das Ventil ab dem nächsten Checkpoint
-sofort, ohne erst sieben Tage neu sammeln zu müssen.
+The counter itself keeps running unchanged and keeps honestly counting appointment-free days - if
+the user later removes their `preferredWakeUpTime` again, the valve fires immediately from the next
+checkpoint on, without having to collect seven days afresh.
 
-- **Test:** Zähler ≥7, kein `hardFloor` im Fenster, aber `preferredWakeUpTime` gesetzt → **kein** Auslösen,
-  jeder Fenstertag behält einen Wert.
-- **Test:** derselbe Fall ohne `preferredWakeUpTime` → Auslösen wie bisher.
+- **Test:** counter ≥7, no `hardFloor` in the window, but `preferredWakeUpTime` set → **no** firing,
+  every window day keeps a value.
+- **Test:** same case without `preferredWakeUpTime` → fires as before.
 
-**Akzeptiertes Restrisiko:** `Alarm.ringing` liefert innerhalb einer laufenden
-`_MyHomePageState`-Instanz garantiert genau ein `handleAlarm()` pro neu klingelndem Alarm (bereits
-korrekt dedupliziert gegen `_previousRingingAlarms`, `lib/main.dart`). Nur falls der App-Prozess
-exakt während eines aktiv klingelnden Alarms beendet und neu gestartet wird, könnte der Zähler
-einmalig doppelt inkrementiert werden - akzeptiert, keine gesonderte Behandlung (das
-Sicherheitsventil ist eine konservative Rückfallebene, kein korrektheitskritischer Mechanismus).
+**Accepted residual risk:** within a running `_MyHomePageState` instance, `Alarm.ringing`
+guarantees exactly one `handleAlarm()` per newly ringing alarm (already correctly deduplicated
+against `_previousRingingAlarms`, `lib/main.dart`). Only if the app process is terminated and
+restarted exactly while an alarm is actively ringing could the counter be incremented twice on that
+one occasion - accepted, no special handling (the safety valve is a conservative fallback, not a
+correctness-critical mechanism).
 
-- **Test:** Termin liegt genau 8 Tage in der Zukunft (außerhalb des Fensters); die 6 Tage
-  unmittelbar vor heute waren termin-los (heute zählt nicht mit) → Zähler steht bei 6, nicht 7 →
-  kein Auslösen.
+- **Test:** an appointment lies exactly 8 days in the future (outside the window); the 6 days
+  immediately before today were appointment-free (today doesn't count) → counter stands at 6, not 7
+  → no firing.
 
-## FR-10 — Kaltstart
+## FR-10 — Cold start
 
-Existiert kein `lastEffectiveWakeTime` (allererste Planung), wird **kein** Wert für Tage vor dem
-ersten realen `hardFloor` erfunden:
+If no `lastEffectiveWakeTime` exists (the very first planning run), **no** value is invented for
+days before the first real `hardFloor`:
 
-- Mit `preferredWakeUpTime`: diese Tage nutzen sie.
-- Ohne: kein Alarm geplant.
-- Der erste reale `hardFloor` wird an seinem eigenen Tag gesetzt (FR-2) und wird ab da Anker für
-  alle Folgetage.
+- With `preferredWakeUpTime`: these days use it.
+- Without: no alarm planned.
+- The first real `hardFloor` is set on its own day (FR-2) and becomes the anchor for all following
+  days from then on.
 
-- **Test:** Tag1–5 termin-los, Tag6 `hardFloor=05:30`, keine `preferredWakeUpTime` → Tag1–5 kein Alarm,
-  Tag6=05:30 wird neuer Anker.
+- **Test:** days 1–5 appointment-free, day 6 `hardFloor=05:30`, no `preferredWakeUpTime` → days 1–5
+  no alarm, day 6=05:30 becomes the new anchor.
 
-## FR-11 — Revisionierbarkeit bis zum tatsächlichen Klingeln
+## FR-11 — Revisability up to the actual ring
 
-Ein bereits berechneter, aber noch nicht ausgelöster Tageswert bleibt revisionierbar: liefert der
-**nächste tatsächliche Kalender-Neuread** eine geänderte Kalenderlage, darf der Wert rückwirkend
-angepasst werden (inkl. erneuter Anwendung von FR-5–FR-7). Erst der tatsächlich ausgelöste Wert ist
-für immer fix.
+A value already computed for a day, but not yet triggered, stays revisable: if the **next actual
+calendar re-read** yields a changed calendar picture, the value may be adjusted retroactively
+(including reapplying FR-5–FR-7). Only the value that has actually been triggered is fixed forever.
 
-**Keine Live-Erkennung:** `device_calendar` (`^4.3.2`) bietet keine Änderungsbenachrichtigung (kein
-Stream/Callback, kein `ContentObserver`, weder Dart- noch nativ-seitig) - die tatsächlichen
-Neuread-Zeitpunkte sind FR-8s Ring-Checkpoint und FR-17s App-Vordergrund-Checkpoint, je nachdem was
-zuerst eintritt. Ein Live-Mechanismus wäre technisch baubar (Android `JobInfo.addTriggerContentUri`),
-aber unverhältnismäßig für eine private Wecker-App und würde ohnehin vom OS gebündelt/verzögert
-ausgeliefert.
+**No live detection:** `device_calendar` (`^4.3.2`) offers no change notification (no
+stream/callback, no `ContentObserver`, neither on the Dart nor the native side) - the actual
+re-read instants are FR-8's ring checkpoint and FR-17's app-foreground checkpoint, whichever comes
+first. A live mechanism would be technically buildable (Android `JobInfo.addTriggerContentUri`),
+but disproportionate for a private alarm app, and would be batched/delayed by the OS anyway.
 
-**Ungecachter Zugriff Pflicht:** Der Neuread muss den Kalender **frisch** abfragen - die bestehende
-`updateCalendarData`/`_fetchedCalendarWeeks`-Zwischenspeicherung (`lib/app_state.dart`) markiert
-Wochen dauerhaft als "geladen", auch wenn nie erneut abgefragt (`docs/TODO.md` T-60 - bereits ein
-Bug im Bestandscode, unabhängig von v2). Die neue Planung darf diesen Cache **nicht**
-wiederverwenden, sonst bleibt eine Kalenderänderung für die gesamte Prozesslaufzeit unsichtbar.
+**Uncached access is mandatory:** the re-read must query the calendar **fresh** - the existing
+`updateCalendarData`/`_fetchedCalendarWeeks` caching (`lib/app_state.dart`) permanently marks weeks
+as "loaded", even if never re-queried (`docs/TODO.md` T-60 - already a bug in the existing code,
+independent of v2). The new planning must **not** reuse this cache, or a calendar change would stay
+invisible for the entire process lifetime.
 
-## FR-12 — Verspätet bekannte Termine nach dem Klingeln
+## FR-12 — Appointments discovered late, after the alarm rang
 
-Wird beim **nächsten tatsächlichen Kalender-Neuread** (FR-8 oder FR-17, je nachdem was zuerst
-eintritt) nach dem Klingeln eines Tages (per FR-11 nicht mehr revisionierbar) durch verspätet
-eingetroffene Kalenderdaten ein realer Termin bekannt, dessen `hardFloor` vor dem Klingelzeitpunkt
-gelegen hätte: der geklingelte Wert bleibt unverändert, aber der Nutzer wird **an genau diesem
-Neuread-Zeitpunkt** mit einer eigenen "möglicherweise verpasster Termin"-Benachrichtigung
-informiert - unterscheidbar von FR-6s und FR-9s Benachrichtigungen. Mangels Live-Erkennung (FR-11)
-ist der nächste Neuread der früheste real erreichbare Zeitpunkt - nicht sofort im Wortsinn.
+If, at the **next actual calendar re-read** (FR-8 or FR-17, whichever comes first) after a day's
+alarm has rung (no longer revisable per FR-11), a real appointment becomes known through
+late-arriving calendar data whose `hardFloor` would have lain before the ring instant: the rung
+value stays unchanged, but the user is informed, **at exactly this re-read instant**, with a
+dedicated "possibly missed appointment" notification - distinguishable from FR-6's and FR-9's
+notifications. For lack of live detection (FR-11), the next re-read is the earliest instant
+actually reachable - not immediate in the literal sense.
 
-## FR-13 — `getStartTimeForDate` bei mehreren Terminen
+## FR-13 — `getStartTimeForDate` with several appointments
 
-Unverändert: hat ein Tag mehrere nicht-ganztägige Termine, zählt für `hardFloor` nur der früheste.
+Unchanged: if a day has several non-all-day appointments, only the earliest counts toward
+`hardFloor`.
 
 ## FR-14 — `durationToWakeUp`/`durationToGetReady`
 
-Unverändert, bereits vor diesem Dokument entschieden: `durationToWakeUp` wird nur unter der Annahme
-eines existierenden Snooze-Mechanismus mitgerechnet (`docs/TODO.md` T-18, unimplementiert) - die
-genaue Berechnung selbst ist nicht Gegenstand dieser Spezifikation.
+Unchanged, already decided before this document: `durationToWakeUp` is only counted under the
+assumption of an existing snooze mechanism (`docs/TODO.md` T-18, unimplemented) - the exact
+calculation itself is not the subject of this specification.
 
-## FR-15 — `ManualAlarm`-Isolation
+## FR-15 — `ManualAlarm` isolation
 
-Diese gesamte Logik liest, schreibt und beeinflusst ausschließlich die `ScheduledAlarm`-Kette.
-`ManualAlarm`s werden nie als `hardFloor`-Quelle herangezogen, nie durch Segmentbildung/-verteilung
-verändert, `lastEffectiveWakeTime` nie durch einen `ManualAlarm`-Wert gesetzt oder gelesen.
+This entire logic exclusively reads, writes, and influences the `ScheduledAlarm` chain.
+`ManualAlarm`s are never used as a `hardFloor` source, never changed by segment
+formation/distribution, and `lastEffectiveWakeTime` is never set or read from a `ManualAlarm`
+value.
 
-- **Test:** Ein `ManualAlarm` um 03:00 an einem Tag, dessen `ScheduledAlarm`-Kurve regulär 07:00
-  ergäbe: der geplante Wert bleibt exakt 07:00, unbeeinflusst.
+- **Test:** a `ManualAlarm` at 03:00 on a day whose `ScheduledAlarm` curve would regularly give
+  07:00: the planned value stays exactly 07:00, unaffected.
 
-## FR-16 — Zeitzonenwechsel: zwei tägliche Checkpoints
+## FR-16 — Time zone change: two daily checkpoints
 
-Der aktuell wirksame **UTC-Versatz** wird an genau zwei Zeitpunkten pro Tag frisch gelesen (über
-`DateTime.now().timeZoneOffset`, plattformseitig - **nicht** über die bestehende
-`Location`/Abkürzungs-Tabelle in `lib/main.dart`/`getLocationFromAbbreviation()`, die von einer
-POSIX-Abkürzung wie `"CST"` mehrdeutig auf eine von drei realen Zonen rät und für ihren
-eigentlichen Zweck - FR-2s Termin-eigene-Zeitzone-Umrechnung - richtig eingesetzt bleibt, aber für
-einen reinen Versatz-Vergleich unnötig fehleranfällig wäre) und mit dem Versatz beim vorigen
-Checkpoint verglichen:
+The currently effective **UTC offset** is freshly read at exactly two points per day (via
+`DateTime.now().timeZoneOffset`, platform-side - **not** via the existing `Location`/abbreviation
+table in `lib/main.dart`/`getLocationFromAbbreviation()`, which guesses ambiguously from a POSIX
+abbreviation like `"CST"` among three real zones, and stays correctly used for its actual purpose -
+FR-2's appointment-own-time-zone conversion - but would be needlessly error-prone for a pure offset
+comparison), and compared with the offset at the previous checkpoint:
 
-1. **Beim tatsächlichen Klingeln** (`Handler.handleAlarm()`, siehe FR-8).
-2. **Am berechneten Schlafengehen-Zeitpunkt** = `nächster geplanter Aufwachzeitpunkt − sleepGoal −
-   reminderDuration` (`sleepGoal`/`reminderDuration`: bestehender App-Zustand,
-   `lib/screens/sleep_habits/screen_sleephabits.dart`) - **unabhängig davon**, ob die
-   Schlafengehen-Benachrichtigung selbst aktiviert ist. Löst **ausschließlich** den
-   Zeitzonen-Vergleich aus, **keine** Neuplanung, **keinen** Kalenderzugriff.
+1. **At the actual ring** (`Handler.handleAlarm()`, see FR-8).
+2. **At the computed bedtime instant** = `next planned wake instant − sleepGoal −
+   reminderDuration` (`sleepGoal`/`reminderDuration`: existing app state,
+   `lib/screens/sleep_habits/screen_sleephabits.dart`) - **regardless of** whether the bedtime
+   notification itself is enabled. Triggers **only** the time zone comparison, **no** replanning,
+   **no** calendar access.
 
-Kein dritter, kontinuierlicher Hintergrund-Timer - beide Checkpoints hängen an ohnehin geplanten
-Ereignissen. FR-17 ergänzt einen bedingten dritten Auslöser für Checkpoint 1 (App-Vordergrund), kein
-eigenständiger dritter FR-16-Checkpoint.
+No third, continuous background timer - both checkpoints hang off events that are scheduled
+anyway. FR-17 adds a conditional third trigger for checkpoint 1 (app foreground), not a standalone
+third FR-16 checkpoint.
 
-**Warum zwei Zeitpunkte:** ein einzelner täglicher Check würde einen untertags eintretenden
-Zeitzonenwechsel (z. B. Toms Flug landet nachmittags) erst beim nächsten Klingeln bemerken.
+**Why two points in time:** a single daily check would only notice a time zone change that
+happens during the day (e.g. Tom's flight lands in the afternoon) at the next ring.
 
-**Verhalten bei erkanntem Wechsel** (verglichen wird der Versatz, nicht der Zonenname - erkennt
-damit echten Ortswechsel und reine Sommerzeit-Änderung einheitlich):
-- **Instant-basierte Werte** (`hardFloor`): unverändert (FR-1) - nur die lokale Anzeige ändert sich.
-- **Wall-Clock-verankerte Werte** (`preferredWakeUpTime`, fortgeschriebene Zwischenwerte): werden **mit
-  gleichbleibenden Ziffern in die neue Zone übertragen** (Alarmuhren-Konvention: "7:00" bleibt
-  "7:00", jetzt in neuer Zone), keine vollständige Neuberechnung der Segmente/Runs - die folgt erst
-  beim nächsten regulären Planungslauf.
+**Behaviour on a detected change** (the offset is compared, not the zone name - this recognizes a
+genuine location change and a plain daylight-saving change the same way):
+- **Instant-based values** (`hardFloor`): unchanged (FR-1) - only the local display changes.
+- **Wall-clock-anchored values** (`preferredWakeUpTime`, carried-forward intermediate values): are
+  **carried over into the new zone with the same digits** (alarm-clock convention: "7:00" stays
+  "7:00", now in the new zone), no full recomputation of the segments/runs - that only follows at
+  the next regular planning run.
 
-**Voraussetzung (gebaut):** Checkpoint 2 hatte im ursprünglichen Code keinen Aufhänger - geplante
-Benachrichtigungen (`awesome_notifications`) führen beim Feuern keinen Dart-Code aus, sofern kein
-Listener registriert ist, und bei deaktivierter Erinnerung wird beim Gerät heute gar nichts
-geplant. Lösung (per Paketquellcode verifiziert, hohe Konfidenz): eine `NotificationContent`
-**ohne** `title`/`body` erzeugt eine "background notification" (nie sichtbar), die
-`onNotificationCreatedMethod` auslöst (**nicht** `onNotificationDisplayedMethod` - der feuert nur,
-wenn tatsächlich etwas in der Statusleiste erscheint). Dieser Callback läuft in einem eigenen
-Hintergrund-Isolate **ohne** `AppState`/`Provider`-Zugriff - `pendingDayValues`/
-`lastCheckedUtcOffset` müssen direkt über `SharedPreferences` gelesen/geschrieben werden. **Neu
-gefundener Vorbehalt:** ist die App vollständig beendet (Force-Quit), werden Notification-Events
-laut Paket-Doku erst beim nächsten Vorder-/Hintergrund-Start nachgeholt, nicht zum geplanten
-Zeitpunkt - siehe FR-17.
+**Precondition (built):** checkpoint 2 had no hook in the original code - scheduled notifications
+(`awesome_notifications`) do not run any Dart code when they fire unless a listener is registered,
+and with the reminder disabled, nothing at all gets scheduled on the device today. Solution
+(verified against the package source, high confidence): a `NotificationContent` **without**
+`title`/`body` creates a "background notification" (never visible), which triggers
+`onNotificationCreatedMethod` (**not** `onNotificationDisplayedMethod` - that only fires when
+something actually appears in the status bar). This callback runs in its own background isolate
+**without** `AppState`/`Provider` access - `pendingDayValues`/`lastCheckedUtcOffset` must be
+read/written directly via `SharedPreferences`. **Newly found caveat:** if the app has been fully
+terminated (force-quit), notification events are, per the package docs, only caught up at the next
+foreground/background start, not at the scheduled instant - see FR-17.
 
-**Präzisierung (`docs/TODO.md` T-85d):** der registrierte Listener feuert für **jede** erzeugte
-Notification, nicht nur für die Bettzeit-Benachrichtigung - auch für die FR-6/FR-9/FR-12-Warnungen
-und (im Debug-Build) für Handlers Diagnose-Notifications. Checkpoint 2 löst also faktisch öfter als
-einmal täglich aus. Das ist harmlos und sogar günstig (der Versatz-Vergleich ist billig,
-idempotent und greift dadurch früher), verschiebt aber die Vergleichs-Baseline: "der Versatz beim
-letzten Checkpoint" heißt "beim letzten *beliebigen* Notification-Ereignis". Bewusst so belassen,
-statt auf `sleepReminderNotificationId` zu filtern - FR-16s Ziel ist, einen untertags eintretenden
-Wechsel früh zu bemerken, und mehr Gelegenheiten dienen genau dem.
+**Clarification (`docs/TODO.md` T-85d):** the registered listener fires for **every** notification
+created, not just the bedtime notification - also for the FR-6/FR-9/FR-12 warnings and (in debug
+builds) for Handler's diagnostic notifications. Checkpoint 2 thus effectively fires more than once
+daily. This is harmless and even beneficial (the offset comparison is cheap, idempotent, and thus
+catches a change earlier), but it shifts the comparison baseline: "the offset at the last
+checkpoint" means "at the last *arbitrary* notification event". Deliberately left this way, rather
+than filtering on `sleepReminderNotificationId` - FR-16's goal is to notice a change happening
+during the day early, and more opportunities serve exactly that.
 
-**Bekannte Grenze am Umstellungstag selbst (`docs/TODO.md` T-85e):** ein wall-clock-verankerter
-Wert für den Umstellungstag wird am Vortag mit dem *alten* Versatz berechnet, und Checkpoint 2
-läuft zur Bettzeit - also noch vor der nächtlichen Umstellung. An diesem einen Tag klingelt ein
-solcher Alarm daher um die Versatzdifferenz falsch; korrigiert wird es beim Ring-Checkpoint
-desselben Morgens (der neu plant) bzw. spätestens am Folgetag. Instant-verankerte Werte (echte
-Termine) sind nicht betroffen. Akzeptiert: eine Korrektur bräuchte eine Vorausschau auf die
-Zonenregeln des Folgetags, was FR-16s Modell ("Versatz vergleichen, nicht Zonennamen
-interpretieren") bewusst nicht kennt.
+**Known limitation on the transition day itself (`docs/TODO.md` T-85e):** a wall-clock-anchored
+value for the transition day is computed the day before with the *old* offset, and checkpoint 2
+runs at bedtime - so still before the change happens overnight. On that one day such an alarm
+therefore rings off by the offset difference; it is corrected at the ring checkpoint that same
+morning (which replans) or at the latest the following day. Instant-anchored values (real
+appointments) are unaffected. Accepted: a fix would need to look ahead at the next day's zone
+rules, which is exactly what FR-16's model ("compare offsets, don't interpret zone names")
+deliberately does not do.
 
-- **Test (Ortswechsel):** Alarm klingelt 06:00 (Zone A, +1). Um 14:00 landet Tom in Zone B (+9).
-  Der Schlafengehen-Checkpoint erkennt den geänderten Versatz; `preferredWakeUpTime` (z. B. 09:00) gilt ab
-  da als 09:00 in Zone B. Ohne den zweiten Checkpoint wäre das erst beim nächsten Klingeln (>12h
-  später) korrigiert worden.
-- **Test (Sommerzeit):** Zone bleibt "Europe/Berlin", Uhren stellen sich nachts von MEZ (+1) auf
-  MESZ (+2) um → der nächste Checkpoint erkennt den geänderten Versatz identisch zu einem
-  Ortswechsel, keine gesonderte Fallunterscheidung nötig.
+- **Test (location change):** alarm rings at 06:00 (zone A, +1). At 14:00 Tom lands in zone B (+9).
+  The bedtime checkpoint detects the changed offset; `preferredWakeUpTime` (e.g. 09:00) now applies
+  as 09:00 in zone B. Without the second checkpoint this would only have been corrected at the next
+  ring (>12h later).
+- **Test (daylight saving):** the zone stays "Europe/Berlin", clocks move overnight from CET (+1) to
+  CEST (+2) → the next checkpoint detects the changed offset identically to a location change, no
+  separate case distinction needed.
 
-## FR-17 — App-Vordergrund als Nachhol-Checkpoint
+## FR-17 — App foreground as a catch-up checkpoint
 
 ```
-Ist lastReplanDate ≠ heutiges Kalenderdatum (Geräte-Zeitzone):
-    sofort, vor jeder UI-Interaktion, derselbe Ablauf wie FR-8s Ring-Checkpoint
-    (Zeitzonen-Check + volle Neuplanung, ungecachter Kalenderzugriff).
-Sonst: kein zusätzlicher Checkpoint.
+If lastReplanDate ≠ today's calendar date (device time zone):
+    immediately, before any UI interaction, the same sequence as FR-8's ring checkpoint
+    (time zone check + full replan, uncached calendar access).
+Otherwise: no additional checkpoint.
 ```
 
-Fängt drei unabhängige Lücken mit demselben, bereits vorhandenen Mechanismus ab: **Reboot** (die
-native Alarm-Wiedereinplanung läuft ohne Flutter-Engine, FR-8/FR-16 laufen dabei nicht mit),
-**Force-Quit** (Notification-Events werden erst beim nächsten Vorder-/Hintergrund-Start nachgeholt,
-FR-16), und **FR-11/FR-12 "nur einmal täglich"** (mangels Live-Kalendererkennung ist der
-Ring-Checkpoint sonst der einzige Neuread - ein App-Öffnen zwischendurch ist ein zusätzlicher,
-günstiger Gelegenheits-Neuread).
+Catches three independent gaps with the same, already existing mechanism: **reboot** (the native
+alarm re-registration runs without the Flutter engine, so FR-8/FR-16 don't run along with it),
+**force-quit** (notification events are only caught up at the next foreground/background start,
+FR-16), and **FR-11/FR-12 "only once daily"** (for lack of live calendar detection, the ring
+checkpoint would otherwise be the only re-read - opening the app in between is an additional,
+cheap opportunistic re-read).
 
-- **Test:** `lastReplanDate` zeigt auf einen Tag vor heute (z. B. nach 2 Tagen Reboot) → App-Start
-  löst genau einen zusätzlichen vollen Checkpoint aus, `lastReplanDate` wird auf heute gesetzt.
-- **Test:** `lastReplanDate` zeigt bereits auf heute → kein zusätzlicher Checkpoint.
-- **Test (Regression):** zweiter App-Start direkt nach dem ersten (z. B. schneller Neustart) →
-  bleibt aus, da `lastReplanDate` bereits aktualisiert wurde - kein doppelter Replan am selben Tag.
+- **Test:** `lastReplanDate` points to a day before today (e.g. after a 2-day reboot) → app start
+  triggers exactly one additional full checkpoint, `lastReplanDate` is set to today.
+- **Test:** `lastReplanDate` already points to today → no additional checkpoint.
+- **Test (regression):** a second app start right after the first (e.g. a quick restart) → does not
+  fire again, since `lastReplanDate` was already updated - no duplicate replan on the same day.
 
-## FR-18 — Anwendung: aus geplanten Werten werden echte Alarme
+## FR-18 — Applying it: planned values become real alarms
 
-**Nachträglich ergänzt** (`docs/TODO.md` T-63): FR-1–FR-17 beschreiben ausschließlich *Berechnung*
-und *Auslöser*. Der Schritt, der die berechneten Tageswerte tatsächlich in Alarme übersetzt, fehlte
-in dieser Spezifikation komplett - mit der Folge, dass die fertige Implementierung funktional
-wirkungslos war (sie schrieb `pendingDayValues`, das niemand las; jeder real klingelnde Alarm kam
-weiter vom alten `Scheduler`).
+**Added later** (`docs/TODO.md` T-63): FR-1–FR-17 describe only *computation* and *triggers*. The
+step that actually translates the computed daily values into alarms was entirely missing from this
+specification - with the result that the finished implementation had no functional effect (it
+wrote `pendingDayValues`, which nobody read; every alarm that actually rang still came from the old
+`Scheduler`).
 
-Nach **jeder** Neuplanung (FR-8, also aus demselben Aufruf heraus - nicht als separat aufzurufender
-Schritt, sonst kann er wieder vergessen werden) wird die Menge der `ScheduledAlarm`s so angeglichen,
-dass sie genau den geplanten Werten entspricht:
+After **every** replan (FR-8, i.e. from within the same call - not as a separately invocable step,
+or it can be forgotten again), the set of `ScheduledAlarm`s is reconciled to match exactly the
+planned values:
 
-- Für jeden geplanten Wert **nach jetzt** ohne passenden Alarm wird genau einer angelegt
-  (minutengenauer Vergleich - der Alarm-Plugin-Aufruf kennt ohnehin nur Minuten).
-- Ein `ScheduledAlarm` **in der Zukunft**, der keinem geplanten Wert entspricht (revidierter Tag,
-  Tag ohne Alarm per FR-9/FR-10), wird entfernt.
-- Ein `ScheduledAlarm` **in der Vergangenheit** wird **nie** entfernt: die Anwendung läuft auch aus
-  FR-8s Ring-Checkpoint heraus, also *während* ein Alarm klingelt - und dessen Zeit liegt dann
-  gerade in der Vergangenheit. Ihn als "nicht mehr geplant" zu entfernen würde ihn per `Alarm.stop()`
-  mitten im Klingeln verstummen lassen und das garantierte Aufwachen aushebeln. Aufräumen echt
-  veralteter Alarme bleibt `Handler.handleAlarm`s eigene Aufgabe (`isAlarmStale`).
-- Bereits vergangene geplante Werte werden nicht neu gesetzt (FR-11: der ausgelöste Wert ist fix).
-- `ManualAlarm`s werden dabei nie gelesen oder geschrieben (FR-15).
+- For every planned value **after now** with no matching alarm, exactly one is created (a
+  minute-precise comparison - the alarm plugin call only knows minutes anyway).
+- A `ScheduledAlarm` **in the future** that matches no planned value (a revised day, a day with no
+  alarm per FR-9/FR-10) is removed.
+- A `ScheduledAlarm` **in the past** is **never** removed: the application also runs from within
+  FR-8's ring checkpoint, i.e. *while* an alarm is ringing - and its time is then in the past. To
+  remove it as "no longer planned" would silence it mid-ring via `Alarm.stop()` and defeat the
+  guaranteed wake-up. Cleaning up genuinely stale alarms remains `Handler.handleAlarm`'s own job
+  (`isAlarmStale`).
+- Already-past planned values are not re-set (FR-11: the triggered value is fixed).
+- `ManualAlarm`s are never read or written in the process (FR-15).
 
-- **Test:** geplanter Zukunftswert ohne bestehenden Alarm → genau ein `ScheduledAlarm` wird angelegt.
-- **Test:** passender Alarm existiert bereits → kein Duplikat, keine Entfernung (idempotent).
-- **Test:** bestehender Zukunfts-Alarm ohne geplantes Gegenstück → entfernt.
-- **Test:** `null`-Tageswert → kein Alarm, bestehender wird entfernt.
-- **Test (sicherheitskritisch):** bestehender Alarm 5 Minuten in der Vergangenheit (klingelt evtl.
-  gerade) → wird **nicht** entfernt.
+- **Test:** a planned future value with no existing alarm → exactly one `ScheduledAlarm` is
+  created.
+- **Test:** a matching alarm already exists → no duplicate, no removal (idempotent).
+- **Test:** an existing future alarm with no planned counterpart → removed.
+- **Test:** a `null` day value → no alarm, an existing one is removed.
+- **Test (safety-critical):** an existing alarm 5 minutes in the past (possibly ringing right now)
+  → is **not** removed.
 
 ---
 
-## Architektur
+## Architecture
 
 ```
-Plattform-Einstiegspunkte (bestehender Code, angepasst)
+Platform entry points (existing code, adapted)
  lib/models/alarms/handler.dart   Handler.handleAlarm()          -> alarmRing
  lib/main.dart                    initState() / didChangeApp…    -> appForeground
- lib/screens/sleep_habits/…       jede planungsrelevante         -> settingsChanged
- lib/screens/settings/page_…      Einstellung (Ton, Lautstärke)
- lib/utils/notifications.dart     onNotificationCreatedMethod()  -> nur Checkpoint 2
-        │ ruft
-DER Einstiegspunkt (lib/models/scheduling/checkpoint.dart)
- runSchedulingCheckpoint(AppState, {trigger})   serialisiert (T-77), vollständig
- runCheckpointSafely(...)                       dasselbe, Fehler geschluckt
-   Sequenz: Sperre -> FR-17-Tagessperre -> Versatz festhalten (FR-16) ->
-            replan() -> FR-6/9/12 melden -> Bettzeit-Notification (T-80)
-        │ ruft
-AppState-bewusste Orchestrierung (lib/models/scheduling/replan.dart)
- replan(AppState)                 Kalender ungecacht lesen (T-60), FR-8 aufrufen,
-                                  Tagesfortschreibung (FR-9/FR-12), FR-18 anwenden
- runTimezoneCheckpoint2(...)      FR-16 Checkpoint 2 - liest/schreibt
-                                  SharedPreferences direkt (Hintergrund-Isolate)
-        │ ruft
-Reine Domänenlogik (lib/models/scheduling/scheduling_v2.dart)
+ lib/screens/sleep_habits/…       every planning-relevant        -> settingsChanged
+ lib/screens/settings/page_…      setting (tone, volume)
+ lib/utils/notifications.dart     onNotificationCreatedMethod()  -> checkpoint 2 only
+        │ calls
+THE entry point (lib/models/scheduling/checkpoint.dart)
+ runSchedulingCheckpoint(AppState, {trigger})   serialized (T-77), complete
+ runCheckpointSafely(...)                       the same, errors swallowed
+   Sequence: lock -> FR-17 daily lock -> record offset (FR-16) ->
+            replan() -> report FR-6/9/12 -> bedtime notification (T-80)
+        │ calls
+AppState-aware orchestration (lib/models/scheduling/replan.dart)
+ replan(AppState)                 reads the calendar uncached (T-60), calls FR-8,
+                                  day-advance (FR-9/FR-12), applies FR-18
+ runTimezoneCheckpoint2(...)      FR-16 checkpoint 2 - reads/writes
+                                  SharedPreferences directly (background isolate)
+        │ calls
+Pure domain logic (lib/models/scheduling/scheduling_v2.dart)
  hardFloor, eventsForDay (FR-2) · distribute (FR-6) · groupTarget (FR-5)
  applyGapDayDrift (FR-4) · planGapOrRunStartDay (FR-7) · computeWeekPlan (FR-8)
  coldStart (FR-10) · updateGapDayCounter (FR-9) · reinterpretForNewOffset (FR-16)
- - NUR plain values (Instant/Duration/TimeOfDay/Map), kein AppState, kein
-   BuildContext, kein Plugin-Zugriff - direkt unit-testbar ohne Mocks
+ - ONLY plain values (Instant/Duration/TimeOfDay/Map), no AppState, no
+   BuildContext, no plugin access - directly unit-testable without mocks
 
-Anwendung und Hilfsmodule
- apply_alarms.dart      planAlarmSync (FR-18, rein) + applyPlannedAlarms
- replan_notifications.dart  FR-6/FR-9/FR-12 als Benachrichtigung (je 1x/Episode)
- next_wake_up.dart      nextWakeUpTime (Plan + ManualAlarms, für die Bettzeit)
- day_marker.dart        Kalender-Tagesarithmetik (T-76): midnight/dayMarker/
+Application and helper modules
+ apply_alarms.dart      planAlarmSync (FR-18, pure) + applyPlannedAlarms
+ replan_notifications.dart  FR-6/FR-9/FR-12 as notifications (once per episode each)
+ next_wake_up.dart      nextWakeUpTime (plan + ManualAlarms, for bedtime)
+ day_marker.dart        calendar day arithmetic (T-76): midnight/dayMarker/
                         dayDistance/dayStamp/isoDate
- stored_values.dart     die zwei erlaubten Lesarten eines Speicherwerts (T-83):
-                        instantFromStored (Domäne, UTC) / localFromStored (UI)
- lib/utils/sleep_reminder.dart  scheduleSleepReminder (FR-16 "Voraussetzung")
+ stored_values.dart     the two permitted readings of a stored value (T-83):
+                        instantFromStored (domain, UTC) / localFromStored (UI)
+ lib/utils/sleep_reminder.dart  scheduleSleepReminder (FR-16 "precondition")
 ```
 
 ```mermaid
 flowchart TD
-    A["Alarm klingelt<br/>Handler.handleAlarm()"] -->|alarmRing| RC[runSchedulingCheckpoint]
-    B["App-Vordergrund<br/>initState() / Resume"] -->|"appForeground<br/>(lastReplanDate ≠ heute?)"| RC
-    S["Einstellung geändert"] -->|settingsChanged| RC
-    RC --> TZ["FR-16 Checkpoint 1:<br/>Versatz festhalten"]
-    RC --> RP["replan():<br/>Kalender lesen (ungecacht) + FR-8"]
+    A["Alarm rings<br/>Handler.handleAlarm()"] -->|alarmRing| RC[runSchedulingCheckpoint]
+    B["App foreground<br/>initState() / Resume"] -->|"appForeground<br/>(lastReplanDate ≠ today?)"| RC
+    S["Setting changed"] -->|settingsChanged| RC
+    RC --> TZ["FR-16 checkpoint 1:<br/>record offset"]
+    RC --> RP["replan():<br/>read calendar (uncached) + FR-8"]
     RP --> AP["applyPlannedAlarms<br/>(FR-18)"]
-    RC --> NO["FR-6/9/12 melden"]
-    RC --> SR["Bettzeit-Notification<br/>(FR-16 Voraussetzung)"]
-    C["Schlafengehen-Zeitpunkt<br/>onNotificationCreatedMethod()<br/>(Hintergrund-Isolate)"] --> TZ2["FR-16 Checkpoint 2:<br/>NUR Zeitzonen-Check"]
+    RC --> NO["report FR-6/9/12"]
+    RC --> SR["bedtime notification<br/>(FR-16 precondition)"]
+    C["Bedtime instant<br/>onNotificationCreatedMethod()<br/>(background isolate)"] --> TZ2["FR-16 checkpoint 2:<br/>time zone check ONLY"]
     RP --> PD[(pendingDayValues<br/>pendingDayInstantAnchored<br/>lastReplanDate<br/>lastProcessedConcludedDay)]
-    AP --> AL[(ScheduledAlarms<br/>+ Alarm-Plugin)]
+    AP --> AL[(ScheduledAlarms<br/>+ alarm plugin)]
     SR --> C
     TZ --> OFF[(lastCheckedUtcOffset)]
     TZ2 --> OFF
     TZ2 -.-> PD
 ```
 
-Kein eigener Auslöser existiert für Kalenderänderungen selbst (FR-11) - ein geänderter Termin wirkt
-beim nächsten Checkpoint. Alle neun neuen `AppState`-Felder (FR-3) persistieren nach bereits
-bewährtem Muster: `int`/`bool`/`String` über `setInt`/`setBool`/`setString` direkt,
-`pendingDayValues` und `pendingDayInstantAnchored` über `jsonEncode`/`jsonDecode` (wie
-`_scheduledAlarms` heute) - keine neue Persistenz-Idee nötig.
+No dedicated trigger exists for calendar changes themselves (FR-11) - a changed appointment takes
+effect at the next checkpoint. All nine new `AppState` fields (FR-3) persist following an
+already-proven pattern: `int`/`bool`/`String` directly via `setInt`/`setBool`/`setString`,
+`pendingDayValues` and `pendingDayInstantAnchored` via `jsonEncode`/`jsonDecode` (like
+`_scheduledAlarms` today) - no new persistence idea needed.
 
-**Was verschwindet:** `lib/models/scheduling/scheduling.dart`s heutige `getEarliestEvent`,
-`adjustAlarmTimes`, `getStartTimeForDate` sowie die private `Scheduler`-Klasse. `docs/TODO.md` T-02
-und T-32 werden dadurch gegenstandslos.
+**What disappears:** `lib/models/scheduling/scheduling.dart`'s current `getEarliestEvent`,
+`adjustAlarmTimes`, `getStartTimeForDate`, and the private `Scheduler` class. `docs/TODO.md` T-02
+and T-32 become moot as a result.
 
-## Implementierungsreihenfolge
+## Implementation order
 
-Jede Phase baut ausschließlich auf bereits abgeschlossenen Phasen auf. "∥" = Reihenfolge innerhalb
-der Phase egal. Pro Schritt: Test(s) aus den FR-Abschnitten oben zuerst, dann Implementierung
-(Red-Green-Refactor: ein Testfall, minimale Implementierung, aufräumen, nächster Testfall -
-`CLAUDE.md`, "Development process"). Deckt ein Test dabei eine Lücke in der Spec selbst auf, wird
-zuerst die Spec korrigiert, dann der Test angepasst.
+Every phase builds exclusively on already-completed phases. "∥" = order within the phase doesn't
+matter. Per step: test(s) from the FR sections above first, then implementation
+(red-green-refactor: one test case, minimal implementation, clean up, next test case -
+`CLAUDE.md`, "Development process"). If a test uncovers a gap in the spec itself, the spec is
+corrected first, then the test is adjusted.
 
-**Phase 0 - Fundament:** (1) `Instant`/`Duration`/`TimeOfDay`-Konvention festlegen. (2∥) vier neue
-`AppState`-Felder anlegen (Persistenz-Rundreise-Test zuerst).
+**Phase 0 - Foundation:** (1) establish the `Instant`/`Duration`/`TimeOfDay` convention. (2∥) add
+four new `AppState` fields (persistence round-trip test first).
 
-**Phase 1 - Reiner Segment-/Verteilungs-Kern:** (3∥) `distribute()` FR-6. (4∥) `applyGapDayDrift()`
-FR-4. (5∥) `hardFloor()`+`eventsForDay()` FR-2. (6) `groupTarget()` FR-5 - braucht 3. (7)
-`planGapOrRunStartDay()` FR-7 - braucht 3,4,6 (insbesondere der Mehrfachziel-Testfall ist der
-eigentliche Grund, warum FR-5 vor FR-7 fertig sein muss).
+**Phase 1 - Pure segment/distribution core:** (3∥) `distribute()` FR-6. (4∥) `applyGapDayDrift()`
+FR-4. (5∥) `hardFloor()`+`eventsForDay()` FR-2. (6) `groupTarget()` FR-5 - needs 3. (7)
+`planGapOrRunStartDay()` FR-7 - needs 3,4,6 (in particular the multi-target test case is the real
+reason FR-5 must be done before FR-7).
 
-**Phase 2 - Wochenweite Orchestrierung (rein):** (8∥) `updateGapDayCounter()` FR-9. (9)
-`coldStart()` FR-10 - braucht 5. (10) `computeWeekPlan()` FR-8 - braucht 5,7,8,9, der große
-Integrationsschritt. (11∥) FR-15-Invariante als Regressionstest.
+**Phase 2 - Week-wide orchestration (pure):** (8∥) `updateGapDayCounter()` FR-9. (9)
+`coldStart()` FR-10 - needs 5. (10) `computeWeekPlan()` FR-8 - needs 5,7,8,9, the big integration
+step. (11∥) FR-15 invariant as a regression test.
 
-**Phase 3 - Zeitzonen-Kern (unabhängig von Phase 1/2):** (12) `reinterpretForNewOffset()` FR-16 -
-braucht nur Phase 0.
+**Phase 3 - Time zone core (independent of Phase 1/2):** (12) `reinterpretForNewOffset()` FR-16 -
+needs only Phase 0.
 
-**Phase 4 - AppState-Orchestrierung + Kalender-Fix:** (13) T-60 zuerst beheben
-(Kalender-Cache-Bypass, unabhängig vom Rest) - Test: zwei `replan()`-Aufrufe mit unterschiedlichen
-Fake-Kalenderdaten, zweites Ergebnis muss die neuen Daten widerspiegeln. (14) `replan(AppState)` -
-braucht 10,13. (15) FR-11-Verhalten - braucht 14. (16) FR-12-Verhalten - braucht 14/15. (17)
-`runAlarmRingCheckpoint()` - braucht 12,14. (18) `onAppForegroundCheckpoint()` FR-17 - braucht 17.
+**Phase 4 - AppState orchestration + calendar fix:** (13) fix T-60 first (calendar cache bypass,
+independent of the rest) - test: two `replan()` calls with different fake calendar data, the second
+result must reflect the new data. (14) `replan(AppState)` - needs 10,13. (15) FR-11 behaviour -
+needs 14. (16) FR-12 behaviour - needs 14/15. (17) `runAlarmRingCheckpoint()` - needs 12,14. (18)
+`onAppForegroundCheckpoint()` FR-17 - needs 17.
 
-**Phase 5 - Plattform-Verdrahtung:** (19) `Handler.handleAlarm()` → `runAlarmRingCheckpoint()` -
-braucht 17 - Test zuerst: insbesondere der 3s-Overlay-Timeout-Regressionstest (schlägt gegen
-unverändertem Code fehl). (20) `initState()` → `onAppForegroundCheckpoint()` - braucht 18. (21∥)
-Schlafengehen-Notification immer planen, unabhängig von `reminderEnabled` - Test zuerst (schlägt
-gegen unverändertem Code fehl, da `setSleepReminder()` heute nur bei aktivierter Erinnerung
-aufgerufen wird). (22) `onNotificationCreatedMethod` bauen + `setListeners` verdrahten - braucht
-21,12 - **davor empfohlen** (kein TDD-Blocker): ein Bestätigungstest auf echtem/emuliertem Gerät,
-dass die stille Notification den Callback tatsächlich auslöst.
+**Phase 5 - Platform wiring:** (19) `Handler.handleAlarm()` → `runAlarmRingCheckpoint()` - needs 17
+- test first: in particular the 3s overlay-timeout regression test (fails against unmodified code).
+(20) `initState()` → `onAppForegroundCheckpoint()` - needs 18. (21∥) always schedule the bedtime
+notification, regardless of `reminderEnabled` - test first (fails against unmodified code, since
+`setSleepReminder()` today is only called when the reminder is enabled). (22) build
+`onNotificationCreatedMethod` + wire up `setListeners` - needs 21,12 - **recommended beforehand**
+(not a TDD blocker): a confirmation test on a real/emulated device that the silent notification
+actually triggers the callback.
 
-**Phase 6 - Aufräumen:** (23) alten `Scheduler`/`_adjustAlarmTimes`/`getEarliestEvent` entfernen.
-(24) `docs/TODO.md` T-02, T-32, T-60 als erledigt markieren. (25) `CLAUDE.md`s Testing-Status um
-die neuen Testdateien ergänzen.
+**Phase 6 - Cleanup:** (23) remove the old `Scheduler`/`_adjustAlarmTimes`/`getEarliestEvent`.
+(24) mark `docs/TODO.md` T-02, T-32, T-60 as done. (25) extend `CLAUDE.md`'s testing status section
+with the new test files.
 
-**Phase 7 - Optional:** (26) `integration_test/app_test.dart` um ein Szenario für FR-17s
-Vordergrund-Checkpoint erweitern - Verlässlichkeit in CI nicht garantiert, offen dokumentieren statt
-stillschweigend als getestet zu behandeln.
+**Phase 7 - Optional:** (26) extend `integration_test/app_test.dart` with a scenario for FR-17's
+foreground checkpoint - reliability in CI not guaranteed, document as open rather than silently
+treating it as tested.
 
-Phase 1–3 sind risikoärmsten (komplett `flutter test`, keine Mocks, keine Geräte) und liefern am
-schnellsten sichtbaren TDD-Fortschritt - dort zuerst anfangen.
+Phases 1–3 carry the least risk (pure `flutter test`, no mocks, no devices) and deliver visible TDD
+progress fastest - start there first.
 
-## FR-20 — Snooze: verschieben, nie abschalten
+## FR-20 — Snooze: postpone, never disable
 
-**Grundsatz.** Snooze **deaktiviert den Wecker nie**. Es beendet das laufende Klingeln und stellt
-denselben Weckruf um `snoozeTime` später erneut. Ein Nutzer, der ausschließlich Snooze drückt, wird
-weiter geweckt, bis das Budget erschöpft ist - danach bleibt nur das reguläre Abschalten.
+**Principle.** Snooze **never disables the alarm**. It ends the current ring and re-arms the same
+wake call `snoozeTime` later. A user who only ever presses snooze keeps being woken up until the
+budget is exhausted - after that, only the regular switch-off remains.
 
-**Das Budget ist `durationToWakeUp`, und das ist kein Zufall.** FR-2 legt den Weckzeitpunkt auf
-`frühester Termin − durationToWakeUp − durationToGetReady`. Die erste Dauer ist die Zeit zum
-Wachwerden, die zweite die zum Fertigmachen. Snooze darf ausschließlich die **erste** aufbrauchen:
-
-```
-Summe aller Verschiebungen eines Weckrufs <= durationToWakeUp
-```
-
-Daraus folgt die tragende Zusicherung, ohne dass sie eigens geprüft werden müsste: **wer nur
-snoozet, kommt trotzdem rechtzeitig los.** Das Fertigmachen bleibt unangetastet, der Termin wird
-nicht verpasst - und genau deshalb ist das Budget diese Dauer und keine eigene Zahl.
-
-Konkret: ein weiteres Snooze wird nur angeboten, wenn
+**The budget is `durationToWakeUp`, and that is no coincidence.** FR-2 sets the wake instant to
+`earliest appointment − durationToWakeUp − durationToGetReady`. The first duration is the time to
+become properly awake, the second the time to get ready. Snooze may only consume the **first**:
 
 ```
-jetzt + snoozeTime <= ursprünglicher Weckzeitpunkt + durationToWakeUp
+Sum of all postponements of a wake call <= durationToWakeUp
 ```
 
-Ist das nicht erfüllt, verschwindet die Snooze-Schaltfläche. Der Wecker klingelt weiter; der Nutzer
-muss ihn regulär abschalten.
+From this follows the load-bearing guarantee, without needing to be checked separately: **someone
+who only snoozes still gets out the door on time.** The getting-ready time stays untouched, the
+appointment is not missed - and that is exactly why the budget is this duration and not some
+separate number.
 
-**Snooze braucht nie den QR-Code.** Auch wenn ein Deaktivierungscode gesetzt ist und das Abschalten
-ihn verlangt (das "garantierte Aufwachen"), ist Snooze ohne Scan erreichbar. Begründung: Snooze
-schaltet nichts ab - es verschiebt nur, und zwar innerhalb eines Budgets, das den Termin nicht
-gefährden kann. Den Code zu verlangen, um **weiter geweckt zu werden**, wäre sinnlos und würde den
-Nutzer im Zweifel dazu bringen, das Gerät ganz abzuschalten.
+Concretely: another snooze is only offered if
 
-**Vorgaben.** `snoozeEnabled` = `false`; `snoozeTime` = 5 Minuten; `durationToWakeUp` = `00:00`.
-Wird `snoozeEnabled` eingeschaltet und ist `durationToWakeUp` dabei `00:00`, wird es auf **10
-Minuten** gesetzt - sonst wäre das Budget null und die gerade eingeschaltete Funktion von Anfang an
-tot. Ein bereits gesetzter Wert bleibt unangetastet.
+```
+now + snoozeTime <= original wake instant + durationToWakeUp
+```
 
-**Zwei Wechselwirkungen, die nicht offensichtlich sind und ohne die es bricht:**
+If this is not satisfied, the snooze button disappears. The alarm keeps ringing; the user has to
+switch it off normally.
 
-1. **Der verschobene Weckruf darf FR-18 nicht in die Hände fallen.** FR-18 entfernt jeden
-   `ScheduledAlarm` in der Zukunft ohne geplantes Gegenstück - und ein auf `jetzt + snoozeTime`
-   verschobener Ruf hat keines. Er wird deshalb **nicht** als `ScheduledAlarm` geführt, sondern als
-   reiner Plattform-Alarm mit eigener ID, den `AppState` nicht kennt. FR-18 sieht ausschließlich
-   `appState.scheduledAlarms`; ein Plattform-Eintrag ohne Gegenstück bleibt unberührt (eigens
-   geprüft, `docs/TODO.md` T-127).
-2. **Der verschobene Ruf löst keinen Ring-Checkpoint aus.** FR-8s Checkpoint lief bereits beim
-   ersten Klingeln; der Tag ist abgeschlossen. Ein zweiter Checkpoint würde nichts hinzufügen, aber
-   FR-9s Zähler und FR-11s Anker erneut anfassen. Da der verschobene Ruf `AppState` unbekannt ist,
-   greift `Handler`s bestehende Regel "nur ein klingelnder `ScheduledAlarm` treibt die Kette"
-   (FR-15, `docs/TODO.md` T-73) von selbst - es ist keine zusätzliche Sonderregel nötig.
+**Snooze never needs the QR code.** Even when a deactivation code is set and switching off requires
+it (the "guaranteed wake-up"), snooze is reachable without a scan. Rationale: snooze disables
+nothing - it only postpones, and within a budget that cannot endanger the appointment. Requiring
+the code just to **keep being woken up** would be pointless, and would risk pushing the user to
+switch the device off entirely.
 
-**Manuelle Alarme** sind eingeschlossen: Snooze verschiebt auch sie, mit demselben Budget. FR-15
-bleibt gewahrt, weil der verschobene Ruf die `ScheduledAlarm`-Kette gar nicht berührt.
+**Defaults.** `snoozeEnabled` = `false`; `snoozeTime` = 5 minutes; `durationToWakeUp` = `00:00`.
+If `snoozeEnabled` is switched on while `durationToWakeUp` is `00:00`, it is set to **10
+minutes** - otherwise the budget would be zero and the feature just switched on would be dead from
+the start. An already-set value is left untouched.
 
-- **Test (Budget):** `durationToWakeUp = 30min`, `snoozeTime = 5min`, Weckruf 06:00.
-  → Snooze ist möglich bis einschließlich der Verschiebung auf **06:30**; der Druck, der auf
-  06:35 führen würde, wird nicht mehr angeboten. Sechs Verschiebungen, danach Schluss.
-- **Test (Budget erschöpft trotz Wartens):** derselbe Aufbau, der Nutzer lässt bis 06:28 klingeln
-  und drückt dann Snooze → `06:28 + 5min = 06:33 > 06:30`, also **kein** Snooze mehr. Das Budget
-  zählt ab dem ursprünglichen Weckzeitpunkt, nicht ab dem letzten Druck.
-- **Test (Standard):** `snoozeEnabled = false` → keine Snooze-Schaltfläche, egal was die anderen
-  Werte sagen.
-- **Test (Einschalten):** `snoozeEnabled` von `false` auf `true` bei `durationToWakeUp = 00:00`
-  → `durationToWakeUp` steht danach auf `00:10`. Bei `durationToWakeUp = 00:45` bleibt es `00:45`.
-- **Test (QR):** Deaktivierungscode gesetzt → das Abschalten verlangt den Scan, Snooze **nicht**.
-- **Test (kein Abschalten):** nach einem Snooze ist der Weckruf weiterhin scharf; es gibt keinen
-  Zustand, in dem Snooze ihn entfernt hat.
+**Two interactions that are not obvious, and without which it breaks:**
+
+1. **The postponed wake call must not fall into FR-18's hands.** FR-18 removes every
+   `ScheduledAlarm` in the future with no planned counterpart - and a call postponed to `now +
+   snoozeTime` has none. It is therefore **not** tracked as a `ScheduledAlarm`, but as a plain
+   platform alarm with its own id, unknown to `AppState`. FR-18 only looks at
+   `appState.scheduledAlarms`; a platform entry with no counterpart is left untouched (specifically
+   checked, `docs/TODO.md` T-127).
+2. **The postponed call does not trigger a ring checkpoint.** FR-8's checkpoint already ran at the
+   first ring; the day is concluded. A second checkpoint would add nothing, but would touch FR-9's
+   counter and FR-11's anchor again. Since the postponed call is unknown to `AppState`, `Handler`'s
+   existing rule "only a ringing `ScheduledAlarm` drives the chain" (FR-15, `docs/TODO.md` T-73)
+   applies on its own - no additional special rule is needed.
+
+**Manual alarms** are included: snooze postpones them too, with the same budget. FR-15 is
+preserved, because the postponed call never touches the `ScheduledAlarm` chain at all.
+
+- **Test (budget):** `durationToWakeUp = 30min`, `snoozeTime = 5min`, wake call at 06:00.
+  → snooze is possible up to and including the postponement to **06:30**; the press that would lead
+  to 06:35 is no longer offered. Six postponements, then it stops.
+- **Test (budget exhausted despite waiting):** same setup, the user lets it ring until 06:28 and
+  then presses snooze → `06:28 + 5min = 06:33 > 06:30`, so **no** more snooze. The budget counts
+  from the original wake instant, not from the last press.
+- **Test (default):** `snoozeEnabled = false` → no snooze button, regardless of what the other
+  values say.
+- **Test (switching on):** `snoozeEnabled` from `false` to `true` with `durationToWakeUp = 00:00`
+  → `durationToWakeUp` is then `00:10`. With `durationToWakeUp = 00:45` it stays `00:45`.
+- **Test (QR):** deactivation code set → switching off requires the scan, snooze does **not**.
+- **Test (no switch-off):** after a snooze the wake call is still armed; there is no state in
+  which snooze has removed it.
 
 ## FR-21 — A switched-off alarm does not ring
 

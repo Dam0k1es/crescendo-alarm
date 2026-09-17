@@ -29,7 +29,7 @@ Two rules that are load-bearing and easy to break by "cleaning up":
 - **Never add a second entry point.** The five that used to exist differed in four orthogonal
   dimensions and produced the same class of bug three times (T-67, T-71, T-80). Add a
   `CheckpointTrigger` value instead.
-- **Every domain value is an absolute instant, UTC-tagged**, while `wunschzeit` is a bare
+- **Every domain value is an absolute instant, UTC-tagged**, while `preferredWakeUpTime` is a bare
   device-local `TimeOfDay` and everything leaving the layer (alarm plugin, notifications, UI, alarm
   titles) is read as **local wall clock**. Use `instantFromStored`/`localFromStored` and
   `alarmPlatformTime` at those boundaries; don't "unify" them.

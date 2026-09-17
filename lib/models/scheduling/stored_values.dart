@@ -1,42 +1,42 @@
-// Die beiden erlaubten Lesarten eines gespeicherten Planwerts
+// The two permitted readings of a stored plan value
 // (docs/TODO.md T-83).
 //
-// `AppState.pendingDayValues` ist eine `Map<String, int?>` von ISO-Datum auf
-// `millisecondsSinceEpoch` - diese Form ist Absicht, weil FR-16s Checkpoint 2
-// denselben SharedPreferences-Schlüssel aus einem Hintergrund-Isolate ohne
-// jeden AppState-Zugriff lesen und schreiben muss.
+// `AppState.pendingDayValues` is a `Map<String, int?>` from ISO date to
+// `millisecondsSinceEpoch` - this shape is deliberate, because FR-16's
+// checkpoint 2 must read and write the same SharedPreferences key from a
+// background isolate with no AppState access at all.
 //
-// Beim Zurücklesen gibt es zwei *unterschiedliche*, beide korrekte Antworten,
-// und genau darin lag die Falle: die Karte wurde an fünf Stellen gelesen,
-// dreimal mit `isUtc: true` und zweimal ohne. Das war kein Fehler, sondern
-// notwendig - aber es sah wie eine Inkonsistenz aus, und ein gut gemeintes
-// Vereinheitlichen hätte Anzeige und Alarmtitel still um den Geräteversatz
-// verschoben. Deshalb keine rohen `DateTime.fromMillisecondsSinceEpoch`-Aufrufe
-// mehr an den Aufrufstellen, sondern zwei Namen, die die Absicht tragen.
+// On reading it back there are two *different*, both correct answers, and
+// that was exactly the trap: the map used to be read in five places, three
+// times with `isUtc: true` and twice without. That was not a bug, but
+// necessary - yet it looked like an inconsistency, and a well-meant
+// unification would have silently shifted the display and alarm titles by
+// the device offset. Hence no more raw `DateTime.fromMillisecondsSinceEpoch`
+// calls at the call sites, but two names that carry the intent.
 
-/// Für die **Domänenschicht** (`scheduling_v2.dart`, `replan.dart`):
-/// UTC-getaggt.
+/// For the **domain layer** (`scheduling_v2.dart`, `replan.dart`):
+/// UTC-tagged.
 ///
-/// Deren Arithmetik vergleicht Ziffernfelder (`_wallClockDelta` liest
-/// `.hour`/`.minute`), also müssen alle Operanden im selben Frame liegen -
-/// und der ist per Konvention UTC (FR-1: jeder Wert ist ein absoluter
-/// Instant). Ein lokal getaggter Wert würde hier je nach Zeitzone der
-/// Testmaschine bzw. des Geräts andere Ergebnisse liefern; genau das war T-61.
+/// Its arithmetic compares digit fields (`_wallClockDelta` reads
+/// `.hour`/`.minute`), so all operands must lie in the same frame - and by
+/// convention that is UTC (FR-1: every value is an absolute instant). A
+/// locally-tagged value here would give different results depending on the
+/// test machine's or the device's time zone; that was exactly T-61.
 DateTime? instantFromStored(int? millis) => millis == null
     ? null
     : DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
 
-/// Für **Plattform und Anzeige** (`apply_alarms.dart`, `next_wake_up.dart`):
-/// lokal getaggt.
+/// For **platform and display** (`apply_alarms.dart`, `next_wake_up.dart`):
+/// locally tagged.
 ///
-/// Dahinter liegen Leser, die die Ziffern als Wanduhrzeit interpretieren -
-/// `ScheduledAlarm.title` über `formatDateTime`, die Alarmliste in der UI, und
-/// `alarmPlatformTime` beim Übergang zum Alarm-Plugin. Derselbe reale Moment
-/// wie [instantFromStored], nur eben in der Lesart, die diese Seite braucht.
+/// Behind this are readers that interpret the digits as wall-clock time -
+/// `ScheduledAlarm.title` via `formatDateTime`, the alarm list in the UI, and
+/// `alarmPlatformTime` at the handoff to the alarm plugin. The same real
+/// moment as [instantFromStored], just in the reading this side needs.
 DateTime? localFromStored(int? millis) =>
     millis == null ? null : DateTime.fromMillisecondsSinceEpoch(millis);
 
-/// Die Gegenrichtung. Frame-unabhängig (`millisecondsSinceEpoch` ist es
-/// ohnehin) und nur der Vollständigkeit halber benannt, damit an den
-/// Schreibstellen dasselbe Vokabular steht wie an den Lesestellen.
+/// The reverse direction. Frame-independent (`millisecondsSinceEpoch` is
+/// anyway) and named only for completeness, so the write sites use the same
+/// vocabulary as the read sites.
 int? toStored(DateTime? value) => value?.millisecondsSinceEpoch;

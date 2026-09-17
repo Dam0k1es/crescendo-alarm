@@ -6,14 +6,14 @@ import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/models/alarms/manual_alarm.dart';
 import 'package:wakeywakey/screens/alarms/screen_alarms.dart';
 
-// docs/TODO.md T-137: "Scheduled" ist der erste Reiter, "Manual" der zweite.
+// docs/TODO.md T-137: "Scheduled" is the first tab, "Manual" the second.
 //
-// Gepruefft wird nicht die Beschriftung, sondern die KOPPLUNG: Reiterindex,
-// angezeigte Liste und der Index, an dem der Schirm seinen Knopf festmacht,
-// muessen zusammenpassen. Wer nur die `tabs:`-Liste tauscht und die
-// `TabBarView.children` vergisst (oder umgekehrt), bekommt einen Schirm, der
-// die eine Liste zeigt, waehrend der Knopf zur anderen gehoert - und das faellt
-// ohne Test nicht auf, weil beide Reiter weiterhin plausibel aussehen.
+// What is checked is not the label but the COUPLING: tab index, displayed
+// list, and the index the screen's button is pinned to must all match up.
+// Swapping only the `tabs:` list and forgetting `TabBarView.children` (or
+// vice versa) produces a screen that shows one list while the button
+// belongs to the other - and without a test this goes unnoticed, because
+// both tabs still look plausible.
 
 Future<AppState> _appStateWithManualAlarm() async {
   SharedPreferences.setMockInitialValues({});
@@ -26,7 +26,7 @@ Future<AppState> _appStateWithManualAlarm() async {
 }
 
 void main() {
-  testWidgets('Scheduled ist Reiter 1, Manual Reiter 2', (tester) async {
+  testWidgets('Scheduled is tab 1, Manual tab 2', (tester) async {
     final appState = await _appStateWithManualAlarm();
 
     await tester.pumpWidget(
@@ -37,19 +37,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Die Indizes selbst.
+    // The indices themselves.
     expect(ScreenAlarms.scheduledTabIndex, 0);
     expect(ScreenAlarms.manualTabIndex, 1);
 
-    // Und die Kopplung: auf dem ERSTEN Reiter darf der manuelle Alarm nicht
-    // zu sehen sein - dort stehen die geplanten.
+    // And the coupling: on the FIRST tab the manual alarm must not be
+    // visible - the planned ones are there.
     expect(find.text('03:00'), findsNothing,
-        reason: 'Reiter 1 zeigt die geplanten Alarme, nicht die manuellen');
+        reason: 'tab 1 shows the planned alarms, not the manual ones');
 
     await tester.tap(find.text('Manual'));
     await tester.pumpAndSettle();
 
     expect(find.text('03:00'), findsOneWidget,
-        reason: 'Reiter 2 zeigt die manuellen Alarme');
+        reason: 'tab 2 shows the manual alarms');
   });
 }

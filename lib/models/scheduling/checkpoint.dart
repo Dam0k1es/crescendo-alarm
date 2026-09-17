@@ -1,25 +1,25 @@
-// Der eine Einstiegspunkt für scheduling-v2 (docs/TODO.md T-87, behebt T-77
-// und T-80).
+// The one entry point for scheduling-v2 (docs/TODO.md T-87, fixes T-77
+// and T-80).
 //
-// Vorher gab es fünf: replan(), runAlarmRingCheckpoint(),
-// onAppForegroundCheckpoint(), runForegroundCheckpointSafely() und
-// onSchedulingSettingsChanged(). Sie unterschieden sich in vier orthogonalen
-// Dimensionen - schreibt der Aufrufer den Zeitzonen-Versatz fort? gilt heute
-// als abgeschlossen? werden FR-6/9/12 gemeldet? wird die Bettzeit-Notification
-// neu geplant? werden Fehler geschluckt? - und jede Kombination war irgendwo
-// von Hand zusammengesetzt. Genau diese Matrix hat T-67 (Melden fehlte auf dem
-// Erholungspfad), T-71 (heute fälschlich als abgeschlossen behandelt) und T-80
-// (Reminder fehlte in beiden Checkpoints) produziert: dreimal derselbe Fehler
-// in derselben Struktur.
+// Previously there were five: replan(), runAlarmRingCheckpoint(),
+// onAppForegroundCheckpoint(), runForegroundCheckpointSafely() and
+// onSchedulingSettingsChanged(). They differed along four orthogonal
+// dimensions - does the caller record the time zone offset? does today
+// count as concluded? are FR-6/9/12 reported? is the bedtime notification
+// replanned? are errors swallowed? - and every combination was assembled by
+// hand somewhere. Exactly this matrix produced T-67 (reporting was missing
+// on the recovery path), T-71 (today was wrongly treated as concluded) and
+// T-80 (the reminder was missing from both checkpoints): the same bug three
+// times in the same structure.
 //
-// Hier steht die Sequenz genau einmal, vollständig und serialisiert. Was sich
-// je Auslöser unterscheidet, ist ausschließlich [CheckpointTrigger] - und das
-// steht als Tabelle in [runSchedulingCheckpoint]s Doc-Kommentar, nicht implizit
-// in fünf Aufrufstellen.
+// Here the sequence exists exactly once, complete and serialized. What
+// differs per trigger is exclusively [CheckpointTrigger] - and that lives as
+// a table in [runSchedulingCheckpoint]'s doc comment, not implicitly across
+// five call sites.
 //
-// Liegt bewusst in einer eigenen Datei, nicht in replan.dart: die Sequenz
-// braucht sleep_reminder.dart, und das zieht über notifications.dart einen
-// Import-Zyklus zurück auf replan.dart (FR-16 Checkpoint 2).
+// Deliberately in its own file, not in replan.dart: the sequence needs
+// sleep_reminder.dart, and that pulls an import cycle back to replan.dart
+// (FR-16 checkpoint 2) via notifications.dart.
 
 import 'dart:async';
 
@@ -32,44 +32,46 @@ import 'package:wakeywakey/utils/diag/diag_log.dart';
 import 'package:wakeywakey/utils/notifications.dart';
 import 'package:wakeywakey/utils/sleep_reminder.dart';
 
-/// Was den Checkpoint ausgelöst hat. Der einzige Unterschied zwischen den
-/// Abläufen - siehe die Tabelle in [runSchedulingCheckpoint].
+/// What triggered the checkpoint. The only difference between the flows -
+/// see the table in [runSchedulingCheckpoint].
 enum CheckpointTrigger {
-  /// FR-8/FR-16 Checkpoint 1: ein Alarm hat gerade geklingelt. Der einzige
-  /// Auslöser, für den der heutige Tag abgeschlossen ist (FR-11).
+  /// FR-8/FR-16 checkpoint 1: an alarm just rang. The only trigger for which
+  /// today counts as concluded (FR-11).
   alarmRing,
 
-  /// FR-17: die App kam in den Vordergrund (Kaltstart nach Reboot/Force-Quit
-  /// oder ein normales Resume). Unterliegt FR-17s Tagessperre.
+  /// FR-17: the app came to the foreground (cold start after reboot/force-quit,
+  /// or a normal resume). Subject to FR-17's daily lock.
   appForeground,
 
-  /// docs/TODO.md T-65: eine Einstellung, die in die Rechnung eingeht, hat
-  /// sich geändert. Unterliegt der Tagessperre bewusst **nicht** - eine
-  /// Änderung muss sofort wirken.
+  /// docs/TODO.md T-65: a setting that feeds into the computation has
+  /// changed. Deliberately **not** subject to the daily lock - a change must
+  /// take effect immediately.
   settingsChanged,
 
-  /// Der Nutzer hat den Sync-Knopf in der Alarmliste gedrückt (Phase 6,
-  /// docs/TODO.md T-64 - dort lief vorher der alte Scheduler). Verhält sich
-  /// wie [settingsChanged]; eigener Wert, damit die Tabelle unten und die
-  /// Debug-Ausgabe ehrlich bleiben.
+  /// The user pressed the sync button in the alarm list (Phase 6,
+  /// docs/TODO.md T-64 - the old Scheduler used to run there). Behaves like
+  /// [settingsChanged]; its own value so the table below and the debug
+  /// output stay honest.
   manualSync,
 }
 
-/// Serialisiert alle Checkpoints gegeneinander (docs/TODO.md T-77).
+/// Serializes every checkpoint against every other one (docs/TODO.md T-77).
 ///
-/// Nötig, weil drei der vier Auslöser fire-and-forget sind (`unawaited`) und
-/// FR-17s Tagessperre sie nicht schützen kann: die liest `lastReplanDate`,
-/// das erst am **Ende** von `replan()` geschrieben wird. Klingelt ein Alarm,
-/// holt Android die App per Full-Screen-Intent nach vorn, also feuert
-/// unmittelbar auch der Resume-Auslöser - der zweite Checkpoint startete
-/// mitten im Kalender-I/O des ersten. Folge: `gapDayCounter` doppelt
-/// inkrementiert (FR-9s Ventil verrechnet sich) und beide berechneten `toAdd`
-/// gegen dieselbe alte Alarmliste, also Doppelalarme auf derselben Minute.
+/// Necessary because three of the four triggers are fire-and-forget
+/// (`unawaited`) and FR-17's daily lock cannot protect against that: it reads
+/// `lastReplanDate`, which is only written at the **end** of `replan()`. When
+/// an alarm rings, Android brings the app forward via a full-screen intent,
+/// so the resume trigger fires immediately too - the second checkpoint used
+/// to start in the middle of the first one's calendar I/O. Consequence:
+/// `gapDayCounter` incremented twice (FR-9's valve miscounts) and both
+/// computed `toAdd` values against the same stale alarm list, i.e. duplicate
+/// alarms on the same minute.
 Future<void> _tail = Future<void>.value();
 
-/// Wie viele Checkpoints gerade anstehen. Nur fuer die Diagnose: ein Wert > 0
-/// beim Start belegt genau die Verschraenkung, die T-77 war (Ring holt die App
-/// per Full-Screen-Intent nach vorn, also feuert unmittelbar auch Resume).
+/// How many checkpoints are currently queued. Diagnostics only: a value > 0
+/// at the start proves exactly the interleaving that T-77 was (a ring brings
+/// the app forward via a full-screen intent, so resume fires immediately
+/// too).
 int _pending = 0;
 
 Future<T> _serialized<T>(Future<T> Function() body) {
@@ -79,8 +81,8 @@ Future<T> _serialized<T>(Future<T> Function() body) {
     try {
       completer.complete(await body());
     } catch (error, stack) {
-      // Der Fehler geht an den eigenen Aufrufer; die Kette selbst bleibt
-      // heil, damit ein kaputter Checkpoint nicht alle folgenden blockiert.
+      // The error goes to its own caller; the chain itself stays intact, so
+      // a broken checkpoint doesn't block every following one.
       completer.completeError(error, stack);
     } finally {
       _pending--;
@@ -89,27 +91,28 @@ Future<T> _serialized<T>(Future<T> Function() body) {
   return completer.future;
 }
 
-/// Die vollständige Reaktion auf einen Auslöser, in fester Reihenfolge:
+/// The complete response to a trigger, in fixed order:
 ///
-/// 1. serialisieren (T-77),
-/// 2. FR-17s Tagessperre prüfen (nur [CheckpointTrigger.appForeground]),
-/// 3. den aktuellen Zeitzonen-Versatz festhalten (FR-16),
-/// 4. [replan] - inklusive FR-18s Alarmabgleich, den `replan()` selbst anstößt,
-/// 5. FR-6/FR-9/FR-12 melden ([reportReplanNotifications]),
-/// 6. die Bettzeit-Notification neu planen ([scheduleSleepReminder], T-80).
+/// 1. serialize (T-77),
+/// 2. check FR-17's daily lock (only for [CheckpointTrigger.appForeground]),
+/// 3. record the current time zone offset (FR-16),
+/// 4. [replan] - including FR-18's alarm reconciliation, which `replan()`
+///    itself triggers,
+/// 5. report FR-6/FR-9/FR-12 ([reportReplanNotifications]),
+/// 6. replan the bedtime notification ([scheduleSleepReminder], T-80).
 ///
-/// | Auslöser | heute abgeschlossen (FR-11) | Tagessperre (FR-17) |
+/// | Trigger | today concluded (FR-11) | daily lock (FR-17) |
 /// |---|---|---|
-/// | `alarmRing` | ja | nein |
-/// | `appForeground` | nein | ja |
-/// | `settingsChanged` | nein | nein |
-/// | `manualSync` | nein | nein |
+/// | `alarmRing` | yes | no |
+/// | `appForeground` | no | yes |
+/// | `settingsChanged` | no | no |
+/// | `manualSync` | no | no |
 ///
-/// Gibt `null` zurück, wenn FR-17s Tagessperre gegriffen hat (kein I/O,
-/// nichts geändert), sonst das Ergebnis der Neuplanung.
+/// Returns `null` if FR-17's daily lock kicked in (no I/O, nothing changed),
+/// otherwise the result of the replan.
 ///
-/// Wirft weiter, wenn die Neuplanung scheitert - wer das nicht verkraftet
-/// (UI-Pfade), nimmt [runCheckpointSafely].
+/// Rethrows if the replan fails - callers that can't handle that (UI paths)
+/// use [runCheckpointSafely] instead.
 Future<ReplanResult?> runSchedulingCheckpoint(
   AppState appState, {
   required CheckpointTrigger trigger,
@@ -118,8 +121,8 @@ Future<ReplanResult?> runSchedulingCheckpoint(
   Duration? deviceUtcOffset,
   Notifications? notifications,
 }) {
-  // Vor der Serialisierung gemessen, damit die Wartezeit auf einen laufenden
-  // Checkpoint ueberhaupt sichtbar wird.
+  // Measured before serialization, so the wait behind a running checkpoint
+  // actually becomes visible at all.
   final queuedBehind = _pending;
   final clock = Stopwatch()..start();
 
@@ -135,31 +138,31 @@ Future<ReplanResult?> runSchedulingCheckpoint(
     );
 
     if (trigger == CheckpointTrigger.appForeground) {
-      // FR-17: ein zweites App-Öffnen am selben Tag ist ein No-op. Innerhalb
-      // der Serialisierung gelesen, damit der Wert nicht von einem parallel
-      // laufenden Checkpoint stammt, der ihn gleich noch schreiben wird.
+      // FR-17: a second app open on the same day is a no-op. Read inside the
+      // serialization, so the value doesn't come from a checkpoint running
+      // in parallel that is about to write it anyway.
       //
-      // Die Bedingung ist **Gleichheit**, nicht "nicht vor heute"
-      // (docs/TODO.md T-109). FR-17 sagt wörtlich "Ist `lastReplanDate` ≠
-      // heutiges Kalenderdatum: sofort […] Sonst: kein zusätzlicher
-      // Checkpoint" - und ein `>=` verschluckt zusätzlich den Fall, in dem der
-      // Marker in der ZUKUNFT liegt.
+      // The condition is **equality**, not "not before today" (docs/TODO.md
+      // T-109). FR-17 literally says "If `lastReplanDate` ≠ today's calendar
+      // date: immediately […] Otherwise: no additional checkpoint" - and a
+      // `>=` would additionally swallow the case where the marker lies in
+      // the FUTURE.
       //
-      // Dorthin gerät er ohne jedes Zutun der App: er ist ein gerätelokales
-      // Ziffern-Datum ohne Klammerung, und ein Zonenwechsel über die
-      // Datumsgrenze (Apia +13 → Pago Pago −11) oder eine Rückwärtskorrektur
-      // der Systemuhr lässt das lokale Datum zurückspringen. Gemessen wurden
-      // dabei bis zu ~48 lokale Stunden ohne einen einzigen
-      // Vordergrund-Checkpoint - also ohne den ungecachten Kalender-Neuread,
-      // der einen veralteten Plan reparieren würde. Ein Ring repariert den
-      // Marker nebenbei, aber genau in FR-17s drei Lücken (Reboot,
-      // Force-Quit, ausgefallenes Klingeln) gibt es keinen.
+      // It gets there with no action by the app at all: it's a device-local
+      // digit date with no clamping, and a zone change across the date
+      // boundary (Apia +13 → Pago Pago −11) or a backward correction of the
+      // system clock makes the local date jump backward. Measured cases ran
+      // up to ~48 local hours with not a single foreground checkpoint -
+      // i.e. without the uncached calendar re-read that would repair a
+      // stale plan. A ring repairs the marker as a side effect, but exactly
+      // in FR-17's three gaps (reboot, force-quit, a ring that failed to
+      // happen) there is none.
       //
-      // Verglichen wird über `dayDistance`, nicht über `==` auf zwei
-      // `DateTime`: der Marker kommt lokal getaggt aus den Preferences,
-      // `currentTime` kann ein `tz.TZDateTime` sein, und Darts `==` verlangt
-      // denselben `isUtc`-Frame. Das ist die Fehlerklasse dieses Moduls
-      // (T-61/T-76/T-83) - `dayDistance` vergleicht bewusst die Datumsziffern.
+      // Compared via `dayDistance`, not via `==` on two `DateTime`s: the
+      // marker comes locally tagged from the preferences, `currentTime` can
+      // be a `tz.TZDateTime`, and Dart's `==` requires the same `isUtc`
+      // frame. That is this module's error class (T-61/T-76/T-83) -
+      // `dayDistance` deliberately compares the date digits.
       final lastReplanDate = appState.lastReplanDate;
       if (lastReplanDate != null &&
           dayDistance(currentTime, midnight(lastReplanDate)) == 0) {
@@ -173,10 +176,10 @@ Future<ReplanResult?> runSchedulingCheckpoint(
 
     var outcome = CheckpointOutcome.replanThrew;
 
-    // FR-16: den geprüften Versatz unabhängig davon festhalten, ob sich
-    // etwas geändert hat - sonst würde Checkpoint 2 dieselbe Änderung
-    // dauerhaft neu entdecken. Bewusst vor der Neuplanung, damit ein
-    // Kalenderfehler den Versatz nicht veralten lässt.
+    // FR-16: record the checked offset regardless of whether anything
+    // changed - otherwise checkpoint 2 would keep rediscovering the same
+    // change forever. Deliberately before the replan, so a calendar error
+    // doesn't leave the offset stale.
     appState.lastCheckedUtcOffset = offset;
 
     try {
@@ -185,9 +188,9 @@ Future<ReplanResult?> runSchedulingCheckpoint(
         fetchEvents: fetchEvents,
         now: now,
         deviceUtcOffset: deviceUtcOffset,
-        // FR-11: nur der tatsächlich ausgelöste Wert ist fix (docs/TODO.md
-        // T-71). Für Erholung und Einstellungsänderung hat heute noch nicht
-        // geklingelt, bleibt also revidierbar und ungezählt.
+        // FR-11: only the value that has actually been triggered is fixed
+        // (docs/TODO.md T-71). For recovery and settings changes, today has
+        // not rung yet, so it stays revisable and uncounted.
         todayAlreadyRang: trigger == CheckpointTrigger.alarmRing,
       );
 
@@ -204,16 +207,16 @@ Future<ReplanResult?> runSchedulingCheckpoint(
       );
       rethrow;
     } finally {
-      // docs/TODO.md T-80: die Bettzeit leitet sich aus dem frisch geplanten
-      // Weckzeitpunkt ab, muss also nach der Neuplanung laufen - und in JEDEM
-      // Auslöser, nicht nur beim Dismiss und beim Reminder-Schalter. Sonst
-      // feuert FR-16s Checkpoint 2 zu einem Zeitpunkt ohne Bezug zum Plan.
+      // docs/TODO.md T-80: bedtime is derived from the freshly planned wake
+      // instant, so it must run after the replan - and on EVERY trigger, not
+      // just on dismiss and the reminder toggle. Otherwise FR-16's
+      // checkpoint 2 fires at an instant with no relation to the plan.
       //
-      // Im `finally`, damit ein gescheiterter Kalenderzugriff FR-16s Aufhänger
-      // nicht mitreißt: auf einem frischen Install gibt es noch überhaupt
-      // keine Bettzeit-Notification, und ohne sie fehlt Checkpoint 2 dauerhaft
-      // der Einsprungpunkt. `scheduleSleepReminder` schluckt eigene Fehler
-      // selbst, kann diesen Pfad also nicht zusätzlich zum Scheitern bringen.
+      // In the `finally`, so a failed calendar access doesn't take FR-16's
+      // hook down with it: on a fresh install there is no bedtime
+      // notification at all yet, and without one checkpoint 2 permanently
+      // lacks its entry point. `scheduleSleepReminder` swallows its own
+      // errors, so it cannot additionally break this path.
       await scheduleSleepReminder(appState, notifications: notifications);
 
       Diag.checkpointFinished(
@@ -221,17 +224,17 @@ Future<ReplanResult?> runSchedulingCheckpoint(
         outcome: outcome,
         took: bucketMillis(clock.elapsedMilliseconds),
       );
-      // Gebuendelt am Ende der Sequenz persistieren - der Klingelpfad selbst
-      // bekommt so keine I/O-Latenz.
+      // Persisted in a batch at the end of the sequence - so the ring path
+      // itself gets no I/O latency from it.
       await Diag.flush();
     }
   });
 }
 
-/// [runSchedulingCheckpoint] für Aufrufer, die nicht scheitern dürfen: jeder
-/// UI- und Lifecycle-Pfad (App-Start, Resume, Einstellungsänderung). Ein
-/// echter Kalender-Plugin-Aussetzer darf weder den App-Start abbrechen noch
-/// die UI abstürzen lassen, die die Änderung ausgelöst hat.
+/// [runSchedulingCheckpoint] for callers that must not fail: every UI and
+/// lifecycle path (app start, resume, settings change). A genuine calendar
+/// plugin outage must neither abort app start nor crash the UI that
+/// triggered the change.
 Future<ReplanResult?> runCheckpointSafely(
   AppState appState, {
   required CheckpointTrigger trigger,
@@ -255,11 +258,11 @@ Future<ReplanResult?> runCheckpointSafely(
   }
 }
 
-/// Uebersetzt den Auslöser in den stabilen Diagnose-Code.
+/// Translates the trigger into the stable diagnostic code.
 ///
-/// Der Logger fuehrt absichtlich eine eigene Enum: er soll nicht in die
-/// Scheduling-Schicht importieren, und die exportierten Codes muessen stabil
-/// bleiben, auch wenn hier ein Auslöser dazukommt.
+/// The logger deliberately keeps its own enum: it must not import into the
+/// scheduling layer, and the exported codes must stay stable even when a
+/// trigger is added here.
 DiagTrigger diagTriggerOf(CheckpointTrigger trigger) => switch (trigger) {
       CheckpointTrigger.alarmRing => DiagTrigger.alarmRing,
       CheckpointTrigger.appForeground => DiagTrigger.appForeground,

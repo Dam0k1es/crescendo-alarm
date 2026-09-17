@@ -3,12 +3,11 @@ import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:wakeywakey/models/scheduling/day_marker.dart';
 
-// docs/TODO.md T-76 (und T-74d, dessen Fix unvollständig war): Tagesarithmetik
-// muss über Datumsfelder laufen, nicht über absolute Dauern. Getestet mit
-// `tz.TZDateTime` in einer Zone mit echter Umstellung, damit der Test
-// unabhängig von der Zeitzone der Testmaschine reproduziert - `DateTime.now()`
-// ist auf der Entwicklungs-VM UTC+0 und hätte die Klasse von Fehlern nie
-// gezeigt.
+// docs/TODO.md T-76 (and T-74d, whose fix was incomplete): day arithmetic must
+// run over date fields, not over absolute durations. Tested with
+// `tz.TZDateTime` in a zone with a real transition, so the test reproduces
+// independently of the test machine's time zone - `DateTime.now()` is UTC+0
+// on the dev VM and would never have shown this bug class.
 
 void main() {
   setUpAll(tzdata.initializeTimeZones);
@@ -17,26 +16,26 @@ void main() {
   setUp(() => berlin = tz.getLocation('Europe/Berlin'));
 
   group('dayDistance', () {
-    test('zählt Kalendertage über die Frühjahrsumstellung korrekt', () {
-      // 2026-03-29 ist in Europe/Berlin die Umstellung auf Sommerzeit; der Tag
-      // hat nur 23 Stunden.
+    test('counts calendar days correctly across the spring transition', () {
+      // 2026-03-29 is the transition to daylight saving in Europe/Berlin;
+      // that day only has 23 hours.
       final before = tz.TZDateTime(berlin, 2026, 3, 27);
       final after = tz.TZDateTime(berlin, 2026, 4, 3);
 
       expect(dayDistance(after, before), 7);
-      // Der Nachweis, dass der naive Weg hier tatsächlich falsch liegt (sonst
-      // wäre dieser Test wertlos, weil er nichts absichert):
+      // Proof that the naive way is actually wrong here (otherwise this
+      // test would be worthless, since it wouldn't guard anything):
       expect(after.difference(before).inDays, 6);
     });
 
-    test('zählt auch über die Herbstumstellung korrekt', () {
+    test('also counts correctly across the autumn transition', () {
       final before = tz.TZDateTime(berlin, 2026, 10, 24);
       final after = tz.TZDateTime(berlin, 2026, 10, 26);
 
       expect(dayDistance(after, before), 2);
     });
 
-    test('ist vorzeichenrichtig und frame-übergreifend', () {
+    test('is sign-correct and frame-crossing', () {
       expect(dayDistance(DateTime.utc(2026, 3, 27), DateTime.utc(2026, 4, 3)),
           -7);
       expect(
@@ -47,7 +46,7 @@ void main() {
   });
 
   group('dayMarker', () {
-    test('bleibt über die Umstellung auf demselben Kalenderdatum', () {
+    test('stays on the same calendar date across the transition', () {
       final start = DateTime.utc(2026, 3, 28);
       final marker = dayMarker(start, 2);
 
@@ -55,7 +54,7 @@ void main() {
       expect(marker.isUtc, isTrue);
     });
 
-    test('erhält den lokalen Frame und normalisiert Monatsüberläufe', () {
+    test('preserves the local frame and normalizes month overruns', () {
       final marker = dayMarker(DateTime(2026, 3, 30), 5);
 
       expect(marker.isUtc, isFalse);
@@ -64,10 +63,10 @@ void main() {
       expect(marker.day, 4);
     });
 
-    test('sieben aufeinanderfolgende Marker ergeben sieben verschiedene Tage',
+    test('seven consecutive markers yield seven different days',
         () {
-      // Genau der Regressionsfall von T-74d: mit `add(Duration(days: i))`
-      // kollidierten zwei Fenstertage auf demselben isoDate-Schlüssel.
+      // Exactly the regression case from T-74d: with `add(Duration(days: i))`,
+      // two window days collided on the same isoDate key.
       final start = DateTime(2026, 3, 28);
       final window = List.generate(7, (i) => dayMarker(start, i));
 
@@ -76,41 +75,40 @@ void main() {
   });
 
   group('midnight / isoDate', () {
-    test('midnight schneidet die Uhrzeit ab und erhält den Frame', () {
+    test('midnight truncates the time of day and preserves the frame', () {
       expect(midnight(DateTime.utc(2026, 3, 28, 17, 45)),
           DateTime.utc(2026, 3, 28));
       expect(midnight(DateTime(2026, 3, 28, 17, 45)).isUtc, isFalse);
     });
 
-    test('isoDate ist nullgepolstert', () {
+    test('isoDate is zero-padded', () {
       expect(isoDate(DateTime.utc(2026, 4, 3)), '2026-04-03');
     });
   });
 
-  group('Schalttag und Jahreswechsel (T-124)', () {
-    // Die klassische selbstgeschriebene Tag-im-Jahr-Rechnung (eine
-    // kumulative Monatstabelle plus `(a.year - b.year) * 365`) liefert fuer
-    // 2028 ueber den 29. Februar hinweg einen Tag zu wenig. Belegt: eine
-    // solche Mutation in `dayDistance` laesst **alle** sechzehn Testdateien
-    // gruen, diese Datei eingeschlossen - obwohl genau sie fuer diese
-    // Arithmetik zustaendig ist. Der Schalttag ist die einzige Konstellation,
-    // in der sie sichtbar wird.
+  group('leap day and year boundary (T-124)', () {
+    // The classic hand-rolled day-of-year calculation (a cumulative month
+    // table plus `(a.year - b.year) * 365`) yields one day too few for 2028
+    // across February 29. Proven: such a mutation in `dayDistance` leaves
+    // **all** sixteen test files green, this file included - even though
+    // this file is exactly the one responsible for this arithmetic. The leap
+    // day is the only configuration in which it becomes visible.
 
-    test('ueber den 29. Februar hinweg', () {
+    test('across February 29', () {
       expect(dayDistance(DateTime.utc(2028, 3, 1), DateTime.utc(2028, 2, 28)), 2,
-          reason: '2028 ist ein Schaltjahr - der 29.02. liegt dazwischen');
+          reason: '2028 is a leap year - Feb 29 lies in between');
       expect(dayDistance(DateTime.utc(2027, 3, 1), DateTime.utc(2027, 2, 28)), 1,
-          reason: '2027 nicht');
+          reason: '2027 is not');
     });
 
-    test('ein Fenster ueber den Schalttag hat sieben verschiedene Tage', () {
+    test('a window across the leap day has seven different days', () {
       final start = DateTime.utc(2028, 2, 26);
       final window = List.generate(7, (i) => dayMarker(start, i));
       expect(window.map(isoDate).toSet().length, 7);
       expect(window.map(isoDate), contains('2028-02-29'));
     });
 
-    test('ueber den Jahreswechsel', () {
+    test('across the year boundary', () {
       expect(dayDistance(DateTime.utc(2027, 1, 2), DateTime.utc(2026, 12, 30)), 3);
       final window = List.generate(7, (i) => dayMarker(DateTime.utc(2026, 12, 29), i));
       expect(window.map(isoDate).toSet().length, 7);

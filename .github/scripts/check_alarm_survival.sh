@@ -1,44 +1,46 @@
 #!/usr/bin/env bash
-# Beweissammlung zu docs/REQUIREMENTS.md R3: uebersteht ein gesetzter Alarm
-# einen Reboot und einen Force-Stop?
+# Evidence collection for docs/REQUIREMENTS.md R3: does a set alarm survive
+# a reboot and a force-stop?
 #
-# Warum ueber `dumpsys alarm` und nicht ueber ein echtes Klingeln: so ist
-# "Alarm ist registriert" von "kein Alarm registriert" unterscheidbar, ohne
-# Wartezeit. Ein Klingel-Test kostet pro Durchgang eine Minute Echtzeit und
-# waere im E2E-Zeitbudget nicht unterzubringen.
+# Why via `dumpsys alarm` and not via an actual ring: this way "alarm is
+# registered" is distinguishable from "no alarm registered" without any
+# waiting. A ringing test costs one minute of real time per run and
+# wouldn't fit inside the E2E time budget.
 #
-# Was aus dem Code bereits bekannt ist (und was dieses Skript pruefen soll):
-#   * Die App hat KEINEN eigenen BootReceiver (grep BOOT_COMPLETED lib/ android/
-#     findet nur die uses-permission-Zeile).
-#   * Das `alarm`-Plugin registriert einen eigenen
-#     `com.gdelataillade.alarm.alarm.BootReceiver` und armiert die gespeicherten
-#     Alarme nach dem Boot per `setExactAndAllowWhileIdle(RTC_WAKEUP, ...)` neu.
-#     Reboot-Ueberleben ist dort also implementiert - erwartet wird GRUEN.
-#   * Bei `am force-stop` cancelt Android plattformseitig alle AlarmManager-
-#     Alarme des Pakets, und ein force-gestoppter Prozess empfaengt danach kein
-#     BOOT_COMPLETED mehr, bis der Nutzer die App erneut startet. Erwartet wird
-#     hier also ROT - und zwar by design, nicht als Fehler dieser App. Genau
-#     das muss R3 dann als Grenze festhalten statt es als Bug zu fuehren.
+# What's already known from the code (and what this script is meant to
+# verify):
+#   * The app has NO BootReceiver of its own (grep BOOT_COMPLETED lib/ android/
+#     only finds the uses-permission line).
+#   * The `alarm` plugin registers its own
+#     `com.gdelataillade.alarm.alarm.BootReceiver` and re-arms the stored
+#     alarms after boot via `setExactAndAllowWhileIdle(RTC_WAKEUP, ...)`.
+#     Reboot survival is therefore implemented there - GREEN is expected.
+#   * On `am force-stop`, Android cancels all of the package's AlarmManager
+#     alarms at the platform level, and a force-stopped process no longer
+#     receives BOOT_COMPLETED afterward until the user relaunches the app.
+#     RED is therefore expected here - and by design, not as a defect of
+#     this app. R3 must record exactly that as a boundary, rather than
+#     carrying it as a bug.
 #
-# ZWEI FEHLSCHLAEGE DIESES SKRIPTS, die seine heutige Form erklaeren:
+# TWO FAILURES OF THIS SCRIPT that explain its current shape:
 #
-#   docs/TODO.md T-99 (Lauf 1): das Muster suchte nur den Paketnamen und fand
-#   NULL, obwohl `arm_alarm_test.dart` im selben Lauf nachweislich einen Alarm
-#   gesetzt hatte. Reaktion damals: mehr Muster.
+#   docs/TODO.md T-99 (run 1): the pattern searched only for the package
+#   name and found NOTHING, even though `arm_alarm_test.dart` had provably
+#   set an alarm in the same run. The reaction back then was: more patterns.
 #
-#   docs/TODO.md T-103 (Lauf 2): eines dieser Muster war die blosse
-#   Teilzeichenkette `AlarmReceiver` - und die trifft Googles
-#   `com.android.wallpaper.module.DailyLoggingAlarmReceiver`. Der Zaehler stand
-#   dadurch auf 2 statt 0, das Skript lief am `BEFORE == 0`-Waechter vorbei und
-#   meldete ein selbstbewusstes "FAIL - no alarm survived the reboot", das
-#   nichts belegte: der eigene Alarm war nie gefunden worden.
+#   docs/TODO.md T-103 (run 2): one of those patterns was the bare
+#   substring `AlarmReceiver` - which matches Google's
+#   `com.android.wallpaper.module.DailyLoggingAlarmReceiver`. That put the
+#   counter at 2 instead of 0, the script sailed past the `BEFORE == 0`
+#   guard, and reported a confident "FAIL - no alarm survived the reboot"
+#   that proved nothing: the app's own alarm had never been found.
 #
-# Die Lehre daraus steckt jetzt in der Struktur, nicht in einem Kommentar:
-# ein Messinstrument, das ein Urteil faellt, muss sich vorher selbst beweisen.
-# `--self-test` prueft die Mustererkennung gegen echte, aufgezeichnete
-# dumpsys-Ausgabe (`fixtures/`) und laeuft bei jedem Aufruf automatisch mit.
-# Ein Muster, das fremde Alarme mitzaehlt, bricht den Lauf hier ab - vor der
-# Messung, nicht nach der Fehlinterpretation.
+# The lesson from that now lives in the structure, not in a comment: a
+# measuring instrument that renders a verdict must first prove itself.
+# `--self-test` checks the pattern detection against real, recorded
+# dumpsys output (`fixtures/`) and runs automatically with every
+# invocation. A pattern that counts foreign alarms aborts the run right
+# here - before the measurement, not after the misinterpretation.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -53,7 +55,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Messung
+# Measurement
 # ---------------------------------------------------------------------------
 PACKAGE="${1:?package name required}"
 EVIDENCE_DIR="${2:?evidence dir required}"
@@ -70,28 +72,27 @@ if ! self_test >>"$OUT" 2>&1; then
   exit 0
 fi
 
-# Die uid der App. Drei Wege, weil das Feld je nach Android-Version anders
-# heisst - und weil Lauf 34566962847 zeigte, dass `userId=` allein leer bleibt.
-# Die uid der App. Drei Wege, weil das Feld je nach Android-Version anders
-# heisst - und weil Lauf 34566962847 zeigte, dass `userId=` allein leer bleibt.
+# The app's uid. Three approaches, because the field is named differently
+# depending on the Android version - and because run 34566962847 showed that
+# `userId=` alone can come back empty.
 #
-# Jeder Versuch protokolliert seine ROHAUSGABE in die Beweisdatei (docs/TODO.md
-# T-130). In Lauf 34622086175 schlugen alle Wege fehl, und weil ihre Fehler nach
-# /dev/null gingen, war aus dem Beweismaterial nicht zu erkennen warum - obwohl
-# `arm_alarm_test.dart` im selben Lauf nachweislich einen Alarm gesetzt hatte
-# und die App installiert war. Das Format zu raten hat dieses Skript schon
-# zweimal in die Irre gefuehrt (T-99, T-103); hier wird es aufgezeichnet.
+# Every attempt logs its RAW OUTPUT into the evidence file (docs/TODO.md
+# T-130). In run 34622086175 all approaches failed, and because their errors
+# went to /dev/null, the evidence gave no way to tell why - even though
+# `arm_alarm_test.dart` had provably set an alarm in the same run and the app
+# was installed. Guessing the format has already led this script astray
+# twice (T-99, T-103); this records it instead.
 resolve_uid() {
   local uid raw
   {
     echo "--- uid attempt 1: pm list packages -U ---"
     raw=$(adb shell pm list packages -U 2>&1 | tr -d '\r' | grep -F "$PACKAGE" | head -5)
-    echo "${raw:-(keine Zeile enthaelt den Paketnamen)}"
+    echo "${raw:-(no line contains the package name)}"
   } >>"$OUT" 2>&1
   uid=$(printf '%s\n' "$raw" \
     | awk -v p="package:$PACKAGE" '$1 == p { for (i=1;i<=NF;i++) if ($i ~ /^uid:/) { sub(/^uid:/,"",$i); print $i } }' | head -1)
   if [[ -z "$uid" ]]; then
-    # Weniger streng: irgendein uid:NNN in einer Zeile, die das Paket nennt.
+    # Less strict: any uid:NNN in a line that names the package.
     uid=$(printf '%s\n' "$raw" | grep -oE "uid:[0-9]+" | head -1 | cut -d: -f2)
   fi
   [[ -n "$uid" ]] && { printf '%s' "$uid"; return; }
@@ -106,7 +107,7 @@ resolve_uid() {
   [[ -n "$uid" ]] && { printf '%s' "$uid"; return; }
 
   {
-    echo "--- uid attempt 3: stat des Datenverzeichnisses ---"
+    echo "--- uid attempt 3: stat of the data directory ---"
     adb shell "stat -c %u /data/data/$PACKAGE" 2>&1 | tr -d '\r' | head -2
   } >>"$OUT" 2>&1
   uid=$(adb shell "stat -c %u /data/data/$PACKAGE" 2>/dev/null | tr -d '\r' \
@@ -116,38 +117,40 @@ resolve_uid() {
 
 APP_UID=$(resolve_uid)
 UID_TOKEN=$(uid_token_for "${APP_UID:-}")
-note "app uid: ${APP_UID:-<nicht aufloesbar>}  token: ${UID_TOKEN:-<keins>}"
+note "app uid: ${APP_UID:-<not resolvable>}  token: ${UID_TOKEN:-<none>}"
 
-# Ist die App ueberhaupt installiert? (docs/TODO.md T-131)
+# Is the app even installed? (docs/TODO.md T-131)
 #
-# Lauf 34627328009 hat die eigentliche Ursache gezeigt, und sie ist
-# strukturell: alle drei Aufloesungswege meldeten uebereinstimmend
-# "Unable to find package" bzw. "No such file or directory" fuer
-# /data/data/<paket>. Die App war zum Messzeitpunkt DEINSTALLIERT - `flutter
-# test` installiert sie fuer den Lauf und raeumt sie danach wieder ab, und
-# Android verwirft mit dem Paket auch dessen AlarmManager-Eintraege.
+# Run 34627328009 showed the actual root cause, and it is structural: all
+# three resolution approaches consistently reported "Unable to find
+# package" resp. "No such file or directory" for /data/data/<package>. The
+# app was UNINSTALLED at the time of measurement - `flutter test` installs
+# it for the run and tears it down again afterward, and Android discards
+# the package's AlarmManager entries along with it.
 #
-# Damit kann das Verfahren "Alarm in einem Test scharf stellen, danach dumpsys
-# befragen" grundsaetzlich nichts messen - unabhaengig von jedem Suchmuster.
-# Genau das hat T-99 als "Muster falsch geraten" fehlgedeutet. Hier wird es
-# beim Namen genannt, statt es wieder als Messluecke zu verbuchen.
+# That means the procedure "arm an alarm in a test, then interrogate
+# dumpsys" fundamentally cannot measure anything here - regardless of any
+# search pattern. That's exactly what T-99 misdiagnosed as "the pattern
+# guessed wrong". Here it's called by its real name instead of being
+# booked as a measurement gap again.
 if ! adb shell pm path "$PACKAGE" 2>/dev/null | grep -q "package:"; then
-  note "RESULT: not measurable - die App ist zum Messzeitpunkt NICHT INSTALLIERT."
-  note "Android verwirft mit dem Paket auch seine AlarmManager-Eintraege, es kann"
-  note "also gar kein Alarm registriert sein. Das ist KEIN Befund ueber das"
-  note "Produkt und auch keine Musterfrage mehr, sondern eine Grenze des"
-  note "Verfahrens: flutter test deinstalliert die App nach dem Lauf. Solange"
-  note "das so ist, muss der Alarm auf einem anderen Weg scharf gestellt werden"
-  note "(installierte App plus UI-Automatisierung) - siehe docs/TODO.md T-131."
+  note "RESULT: not measurable - the app is NOT INSTALLED at the time of measurement."
+  note "Android discards the package's AlarmManager entries along with it, so no"
+  note "alarm could possibly be registered. This is NOT a finding about the"
+  note "product and no longer a pattern question either, but a boundary of the"
+  note "procedure: flutter test uninstalls the app after the run. As long as"
+  note "that holds, the alarm must be armed by a different path"
+  note "(an installed app plus UI automation) - see docs/TODO.md T-131."
   exit 0
 fi
 DUMP=$(mktemp)
 snapshot() { adb shell dumpsys alarm 2>/dev/null | tr -d '\r' >"$DUMP"; }
 count_alarms() { snapshot; count_app_alarms "$PACKAGE" "$UID_TOKEN" "$DUMP"; }
 
-# Roher Kontext fuer die Diagnose. Bewusst BREITER als das Zaehlmuster: er soll
-# zeigen, wie die Eintraege wirklich aussehen, falls das Zaehlmuster nichts
-# findet. Er darf aber nie in die Zaehlung einfliessen - das war T-103.
+# Raw context for diagnosis. Deliberately BROADER than the counting
+# pattern: it's meant to show what the entries actually look like if the
+# counting pattern finds nothing. It must never feed into the count,
+# though - that was T-103.
 dump_alarms() {
   {
     echo "--- dumpsys alarm (matching this app, $1) ---"
@@ -174,7 +177,7 @@ fi
 note "--- rebooting ---"
 adb reboot
 adb wait-for-device
-# Auf ein wirklich fertig gebootetes System warten, nicht nur auf adb.
+# Wait for a genuinely fully-booted system, not just for adb.
 for _ in $(seq 1 120); do
   if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then
     break
@@ -183,12 +186,12 @@ for _ in $(seq 1 120); do
 done
 note "boot_completed: $(adb shell getprop sys.boot_completed | tr -d '\r')"
 
-# Die uid kann sich ueber einen Reboot nicht aendern, aber das Token neu
-# aufzuloesen kostet nichts und faengt einen Neuinstall ab.
+# The uid cannot change across a reboot, but re-resolving the token costs
+# nothing and catches a reinstall.
 APP_UID=$(resolve_uid)
 UID_TOKEN=$(uid_token_for "${APP_UID:-}")
 
-# Dem BootReceiver des Plugins Zeit geben, die Alarme neu zu armieren.
+# Give the plugin's BootReceiver time to re-arm the alarms.
 sleep 10
 AFTER_REBOOT=$(count_alarms)
 note "registered alarm lines after reboot: $AFTER_REBOOT"

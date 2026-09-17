@@ -71,7 +71,7 @@ with the calendar screen.
   its own plan** - deleting that one call left nine test files green, which is precisely how this
   engine was once completely inert (T-117). Seven further points are understood, reproduced and
   deliberately **not** implemented: in each the code follows the spec and the spec is what has the
-  gap - see `docs/TODO.md`, "Wartet auf eine Entscheidung, nicht auf Arbeit".
+  gap - see `docs/TODO.md`, "Waiting on a decision, not on work".
 - **Remaining caveat (honest):** the chain is self-sustaining only while it keeps ringing. If the
   chain is ever fully broken *and* the app is never opened - the realistic case being a reboot that
   loses the platform alarms (that is R3, still unverified) - nothing re-plans until the next app
@@ -93,29 +93,29 @@ set).
   (`docs/TODO.md` T-03), and a `SharedPreferences` load failure can currently block app startup
   entirely rather than degrade to defaults (`docs/TODO.md` T-45). Needs a real-device test:
   schedule an alarm, force-stop the app, reboot the device, and confirm it still fires.
-- **Verfahren steht jetzt bereit (2026-09-10, `docs/TODO.md` T-93):**
-  `.github/scripts/check_alarm_survival.sh` beantwortet die Frage über `dumpsys alarm` statt über
-  ein echtes Klingeln - damit ist "Alarm ist registriert" von "kein Alarm registriert"
-  unterscheidbar, ohne Wartezeit. Es läuft im E2E-Job, **noch nicht gatend**, weil das Verhalten auf
-  diesem Emulator-Image nie gemessen wurde und ein unverifiziertes Bein keinen Release blockieren
-  darf. `docs/device-trial-checklist.md` Abschnitt C führt dieselbe Prüfung für ein echtes Gerät.
-- **Erster echter Lauf (34566962847, 2026-09-11): messtechnisch unbrauchbar.** Das Zählmuster traf
-  fremde Alarme (Googles `DailyLoggingAlarmReceiver` über die Teilzeichenkette `AlarmReceiver`) und
-  gab daraufhin ein FAIL aus, das nichts belegt — der eigene Alarm war nie gefunden worden. Das ist
-  aufgearbeitet (`docs/TODO.md` T-103): die Zählung liest jetzt den uid-Zähler von `dumpsys` statt
-  Text zu raten, und das Skript prüft sich vor jeder Messung selbst gegen aufgezeichnete Ausgabe.
-  **Die Frage bleibt damit unbeantwortet** — sie ist nur messbar geworden. Wer den Status dieser
-  Anforderung liest: nicht "Reboot fällt durch", sondern "noch immer nicht gemessen".
-- **Aus dem Code bereits ableitbar:** die App hat **keinen** eigenen `BootReceiver`; das
-  `alarm`-Plugin registriert einen und armiert die gespeicherten Alarme nach dem Boot per
-  `setExactAndAllowWhileIdle(RTC_WAKEUP, …)` neu. Reboot-Überleben ist dort implementiert, der
-  Beleg fehlt nur.
-- **Wichtige Abgrenzung, die diese Anforderung noch nicht macht:** bei `am force-stop` löscht
-  Android plattformseitig alle AlarmManager-Alarme des Pakets, und ein force-gestoppter Prozess
-  empfängt danach kein `BOOT_COMPLETED` mehr, bis der Nutzer die App erneut startet. "Force-Stop
-  überleben" ist damit kein erreichbares Ziel, sondern eine Plattformgrenze - R3 sollte das als
-  Grenze führen und nicht als Defizit. Was die App leisten kann und laut FR-17 leistet: beim
-  nächsten App-Öffnen alles neu setzen.
+- **A procedure is now in place (2026-09-10, `docs/TODO.md` T-93):**
+  `.github/scripts/check_alarm_survival.sh` answers the question via `dumpsys alarm` instead of via
+  an actual ring - that makes "alarm is registered" distinguishable from "no alarm registered",
+  with no waiting time. It runs in the E2E job, **not yet gating**, because this behaviour on this
+  emulator image has never been measured, and an unverified leg must not block a release.
+  `docs/device-trial-checklist.md` section C runs the same check on a real device.
+- **First real run (34566962847, 2026-09-11): unusable as a measurement.** The counting pattern
+  matched a foreign app's alarms (Google's `DailyLoggingAlarmReceiver`, via the substring
+  `AlarmReceiver`) and reported a FAIL that proved nothing - the app's own alarm had never been
+  found. This has been fixed (`docs/TODO.md` T-103): the counting now reads `dumpsys`'s uid counter
+  instead of guessing from text, and the script checks itself against recorded output before every
+  measurement. **The question therefore remains unanswered** - it has only become measurable. Read
+  this requirement's status as "still not measured", not "fails reboot".
+- **Already derivable from the code:** the app has **no** `BootReceiver` of its own; the `alarm`
+  plugin registers one and re-arms the stored alarms after boot via
+  `setExactAndAllowWhileIdle(RTC_WAKEUP, …)`. Reboot survival is implemented there - only the
+  evidence is missing.
+- **An important boundary this requirement does not yet draw:** on `am force-stop`, Android removes
+  all of the package's AlarmManager alarms at the platform level, and a force-stopped process no
+  longer receives `BOOT_COMPLETED` afterwards until the user starts the app again. "Surviving a
+  force-stop" is therefore not an achievable goal but a platform boundary - R3 should track it as
+  that boundary, not as a deficiency. What the app can do, and per FR-17 does: re-arm everything the
+  next time the app is opened.
 
 ## R4 - All alarm-ringing prerequisites are met before an alarm fires
 

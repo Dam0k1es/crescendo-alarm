@@ -1,23 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wakeywakey/utils/notifications.dart';
 
-// Phase 5 (docs/scheduling-v2-spec.md, "Implementierungsreihenfolge", Schritt
-// 21): die Schlafengehen-Notification muss IMMER geplant werden, unabhängig
-// von `reminderEnabled` - FR-16s Checkpoint 2 (Schlafengehen-Zeitpunkt) braucht
-// dafür einen Aufhänger, auch wenn die sichtbare Erinnerung deaktiviert ist.
-// `sleepReminderContent` entscheidet nur, OB die Notification sichtbar ist
-// (title/body gesetzt) oder still im Hintergrund erzeugt wird (title/body
-// beide null - awesome_notifications' eigene "background notification").
+// Phase 5 (docs/scheduling-v2-spec.md, "Implementation order", step
+// 21): the bedtime notification must ALWAYS be scheduled, regardless
+// of `reminderEnabled` - FR-16's checkpoint 2 (bedtime instant) needs
+// a hook for that, even when the visible reminder is disabled.
+// `sleepReminderContent` only decides WHETHER the notification is visible
+// (title/body set) or created silently in the background (title/body
+// both null - awesome_notifications' own "background notification").
 
 void main() {
-  group('sleepReminderContent (FR-16 Voraussetzung)', () {
-    test('reminderEnabled=true -> sichtbarer Titel/Text', () {
+  group('sleepReminderContent (FR-16 prerequisite)', () {
+    test('reminderEnabled=true -> visible title/text', () {
       final content = sleepReminderContent(reminderEnabled: true);
       expect(content.title, isNotNull);
       expect(content.body, isNotNull);
     });
 
-    test('reminderEnabled=false -> weder Titel noch Text (stille Notification)', () {
+    test('reminderEnabled=false -> neither title nor text (silent notification)', () {
       final content = sleepReminderContent(reminderEnabled: false);
       expect(content.title, isNull);
       expect(content.body, isNull);

@@ -72,9 +72,10 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
         case 'reminder':
           _appState.reminderDuration = pickedTime;
           break;
-        // docs/TODO.md T-72: ohne diese beiden Regler waren FR-4s Drift, FR-7s
-        // Teil-Kappung und FR-10s preferredWakeUpTime-Zweig für Nutzer unerreichbar -
-        // preferredWakeUpTime war immer null, maxDailyDelta immer das Minimum.
+        // docs/TODO.md T-72: without these two controls, FR-4's drift, FR-7's
+        // partial capping, and FR-10's preferredWakeUpTime branch were
+        // unreachable for the user - preferredWakeUpTime was always null,
+        // maxDailyDelta always the minimum.
         case 'preferredWakeUpTime':
           _appState.preferredWakeUpTime = pickedTime;
           break;
@@ -175,10 +176,10 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                         minute: _appState.maxDailyDelta.inMinutes % 60,
                       ),
                     ),
-                    // docs/TODO.md T-88: AppState klemmt diesen Wert nach unten
-                    // auf 15 Minuten (sonst käme die Glättung praktisch nie
-                    // voran). Das war für den Nutzer unsichtbar - wer 5
-                    // Minuten wählte, bekam stillschweigend 15.
+                    // docs/TODO.md T-88: AppState bounds this value below at
+                    // 15 minutes (otherwise the smoothing would practically
+                    // never make progress). That was invisible to the user -
+                    // whoever picked 5 minutes silently got 15.
                     const Padding(
                       padding: EdgeInsets.only(top: 4.0),
                       child: Text(
@@ -275,8 +276,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                       _appState.gentleWakeUpEnabled,
                       (value) {
                         _appState.gentleWakeUpEnabled = value;
-                        // docs/TODO.md T-84: siehe Ton/Lautstärke - gentlewake
-                        // ist eine Eigenschaft der bereits gesetzten Alarme.
+                        // docs/TODO.md T-84: see tone/volume - gentlewake is
+                        // a property of the already-armed alarms.
                         runCheckpointSafely(_appState,
                             trigger: CheckpointTrigger.settingsChanged);
                       },
@@ -412,9 +413,9 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
     );
   }
 
-  /// [isDuration] entscheidet über das Suffix: die meisten Regler hier sind
-  /// Zeitspannen ("01:30 h"), die gewünschte Weckzeit (FR-3) ist dagegen eine
-  /// Uhrzeit und wurde vom geteilten Picker fälschlich als Dauer beschriftet
+  /// [isDuration] decides the suffix: most controls here are durations
+  /// ("01:30 h"), while the preferred wake-up time (FR-3) is a time of day
+  /// and was wrongly labelled as a duration by the shared picker
   /// (docs/TODO.md T-88).
   Widget _buildTimePicker(String setting, TimeOfDay value,
       {bool isDuration = true}) {

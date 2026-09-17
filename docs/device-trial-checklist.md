@@ -1,114 +1,114 @@
-# Geräte-Probelauf: Checkliste
+# Device Trial: Checklist
 
-Zweck: aus einem Probelauf **datierte Belege** machen statt Eindrücke. Jede Zeile hat ein
-Ergebnisfeld — was nicht eingetragen ist, gilt als nicht geprüft. `docs/REQUIREMENTS.md` verweist
-für R3 und R4 auf diese Datei.
+Purpose: turn a trial run into **dated evidence** instead of impressions. Every line has a result
+field — whatever is not filled in counts as not checked. `docs/REQUIREMENTS.md` points to this file
+for R3 and R4.
 
-Auszufüllen pro Lauf. Vorlage kopieren, nicht überschreiben.
+Fill in per run. Copy the template, don't overwrite it.
 
-| Feld | Wert |
+| Field | Value |
 |---|---|
-| Datum | |
-| Gerät (Hersteller, Modell) | |
-| Android-Version / API | |
-| Gerätezeitzone | |
-| APK (Datei, Größe, `apksigner`-Prüfsumme) | |
-| Build (Commit) | |
+| Date | |
+| Device (manufacturer, model) | |
+| Android version / API | |
+| Device time zone | |
+| APK (file, size, `apksigner` checksum) | |
+| Build (commit) | |
 
-## Warum überhaupt manuell
+## Why manual at all
 
-Die Automatisierung deckt inzwischen viel ab: `flutter test` prüft die Domänenlogik in sechs
-Zeitzonen, und die E2E-Suite fährt gegen einen echten Emulator und belegt dort FR-18 bis zum
-Alarm-Plugin. Vier Dinge kann sie strukturell **nicht** zeig, und genau die stehen hier:
+Automation covers a lot by now: `flutter test` checks the domain logic in six time zones, and the
+E2E suite runs against a real emulator and proves FR-18 all the way to the alarm plugin. Four
+things it structurally **cannot** show, and those are exactly what's here:
 
-1. **Echte Kalenderkonten.** Der CI-Emulator hat keine. Jedes E2E-Szenario injiziert seine Termine
-   über den `fetchEvents`-Parameter — die reale Kette `device_calendar` → `eventToMeeting` →
-   `TZDateTime` in der *Termin-eigenen* Zone bleibt damit ungeprüft. Das ist ausgerechnet die
-   Quelle von T-61.
-2. **Ton.** Der Emulator läuft ohne Audio (`-noaudio`); der einzige Ersatz ist ein
-   `dumpsys audio`-Protokoll als Indiz.
-3. **Kamera.** Der QR-Scan wird über `debugBarcodeStreamOverride` injiziert, echte Dekodierung ist
-   nie gelaufen (T-16).
-4. **OEM-Verhalten.** Doze, Batteriesparen und herstellereigene Prozess-Killer gibt es auf einem
-   Standard-Emulator nicht.
+1. **Real calendar accounts.** The CI emulator has none. Every E2E scenario injects its
+   appointments via the `fetchEvents` parameter — the real chain `device_calendar` → `eventToMeeting`
+   → `TZDateTime` in the *appointment's own* zone stays unchecked. That is, of all things, the
+   source of T-61.
+2. **Sound.** The emulator runs without audio (`-noaudio`); the only substitute is a `dumpsys
+   audio` log as circumstantial evidence.
+3. **Camera.** The QR scan is injected via `debugBarcodeStreamOverride`; real decoding has never
+   run (T-16).
+4. **OEM behaviour.** Doze, battery saving, and manufacturer-specific process killers don't exist
+   on a standard emulator.
 
-## A — Grundfunktion
+## A — Core function
 
-| # | Prüfung | Erwartung | Ergebnis |
+| # | Check | Expectation | Result |
 |---|---|---|---|
-| A1 | App installieren und starten | Splash → Berechtigungen → Hauptbildschirm | |
-| A2 | Manuellen Alarm auf +2 min setzen | klingelt, Overlay erscheint | |
-| A3 | Über "Stop" abschalten | Overlay weg, kein Alarm mehr aktiv | |
-| A4 | Ton hörbar? Lautstärke wie eingestellt? | ja | |
-| A5 | Gentle Wake aktivieren (Standard-Rampe 1 min), Alarm wiederholen | Lautstärke steigt über ~60 s bis zur eingestellten Lautstärke an | |
-| A6 | "Ramp duration" auf 5 min stellen, Alarm wiederholen | die Rampe dauert jetzt ~5 min, nicht mehr 1 min (T-96) | |
-| A7 | Rampe auf unter 1 min zu stellen versuchen | nicht möglich, Hinweis "At least 00:01 h" erscheint | |
+| A1 | Install and start the app | Splash → permissions → main screen | |
+| A2 | Set a manual alarm for +2 min | rings, overlay appears | |
+| A3 | Switch off via "Stop" | overlay gone, no alarm still active | |
+| A4 | Sound audible? Volume as set? | yes | |
+| A5 | Enable gentle wake (default ramp 1 min), repeat the alarm | volume rises over ~60 s up to the set volume | |
+| A6 | Set "Ramp duration" to 5 min, repeat the alarm | the ramp now takes ~5 min, no longer 1 min (T-96) | |
+| A7 | Try setting the ramp below 1 min | not possible, "At least 00:01 h" message appears | |
 
-## B — Kalenderabgeleitetes Wecken (der eigentliche Produktpfad)
+## B — Calendar-derived wake-up (the actual product path)
 
-| # | Prüfung | Erwartung | Ergebnis |
+| # | Check | Expectation | Result |
 |---|---|---|---|
-| B1 | Echtes Kalenderkonto einrichten, Termin für morgen früh anlegen | | |
-| B2 | In den Einstellungen "Duration to wake up"/"to get ready" setzen | | |
-| B3 | Sync-Knopf in der Alarmliste drücken | Alarme für die nächsten 7 Tage erscheinen | |
-| B4 | Erster Alarm gegen Terminbeginn − Vorlaufzeiten prüfen | stimmt auf die Minute | |
-| B5 | Termin im Kalender **verschieben**, Sync erneut | Alarm folgt | |
-| B6 | Termin löschen, Sync erneut | Tag driftet zur Wunschzeit bzw. fällt weg | |
-| B7 | Termin mit **fremder Zeitzone** anlegen (z. B. Asia/Tokyo) | Alarm richtet sich nach der **Geräte**zone, nicht der Terminzone (FR-2) | |
-| B8 | Ganztägigen Termin anlegen | wird ignoriert, Tag bleibt Lückentag (FR-2) | |
+| B1 | Set up a real calendar account, create an appointment for tomorrow morning | | |
+| B2 | Set "Duration to wake up"/"to get ready" in settings | | |
+| B3 | Press the sync button in the alarm list | alarms for the next 7 days appear | |
+| B4 | Check the first alarm against appointment start − lead times | correct to the minute | |
+| B5 | **Move** the appointment in the calendar, sync again | alarm follows | |
+| B6 | Delete the appointment, sync again | the day drifts toward the preferred wake-up time, or drops out | |
+| B7 | Create an appointment with a **foreign time zone** (e.g. Asia/Tokyo) | the alarm follows the **device's** zone, not the appointment's zone (FR-2) | |
+| B8 | Create an all-day appointment | ignored, the day stays a gap day (FR-2) | |
 
-## C — Überleben (R3)
+## C — Survival (R3)
 
-| # | Prüfung | Erwartung | Ergebnis |
+| # | Check | Expectation | Result |
 |---|---|---|---|
-| C1 | Alarm setzen, `adb shell dumpsys alarm \| grep com.wakeywakey` | Eintrag vorhanden | |
-| C2 | Gerät neu starten, **ohne** die App zu öffnen, dann C1 wiederholen | Eintrag wieder vorhanden | |
-| C3 | Alarm nach dem Reboot abwarten | klingelt | |
-| C4 | `adb shell am force-stop com.wakeywakey.wakeywakey`, dann C1 | **Erwartung: Eintrag weg** — Android löscht die Alarme eines force-gestoppten Pakets, das ist Plattformverhalten, kein Fehler der App. Hier festhalten, damit R3 es als Grenze führt statt als Bug. | |
-| C5 | Nach C4 die App öffnen | Alarme werden neu gesetzt (FR-17-Erholung) | |
-| C6 | Batteriesparen einschalten, Alarm auf +10 min, Bildschirm aus | klingelt trotzdem | |
+| C1 | Set an alarm, `adb shell dumpsys alarm \| grep com.wakeywakey` | entry present | |
+| C2 | Reboot the device **without** opening the app, then repeat C1 | entry present again | |
+| C3 | Wait for the alarm to ring after the reboot | rings | |
+| C4 | `adb shell am force-stop com.wakeywakey.wakeywakey`, then C1 | **Expectation: entry gone** — Android removes the alarms of a force-stopped package; this is platform behaviour, not an app defect. Record it here so R3 tracks it as a boundary, not a bug. | |
+| C5 | Open the app after C4 | alarms are re-armed (FR-17 recovery) | |
+| C6 | Enable battery saver, set an alarm for +10 min, screen off | rings anyway | |
 
-Zu C1/C2 aus dem Code bekannt: die App hat **keinen** eigenen `BootReceiver`. Das `alarm`-Plugin
-registriert einen (`com.gdelataillade.alarm.alarm.BootReceiver`) und armiert die gespeicherten
-Alarme nach dem Boot per `setExactAndAllowWhileIdle(RTC_WAKEUP, …)` neu; es verwirft dabei
-verpasste Alarme als "stale". C2 sollte also grün sein — geprüft wurde es nie.
+Known from the code regarding C1/C2: the app has **no** `BootReceiver` of its own. The `alarm`
+plugin registers one (`com.gdelataillade.alarm.alarm.BootReceiver`) and re-arms the stored alarms
+after boot via `setExactAndAllowWhileIdle(RTC_WAKEUP, …)`; in doing so it discards missed alarms as
+"stale". So C2 should be green — it has just never been checked.
 
-## D — Garantiertes Aufwachen (QR)
+## D — Guaranteed wake-up (QR)
 
-| # | Prüfung | Erwartung | Ergebnis |
+| # | Check | Expectation | Result |
 |---|---|---|---|
-| D1 | QR-Code in den Einstellungen erzeugen und ausdrucken | | |
-| D2 | Alarm klingeln lassen | QR-Scanner erscheint statt "Stop" | |
-| D3 | **Falschen** Code scannen | Alarm läuft weiter, Scanner bleibt offen | |
-| D4 | Richtigen Code mit der **echten Kamera** scannen | Alarm stoppt (schließt T-16) | |
-| D5 | Prüfen, ob der gescannte Wert irgendwo auf dem Bildschirm steht | **darf nicht** — nur "QR Code detected" | |
+| D1 | Generate and print a QR code in settings | | |
+| D2 | Let an alarm ring | QR scanner appears instead of "Stop" | |
+| D3 | Scan the **wrong** code | alarm keeps running, scanner stays open | |
+| D4 | Scan the correct code with the **real camera** | alarm stops (closes T-16) | |
+| D5 | Check whether the scanned value appears anywhere on screen | **must not** — only "QR Code detected" | |
 
-## E — Diagnose-Log (T-89)
+## E — Diagnostics log (T-89)
 
-| # | Prüfung | Erwartung | Ergebnis |
+| # | Check | Expectation | Result |
 |---|---|---|---|
-| E1 | Einstellungen → Diagnostics öffnen | Ereignisse sichtbar | |
-| E2 | Inhalt durchsehen | keine Uhrzeit, kein Datum, kein Termintitel, kein Kalendername, kein QR-Code | |
-| E3 | Nach B3 nachsehen | `weekPlanComputed` mit `plannedDays=7`, `windowDayCount == distinctDayKeys` | |
-| E4 | Nach A3 nachsehen | `alarmSync` **ohne** großes `toRemove` bei `toAdd=0` (das wäre T-64) | |
-| E5 | Nach dem Morgenalarm nachsehen | `dayAdvance` mit `daysProcessed >= 1` (0 wäre T-75) | |
-| E6 | Zur Bettzeit nachsehen | `timezoneCheck` vorhanden und mit `(bg)` markiert → **schließt T-62** | |
-| E7 | "Copy" drücken und den Text irgendwo einfügen | vollständig, ausschließlich Enum-Namen und Zahlen | |
-| E8 | Schalter aus, App neu starten, nachsehen | keine neuen Ereignisse | |
+| E1 | Open Settings → Diagnostics | events visible | |
+| E2 | Review the content | no time of day, no date, no appointment title, no calendar name, no QR code | |
+| E3 | Check after B3 | `weekPlanComputed` with `plannedDays=7`, `windowDayCount == distinctDayKeys` | |
+| E4 | Check after A3 | `alarmSync` **without** a large `toRemove` at `toAdd=0` (that would be T-64) | |
+| E5 | Check after the morning alarm | `dayAdvance` with `daysProcessed >= 1` (0 would be T-75) | |
+| E6 | Check at bedtime | `timezoneCheck` present and marked with `(bg)` → **closes T-62** | |
+| E7 | Press "Copy" and paste the text somewhere | complete, exclusively enum names and numbers | |
+| E8 | Switch off, restart the app, check | no new events | |
 
-E6 ist der Punkt mit dem größten Hebel: dass eine stille Notification
-`onNotificationCreatedMethod` überhaupt auslöst, ist bislang nur aus dem Paketquellcode
-abgeleitet. Erscheint `timezoneCheck (bg)` im Log, ist FR-16s Checkpoint 2 auf dem Gerät belegt.
+E6 is the point with the biggest leverage: that a silent notification actually triggers
+`onNotificationCreatedMethod` has so far only been inferred from the package source. If
+`timezoneCheck (bg)` appears in the log, FR-16's checkpoint 2 is confirmed on the device.
 
-## F — Zeitzonen und Sommerzeit
+## F — Time zones and daylight saving
 
-| # | Prüfung | Erwartung | Ergebnis |
+| # | Check | Expectation | Result |
 |---|---|---|---|
-| F1 | Gerätezeitzone wechseln (z. B. Berlin → Tokio), App öffnen | Wunschzeit-Tage behalten ihre **Ziffern**, Termintage ihren **Moment** (FR-16) | |
-| F2 | Nach F1 ins Diagnose-Log sehen | `timezoneCheck` mit `offsetChangeShape=3` (otherChange) | |
-| F3 | Geräteuhr auf den Tag vor einer Sommerzeitumstellung stellen, Alarm für den Umstellungstag | **bekannte Grenze:** an diesem einen Tag kann der Alarm um eine Stunde falsch liegen (siehe FR-16 in `docs/scheduling-v2-spec.md`) | |
+| F1 | Change the device time zone (e.g. Berlin → Tokyo), open the app | days using the preferred wake-up time keep their **digits**, appointment days keep their **instant** (FR-16) | |
+| F2 | Check the diagnostics log after F1 | `timezoneCheck` with `offsetChangeShape=3` (otherChange) | |
+| F3 | Set the device clock to the day before a daylight-saving transition, alarm for the transition day | **known limitation:** on this one day the alarm can be off by one hour (see FR-16 in `docs/scheduling-v2-spec.md`) | |
 
-## Befunde
+## Findings
 
-Alles Auffällige hier mit Datum eintragen und in `docs/TODO.md` als eigene Nummer aufnehmen —
-diese Datei ist der Beleg, nicht die Aufgabenliste.
+Enter anything notable here with a date and give it its own number in `docs/TODO.md` — this file
+is the evidence, not the task list.

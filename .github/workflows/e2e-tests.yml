@@ -13,14 +13,14 @@ jobs:
   e2e-tests:
     name: E2E tests (real emulator)
     runs-on: ubuntu-latest
-    # Provisorisch auf eine Stunde (docs/TODO.md T-98). Die 25 Minuten waren auf
-    # den Stand VOR den Engine-Szenarien zugeschnitten: der Job brauchte damals
-    # 19m53s. Dazu kamen vier neue Szenarien (eines wartet auf ein echtes
-    # Klingeln), ein zweiter `flutter test`-Aufruf fuer arm_alarm_test.dart und
-    # der Reboot-Nachweis mit bis zu 240s Bootwartezeit - der erste Lauf danach
-    # lief prompt in den Timeout. Ein Zeitlimit soll einen haengenden Job
-    # abschneiden, nicht einen langsamen; deshalb erst grosszuegig, und erst
-    # nach ein paar gemessenen Laeufen wieder eng.
+    # Provisionally set to one hour (docs/TODO.md T-98). The previous 25
+    # minutes were sized for the state BEFORE the engine scenarios: the job
+    # took 19m53s back then. Since then four new scenarios were added (one
+    # waits for a real ring), a second `flutter test` invocation for
+    # arm_alarm_test.dart, and the reboot evidence with up to 240s of boot
+    # wait - the very next run after that promptly hit the timeout. A time
+    # limit should cut off a hung job, not a slow one; hence generous for
+    # now, to be tightened again once a few runs have been measured.
     timeout-minutes: 60
     steps:
       - name: Free disk space
@@ -51,15 +51,14 @@ jobs:
           restore-keys: pub-
       - uses: actions/cache@v4
         with:
-          # docs/TODO.md T-102: vorher lag hier `~/.gradle/caches` komplett drin.
-          # Das waechst unbegrenzt - es enthaelt neben den heruntergeladenen
-          # Abhaengigkeiten auch jede transformierte AAR und jeden
-          # Build-Cache-Eintrag. Ergebnis: zwei Gradle-Caches mit 3746 MB und
-          # 2397 MB, und ein Restore, der laenger dauert als der Build spart.
-          # Im Lauf 34535358135 ist der Release-Build daran gestorben - der
-          # Cache-Schritt kippte nach 2m49s, `flutter build apk` lief nie.
-          # Gecacht wird jetzt nur, was sich wirklich lohnt: die geladenen
-          # Module und der Wrapper.
+          # docs/TODO.md T-102: this used to hold the whole of `~/.gradle/caches`.
+          # That grows without bound - besides the downloaded dependencies it
+          # also holds every transformed AAR and every build-cache entry. Result:
+          # two Gradle caches of 3746 MB and 2397 MB, and a restore that took
+          # longer than the build it was meant to save. In run 34535358135 the
+          # release build died from it - the cache step timed out after 2m49s,
+          # `flutter build apk` never ran. Now only what's actually worth it is
+          # cached: the downloaded modules and the wrapper.
           path: |
             ~/.gradle/caches/modules-2
             ~/.gradle/wrapper

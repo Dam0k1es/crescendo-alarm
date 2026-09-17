@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wakeywakey/models/scheduling/scheduling_v2.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 
-// Phase 1 (docs/scheduling-v2-spec.md, "Implementierungsreihenfolge"): the pure
+// Phase 1 (docs/scheduling-v2-spec.md, "Implementation order"): the pure
 // segment/distribution core - distribute (FR-6), applyGapDayDrift (FR-4),
 // hardFloor/eventsForDay (FR-2), groupTarget (FR-5), planGapOrRunStartDay (FR-7).
 // Every test case here is taken verbatim (same numbers) from the "Test:" bullets
@@ -14,7 +14,7 @@ DateTime _t(int hour, int minute, {int day = 1}) =>
 
 // FR-2 tests construct events directly in UTC and pass the device offset
 // explicitly, so they're deterministic regardless of the host machine's own
-// configured timezone (see spec, FR-2 "Testbarkeit").
+// configured timezone (see spec, FR-2 "Testability").
 DateTime _utc(int hour, int minute, {int day = 1}) =>
     DateTime.utc(2026, 1, day, hour, minute);
 
@@ -30,7 +30,7 @@ Meeting _meetingAt(DateTime from, {bool isAllDay = false}) {
 
 void main() {
   group('distribute (FR-6)', () {
-    test('Normalfall, Richtung "früher"', () {
+    test('normal case, direction "earlier"', () {
       final result = distribute(
         anchor: _t(8, 0),
         target: _t(4, 30),
@@ -49,7 +49,7 @@ void main() {
       expect(result.valuesByDayOffset[5], _t(4, 30, day: 6));
     });
 
-    test('Normalfall, Richtung "später"', () {
+    test('normal case, direction "later"', () {
       final result = distribute(
         anchor: _t(6, 0),
         target: _t(9, 0),
@@ -63,7 +63,7 @@ void main() {
       expect(result.valuesByDayOffset[3], _t(9, 0, day: 4));
     });
 
-    test('erzwungener Bruch, N>1 - verteilt auf alle Tage, nicht gedumpt', () {
+    test('forced overrun, N>1 - distributed over all days, not dumped', () {
       final result = distribute(
         anchor: _t(8, 0),
         target: _t(4, 30),
@@ -77,7 +77,7 @@ void main() {
       expect(result.valuesByDayOffset[3], _t(4, 30, day: 4));
     });
 
-    test('erzwungener Bruch, N=1 - voller Sprung ist kein Spezifikationsfehler', () {
+    test('forced overrun, N=1 - a full jump is not a spec defect', () {
       final result = distribute(
         anchor: _t(8, 0),
         target: _t(2, 0),
@@ -90,13 +90,13 @@ void main() {
     });
   });
 
-  group('applyGapDayDrift (FR-4, isolated from FR-7s Deckel)', () {
-    // Das Ergebnis liegt immer auf v.day + 1 (dem echten, tatsächlich
-    // geplanten "heute") - genau wie distribute()s Tag_i-Platzierung, siehe
-    // applyGapDayDrift()s Doc-Kommentar. Werte sind explizite UTC-Instants und
-    // der Geräte-Versatz ist explizit 0 (T-61/Option B) - Verhalten bei
-    // Versatz != 0 deckt test/scheduling_v2_offset_test.dart ab.
-    test('kein preferredWakeUpTime -> hält (Uhrzeit unverändert, Datum +1)', () {
+  group('applyGapDayDrift (FR-4, isolated from FR-7\'s cap)', () {
+    // The result always lies on v.day + 1 (the real, actually planned
+    // "today") - exactly like distribute()'s day_i placement, see
+    // applyGapDayDrift()'s doc comment. Values are explicit UTC instants and
+    // the device offset is explicitly 0 (T-61/Option B) - behaviour at a
+    // non-zero offset is covered by test/scheduling_v2_offset_test.dart.
+    test('no preferredWakeUpTime -> holds (time of day unchanged, date +1)', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
         preferredWakeUpTime: null,
@@ -106,7 +106,7 @@ void main() {
       expect(result, _utc(7, 0, day: 2));
     });
 
-    test('Drift Richtung später, voller Schritt', () {
+    test('drift toward later, full step', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
         preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
@@ -116,7 +116,7 @@ void main() {
       expect(result, _utc(7, 30, day: 2));
     });
 
-    test('Drift Richtung früher, voller Schritt', () {
+    test('drift toward earlier, full step', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
         preferredWakeUpTime: const TimeOfDay(hour: 5, minute: 0),
@@ -126,7 +126,7 @@ void main() {
       expect(result, _utc(6, 30, day: 2));
     });
 
-    test('Ziel näher als maxDailyDelta -> kein Überschießen', () {
+    test('target closer than maxDailyDelta -> no overshoot', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 15),
@@ -136,7 +136,7 @@ void main() {
       expect(result, _utc(7, 15, day: 2));
     });
 
-    test('wunschzeit bereits erreicht -> Uhrzeit unverändert, Datum +1', () {
+    test('preferredWakeUpTime already reached -> time of day unchanged, date +1', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
@@ -148,7 +148,7 @@ void main() {
   });
 
   group('hardFloor / eventsForDay (FR-2)', () {
-    test('mehrere Termine - der frühere zählt', () {
+    test('several appointments - the earlier one counts', () {
       final events = [
         _meetingAt(_utc(9, 0)),
         _meetingAt(_utc(7, 0)),
@@ -165,7 +165,7 @@ void main() {
       expect(result, _utc(6, 30));
     });
 
-    test('ganztägiger Termin fließt nie ein', () {
+    test('an all-day appointment never enters', () {
       final events = [
         _meetingAt(_utc(12, 0), isAllDay: true),
         _meetingAt(_utc(8, 0)),
@@ -182,7 +182,7 @@ void main() {
       expect(result, _utc(7, 30));
     });
 
-    test('nur ganztägig -> Lückentag, kein hardFloor', () {
+    test('only an all-day appointment -> gap day, no hardFloor', () {
       final events = [_meetingAt(_utc(12, 0), isAllDay: true)];
 
       final result = hardFloor(
@@ -196,41 +196,42 @@ void main() {
       expect(result, isNull);
     });
 
-    test('Termin-eigene Zeitzone: Tageszuordnung folgt der Geräte-Zeitzone', () {
-      // Tom, Gerät in Europe/Berlin (CET, +1h). Termin startTimeZone=Asia/Tokyo,
-      // Beginn 03:00 JST am "Tag 2" = bereits korrekt umgerechnet auf 18:00 UTC
-      // am Vortag ("Tag 1") - diese Umrechnung ist vorhandene, unveränderte
-      // Funktionalität und hier bereits als `from` gegeben, nicht Teil des Tests.
+    test('appointment\'s own time zone: day assignment follows the device time zone', () {
+      // Tom, device on Europe/Berlin (CET, +1h). Appointment
+      // startTimeZone=Asia/Tokyo, start 03:00 JST on "day 2" = already
+      // correctly converted to 18:00 UTC the day before ("day 1") - this
+      // conversion is existing, unchanged functionality and is already given
+      // here as `from`, not part of the test.
       final tokyoMeeting = _meetingAt(_utc(18, 0, day: 1));
 
       final berlinOffset = const Duration(hours: 1);
 
-      final onVortag = eventsForDay(
+      final onDayBefore = eventsForDay(
         _utc(0, 0, day: 1),
         allEvents: [tokyoMeeting],
         deviceUtcOffset: berlinOffset,
       );
-      expect(onVortag, [tokyoMeeting]);
+      expect(onDayBefore, [tokyoMeeting]);
 
-      final onTokyoDatum = eventsForDay(
+      final onTokyoDate = eventsForDay(
         _utc(0, 0, day: 2),
         allEvents: [tokyoMeeting],
         deviceUtcOffset: berlinOffset,
       );
-      expect(onTokyoDatum, isEmpty);
+      expect(onTokyoDate, isEmpty);
     });
   });
 
   group('groupTarget (FR-5)', () {
-    // Die Kurvenform hängt nicht von maxDailyDelta ab (nur die Overrun-Meldung
-    // in distribute() tut das) - ein beliebiger Wert genügt hier.
+    // The curve's shape does not depend on maxDailyDelta (only the overrun
+    // notification in distribute() does) - any value is fine here.
     const maxDailyDelta = Duration(minutes: 60);
 
-    // HardFloorPoint.value muss auf dem echten Kalendertag liegen, den sein
-    // dayOffset behauptet (anchor.day + dayOffset) - genau wie computeWeekPlan
-    // es später tatsächlich konstruiert; distribute()/groupTarget vergleichen
-    // reale Daten, nicht nur Uhrzeiten (siehe distribute()s Datums-Fortschreibung).
-    test('einfacher Fall - t1, t2 gleiche Richtung, keine Verletzung', () {
+    // HardFloorPoint.value must lie on the real calendar date its dayOffset
+    // claims (anchor.day + dayOffset) - exactly as computeWeekPlan actually
+    // constructs it later; distribute()/groupTarget compare real dates, not
+    // just times of day (see distribute()'s date advancement).
+    test('simple case - t1, t2 same direction, no violation', () {
       final t1 = HardFloorPoint(dayOffset: 2, value: _t(7, 0, day: 3));
       final t2 = HardFloorPoint(dayOffset: 4, value: _t(6, 0, day: 5));
 
@@ -243,9 +244,9 @@ void main() {
       expect(result, t2);
     });
 
-    test('Zwischenpunkt würde verletzt - Run muss schrumpfen', () {
-      final t1 = HardFloorPoint(dayOffset: 3, value: _t(6, 0, day: 4)); // Mittwoch, streng
-      final t2 = HardFloorPoint(dayOffset: 5, value: _t(8, 0, day: 6)); // Freitag, lockerer
+    test('an intermediate point would be violated - the run must shrink', () {
+      final t1 = HardFloorPoint(dayOffset: 3, value: _t(6, 0, day: 4)); // Wednesday, strict
+      final t2 = HardFloorPoint(dayOffset: 5, value: _t(8, 0, day: 6)); // Friday, looser
 
       final result = groupTarget(
         anchor: _t(9, 0, day: 1),
@@ -256,7 +257,7 @@ void main() {
       expect(result, t1);
     });
 
-    test('ΔT=0-Punkt beendet seinen Run sofort bei sich selbst', () {
+    test('a ΔT=0 point ends its run immediately at itself', () {
       final t1 = HardFloorPoint(dayOffset: 2, value: _t(7, 0, day: 3)); // ΔT=0
       final t2 = HardFloorPoint(dayOffset: 5, value: _t(9, 0, day: 6));
 
@@ -275,54 +276,55 @@ void main() {
     // in for THIS call) - each simulated day below is its own fresh call,
     // exactly as a real daily replanning loop would rebase it.
 
-    test('ein hardFloor-Punkt: Montag driftet, Dienstag startet den Run', () {
+    test('one hardFloor point: Monday drifts, Tuesday starts the run', () {
       const preferredWakeUpTime = TimeOfDay(hour: 10, minute: 0);
       const maxDailyDelta = Duration(minutes: 30);
-      final f = _utc(5, 0); // Samstag, 05:00
+      final f = _utc(5, 0); // Saturday, 05:00
 
-      // remainingPoints' dayOffset ist v-relativ (die echte Kalendertage-Distanz
-      // von v zu F) - das braucht groupTarget/distribute zwingend so für die
-      // Datumsplatzierung (siehe groupTarget-Tests). v ist "Sonntag" (Tag 1);
-      // F=Samstag ist 6 Tage davon entfernt (Mo,Di,Mi,Do,Fr,Sa). planGapOrRunStartDay
-      // zieht davon selbst 1 ab, um das spec-eigene N_Rest ("Tage von morgen bis
-      // F, F eingeschlossen" = 5 für Montag) zu bilden.
-      final montag = planGapOrRunStartDay(
+      // remainingPoints' dayOffset is relative to v (the real calendar-day
+      // distance from v to F) - groupTarget/distribute necessarily need it
+      // that way for date placement (see the groupTarget tests). v is
+      // "Sunday" (day 1); F=Saturday is 6 days away from it
+      // (Mon,Tue,Wed,Thu,Fri,Sat). planGapOrRunStartDay itself subtracts 1
+      // from that to form the spec's own N_remaining ("days from tomorrow to
+      // F, F included" = 5 for Monday).
+      final monday = planGapOrRunStartDay(
         v: _utc(7, 0),
         remainingPoints: [HardFloorPoint(dayOffset: 6, value: f)],
         preferredWakeUpTime: preferredWakeUpTime,
         maxDailyDelta: maxDailyDelta,
         deviceUtcOffset: Duration.zero,
       );
-      // v ist der Anker "gestern" (Sonntag); planGapOrRunStartDay berechnet
-      // stets den Wert für den echten Folgetag (siehe applyGapDayDrift()s
-      // Datums-Fortschreibung) - "Montag" landet also auf v.day + 1.
-      expect(montag.value, _utc(7, 30, day: 2));
-      expect(montag.overrunNotificationNeeded, isFalse);
+      // v is the anchor "yesterday" (Sunday); planGapOrRunStartDay always
+      // computes the value for the real following day (see
+      // applyGapDayDrift()'s date advancement) - so "Monday" lands on v.day + 1.
+      expect(monday.value, _utc(7, 30, day: 2));
+      expect(monday.overrunNotificationNeeded, isFalse);
 
-      // Dienstag: Anker ist jetzt Montags tatsächliches Ergebnis (Tag 2); F ist
-      // von dort noch 5 Tage entfernt (Mi,Do,Fr,Sa + F selbst).
-      final dienstag = planGapOrRunStartDay(
-        v: montag.value,
+      // Tuesday: the anchor is now Monday's actual result (day 2); F is
+      // still 5 days away from there (Wed,Thu,Fri,Sat + F itself).
+      final tuesday = planGapOrRunStartDay(
+        v: monday.value,
         remainingPoints: [HardFloorPoint(dayOffset: 5, value: f)],
         preferredWakeUpTime: preferredWakeUpTime,
         maxDailyDelta: maxDailyDelta,
         deviceUtcOffset: Duration.zero,
       );
-      expect(dienstag.value, _utc(7, 0, day: 3));
-      expect(dienstag.overrunNotificationNeeded, isFalse);
+      expect(tuesday.value, _utc(7, 0, day: 3));
+      expect(tuesday.overrunNotificationNeeded, isFalse);
     });
 
-    test('zwei hardFloor-Punkte, FR-5-Ziel ≠ nächster Punkt: Montag startet sofort', () {
+    test('two hardFloor points, FR-5 target ≠ next point: Monday starts immediately', () {
       const maxDailyDelta = Duration(minutes: 30);
-      // v (Sonntag, Anker) ist Tag 1; die Werte müssen auf v.day + dayOffset
-      // liegen, damit groupTargets Zwischenpunkt-Prüfung reale Daten vergleicht
-      // (siehe groupTarget-Tests oben). Freitag ist 5 Tage nach Sonntag (Tag 6),
-      // Samstag 6 Tage (Tag 7).
-      final t1 = _utc(6, 0, day: 6); // Freitag, locker
-      final t2 = _utc(4, 0, day: 7); // Samstag, streng
+      // v (Sunday, anchor) is day 1; the values must lie on v.day + dayOffset
+      // so that groupTarget's intermediate-point check compares real dates
+      // (see the groupTarget tests above). Friday is 5 days after Sunday
+      // (day 6), Saturday 6 days (day 7).
+      final t1 = _utc(6, 0, day: 6); // Friday, loose
+      final t2 = _utc(4, 0, day: 7); // Saturday, strict
 
-      // Montag: t1 (Freitag) ist 5 Tage von v entfernt, t2 (Samstag) 6 Tage.
-      final montag = planGapOrRunStartDay(
+      // Monday: t1 (Friday) is 5 days from v, t2 (Saturday) 6 days.
+      final monday = planGapOrRunStartDay(
         v: _utc(7, 0),
         remainingPoints: [
           HardFloorPoint(dayOffset: 5, value: t1),
@@ -333,27 +335,27 @@ void main() {
         deviceUtcOffset: Duration.zero,
       );
 
-      expect(montag.value, _utc(6, 30, day: 2));
-      expect(montag.overrunNotificationNeeded, isFalse);
+      expect(monday.value, _utc(6, 30, day: 2));
+      expect(monday.overrunNotificationNeeded, isFalse);
     });
   });
 
   group('updateGapDayCounter (FR-9)', () {
-    test('Tag mit realem hardFloor setzt zurück', () {
+    test('a day with a real hardFloor resets it', () {
       expect(
         updateGapDayCounter(previousCounter: 6, dayHadRealHardFloor: true),
         0,
       );
     });
 
-    test('Tag ohne hardFloor erhöht um 1', () {
+    test('a day without a hardFloor increases it by 1', () {
       expect(
         updateGapDayCounter(previousCounter: 6, dayHadRealHardFloor: false),
         7,
       );
     });
 
-    test('rollierend über mehrere Tage - 6 termin-lose Tage vor heute', () {
+    test('rolling across several days - 6 appointment-free days before today', () {
       var counter = 0;
       for (var i = 0; i < 6; i++) {
         counter = updateGapDayCounter(
@@ -361,12 +363,12 @@ void main() {
           dayHadRealHardFloor: false,
         );
       }
-      expect(counter, 6); // noch nicht 7 -> kein Auslösen
+      expect(counter, 6); // not yet 7 -> no firing
     });
   });
 
   group('coldStart (FR-10)', () {
-    test('Tag1-5 termin-los, keine preferredWakeUpTime -> kein Alarm geplant', () {
+    test('days 1-5 appointment-free, no preferredWakeUpTime -> no alarm planned', () {
       final days = [
         _utc(0, 0, day: 1),
         _utc(0, 0, day: 2),
@@ -382,7 +384,7 @@ void main() {
       expect(result.values.every((v) => v == null), isTrue);
     });
 
-    test('mit preferredWakeUpTime -> diese Tage nutzen sie', () {
+    test('with preferredWakeUpTime -> these days use it', () {
       final days = [_utc(0, 0, day: 1), _utc(0, 0, day: 2)];
 
       final result = coldStart(
@@ -399,7 +401,7 @@ void main() {
   group('computeWeekPlan (FR-8)', () {
     DateTime day(int n) => _utc(0, 0, day: n);
 
-    test('Kaltstart: Tag1-5 termin-los, Tag6 hardFloor=05:30, keine wunschzeit', () {
+    test('cold start: days 1-5 appointment-free, day 6 hardFloor=05:30, no preferredWakeUpTime', () {
       final window = [1, 2, 3, 4, 5, 6].map(day).toList();
       final events = [_meetingAt(_utc(5, 30, day: 6))];
 
@@ -423,14 +425,14 @@ void main() {
       expect(result.safetyValveTriggered, isFalse);
     });
 
-    test('ein hardFloor-Punkt am Fensterende - komplette Woche durchgerechnet '
-        '(Regressionstest: Freitag war vor dem N_Rest<=1-Fix falsch)', () {
-      final window = [1, 2, 3, 4, 5, 6].map(day).toList(); // Mo..Sa
-      final events = [_meetingAt(_utc(5, 0, day: 6))]; // Sa, F=05:00
+    test('one hardFloor point at the end of the window - the whole week worked '
+        'through (regression test: Friday was wrong before the N_remaining<=1 fix)', () {
+      final window = [1, 2, 3, 4, 5, 6].map(day).toList(); // Mon..Sat
+      final events = [_meetingAt(_utc(5, 0, day: 6))]; // Sat, F=05:00
 
       final result = computeWeekPlan(
         window: window,
-        lastEffectiveWakeTime: _utc(7, 0, day: 0), // So, Anker
+        lastEffectiveWakeTime: _utc(7, 0, day: 0), // Sun, anchor
         allEvents: events,
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
@@ -440,34 +442,34 @@ void main() {
         gapDayCounter: 0,
       );
 
-      // Montag (i=1, N_F=6, N_Rest=5): Halten erfüllt 24min<=30min, voller
-      // Drift (30min<=30min, Grenze) -> 07:30 (deckt sich exakt mit FR-7s
-      // eigenem durchgerechneten Testfall oben, "ein hardFloor-Punkt: Montag
-      // driftet").
-      expect(result.valuesByDay[day(1)], _utc(7, 30, day: 1)); // Mo
-      // Dienstag (i=2, N_Rest=4): Halten bei 07:30 verletzt 37,5min>30min ->
-      // Tag 1 eines neuen Runs, N=5 (Di-Sa): Di=07:00, Mi=06:30, Do=06:00,
-      // Fr=05:30, Sa=05:00 - identisch mit FR-7s eigenem Testfall.
-      expect(result.valuesByDay[day(2)], _utc(7, 0, day: 2)); // Di
-      expect(result.valuesByDay[day(3)], _utc(6, 30, day: 3)); // Mi
-      expect(result.valuesByDay[day(4)], _utc(6, 0, day: 4)); // Do
-      expect(result.valuesByDay[day(5)], _utc(5, 30, day: 5)); // Fr
-      expect(result.valuesByDay[day(6)], _utc(5, 0, day: 6)); // Sa, eigener hardFloor
+      // Monday (i=1, N_F=6, N_remaining=5): holding satisfies 24min<=30min,
+      // full drift (30min<=30min, boundary) -> 07:30 (matches exactly FR-7's
+      // own worked test case above, "one hardFloor point: Monday drifts").
+      expect(result.valuesByDay[day(1)], _utc(7, 30, day: 1)); // Mon
+      // Tuesday (i=2, N_remaining=4): holding at 07:30 violates
+      // 37.5min>30min -> day 1 of a new run, N=5 (Tue-Sat): Tue=07:00,
+      // Wed=06:30, Thu=06:00, Fri=05:30, Sat=05:00 - identical to FR-7's own
+      // test case.
+      expect(result.valuesByDay[day(2)], _utc(7, 0, day: 2)); // Tue
+      expect(result.valuesByDay[day(3)], _utc(6, 30, day: 3)); // Wed
+      expect(result.valuesByDay[day(4)], _utc(6, 0, day: 4)); // Thu
+      expect(result.valuesByDay[day(5)], _utc(5, 30, day: 5)); // Fri
+      expect(result.valuesByDay[day(6)], _utc(5, 0, day: 6)); // Sat, its own hardFloor
       expect(result.overrunNotificationNeeded, isFalse);
       expect(result.safetyValveTriggered, isFalse);
     });
 
-    test('zwei hardFloor-Punkte: loser Zwischentermin wird glatt unterschritten, '
-        'nicht auf seinen eigenen hardFloor zurückgesetzt', () {
-      final window = [1, 2, 3, 4].map(day).toList(); // Mo..Do
+    test('two hardFloor points: a loose intermediate appointment is smoothly '
+        'undercut, not reset to its own hardFloor', () {
+      final window = [1, 2, 3, 4].map(day).toList(); // Mon..Thu
       final events = [
-        _meetingAt(_utc(8, 0, day: 3)), // Mi, locker
-        _meetingAt(_utc(3, 0, day: 4)), // Do, streng
+        _meetingAt(_utc(8, 0, day: 3)), // Wed, loose
+        _meetingAt(_utc(3, 0, day: 4)), // Thu, strict
       ];
 
       final result = computeWeekPlan(
         window: window,
-        lastEffectiveWakeTime: _utc(9, 0, day: 0), // So, Anker
+        lastEffectiveWakeTime: _utc(9, 0, day: 0), // Sun, anchor
         allEvents: events,
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
@@ -477,36 +479,37 @@ void main() {
         gapDayCounter: 0,
       );
 
-      // FR-5 (hypothetisch, A=So 09:00): t_m=Do 03:00 (streng), N_F=4 (Verteilung
-      // A->Do über 4 Tage ergibt an Mi 04:30, verletzt Mis eigenen hardFloor
-      // 08:00 nicht). Montag (i=1, N_Rest=3): Halten bei 09:00 verletzt bereits
-      // 120min>90min -> Montag ist selbst Tag 1 des Runs, N=4: Mo=07:30.
-      expect(result.valuesByDay[day(1)], _utc(7, 30, day: 1)); // Mo
-      // Dienstag (i=2 ab dem neuen Anker Mo=07:30, N_Rest=2 bis Do): Halten
-      // verletzt 135min>90min -> Tag 1 eines neuen Runs, N=3: Di=06:00.
-      expect(result.valuesByDay[day(2)], _utc(6, 0, day: 2)); // Di
-      // Mi: eigener hardFloor wäre 08:00, aber die Kurve (04:30) unterschreitet
-      // ihn ohne ihn zu verletzen - die Kurve gewinnt, kein Reset auf 08:00.
+      // FR-5 (hypothetical, A=Sun 09:00): t_m=Thu 03:00 (strict), N_F=4
+      // (distributing A->Thu over 4 days gives 04:30 on Wed, doesn't violate
+      // Wed's own hardFloor of 08:00). Monday (i=1, N_remaining=3): holding
+      // at 09:00 already violates 120min>90min -> Monday is itself day 1 of
+      // the run, N=4: Mon=07:30.
+      expect(result.valuesByDay[day(1)], _utc(7, 30, day: 1)); // Mon
+      // Tuesday (i=2 from the new anchor Mon=07:30, N_remaining=2 to Thu):
+      // holding violates 135min>90min -> day 1 of a new run, N=3: Tue=06:00.
+      expect(result.valuesByDay[day(2)], _utc(6, 0, day: 2)); // Tue
+      // Wed: its own hardFloor would be 08:00, but the curve (04:30)
+      // undercuts it without violating it - the curve wins, no reset to 08:00.
       expect(result.valuesByDay[day(3)], _utc(4, 30, day: 3));
-      expect(result.valuesByDay[day(4)], _utc(3, 0, day: 4)); // Do, eigener hardFloor
+      expect(result.valuesByDay[day(4)], _utc(3, 0, day: 4)); // Thu, its own hardFloor
       expect(result.overrunNotificationNeeded, isFalse);
       expect(result.safetyValveTriggered, isFalse);
 
-      // FR-16 braucht pro Tag die Information, ob der Wert instant-verankert
-      // ist (direkt aus einem echten hardFloor - der Termin verschiebt sich
-      // bei einem Zeitzonenwechsel nicht) oder ziffern-verankert (aus
-      // preferredWakeUpTime/Kurve - da gilt die Alarmuhren-Konvention). Genau dieses
-      // Szenario unterscheidet beides: Mi liegt auf der Kurve (04:30), obwohl
-      // der Tag einen eigenen hardFloor (08:00) hat, Do dagegen exakt auf
-      // seinem hardFloor.
+      // FR-16 needs, per day, the information whether the value is
+      // instant-anchored (directly from a real hardFloor - the appointment
+      // doesn't shift on a time zone change) or digit-anchored (from
+      // preferredWakeUpTime/the curve - where the alarm-clock convention
+      // applies). This exact scenario distinguishes the two: Wed lies on the
+      // curve (04:30) even though the day has its own hardFloor (08:00),
+      // while Thu lies exactly on its own hardFloor.
       expect(result.instantAnchoredDays, {day(4)});
     });
 
-    // FR-9s Ventil greift laut Spec nur ohne gesetzte `preferredWakeUpTime`
-    // (Ausnahme nachträglich ergänzt, docs/TODO.md T-78) - dieser Fall setzt
-    // deshalb bewusst keine.
+    // Per spec, FR-9's valve only fires without a set `preferredWakeUpTime`
+    // (exception added later, docs/TODO.md T-78) - this case therefore
+    // deliberately sets none.
     test(
-        'Sicherheitsventil: Zähler bereits bei 7, kein hardFloor im Fenster, keine wunschzeit',
+        'safety valve: counter already at 7, no hardFloor in the window, no preferredWakeUpTime',
         () {
       final window = [1, 2, 3].map(day).toList();
 
@@ -526,13 +529,13 @@ void main() {
       expect(result.safetyValveTriggered, isTrue);
     });
 
-    // docs/TODO.md T-78 / FR-9 "Ausnahme: gesetzte preferredWakeUpTime": das Ventil
-    // schützt gegen blinde Fortschreibung. Mit einer preferredWakeUpTime ist die
-    // Fortschreibung durch FR-4 beschränkt (sie hält exakt auf der preferredWakeUpTime
-    // an), es gibt also nichts, wovor zu schützen wäre - und das Auslösen wäre
-    // hier eine Einbahnstraße: ohne Alarme gibt es keinen Ring-Checkpoint mehr,
-    // der den Zähler je zurücksetzen könnte.
-    test('Sicherheitsventil greift NICHT, wenn eine preferredWakeUpTime gesetzt ist', () {
+    // docs/TODO.md T-78 / FR-9 "exception: preferredWakeUpTime set": the
+    // valve protects against blind advancement. With a preferredWakeUpTime,
+    // the advancement is bounded by FR-4 (it stops exactly at the
+    // preferredWakeUpTime), so there is nothing to protect against - and
+    // firing here would be a one-way street: without alarms there is no
+    // more ring checkpoint that could ever reset the counter.
+    test('the safety valve does NOT fire when a preferredWakeUpTime is set', () {
       final window = [1, 2, 3].map(day).toList();
 
       final result = computeWeekPlan(
@@ -544,46 +547,46 @@ void main() {
         durationToGetReady: Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
-        gapDayCounter: 42, // weit jenseits der Schwelle
+        gapDayCounter: 42, // far past the threshold
       );
 
       expect(result.safetyValveTriggered, isFalse);
       expect(result.valuesByDay.length, 3);
       expect(result.valuesByDay.values.every((v) => v != null), isTrue,
-          reason: 'jeder Fenstertag behält einen Wert, '
-              'bekommen ${result.valuesByDay}');
-      // FR-4 driftet weiter Richtung 09:00, in 30-Minuten-Schritten.
+          reason: 'every window day keeps a value, '
+              'got ${result.valuesByDay}');
+      // FR-4 keeps drifting toward 09:00, in 30-minute steps.
       expect(result.valuesByDay[day(1)], _utc(7, 30, day: 1));
       expect(result.valuesByDay[day(3)], _utc(8, 30, day: 3));
     });
   });
 
-  // Phase 3 (docs/scheduling-v2-spec.md, "Implementierungsreihenfolge"):
-  // reinterpretForNewOffset (FR-16) - unabhängig von Phase 1/2, braucht nur
-  // Phase 0. Beide Testfälle sind wörtlich die spec-eigenen "Test:"-Bullets
-  // unter FR-16.
+  // Phase 3 (docs/scheduling-v2-spec.md, "Implementation order"):
+  // reinterpretForNewOffset (FR-16) - independent of Phase 1/2, needs only
+  // Phase 0. Both test cases are verbatim the spec's own "Test:" bullets
+  // under FR-16.
   group('reinterpretForNewOffset (FR-16)', () {
-    test('Ortswechsel: 09:00 in Zone A (+1) bleibt 09:00, jetzt in Zone B (+9)', () {
-      // 09:00 lokal unter +1 = 08:00 UTC.
+    test('location change: 09:00 in zone A (+1) stays 09:00, now in zone B (+9)', () {
+      // 09:00 local under +1 = 08:00 UTC.
       final result = reinterpretForNewOffset(
         value: _utc(8, 0),
         oldOffset: const Duration(hours: 1),
         newOffset: const Duration(hours: 9),
       );
 
-      // 09:00 lokal unter +9 = 00:00 UTC - gleiche Ziffern, neue Zone.
+      // 09:00 local under +9 = 00:00 UTC - same digits, new zone.
       expect(result, _utc(0, 0));
     });
 
-    test('Sommerzeit: 07:00 unter MEZ (+1) bleibt 07:00 unter MESZ (+2)', () {
-      // 07:00 lokal unter +1 = 06:00 UTC.
+    test('daylight saving: 07:00 under CET (+1) stays 07:00 under CEST (+2)', () {
+      // 07:00 local under +1 = 06:00 UTC.
       final result = reinterpretForNewOffset(
         value: _utc(6, 0),
         oldOffset: const Duration(hours: 1),
         newOffset: const Duration(hours: 2),
       );
 
-      // 07:00 lokal unter +2 = 05:00 UTC.
+      // 07:00 local under +2 = 05:00 UTC.
       expect(result, _utc(5, 0));
     });
   });

@@ -2,41 +2,41 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-// docs/TODO.md T-89: PII-Freiheit der Log-Ausgaben wird strukturell geprueft,
-// nicht durch Disziplin. Ein unabhaengiger Audit fand fuenf kritische Lecks
-// (der QR-Deaktivierungscode an drei Stellen, der Kalendername - auf Android
-// typischerweise die Konto-Mailadresse - und Termintitel) sowie eine ganze
-// Fehlerklasse: `catch (e) { debugPrint("... $e") }`.
+// docs/TODO.md T-89: PII-freedom of the log output is checked structurally,
+// not by discipline. An independent audit found five critical leaks
+// (the QR deactivation code in three places, the calendar name - on
+// Android typically the account's email address - and appointment titles)
+// as well as a whole bug class: `catch (e) { debugPrint("... $e") }`.
 //
-// Letztere ist die subtile: `FormatException.toString()` enthaelt einen
-// Ausschnitt der QUELLZEICHENKETTE. Ueber `$e` gelangen damit Nutzdaten ins
-// Log, die im Format-String selbst gar nicht vorkommen - bei beschaedigten
-// SharedPreferences also Alarmtitel, geplante Weckzeiten oder der
-// Deaktivierungscode selbst. Deshalb darf `debugPrint` eine Ausnahme nur noch
-// als `runtimeType` aufnehmen.
+// The latter is the subtle one: `FormatException.toString()` contains a
+// slice of the SOURCE STRING. Via `$e`, user data therefore enters the
+// log that doesn't appear in the format string itself at all - with
+// corrupted SharedPreferences that means alarm titles, planned wake
+// times, or the deactivation code itself. That's why `debugPrint` may
+// only ever take an exception as a `runtimeType` from now on.
 //
-// Dieser Test ist absichtlich quelltextlesend: er verbietet den KANAL, nicht
-// einen konkreten Wert. Ein Wert-basierter Test wuerde nur die heute bekannten
-// Lecks fangen.
+// This test is deliberately source-reading: it forbids the CHANNEL, not
+// a specific value. A value-based test would only catch the leaks known
+// today.
 
-/// Ausdruecke, die niemals in einer Log-Ausgabe interpoliert werden duerfen.
-/// Schluessel = Regex auf den Argumenten von debugPrint, Wert = Begruendung.
+/// Expressions that must never be interpolated into a log line.
+/// Key = regex on debugPrint's arguments, value = the reason.
 const _forbidden = <String, String>{
   r'\$\{?\s*e\s*\}?(?![a-zA-Z0-9_.])':
-      r'Eine Ausnahme darf nur als ${e.runtimeType} geloggt werden - '
-          'FormatException.toString() echot die Quellzeichenkette.',
-  r'rawValue': 'Der gescannte QR-Rohwert ist das Deaktivierungsgeheimnis.',
-  r'\.payload': 'Der Deaktivierungscode selbst.',
+      r'An exception may only be logged as ${e.runtimeType} - '
+          'FormatException.toString() echoes the source string.',
+  r'rawValue': 'The scanned QR raw value is the deactivation secret.',
+  r'\.payload': 'The deactivation code itself.',
   r'deactivationCode\b(?!\s*==|\s*!=|\s*is\b)':
-      'Der Deaktivierungscode selbst (Vergleiche auf null sind erlaubt).',
-  r'eventName': 'Termintitel aus dem Geraetekalender.',
-  r'\.description': 'Terminbeschreibung aus dem Geraetekalender.',
+      'The deactivation code itself (comparisons against null are allowed).',
+  r'eventName': 'Appointment title from the device calendar.',
+  r'\.description': 'Appointment description from the device calendar.',
   r'calendar\.name|\.name\b(?=[^)]*\})':
-      'Kalendername - auf Android regelmaessig die Konto-Mailadresse.',
+      'Calendar name - on Android regularly the account email address.',
 };
 
-/// Findet die Argumentliste jedes debugPrint-Aufrufs, ueber Zeilenumbrueche
-/// hinweg (viele Aufrufe im Projekt sind mehrzeilig formatiert).
+/// Finds the argument list of every debugPrint call, across line breaks
+/// (many calls in the project are formatted across multiple lines).
 Iterable<({int line, String args})> _debugPrintCalls(String source) {
   final out = <({int line, String args})>[];
   const needle = 'debugPrint(';
@@ -63,7 +63,7 @@ Iterable<({int line, String args})> _debugPrintCalls(String source) {
 }
 
 void main() {
-  test('keine Log-Ausgabe in lib/ interpoliert personenbezogene oder geheime Daten',
+  test('no log output in lib/ interpolates personal or secret data',
       () {
     final violations = <String>[];
 
@@ -84,29 +84,29 @@ void main() {
     expect(
       violations,
       isEmpty,
-      reason: 'Diese Log-Ausgaben koennen Nutzerdaten oder Geheimnisse '
-          'preisgeben:\n\n${violations.join('\n\n')}\n',
+      reason: 'These log lines can expose user data or secrets:\n\n'
+          '${violations.join('\n\n')}\n',
     );
   });
 
-  // Der einzige debugPrint, der den Release-Guard aus main.dart umgeht: er
-  // sitzt in runTimezoneCheckpoint2, das per @pragma('vm:entry-point') in einem
-  // EIGENEN Isolate laeuft. Dort ist main() nie gelaufen, also gilt der
-  // debugPrint-Default und schreibt auch im Release nach logcat.
-  test('der Hintergrund-Isolate-Pfad loggt nichts Interpoliertes', () {
+  // The one debugPrint that bypasses main.dart's release guard: it sits
+  // in runTimezoneCheckpoint2, which runs in its OWN isolate via
+  // @pragma('vm:entry-point'). main() never ran there, so debugPrint's
+  // default applies and it writes to logcat even in release.
+  test('the background isolate path logs nothing interpolated', () {
     final source = File('lib/models/scheduling/replan.dart').readAsStringSync();
     final checkpoint2 = source.substring(source.indexOf('runTimezoneCheckpoint2'));
 
     for (final call in _debugPrintCalls(checkpoint2)) {
-      // Erlaubt ist genau eine Form: der Typ einer Ausnahme. Alles andere
-      // waere ein Wert, und hier landet er auch im Release im logcat.
+      // Exactly one form is allowed: an exception's type. Anything else
+      // would be a value, and here it lands in logcat even in release.
       final interpolations =
           RegExp(r'\$\{?[^}"\x27]*\}?').allMatches(call.args).map((m) => m.group(0));
       for (final interpolation in interpolations) {
         expect(interpolation, r'${e.runtimeType}',
-            reason: 'Im Hintergrund-Isolate greift der kReleaseMode-Guard aus '
-                'main.dart nicht - diese Zeile landet auch im Release im '
-                'logcat: ${call.args.trim()}');
+            reason: 'In the background isolate main.dart\'s kReleaseMode '
+                'guard does not apply - this line lands in logcat even in '
+                'release: ${call.args.trim()}');
       }
     }
   });

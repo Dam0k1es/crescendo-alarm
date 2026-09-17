@@ -8,9 +8,9 @@ import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 import 'package:wakeywakey/utils/notifications.dart';
 
-// Regressionen aus der unabhaengigen Spec-Pruefung (2026-09-11), Ebene
-// Checkpoint-Ausloeser. Domaene und replan() liegen in
-// scheduling_v2_audit_test.dart bzw. replan_audit_test.dart.
+// Regressions from the independent spec review (2026-09-11), at the
+// checkpoint-trigger level. The domain layer and replan() live in
+// scheduling_v2_audit_test.dart and replan_audit_test.dart respectively.
 
 class _SilentNotifications implements Notifications {
   int scheduleCount = 0;
@@ -48,28 +48,28 @@ Future<AppState> _freshAppState() async {
 void main() {
   tzdata.initializeTimeZones();
 
-  group('FR-17: die Tagessperre prueft "!= heute", nicht ">= heute" (T-109)',
+  group('FR-17: the daily lock checks "!= today", not ">= today" (T-109)',
       () {
-    // FR-17 woertlich:
+    // FR-17, verbatim:
     //
-    //   "Ist `lastReplanDate` != heutiges Kalenderdatum (Geraete-Zeitzone):
-    //    sofort, vor jeder UI-Interaktion, derselbe Ablauf wie FR-8s
-    //    Ring-Checkpoint [...] Sonst: kein zusaetzlicher Checkpoint."
+    //   "If `lastReplanDate` != today's calendar date (device time zone):
+    //    immediately, before any UI interaction, the same sequence as FR-8's
+    //    ring checkpoint [...] Otherwise: no additional checkpoint."
     //
-    // Der Code las `!midnight(last).isBefore(midnight(jetzt))`, also ">=".
-    // Fuer ein `lastReplanDate` in der ZUKUNFT wurde damit uebersprungen,
-    // obwohl FR-17 "!=" fordert.
+    // The code read `!midnight(last).isBefore(midnight(now))`, i.e. ">=".
+    // For a `lastReplanDate` in the FUTURE this got skipped, even though
+    // FR-17 requires "!=".
     //
-    // In die Zukunft geraet der Marker ohne jedes Zutun der App: er ist ein
-    // geraetelokales Ziffern-Datum ohne Klammerung, und ein Zonenwechsel ueber
-    // die Datumsgrenze (oder eine Rueckwaertskorrektur der Systemuhr) laesst
-    // das lokale Datum zurueckspringen. Genau dann faellt der eine Mechanismus
-    // aus, der einen veralteten Plan noch reparieren koennte - und zwar in
-    // genau den drei Luecken, fuer die FR-17 gebaut ist (Reboot, Force-Quit,
-    // ausgefallenes taegliches Klingeln), in denen es keinen Ring gibt, der
-    // den Marker nebenbei repariert.
+    // The marker ends up in the future with no action by the app at all:
+    // it's a device-local digit date with no clamping, and a zone change
+    // across the date boundary (or a backward correction of the system
+    // clock) makes the local date jump backward. Exactly then the one
+    // mechanism that could still repair a stale plan fails - and precisely
+    // in the three gaps FR-17 is built for (reboot, force-quit, a daily ring
+    // that failed to happen), where there is no ring to repair the marker
+    // as a side effect.
 
-    test('lastReplanDate morgen: der Vordergrund-Checkpoint laeuft', () async {
+    test('lastReplanDate tomorrow: the foreground checkpoint runs', () async {
       final appState = await _freshAppState();
       appState.lastReplanDate = _tomorrowOf(DateTime.utc(2026, 3, 10));
 
@@ -83,13 +83,13 @@ void main() {
       );
 
       expect(result, isNotNull,
-          reason: 'FR-17: != heute -> voller Checkpoint');
+          reason: 'FR-17: != today -> full checkpoint');
       expect(appState.lastReplanDate, DateTime.utc(2026, 3, 10));
     });
 
-    test('lastReplanDate heute: weiterhin ein No-op', () async {
-      // Gegenprobe: FR-17s eigentlicher Zweck (hoechstens einmal taeglich)
-      // darf nicht verlorengehen.
+    test('lastReplanDate today: still a no-op', () async {
+      // Counter-check: FR-17's actual purpose (at most once daily) must not
+      // be lost.
       final appState = await _freshAppState();
       appState.lastReplanDate = DateTime.utc(2026, 3, 10);
 
@@ -110,7 +110,7 @@ void main() {
       expect(fetches, 0);
     });
 
-    test('lastReplanDate gestern: laeuft weiterhin', () async {
+    test('lastReplanDate yesterday: still runs', () async {
       final appState = await _freshAppState();
       appState.lastReplanDate = DateTime.utc(2026, 3, 9);
 
@@ -126,24 +126,24 @@ void main() {
       expect(result, isNotNull);
     });
 
-    test('echter Datumsruecksprung: Apia (+13) nach Pago Pago (-11)', () async {
-      // Der Fall, der das ueberhaupt erst erzeugt - als echte IANA-Zonen, nicht
-      // als UTC-Fixture: auf dieser UTC+0-VM kann ein `DateTime.utc`-Fixture
-      // einen Datumsruecksprung gar nicht darstellen.
+    test('a real date rollback: Apia (+13) to Pago Pago (-11)', () async {
+      // The case that actually produces this - as real IANA zones, not as a
+      // UTC fixture: on this UTC+0 VM, a `DateTime.utc` fixture cannot
+      // represent a date rollback at all.
       final apia = tz.getLocation('Pacific/Apia');
       final pago = tz.getLocation('Pacific/Pago_Pago');
 
       final beforeFlight = tz.TZDateTime(apia, 2026, 3, 10, 8, 0);
-      // Derselbe Instant, in Pago Pago gelesen: 24 Stunden Versatzdifferenz,
-      // also der 09.03. - ein Kalendertag ZURUECK, obwohl die Zeit vorwaerts
-      // laeuft.
+      // The same instant, read in Pago Pago: a 24-hour offset difference,
+      // i.e. Mar 9 - one calendar day BACK, even though time itself moves
+      // forward.
       final afterFlight =
           tz.TZDateTime.from(beforeFlight.add(const Duration(hours: 2)), pago);
 
       expect(afterFlight.day, lessThan(beforeFlight.day),
-          reason: 'Fixture-Kontrolle: das lokale Datum springt wirklich zurueck');
+          reason: 'fixture check: the local date really does jump backward');
       expect(afterFlight.isAfter(beforeFlight), isTrue,
-          reason: 'Fixture-Kontrolle: der zweite Moment liegt real spaeter');
+          reason: 'fixture check: the second instant is really later');
 
       final appState = await _freshAppState();
       var fetches = 0;
@@ -160,7 +160,7 @@ void main() {
         fetchEvents: fetch,
         notifications: _SilentNotifications(),
       );
-      expect(fetches, 1, reason: 'der erste Checkpoint laeuft');
+      expect(fetches, 1, reason: 'the first checkpoint runs');
 
       final result = await runSchedulingCheckpoint(
         appState,
@@ -172,9 +172,9 @@ void main() {
       );
 
       expect(result, isNotNull,
-          reason: 'FR-17: das lokale Datum ist ein anderes -> Checkpoint');
+          reason: 'FR-17: the local date differs -> checkpoint');
       expect(fetches, 2,
-          reason: 'und mit ihm ein ungecachter Kalender-Neuread');
+          reason: 'and with it an uncached calendar re-read');
     });
   });
 }

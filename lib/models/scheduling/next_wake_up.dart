@@ -48,9 +48,9 @@ DateTime? nextWakeUpTime({
   }
 
   for (final millis in pendingDayValues.values) {
-    // localFromStored (docs/TODO.md T-83): dieselbe Lesart wie auf der
-    // Manual-Alarm-Seite unten, die aus `now`s lokalen Feldern baut - beide
-    // Kandidaten müssen im selben Frame verglichen werden.
+    // localFromStored (docs/TODO.md T-83): the same reading as on the
+    // manual-alarm side below, which builds from `now`'s local fields - both
+    // candidates must be compared in the same frame.
     final planned = localFromStored(millis);
     if (planned == null) continue;
     consider(planned);

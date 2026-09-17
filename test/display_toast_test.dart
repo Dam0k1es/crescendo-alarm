@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
-// docs/TODO.md T-136: Meldungen wie "Can not edit scheduled alarms!" blieben
-// stehen, bis der Nutzer sie wegtippte - obwohl `displayToast` seit dem ersten
-// Commit `duration: Duration(seconds: 5)` setzt.
+// docs/TODO.md T-136: messages like "Can not edit scheduled alarms!" stayed
+// on screen until the user tapped them away - even though `displayToast` has
+// set `duration: Duration(seconds: 5)` since its very first commit.
 //
-// Ursache im Framework, nicht im Aufruf: `SnackBar` belegt `persist` mit
-// `persist ?? action != null` vor, und `ScaffoldMessenger` bricht seinen
-// Timer mit `if (snackBar.persist) return;` ab. Ein SnackBar MIT Aktion
-// ignoriert seine eigene Dauer also - und `displayToast` gibt einen
-// "Dismiss"-Knopf mit.
+// The cause is in the framework, not in the call site: `SnackBar` defaults
+// `persist` to `persist ?? action != null`, and `ScaffoldMessenger` aborts
+// its timer with `if (snackBar.persist) return;`. A SnackBar WITH an action
+// therefore ignores its own duration - and `displayToast` supplies a
+// "Dismiss" button.
 
 const _message = 'Can not edit scheduled alarms!';
 
@@ -19,43 +19,44 @@ Widget _host() => MaterialApp(
         body: Builder(
           builder: (context) => ElevatedButton(
             onPressed: () => displayToast(context, _message),
-            child: const Text('ausloesen'),
+            child: const Text('trigger'),
           ),
         ),
       ),
     );
 
 void main() {
-  testWidgets('die Meldung verschwindet nach 5 Sekunden von selbst',
+  testWidgets('the message disappears on its own after 5 seconds',
       (tester) async {
     await tester.pumpWidget(_host());
-    await tester.tap(find.text('ausloesen'));
+    await tester.tap(find.text('trigger'));
     await tester.pump();
-    // Einblend-Animation abwarten: `ScaffoldMessenger` legt seinen
-    // Ausblend-Timer erst an, wenn sie durch ist (`isCompleted` in dessen
-    // `build`). Wer hier zu knapp pumpt, misst den Timer gar nicht.
+    // Wait out the fade-in animation: `ScaffoldMessenger` only starts its
+    // fade-out timer once it has completed (`isCompleted` in its
+    // `build`). Pumping too little here doesn't measure the timer at all.
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.text(_message), findsOneWidget);
 
-    // Kurz vor Ablauf steht sie noch.
+    // Shortly before it expires it is still there.
     await tester.pump(const Duration(seconds: 4));
     expect(find.text(_message), findsOneWidget,
-        reason: 'vor Ablauf der 5 Sekunden bleibt sie sichtbar');
+        reason: 'it stays visible before the 5 seconds are up');
 
-    // Nach Ablauf verschwindet sie ohne jedes Zutun - samt Ausblend-Animation.
+    // After expiry it disappears with no interaction at all - including
+    // the fade-out animation.
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
     expect(find.text(_message), findsNothing,
-        reason: 'nach 5 Sekunden ohne einen einzigen Tipp weg');
+        reason: 'gone after 5 seconds without a single tap');
   });
 
-  testWidgets('der Dismiss-Knopf bleibt erhalten', (tester) async {
-    // Gegenprobe: die automatische Abschaltung darf die manuelle nicht
-    // ersetzen - wer die Meldung gelesen hat, soll sie sofort wegtippen
-    // koennen.
+  testWidgets('the Dismiss button is still there', (tester) async {
+    // Counter-check: the automatic dismissal must not replace the manual
+    // one - anyone who has read the message should be able to tap it away
+    // immediately.
     await tester.pumpWidget(_host());
-    await tester.tap(find.text('ausloesen'));
+    await tester.tap(find.text('trigger'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 

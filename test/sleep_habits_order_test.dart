@@ -5,28 +5,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/screens/sleep_habits/screen_sleephabits.dart';
 
-// docs/TODO.md T-95: die Reihenfolge der Einträge auf dem Sleep-Habits-Schirm.
+// docs/TODO.md T-95: the order of entries on the sleep-habits screen.
 //
-// Der Defekt der alten Reihenfolge war nicht Geschmack, sondern eine falsche
-// Ursachenzuordnung: "Sleep Goal" stand an erster Stelle, beeinflusst aber die
-// Alarmzeit überhaupt nicht - es verschiebt ausschließlich die
-// Bettgeh-Erinnerung (nextWakeUpTime - sleepGoal - reminderDuration, siehe
-// lib/utils/sleep_reminder.dart). Wer es oben sieht und daran dreht, erwartet
-// einen früheren Wecker und bekommt nichts. Gleichzeitig war es von "Enable
-// Reminder" - seiner anderen Hälfte derselben Rechnung - durch drei fremde
-// Einträge getrennt, und "Preferred wake-up time", der Anker der ganzen
-// FR-4-Drift und die einzige Einstellung, die ein Nutzer ohne Kalendertermine
-// überhaupt braucht, lag auf Position 4 unter zwei Dauern, die nur bei
-// vorhandenem Termin wirken.
+// The defect in the old order was not taste, but a wrong attribution of
+// cause: "Sleep Goal" was in first place, but doesn't affect the alarm time
+// at all - it only shifts the bedtime reminder (nextWakeUpTime - sleepGoal -
+// reminderDuration, see lib/utils/sleep_reminder.dart). Whoever sees it at
+// the top and adjusts it expects an earlier alarm and gets nothing. At the
+// same time it was separated from "Enable Reminder" - its other half of the
+// same calculation - by three unrelated entries, and "Preferred wake-up
+// time", the anchor of the entire FR-4 drift and the only setting a user
+// needs at all without calendar appointments, sat at position 4, below two
+// durations that only apply when an appointment exists.
 //
-// Getestet wird über die y-Position der Beschriftungen, nicht über die
-// Reihenfolge im Quelltext: geprüft werden soll, was der Nutzer sieht.
+// Tested via the labels' y-position, not the source order: what's checked is
+// what the user sees.
 
 Future<AppState> _appStateWithAllTilesVisible() async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   final appState = AppState();
   await appState.initialized;
-  // Beide aufklappbaren Bereiche öffnen, damit alle Einträge im Baum liegen.
+  // Open both expandable sections, so every entry is in the tree.
   appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
   appState.reminderEnabled = true;
   appState.gentleWakeUpEnabled = true;
@@ -43,30 +42,30 @@ Future<void> _pumpScreen(WidgetTester tester, AppState appState) async {
   await tester.pumpAndSettle();
 }
 
-/// Die y-Positionen der genannten Texte, in der Reihenfolge der Liste.
+/// The y-positions of the named texts, in the list's order.
 List<double> _verticalPositions(WidgetTester tester, List<String> labels) {
   return labels.map((label) {
     final finder = find.text(label);
     expect(finder, findsOneWidget,
-        reason: 'Beschriftung "$label" nicht (oder mehrfach) gefunden');
+        reason: 'label "$label" not found (or found more than once)');
     return tester.getTopLeft(finder).dy;
   }).toList();
 }
 
 void main() {
-  testWidgets('die Einträge stehen in ursächlicher Reihenfolge', (tester) async {
+  testWidgets('the entries are in causal order', (tester) async {
     await _pumpScreen(tester, await _appStateWithAllTilesVisible());
 
-    // Drei Gruppen, jede in sich ursächlich geordnet:
+    // Three groups, each internally ordered by cause:
     //
-    // 1. Was bestimmt, WANN der Wecker klingelt. Zuerst das Ziel, auf das FR-4
-    //    zudriftet; dann die Schranke, wie schnell er sich ihm nähern darf;
-    //    dann die zwei Vorlaufzeiten, die nur an Tagen mit Termin überhaupt
-    //    greifen - in der Reihenfolge, in der sie real anfallen und in der
-    //    hardFloor sie abzieht (erst aufwachen, dann fertig werden).
-    // 2. Was die Bettgeh-Erinnerung bestimmt. Das Schlafziel definiert die
-    //    Bettzeit, der Vorlauf misst sich von ihr aus - also in dieser Folge.
-    // 3. Wie sich der Alarm beim Klingeln verhält.
+    // 1. What determines WHEN the alarm rings. First the target FR-4 drifts
+    //    toward; then the bound on how fast it may approach it; then the two
+    //    lead times, which only apply on days with an appointment at all -
+    //    in the order they actually occur in and in which hardFloor
+    //    subtracts them (wake up first, then get ready).
+    // 2. What determines the bedtime reminder. The sleep goal defines the
+    //    bedtime, the lead time is measured from it - hence this order.
+    // 3. How the alarm behaves once it rings.
     final expectedOrder = <String>[
       'Preferred wake-up time',
       'Max. daily shift',
@@ -83,17 +82,17 @@ void main() {
       expect(
         positions[i],
         greaterThan(positions[i - 1]),
-        reason: '"${expectedOrder[i]}" muss unter "${expectedOrder[i - 1]}" '
-            'stehen, liegt aber bei y=${positions[i]} gegenüber '
+        reason: '"${expectedOrder[i]}" must be below "${expectedOrder[i - 1]}" '
+            'but is at y=${positions[i]} versus '
             'y=${positions[i - 1]}',
       );
     }
   });
 
-  testWidgets('jede Gruppe traegt eine Ueberschrift ueber ihrem ersten Eintrag',
+  testWidgets('each group carries a heading above its first entry',
       (tester) async {
-    // Ohne Überschriften ist die Gruppierung für den Nutzer unsichtbar - dann
-    // wäre die neue Reihenfolge nur eine andere, keine erklärte.
+    // Without headings the grouping is invisible to the user - then the new
+    // order would just be a different one, not an explained one.
     await _pumpScreen(tester, await _appStateWithAllTilesVisible());
 
     final pairs = <String, String>{
@@ -105,19 +104,19 @@ void main() {
     pairs.forEach((header, firstItem) {
       final headerFinder = find.text(header);
       expect(headerFinder, findsOneWidget,
-          reason: 'Gruppen-Überschrift "$header" fehlt');
+          reason: 'group heading "$header" is missing');
       expect(
         tester.getTopLeft(headerFinder).dy,
         lessThan(tester.getTopLeft(find.text(firstItem)).dy),
-        reason: '"$header" muss über "$firstItem" stehen',
+        reason: '"$header" must be above "$firstItem"',
       );
     });
   });
 
-  testWidgets('der Hinweis zum Minimum bleibt bei "Max. daily shift"',
+  testWidgets('the minimum hint stays with "Max. daily shift"',
       (tester) async {
-    // Der Hinweis aus T-88 darf beim Umsortieren nicht von seinem Regler
-    // getrennt werden - allein stehend wäre er sinnlos.
+    // The hint from T-88 must not be separated from its control when
+    // reordering - standing alone it would be meaningless.
     await _pumpScreen(tester, await _appStateWithAllTilesVisible());
 
     final hint = find.textContaining('smaller values are raised');
@@ -129,31 +128,31 @@ void main() {
     expect(
       tester.getTopLeft(hint).dy,
       lessThan(tester.getTopLeft(find.text('Duration to wake up')).dy),
-      reason: 'der Hinweis gehört noch in die Kachel von "Max. daily shift"',
+      reason: 'the hint still belongs in the "Max. daily shift" tile',
     );
   });
 
-  // docs/TODO.md T-96: Gentle Wake hatte keinen Regler - die Rampe war auf
-  // 60 Sekunden festverdrahtet.
-  testWidgets('Gentle Wake zeigt einen Regler fuer die Rampendauer',
+  // docs/TODO.md T-96: Gentle Wake had no control - the ramp was hardcoded to
+  // 60 seconds.
+  testWidgets('Gentle Wake shows a control for the ramp duration',
       (tester) async {
     await _pumpScreen(tester, await _appStateWithAllTilesVisible());
 
     final label = find.text('Ramp duration');
-    expect(label, findsOneWidget, reason: 'Regler fuer die Rampendauer fehlt');
+    expect(label, findsOneWidget, reason: 'ramp-duration control is missing');
     expect(
       tester.getTopLeft(label).dy,
       greaterThan(tester.getTopLeft(find.text('Gentle WakeUp')).dy),
-      reason: 'der Regler gehoert unter seinen Schalter',
+      reason: 'the control belongs below its switch',
     );
 
-    // Wie bei maxDailyDelta (T-88) darf das erzwungene Minimum nicht
-    // unsichtbar sein - der hh:mm-Picker laesst 00:00 zu, das Plugin nicht.
+    // As with maxDailyDelta (T-88), the enforced minimum must not be
+    // invisible - the hh:mm picker allows 00:00, the plugin does not.
     expect(find.textContaining('At least 00:01'), findsOneWidget,
-        reason: 'Hinweis auf das Minimum fehlt');
+        reason: 'hint about the minimum is missing');
   });
 
-  testWidgets('ist Gentle Wake aus, gibt es auch keinen Regler', (tester) async {
+  testWidgets('with Gentle Wake off, there is also no control', (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final appState = AppState();
     await appState.initialized;

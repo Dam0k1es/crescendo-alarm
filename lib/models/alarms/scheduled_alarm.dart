@@ -4,20 +4,20 @@ import 'package:wakeywakey/models/alarms/myalarm.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
 class ScheduledAlarm extends MyAlarm {
-  /// Kein `title`-Parameter (docs/TODO.md T-86): der Konstruktor hat ihn
-  /// immer sofort mit `formatDateTime(time)` überschrieben, ein übergebener
-  /// Wert war also wirkungslos - inklusive dem aus [ScheduledAlarm.fromJson],
-  /// der beim Laden schlicht verworfen wurde. Der Titel ist bewusst aus der
-  /// Zeit abgeleitet und keine eigene Eigenschaft.
+  /// No `title` parameter (docs/TODO.md T-86): the constructor always
+  /// immediately overwrote it with `formatDateTime(time)`, so a passed-in
+  /// value had no effect - including the one from [ScheduledAlarm.fromJson],
+  /// which was simply discarded on load. The title is deliberately derived
+  /// from the time, not its own property.
   ScheduledAlarm({
     required DateTime super.time,
     super.enabled,
     super.gentlewake,
     super.gentleWakeDuration,
     super.tone,
-    // docs/TODO.md T-84: war nicht durchgereicht, also klang JEDER von FR-18
-    // gesetzte Alarm mit MyAlarms Default 0.6 und ignorierte
-    // appState.selectedVolume - obwohl es dafür eine UI gibt.
+    // docs/TODO.md T-84: this wasn't passed through, so EVERY alarm set by
+    // FR-18 rang with MyAlarm's default of 0.6 and ignored
+    // appState.selectedVolume - even though there's a UI for it.
     super.volume,
     super.id,
   }) : super(title: formatDateTime(time));

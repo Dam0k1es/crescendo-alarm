@@ -21,22 +21,22 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // docs/TODO.md T-90: `java.time.*` gibt es auf Android erst ab API 26,
-        // dieses Projekt verspricht aber minSdk 24. Nachgewiesen im gebauten
-        // Release-Dex: `strings classes.dex | grep '^Ljava/time/'` findet
-        // `Ljava/time/Duration;`, und es gibt KEINE `Lj$/`-Ersatzklassen -
-        // der Aufruf ging also un-desugart ins APK. Quelle ist das
-        // `alarm`-Plugin (AlarmSettings.kt:138, `Duration.ofMillis`), das kein
-        // eigenes Desugaring aktiviert und selbst minSdk 19 deklariert.
+        // docs/TODO.md T-90: `java.time.*` only exists on Android from API 26
+        // onward, but this project promises minSdk 24. Confirmed in the built
+        // release dex: `strings classes.dex | grep '^Ljava/time/'` finds
+        // `Ljava/time/Duration;`, and there are NO `Lj$/` replacement classes -
+        // so the call went into the APK un-desugared. The source is the
+        // `alarm` plugin (AlarmSettings.kt:138, `Duration.ofMillis`), which
+        // doesn't enable its own desugaring and itself declares minSdk 19.
         //
-        // Nach genauerem Lesen sitzt der Aufruf auf einem
-        // Rueckwaertskompatibilitaets-Pfad fuer altes v4-Alarm-JSON, den die
-        // aktuelle App-Version normalerweise nicht betritt - es ist also eine
-        // LATENTE API-26-Mine unter einem minSdk-24-Vertrag, kein bestaetigter
-        // Absturz. Desugaring entschaerft sie unabhaengig davon und kostet nur
-        // Bauzeit; das ist deutlich billiger als die Frage offen zu lassen,
-        // denn es gibt in diesem Projekt keinen einzigen Beweis, dass die App
-        // auf API 24 laeuft (der E2E-Emulator fuhr bisher nur API 34).
+        // On closer reading, the call sits on a backward-compatibility path
+        // for old v4 alarm JSON that the current app version normally never
+        // enters - so it's a LATENT API-26 mine under a minSdk-24 contract,
+        // not a confirmed crash. Desugaring defuses it regardless and only
+        // costs build time; that's considerably cheaper than leaving the
+        // question open, since this project has no evidence whatsoever that
+        // the app runs on API 24 (the E2E emulator has so far only run
+        // API 34).
         isCoreLibraryDesugaringEnabled = true
     }
 
@@ -85,7 +85,7 @@ flutter {
 }
 
 dependencies {
-    // Gehoert zu isCoreLibraryDesugaringEnabled oben (docs/TODO.md T-90):
-    // liefert die `java.time`-Ersatzklassen (`Lj$/...`) fuer API < 26.
+    // Belongs to isCoreLibraryDesugaringEnabled above (docs/TODO.md T-90):
+    // supplies the `java.time` replacement classes (`Lj$/...`) for API < 26.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

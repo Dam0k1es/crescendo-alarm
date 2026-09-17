@@ -22,9 +22,9 @@ jobs:
 
   security-gate:
     name: Security gate
-    # Die Luecke, die hier bestand: dieser Pfad baute, signierte und haengte
-    # ein APK an ein GitHub-Release, ohne SCA, Secret- oder SAST-Pruefung -
-    # obwohl derselbe Commit auf `master` daran gescheitert waere.
+    # The gap that used to exist here: this path built, signed and attached
+    # an APK to a GitHub Release with no SCA, secret, or SAST check - even
+    # though the same commit would have failed that check on `master`.
     uses: ./.github/workflows/security-gate.yml
 
   build-signed-release:
@@ -55,15 +55,14 @@ jobs:
           restore-keys: pub-
       - uses: actions/cache@v4
         with:
-          # docs/TODO.md T-102: vorher lag hier `~/.gradle/caches` komplett drin.
-          # Das waechst unbegrenzt - es enthaelt neben den heruntergeladenen
-          # Abhaengigkeiten auch jede transformierte AAR und jeden
-          # Build-Cache-Eintrag. Ergebnis: zwei Gradle-Caches mit 3746 MB und
-          # 2397 MB, und ein Restore, der laenger dauert als der Build spart.
-          # Im Lauf 34535358135 ist der Release-Build daran gestorben - der
-          # Cache-Schritt kippte nach 2m49s, `flutter build apk` lief nie.
-          # Gecacht wird jetzt nur, was sich wirklich lohnt: die geladenen
-          # Module und der Wrapper.
+          # docs/TODO.md T-102: this used to hold the whole of `~/.gradle/caches`.
+          # That grows without bound - besides the downloaded dependencies it
+          # also holds every transformed AAR and every build-cache entry. Result:
+          # two Gradle caches of 3746 MB and 2397 MB, and a restore that took
+          # longer than the build it was meant to save. In run 34535358135 the
+          # release build died from it - the cache step timed out after 2m49s,
+          # `flutter build apk` never ran. Now only what's actually worth it is
+          # cached: the downloaded modules and the wrapper.
           path: |
             ~/.gradle/caches/modules-2
             ~/.gradle/wrapper
@@ -100,9 +99,10 @@ jobs:
         with:
           name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-          # docs/TODO.md T-100: ein Tag-Release haengt sein APK dauerhaft an
-          # die GitHub-Release-Seite - das Actions-Artefakt daneben ist nur
-          # fuer den Weg dorthin da und muss nicht 90 Tage Speicher belegen.
+          # docs/TODO.md T-100: a tag release attaches its APK permanently to
+          # the GitHub Release page - the Actions artifact alongside it only
+          # exists for the path getting there and doesn't need to occupy
+          # storage for 90 days.
           retention-days: 30
 
       - name: Attach to GitHub Release

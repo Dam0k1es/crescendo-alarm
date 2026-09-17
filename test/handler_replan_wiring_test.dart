@@ -12,11 +12,11 @@ import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
 import 'package:wakeywakey/models/scheduling/replan.dart';
 import 'package:wakeywakey/screens/alarms/screen_active_alarm.dart';
 
-// Phase 5 (docs/scheduling-v2-spec.md, "Implementierungsreihenfolge", Schritt
-// 19): Handler.handleAlarm() -> runAlarmRingCheckpoint(). FR-8 sagt, der Ring
-// selbst "feuert immer" und muss einen Checkpoint auslösen - das darf aber
-// NIE den Alarm-Overlay bzw. den 3s-Fallback-Pfad verzögern oder brechen; das
-// ist genau die Regression, die diese Datei absichert.
+// Phase 5 (docs/scheduling-v2-spec.md, "Implementation order", step
+// 19): Handler.handleAlarm() -> runAlarmRingCheckpoint(). FR-8 says the ring
+// itself "always fires" and must trigger a checkpoint - but that must NEVER
+// delay or break the alarm overlay or the 3s fallback path; that is exactly
+// the regression this file guards against.
 
 const _fixedResult = ReplanResult(
   overrunNotificationNeeded: false,
@@ -34,9 +34,9 @@ AlarmSettings _fakeAlarmSettings({int id = 1}) => AlarmSettings(
       ),
     );
 
-/// docs/TODO.md T-73: der Replan-Checkpoint feuert nur noch für einen
-/// klingelnden `ScheduledAlarm`. Damit die Nicht-Blockier-Tests unten den
-/// Checkpoint überhaupt erreichen, muss der Alarm in AppState registriert sein.
+/// docs/TODO.md T-73: the replan checkpoint now only fires for a ringing
+/// `ScheduledAlarm`. For the non-blocking tests below to reach the
+/// checkpoint at all, the alarm must be registered in AppState.
 void _registerScheduledAlarm(AppState appState, {int id = 1}) {
   appState.scheduledAlarms = [
     ScheduledAlarm(
@@ -70,7 +70,7 @@ Future<BuildContext> _pumpAppWithContext(
 
 void main() {
   testWidgets(
-      'ein hängender Checkpoint (nie abschließend) verzögert das Zeigen des Alarm-Overlays nicht',
+      'a hanging checkpoint (never completing) does not delay showing the alarm overlay',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final appState = AppState();
@@ -87,14 +87,13 @@ void main() {
 
     expect(find.byType(ScreenAlarmActive), findsOneWidget);
 
-    // Sauber aufräumen, damit kein offenes Future über das Testende
-    // hinausreicht.
+    // Clean up properly, so no open Future outlives the end of the test.
     completer.complete(_fixedResult);
     await tester.pump();
   });
 
   testWidgets(
-      'ein Checkpoint, der fehlschlägt, verhindert das Zeigen des Overlays nicht',
+      'a checkpoint that fails does not prevent the overlay from showing',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final appState = AppState();
@@ -116,12 +115,12 @@ void main() {
   });
 
   testWidgets(
-      'T-73: ein klingelnder ManualAlarm löst KEINEN Replan-Checkpoint aus',
+      'T-73: a ringing ManualAlarm triggers NO replan checkpoint',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final appState = AppState();
     await appState.initialized;
-    // Derselbe Id wie der klingelnde Alarm - aber als ManualAlarm.
+    // The same id as the ringing alarm - but as a ManualAlarm.
     appState.manualAlarms
         .add(ManualAlarm(time: const TimeOfDay(hour: 3, minute: 0), id: 1));
     final context = await _pumpAppWithContext(tester, appState);
@@ -136,15 +135,15 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    // FR-15: ein manueller Alarm darf die ScheduledAlarm-Kette nicht
-    // fortschreiben (Fenster, gapDayCounter, lastReplanDate).
+    // FR-15: a manual alarm must not advance the ScheduledAlarm chain
+    // (window, gapDayCounter, lastReplanDate).
     expect(called, isFalse);
-    // Das Overlay muss trotzdem erscheinen.
+    // The overlay must still appear.
     expect(find.byType(ScreenAlarmActive), findsOneWidget);
   });
 
   testWidgets(
-      'runCheckpoint wird tatsächlich mit der AppState-Instanz aufgerufen',
+      'runCheckpoint is actually called with the AppState instance',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final appState = AppState();

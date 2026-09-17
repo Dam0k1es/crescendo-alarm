@@ -59,8 +59,8 @@ dependencies:
 
   flutter_markdown_plus: ^1.0.12
 
-  # `any` war eine offene Flanke: eine bruchhafte Version haette still
-  # hereinkommen koennen. Gepinnt auf die ohnehin aufgeloeste Version.
+  # `any` was an open flank: a broken version could have come in silently.
+  # Pinned to the version that already resolves anyway.
   awesome_notifications: ^0.12.1
   # docs/TODO.md T-33: replaced mobile_scanner, which links Google's
   # proprietary ML Kit barcode binaries (bundled into the APK by default) -
@@ -82,9 +82,8 @@ dev_dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
-  # Gehoert hierher, nicht zu `dependencies`: flutter_lints liefert
-  # ausschliesslich Analyse-Regeln (siehe analysis_options.yaml) und wird zur
-  # Laufzeit nie importiert.
+  # Belongs here, not under `dependencies`: flutter_lints supplies analysis
+  # rules only (see analysis_options.yaml) and is never imported at runtime.
   flutter_lints: ^6.0.0
 
 # device_calendar (even its latest release, 4.3.3) still pins `timezone: ^0.9.0`,
@@ -123,10 +122,11 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    # assets/icons/icon.png ist bewusst NICHT gebuendelt: es ist nur die
-    # Quelle fuer `dart run flutter_launcher_icons` (Pfad steht unten in
-    # dessen Konfiguration) und wird von der Platte gelesen. Zur Laufzeit laedt
-    # es niemand - im APK waere es toter Ballast. Die Datei bleibt im Repo.
+    # assets/icons/icon.png is deliberately NOT bundled: it's only the
+    # source for `dart run flutter_launcher_icons` (its path is in that
+    # tool's config below) and is read straight from disk. Nothing loads it
+    # at runtime - it would be dead weight in the APK. The file stays in the
+    # repo.
     - assets/icons/icon_no_shadow.png
     - assets/sounds/lollipop.mp3
     - assets/text/Privacy.md

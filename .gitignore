@@ -446,9 +446,9 @@ tasks.txt
 __pycache__/
 *.pyc
 
-# Projektregel: nach jedem neu gebauten Feature liegt hier ein `current.apk` zum
-# Flashen (siehe CLAUDE.md, "Current APK"). Bewusst NICHT verfolgt - es ist ein
-# Build-Ergebnis, aendert sich mit jedem Feature und waere 80 MB pro Commit.
+# Project rule: after every newly built feature, a `current.apk` sits here for
+# flashing (see CLAUDE.md, "Current APK"). Deliberately NOT tracked - it's a
+# build output, changes with every feature, and would be 80 MB per commit.
 current.apk
 
 

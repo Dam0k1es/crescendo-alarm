@@ -7,12 +7,11 @@ import 'package:wakeywakey/utils/notifications.dart';
 import 'package:wakeywakey/models/scheduling/day_marker.dart';
 import 'package:wakeywakey/utils/sleep_reminder.dart';
 
-// Phase 5 (docs/scheduling-v2-spec.md, "Implementierungsreihenfolge", Schritt
-// 21): die Schlafengehen-Notification muss IMMER geplant werden - auch wenn
-// reminderEnabled=false ist. Vor dieser Änderung hätte dieser Test gegen den
-// unveränderten Code fehlgeschlagen (Handler.onAlarmHandled rief
-// scheduleNotification nur innerhalb eines `if (appState.reminderEnabled)`
-// auf).
+// Phase 5 (docs/scheduling-v2-spec.md, "Implementation order", step
+// 21): the bedtime notification must ALWAYS be scheduled - even when
+// reminderEnabled=false. Before this change, this test would have failed
+// against the unmodified code (Handler.onAlarmHandled only called
+// scheduleNotification inside an `if (appState.reminderEnabled)`).
 
 class _RecordingNotifications implements Notifications {
   String? lastTitle;
@@ -61,17 +60,17 @@ Future<AppState> _freshAppState() async {
 
 void main() {
   test(
-      'reminderEnabled=false: die Notification wird trotzdem geplant, nur still (kein title/body)',
+      'reminderEnabled=false: the notification is scheduled anyway, just silently (no title/body)',
       () async {
     final appState = await _freshAppState();
     appState.reminderEnabled = false;
     final notifications = _RecordingNotifications();
 
     Handler.onAlarmHandled(appState, 1, notifications: notifications);
-    // onAlarmHandled() ist fire-and-forget (siehe seinen Doc-Kommentar) - kurz
-    // die Event-Queue durchlaufen lassen, damit scheduleSleepReminder()s
-    // eigene await-Punkte (cancelAllNotifications, dann scheduleNotification)
-    // vor der Prüfung abgeschlossen sind.
+    // onAlarmHandled() is fire-and-forget (see its doc comment) - briefly let
+    // the event queue run through, so scheduleSleepReminder()'s own await
+    // points (cancelAllNotifications, then scheduleNotification) are done
+    // before the check.
     await Future<void>.delayed(Duration.zero);
 
     expect(notifications.callCount, 1);
@@ -80,7 +79,7 @@ void main() {
     expect(notifications.lastScheduledDate, isNotNull);
   });
 
-  test('reminderEnabled=true: die Notification wird sichtbar geplant', () async {
+  test('reminderEnabled=true: the notification is scheduled visibly', () async {
     final appState = await _freshAppState();
     appState.reminderEnabled = true;
     final notifications = _RecordingNotifications();
@@ -93,17 +92,17 @@ void main() {
     expect(notifications.lastBody, isNotNull);
   });
 
-  // Gefunden bei der unabhängigen Prüfung von Phase 5: setSleepReminder() lief
-  // bisher NUR aus dem Reminder-Toggle heraus und Handler.onAlarmHandled NUR
-  // nach einem In-App-Dismiss - auf einem frischen Install (reminderEnabled
-  // defaultet auf false, kein Toggle je berührt, kein Alarm je gedismisst)
-  // wurde also NIE eine Notification geplant, obwohl FR-16 Checkpoint 2 dafür
-  // von Anfang an einen Aufhänger braucht. Regressionstest zuerst (schlägt
-  // gegen den unveränderten Code fehl, da scheduleSleepReminder() dort noch
-  // nicht existiert).
-  group('scheduleSleepReminder (Cold-Start-Regression)', () {
+  // Found during Phase 5's independent review: setSleepReminder() used to
+  // run ONLY out of the reminder toggle, and Handler.onAlarmHandled ONLY
+  // after an in-app dismiss - on a fresh install (reminderEnabled defaults
+  // to false, no toggle ever touched, no alarm ever dismissed), NO
+  // notification was ever scheduled, even though FR-16 checkpoint 2 needs a
+  // hook for it from the very start. Regression test first (fails against
+  // the unmodified code, since scheduleSleepReminder() doesn't exist there
+  // yet).
+  group('scheduleSleepReminder (cold-start regression)', () {
     test(
-        'frischer AppState, kein Toggle berührt, kein Alarm gedismisst -> Notification wird trotzdem geplant',
+        'fresh AppState, no toggle touched, no alarm dismissed -> a notification is scheduled anyway',
         () async {
       final appState = await _freshAppState();
       final notifications = _RecordingNotifications();
@@ -116,18 +115,18 @@ void main() {
       expect(notifications.lastScheduledDate, isNotNull);
     });
 
-    // Gefunden bei der erneuten Prüfung des obigen Fixes: das Zusammenlegen
-    // der drei Aufrufstellen hatte cancelAllNotifications() (global,
-    // AwesomeNotifications().cancelAll()) unbeabsichtigt an zwei neue Stellen
-    // gebracht (App-Start, Alarm-Dismiss) - das riskiert, gerade erst vom
-    // (unawaited) Replan-Checkpoint erzeugte FR-6/FR-9/FR-12-Warnungen sofort
-    // wieder zu verschlucken. Cancel muss auf die Sleep-Reminder-Notification
-    // selbst beschränkt bleiben (per fester ID), nicht global.
-    // docs/TODO.md T-61: die Schlafenszeit wird aus einem UTC-getaggten
-    // Planwert abgeleitet, NotificationCalendar liest aber lokale Ziffern -
-    // ohne Umrechnung würde Checkpoint 2 zur falschen lokalen Zeit feuern.
+    // Found on re-reviewing the fix above: consolidating the three call
+    // sites had unintentionally brought cancelAllNotifications() (global,
+    // AwesomeNotifications().cancelAll()) to two new spots (app start, alarm
+    // dismiss) - risking swallowing FR-6/FR-9/FR-12 warnings that the
+    // (unawaited) replan checkpoint had just produced. Cancel must stay
+    // scoped to the sleep-reminder notification itself (by a fixed id), not
+    // global.
+    // docs/TODO.md T-61: the bedtime is derived from a UTC-tagged planned
+    // value, but NotificationCalendar reads local digits - without
+    // conversion, checkpoint 2 would fire at the wrong local time.
     test(
-        'der geplante Zeitpunkt wird lokal übergeben, ohne den realen Moment zu verschieben',
+        'the scheduled instant is passed as local, without shifting the real moment',
         () async {
       final appState = await _freshAppState();
       final notifications = _RecordingNotifications();
@@ -147,13 +146,13 @@ void main() {
       expect(
         notifications.lastScheduledDate!.difference(expected).abs().inMinutes,
         lessThanOrEqualTo(1),
-        reason: 'derselbe reale Moment erwartet, '
-            'bekommen ${notifications.lastScheduledDate}',
+        reason: 'expected the same real moment, '
+            'got ${notifications.lastScheduledDate}',
       );
     });
 
     test(
-        'storniert nur die vorherige Sleep-Reminder-Notification (per fester ID), nie alle Notifications',
+        'only cancels the previous sleep-reminder notification (by a fixed id), never all notifications',
         () async {
       final appState = await _freshAppState();
       final notifications = _RecordingNotifications();
@@ -167,34 +166,34 @@ void main() {
   });
 
 
-  group('die Bettzeit darf nie in der Vergangenheit geplant werden (T-110)', () {
-    // FR-16 haengt seinen zweiten Checkpoint an diese Notification:
+  group('bedtime must never be scheduled in the past (T-110)', () {
+    // FR-16 hangs its second checkpoint off this notification:
     //
-    //   "Voraussetzung (gebaut): eine NotificationContent ohne title/body,
-    //    die `onNotificationCreatedMethod` ausloest."
+    //   "Precondition (built): a NotificationContent without title/body,
+    //    that triggers `onNotificationCreatedMethod`."
     //
-    // `scheduleSleepReminder` stornierte die vorhandene aber bedingungslos und
-    // plante dann neu - auch fuer einen Zeitpunkt, der schon vorbei ist. Ist
-    // `sleepGoal + reminderDuration` groesser als der Abstand bis zum naechsten
-    // Weckzeitpunkt, ist die berechnete Bettzeit vergangen.
+    // `scheduleSleepReminder` used to cancel the existing one unconditionally
+    // and then reschedule - even for an instant that has already passed. If
+    // `sleepGoal + reminderDuration` is greater than the distance to the next
+    // wake instant, the computed bedtime is in the past.
     //
-    // Was Android damit macht, ist nachgelesen, nicht vermutet: in
-    // `AndroidAwnCore-0.12.1.aar` liefert `CronUtils.getNextCalendar` fuer
-    // jedes Ergebnis vor "jetzt" `null`, `NotificationScheduler.doInBackground`
-    // ruft daraufhin `cancelSchedule`, loggt "Date is not more valid." und
-    // bricht ab - das Created-Ereignis wird nur im Nicht-null-Zweig gesendet.
-    // Die alte Notification ist zu dem Zeitpunkt bereits storniert. Ergebnis:
-    // fuer diese Nacht laeuft FR-16s Checkpoint 2 gar nicht, also wird ein
-    // untertags eingetretener Zeitzonenwechsel erst beim Klingeln bemerkt -
-    // genau das Szenario, gegen das der zweite Checkpoint gebaut wurde.
+    // What Android does with it is read from the source, not guessed: in
+    // `AndroidAwnCore-0.12.1.aar`, `CronUtils.getNextCalendar` returns `null`
+    // for any result before "now", `NotificationScheduler.doInBackground`
+    // then calls `cancelSchedule`, logs "Date is not more valid." and
+    // aborts - the Created event is only sent on the non-null branch. The
+    // old notification is already cancelled by that point. Result: for that
+    // night, FR-16's checkpoint 2 doesn't run at all, so a time zone change
+    // that happened during the day is only noticed at the next ring -
+    // exactly the scenario the second checkpoint was built against.
 
-    test('vergangene Bettzeit: der Aufhaenger wird trotzdem in die Zukunft gelegt',
+    test('past bedtime: the hook is placed in the future anyway',
         () async {
       final appState = await _freshAppState();
       final now = DateTime.now();
 
-      // Naechster Weckzeitpunkt in 5 Stunden, Schlafziel 9 Stunden
-      // -> Bettzeit vor 4 Stunden.
+      // Next wake instant in 5 hours, sleep goal 9 hours
+      // -> bedtime 4 hours ago.
       appState.pendingDayValues = {
         isoDate(now.add(const Duration(hours: 5))):
             now.add(const Duration(hours: 5)).millisecondsSinceEpoch,
@@ -206,18 +205,18 @@ void main() {
       await scheduleSleepReminder(appState, notifications: notifications);
 
       expect(notifications.callCount, 1,
-          reason: 'ohne neue Notification haette FR-16 keinen Aufhaenger mehr');
+          reason: 'without a new notification, FR-16 would have no hook left');
       expect(notifications.lastScheduledDate, isNotNull);
       expect(notifications.lastScheduledDate!.isAfter(now), isTrue,
-          reason: 'ein vollstaendig bestimmtes Datum in der Vergangenheit hat '
-              'keinen naechsten gueltigen Termin - Android verwirft es');
+          reason: 'a fully determined date in the past has no next valid '
+              'occurrence - Android discards it');
     });
 
-    test('vergangene Bettzeit: der Aufhaenger ist still, auch bei aktiver Erinnerung',
+    test('past bedtime: the hook is silent, even with the reminder active',
         () async {
-      // Eine sichtbare "geh schlafen"-Meldung Stunden nach dem gemeinten
-      // Zeitpunkt waere irrefuehrend. FR-16 trennt Sichtbarkeit ausdruecklich
-      // vom Aufhaenger; hier ist nur der Aufhaenger noch sinnvoll.
+      // A visible "time to sleep" message hours after the intended instant
+      // would be misleading. FR-16 explicitly separates visibility from the
+      // hook; here only the hook still makes sense.
       final appState = await _freshAppState();
       final now = DateTime.now();
       appState.pendingDayValues = {
@@ -235,9 +234,9 @@ void main() {
       expect(notifications.lastBody, isNull);
     });
 
-    test('zukuenftige Bettzeit bleibt unveraendert sichtbar und puenktlich',
+    test('a future bedtime stays visible and on time, unchanged',
         () async {
-      // Gegenprobe gegen eine Ueberkorrektur.
+      // Counter-check against over-correction.
       final appState = await _freshAppState();
       final now = DateTime.now();
       appState.pendingDayValues = {
@@ -254,7 +253,7 @@ void main() {
       expect(notifications.lastTitle, isNotNull);
       expect(notifications.lastScheduledDate!.isAfter(now.add(const Duration(hours: 7))),
           isTrue,
-          reason: 'rund 8 Stunden voraus, nicht vorgezogen');
+          reason: 'around 8 hours ahead, not brought forward');
     });
   });
 }

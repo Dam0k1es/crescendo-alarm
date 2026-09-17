@@ -3,33 +3,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wakeywakey/models/scheduling/scheduling_v2.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 
-// docs/TODO.md T-61, Ebene 1/2/3 der geplanten Teststruktur.
+// docs/TODO.md T-61, levels 1/2/3 of the planned test structure.
 //
-// Semantik (Option B, entschieden vor diesen Tests): jeder Wert der
-// Domänenschicht ist ein **echter absoluter Instant** (FR-1). Nur dort, wo
-// eine geräte-lokale `TimeOfDay` (`preferredWakeUpTime`) auf einen Instant trifft, muss
-// `deviceUtcOffset` einfließen - also in applyGapDayDrift und coldStart.
-// distribute/groupTarget sind dagegen frame-invariant: sie vergleichen
-// ausschließlich Instant mit Instant, und die Tag_i-Platzierung im lokalen
-// Frame ergibt nach Rückumrechnung exakt denselben Instant wie im Rohframe.
+// Semantics (Option B, decided before these tests): every domain-layer value
+// is a **real absolute instant** (FR-1). Only where a device-local
+// `TimeOfDay` (`preferredWakeUpTime`) meets an instant does `deviceUtcOffset`
+// need to come in - i.e. in applyGapDayDrift and coldStart.
+// distribute/groupTarget, by contrast, are frame-invariant: they exclusively
+// compare instant with instant, and the day_i placement in the local frame
+// yields, after converting back, exactly the same instant as in the raw
+// frame.
 //
-// Alle Instants werden explizit als UTC konstruiert und der Geräte-Versatz
-// explizit übergeben - die Systemzeitzone der Testmaschine darf nie einfließen
-// (FR-2 "Testbarkeit").
+// All instants are explicitly constructed as UTC and the device offset is
+// explicitly passed in - the test machine's system time zone must never come
+// into play (FR-2 "testability").
 
-/// Ein echter Instant (UTC).
+/// A real instant (UTC).
 DateTime _utc(int hour, int minute, {int day = 1}) =>
     DateTime.utc(2026, 3, day, hour, minute);
 
-/// Gerät in Berlin-Sommerzeit.
+/// A device on Berlin daylight-saving time.
 const berlin = Duration(hours: 2);
 
 void main() {
-  group('applyGapDayDrift mit deviceUtcOffset != 0 (T-61, Ebene 2)', () {
-    test('wunschzeit ist bereits erreicht (lokal gelesen) -> kein Drift', () {
-      // v = 05:00 UTC = 07:00 lokal in Berlin. preferredWakeUpTime ist 07:00 lokal,
-      // also genau erreicht - es darf NICHT gedriftet werden. Der alte Code
-      // liest 05:00 als Ziffern und driftet 30min Richtung "07:00".
+  group('applyGapDayDrift with deviceUtcOffset != 0 (T-61, level 2)', () {
+    test('preferredWakeUpTime is already reached (read locally) -> no drift', () {
+      // v = 05:00 UTC = 07:00 local in Berlin. preferredWakeUpTime is 07:00
+      // local, so it's exactly reached - it must NOT drift. The old code
+      // reads 05:00 as digits and drifts 30min toward "07:00".
       final result = applyGapDayDrift(
         v: _utc(5, 0, day: 1),
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
@@ -40,9 +41,9 @@ void main() {
       expect(result, _utc(5, 0, day: 2));
     });
 
-    test('Drift Richtung später wird lokal gemessen', () {
-      // v = 05:00 UTC = 07:00 lokal, preferredWakeUpTime 09:00 lokal -> Distanz 2h,
-      // gekappt auf 30min -> 07:30 lokal = 05:30 UTC am Folgetag.
+    test('drift toward later is measured locally', () {
+      // v = 05:00 UTC = 07:00 local, preferredWakeUpTime 09:00 local ->
+      // distance 2h, capped at 30min -> 07:30 local = 05:30 UTC the next day.
       final result = applyGapDayDrift(
         v: _utc(5, 0, day: 1),
         preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
@@ -53,9 +54,10 @@ void main() {
       expect(result, _utc(5, 30, day: 2));
     });
 
-    test('lokales Datum zählt, nicht das UTC-Datum', () {
-      // v = 23:00 UTC am Tag 1 = 01:00 lokal am Tag 2. "Morgen" ist damit
-      // lokal Tag 3, nicht Tag 2. preferredWakeUpTime = 01:00 lokal (erreicht).
+    test('the local date counts, not the UTC date', () {
+      // v = 23:00 UTC on day 1 = 01:00 local on day 2. "Tomorrow" is
+      // therefore locally day 3, not day 2. preferredWakeUpTime = 01:00
+      // local (reached).
       final result = applyGapDayDrift(
         v: _utc(23, 0, day: 1),
         preferredWakeUpTime: const TimeOfDay(hour: 1, minute: 0),
@@ -63,11 +65,11 @@ void main() {
         deviceUtcOffset: berlin,
       );
 
-      // lokal Tag 3, 01:00 -> Instant 23:00 UTC am Tag 2.
+      // Locally day 3, 01:00 -> instant 23:00 UTC on day 2.
       expect(result, _utc(23, 0, day: 2));
     });
 
-    test('Invarianz: bei deviceUtcOffset = 0 unverändertes Verhalten', () {
+    test('invariance: unchanged behaviour at deviceUtcOffset = 0', () {
       final result = applyGapDayDrift(
         v: _utc(7, 0, day: 1),
         preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
@@ -79,10 +81,10 @@ void main() {
     });
   });
 
-  group('coldStart mit deviceUtcOffset != 0 (T-61, Ebene 2)', () {
-    test('wunschzeit wird als lokale Uhrzeit des Fenstertages gesetzt', () {
-      // Fenstertage sind lokale Kalenderdaten (Datums-Marker). preferredWakeUpTime
-      // 07:00 lokal am Tag 1 -> Instant 05:00 UTC am Tag 1.
+  group('coldStart with deviceUtcOffset != 0 (T-61, level 2)', () {
+    test('preferredWakeUpTime is set as the window day\'s local time of day', () {
+      // Window days are local calendar dates (date markers). preferredWakeUpTime
+      // 07:00 local on day 1 -> instant 05:00 UTC on day 1.
       final days = [_utc(0, 0, day: 1), _utc(0, 0, day: 2)];
 
       final result = coldStart(
@@ -95,8 +97,8 @@ void main() {
       expect(result[days[1]], _utc(5, 0, day: 2));
     });
 
-    test('lokale Uhrzeit vor dem Versatz rutscht auf den UTC-Vortag', () {
-      // 01:00 lokal am Tag 2 = 23:00 UTC am Tag 1.
+    test('a local time before the offset slides to the UTC day before', () {
+      // 01:00 local on day 2 = 23:00 UTC on day 1.
       final days = [_utc(0, 0, day: 2)];
 
       final result = coldStart(
@@ -108,7 +110,7 @@ void main() {
       expect(result[days[0]], _utc(23, 0, day: 1));
     });
 
-    test('Invarianz: bei deviceUtcOffset = 0 unverändertes Verhalten', () {
+    test('invariance: unchanged behaviour at deviceUtcOffset = 0', () {
       final days = [_utc(0, 0, day: 1)];
 
       final result = coldStart(
@@ -121,7 +123,7 @@ void main() {
     });
   });
 
-  group('hardFloor unter Versatz (T-61, Ebene 1)', () {
+  group('hardFloor under an offset (T-61, level 1)', () {
     Meeting meetingAt(DateTime from) => Meeting(
           from: from,
           to: from.add(const Duration(hours: 1)),
@@ -130,35 +132,35 @@ void main() {
           endTimeZone: 'Etc/UTC',
         );
 
-    test('der Rückgabewert ist versatz-unabhängig (der Termin verschiebt sich nicht)',
+    test('the return value is offset-independent (the appointment does not shift)',
         () {
-      // 23:00 UTC am Tag 10 = 01:00 lokal am Tag 11 (Berlin, +2).
+      // 23:00 UTC on day 10 = 01:00 local on day 11 (Berlin, +2).
       final event = meetingAt(_utc(23, 0, day: 10));
 
       final berlinValue = hardFloor(
-        day: _utc(0, 0, day: 11), // lokaler Kalendertag in Berlin
+        day: _utc(0, 0, day: 11), // local calendar day in Berlin
         allEvents: [event],
         deviceUtcOffset: berlin,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
       );
       final utcValue = hardFloor(
-        day: _utc(0, 0, day: 10), // derselbe Termin, aber UTC-Kalendertag
+        day: _utc(0, 0, day: 10), // same appointment, but a UTC calendar day
         allEvents: [event],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
       );
 
-      // FR-1/FR-16: instant-basiert - identischer Instant in beiden Zonen.
+      // FR-1/FR-16: instant-based - identical instant in both zones.
       expect(berlinValue, _utc(23, 0, day: 10));
       expect(utcValue, berlinValue);
     });
 
-    test('die Tageszuordnung dagegen folgt dem Versatz', () {
+    test('the day assignment, by contrast, follows the offset', () {
       final event = meetingAt(_utc(23, 0, day: 10));
 
-      // Unter +2 gehört der Termin zum lokalen Tag 11, nicht zum Tag 10.
+      // Under +2 the appointment belongs to local day 11, not day 10.
       expect(
         hardFloor(
           day: _utc(0, 0, day: 10),
@@ -172,7 +174,7 @@ void main() {
     });
   });
 
-  group('computeWeekPlan-Invarianz (T-61, Ebene 3a)', () {
+  group('computeWeekPlan invariance (T-61, level 3a)', () {
     Meeting meetingAt(DateTime from) => Meeting(
           from: from,
           to: from.add(const Duration(hours: 1)),
@@ -181,15 +183,15 @@ void main() {
           endTimeZone: 'Etc/UTC',
         );
 
-    test('gleiche lokale Termin-Ablesung -> gleicher Plan, nur um den Versatz verschoben',
+    test('same local appointment reading -> same plan, just shifted by the offset',
         () {
       final window = [1, 2, 3, 4, 5, 6].map((d) => _utc(0, 0, day: d)).toList();
 
       WeekPlanResult plan(Duration offset, Duration eventShift) => computeWeekPlan(
             window: window,
             lastEffectiveWakeTime: _utc(7, 0, day: 0).subtract(offset),
-            // Termin so verschoben, dass seine LOKALE Ablesung in beiden
-            // Läufen identisch ist (05:00 lokal am Tag 6).
+            // The appointment is shifted so its LOCAL reading is identical in
+            // both runs (05:00 local on day 6).
             allEvents: [meetingAt(_utc(5, 0, day: 6).subtract(eventShift))],
             deviceUtcOffset: offset,
             durationToWakeUp: Duration.zero,
@@ -206,19 +208,19 @@ void main() {
         final utcValue = atUtc.valuesByDay[day];
         final berlinValue = atBerlin.valuesByDay[day];
         if (utcValue == null) {
-          expect(berlinValue, isNull, reason: 'Tag $day');
+          expect(berlinValue, isNull, reason: 'day $day');
           continue;
         }
-        // Identische lokale Ziffern => Instants differieren genau um den
-        // Versatz. Wäre die Arithmetik frame-inkonsistent, würde hier etwas
-        // anderes herauskommen.
-        expect(berlinValue, utcValue.subtract(berlin), reason: 'Tag $day');
+        // Identical local digits => the instants differ by exactly the
+        // offset. If the arithmetic were frame-inconsistent, something else
+        // would come out here.
+        expect(berlinValue, utcValue.subtract(berlin), reason: 'day $day');
       }
     });
   });
 
-  group('distribute/groupTarget sind frame-invariant (T-61, festgeschrieben)', () {
-    test('distribute liefert bei jedem Versatz denselben Instant', () {
+  group('distribute/groupTarget are frame-invariant (T-61, locked in)', () {
+    test('distribute yields the same instant under any offset', () {
       final anchor = _utc(5, 0, day: 1);
       final target = _utc(3, 0, day: 3);
 
@@ -235,9 +237,9 @@ void main() {
         maxDailyDelta: const Duration(hours: 2),
       );
 
-      // Bewusst dieselbe Signatur: distribute bekommt KEINEN Versatz, weil er
-      // das Ergebnis nicht verändern kann (Differenz zweier Instants im
-      // gleichen Frame, und die Tag_i-Platzierung ist offsetneutral).
+      // Deliberately the same signature: distribute gets NO offset, because
+      // it cannot change the result (the difference of two instants in the
+      // same frame, and the day_i placement is offset-neutral).
       expect(shifted.valuesByDayOffset[1], zero.valuesByDayOffset[1]);
       expect(shifted.valuesByDayOffset[2], zero.valuesByDayOffset[2]);
       expect(zero.valuesByDayOffset[2], _utc(3, 0, day: 3));

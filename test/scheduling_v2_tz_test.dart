@@ -5,18 +5,17 @@ import 'package:wakeywakey/models/scheduling/scheduling_v2.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
-// docs/TODO.md T-61, Ebene 1 und 4 der geplanten Teststruktur - mit der
-// Infrastruktur, die bisher fehlte: `tz.initializeTimeZones()` plus ein
-// Fixture-Helper, der `Meeting.from` so baut, wie `device_calendar` es in
-// Produktion liefert - als `tz.TZDateTime` in der **termin-eigenen** Zone,
-// nicht UTC-getaggt. Genau daran ist der frühere Teilfix gescheitert: alle
-// Fixtures nutzten `DateTime.utc(...)`, also zufällig denselben Frame wie der
-// Anker.
+// docs/TODO.md T-61, levels 1 and 4 of the planned test structure - with the
+// infrastructure that had been missing so far: `tz.initializeTimeZones()`
+// plus a fixture helper that builds `Meeting.from` the way `device_calendar`
+// delivers it in production - as a `tz.TZDateTime` in the **appointment's
+// own** zone, not UTC-tagged. That's exactly what the earlier partial fix
+// failed on: every fixture used `DateTime.utc(...)`, so it happened to share
+// the same frame as the anchor.
 //
-// Semantik (Option B): jeder Wert der Domänenschicht ist ein echter absoluter
-// Instant, und alle Werte tragen denselben Frame (UTC), damit die
-// ziffernvergleichende Arithmetik (`_wallClockDelta`) korrekte Differenzen
-// liefert.
+// Semantics (Option B): every domain-layer value is a real absolute instant,
+// and all values carry the same frame (UTC), so the digit-comparing
+// arithmetic (`_wallClockDelta`) yields correct differences.
 
 Meeting _meetingInZone(String zone, int year, int month, int day, int hour,
         int minute) =>
@@ -34,9 +33,9 @@ const berlinSummer = Duration(hours: 2);
 void main() {
   setUpAll(tzdata.initializeTimeZones);
 
-  group('hardFloor normalisiert den Frame (T-61, Ebene 1)', () {
-    test('Rückgabewert ist derselbe Instant, aber UTC-getaggt', () {
-      // 09:00 Europe/Berlin (Sommerzeit) = 07:00 UTC, minus 30min Vorlauf.
+  group('hardFloor normalizes the frame (T-61, level 1)', () {
+    test('the return value is the same instant, but UTC-tagged', () {
+      // 09:00 Europe/Berlin (daylight saving) = 07:00 UTC, minus 30min lead time.
       final event = _meetingInZone('Europe/Berlin', 2026, 7, 10, 9, 0);
 
       final result = hardFloor(
@@ -48,16 +47,16 @@ void main() {
       );
 
       expect(result, isNotNull);
-      // Derselbe reale Moment (FR-16: der Termin verschiebt sich nicht)...
+      // The same real moment (FR-16: the appointment doesn't shift)...
       expect(result!.isAtSameMomentAs(DateTime.utc(2026, 7, 10, 6, 30)), isTrue);
-      // ...aber im gemeinsamen Frame, damit die Ziffernarithmetik stimmt.
+      // ...but in the shared frame, so the digit arithmetic is correct.
       expect(result.isUtc, isTrue);
       expect(result.hour, 6);
     });
 
-    test('ein Termin in einer FREMDEN Zone wird ebenfalls normalisiert', () {
-      // 03:00 Asia/Tokyo (+9) = 18:00 UTC am Vortag; Gerät in Berlin (+2)
-      // ordnet ihn dem lokalen Vortag (20:00 Berlin) zu.
+    test('an appointment in a FOREIGN zone is normalized too', () {
+      // 03:00 Asia/Tokyo (+9) = 18:00 UTC the day before; a device in Berlin
+      // (+2) assigns it to the local day before (20:00 Berlin).
       final event = _meetingInZone('Asia/Tokyo', 2026, 7, 11, 3, 0);
 
       final result = hardFloor(
@@ -74,8 +73,8 @@ void main() {
     });
   });
 
-  group('ΔT über die Frame-Grenze (T-61, Ebene 2 mit echtem TZDateTime)', () {
-    test('distribute rechnet die lokale Differenz, nicht die Ziffern-Differenz',
+  group('ΔT across the frame boundary (T-61, level 2 with a real TZDateTime)', () {
+    test('distribute computes the local difference, not the digit difference',
         () {
       final event = _meetingInZone('Europe/Berlin', 2026, 7, 10, 9, 0);
       final target = hardFloor(
@@ -86,7 +85,7 @@ void main() {
         durationToGetReady: Duration.zero,
       )!;
 
-      // Anker wie in Produktion aus pendingDayValues: 07:00 Berlin = 05:00 UTC.
+      // Anchor as it comes from pendingDayValues in production: 07:00 Berlin = 05:00 UTC.
       final anchor = DateTime.utc(2026, 7, 9, 5, 0);
 
       final curve = distribute(
@@ -96,24 +95,24 @@ void main() {
         maxDailyDelta: const Duration(hours: 12),
       );
 
-      // Lokal: 07:00 -> 08:30, also ΔT = +1:30. Vor dem Fix wurden die Ziffern
-      // 5 und 8 verglichen (ΔT = +3:30) und das Ergebnis lag 2 Stunden zu spät.
+      // Locally: 07:00 -> 08:30, so ΔT = +1:30. Before the fix, the digits 5
+      // and 8 were compared (ΔT = +3:30) and the result was 2 hours too late.
       expect(
         curve.valuesByDayOffset[1]!
             .isAtSameMomentAs(DateTime.utc(2026, 7, 10, 6, 30)),
         isTrue,
-        reason: 'erwartet 06:30 UTC = 08:30 Berlin, '
-            'bekommen ${curve.valuesByDayOffset[1]}',
+        reason: 'expected 06:30 UTC = 08:30 Berlin, '
+            'got ${curve.valuesByDayOffset[1]}',
       );
     });
   });
 
-  group('FR-18-Grenze zum Alarm-Plugin (T-61, Ebene 4)', () {
-    test('alarmPlatformTime erhält den realen Moment, minutengenau', () {
-      // Ein geplanter Wert ist ein UTC-getaggter Instant. Das Plugin bekommt
-      // eine lokale Wall-Clock-Zeit - vorher wurden dafür einfach die Ziffern
-      // des UTC-Werts als lokal interpretiert, der Alarm klingelte also um den
-      // Geräte-Versatz zu früh.
+  group('FR-18 boundary to the alarm plugin (T-61, level 4)', () {
+    test('alarmPlatformTime receives the real moment, minute-precise', () {
+      // A planned value is a UTC-tagged instant. The plugin receives a local
+      // wall-clock time - previously the UTC value's digits were simply
+      // interpreted as local, so the alarm rang too early by the device
+      // offset.
       final planned = DateTime.utc(2026, 7, 10, 6, 30, 45);
 
       final platformTime = alarmPlatformTime(planned);
@@ -122,12 +121,12 @@ void main() {
       expect(
         platformTime.isAtSameMomentAs(DateTime.utc(2026, 7, 10, 6, 30)),
         isTrue,
-        reason: 'derselbe reale Moment (Sekunden abgeschnitten), '
-            'bekommen $platformTime',
+        reason: 'the same real moment (seconds truncated), '
+            'got $platformTime',
       );
     });
 
-    test('ein bereits lokaler Wert bleibt unverändert (ManualAlarm-Pfad)', () {
+    test('an already-local value stays unchanged (ManualAlarm path)', () {
       final local = DateTime(2026, 7, 10, 6, 30);
 
       final platformTime = alarmPlatformTime(local);

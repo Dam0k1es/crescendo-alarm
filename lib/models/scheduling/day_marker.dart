@@ -1,47 +1,47 @@
-// Kalender-Tagesarithmetik für scheduling-v2, an einer Stelle (docs/TODO.md
-// T-87). Vorher lag dieselbe Rechnung dreimal verstreut - als `_midnight`/
-// `_dayMarker` in replan.dart und als Ad-hoc-`add(Duration(days: n))` bzw.
-// `difference(...).inDays` in scheduling_v2.dart - und genau die verstreuten
-// Kopien waren die Ursache von T-74d und T-76.
+// Calendar day arithmetic for scheduling-v2, in one place (docs/TODO.md
+// T-87). Previously the same computation was scattered three times - as
+// `_midnight`/`_dayMarker` in replan.dart and as ad-hoc
+// `add(Duration(days: n))` or `difference(...).inDays` in scheduling_v2.dart
+// - and exactly those scattered copies were the cause of T-74d and T-76.
 //
-// Der Kern der Sache: ein Tagesmarker ist ein **Kalenderdatum**, keine Dauer.
-// Auf einem lokal getaggten (oder `tz.TZDateTime`-) Marker liefert
-// `add(Duration(days: 1))` an einer Sommerzeit-Umstellung 23:00 des Vortags,
-// und `difference(...).inDays` zählt um einen Tag zu wenig, weil der
-// betroffene Tag nur 23 Stunden hat. Beides muss über die Datumsfelder
-// laufen, nicht über absolute Dauern.
+// The heart of the matter: a day marker is a **calendar date**, not a
+// duration. On a locally-tagged (or `tz.TZDateTime`) marker, across a
+// daylight-saving transition `add(Duration(days: 1))` yields 23:00 of the
+// previous day, and `difference(...).inDays` counts one day too few, because
+// the affected day only has 23 hours. Both must run over the date fields,
+// not over absolute durations.
 
-/// Mitternacht von [t]s eigenem Kalendertag, im selben Frame wie [t]
-/// (`DateTime(...)` baut immer einen *lokalen* Wert, unabhängig von der
-/// Herkunft der Komponenten - auf einem UTC-getaggten [t] würde das dessen
-/// Ziffern im Host-Versatz reinterpretieren).
+/// Midnight of [t]'s own calendar day, in the same frame as [t]
+/// (`DateTime(...)` always builds a *local* value, regardless of where the
+/// components came from - on a UTC-tagged [t] this would reinterpret its
+/// digits in the host offset).
 DateTime midnight(DateTime t) =>
     t.isUtc ? DateTime.utc(t.year, t.month, t.day) : DateTime(t.year, t.month, t.day);
 
-/// [base]s Kalenderdatum um [days] verschoben, über die Datumsfelder gerechnet
-/// (`DateTime`s Konstruktor normalisiert Überläufe wie `day: 32` selbst).
+/// [base]'s calendar date shifted by [days], computed over the date fields
+/// (`DateTime`'s constructor normalizes overflows like `day: 32` itself).
 DateTime dayMarker(DateTime base, int days) => base.isUtc
     ? DateTime.utc(base.year, base.month, base.day + days)
     : DateTime(base.year, base.month, base.day + days);
 
-/// Ein frame-freier, vergleichbarer Stempel für [t]s Kalendertag: dessen
-/// Datumsziffern, als UTC-Mitternacht getragen. UTC kennt keine Umstellung,
-/// deshalb ist die Differenz zweier solcher Stempel immer exakt ein Vielfaches
-/// von 24 Stunden - genau das, was [dayDistance] braucht.
+/// A frame-free, comparable stamp for [t]'s calendar day: its date digits,
+/// carried as UTC midnight. UTC has no transitions, so the difference between
+/// two such stamps is always exactly a multiple of 24 hours - exactly what
+/// [dayDistance] needs.
 ///
-/// Bewusst frame-übergreifend: [t] darf ein UTC-Instant, ein lokaler Marker
-/// oder ein `tz.TZDateTime` sein. Verglichen wird das Kalenderdatum, das [t]
-/// in seinem *eigenen* Frame benennt - für Fensterttage (Datumsmarker) ist das
-/// die gesuchte Bedeutung.
+/// Deliberately frame-crossing: [t] may be a UTC instant, a local marker, or
+/// a `tz.TZDateTime`. What's compared is the calendar date that [t] names in
+/// its *own* frame - for window days (date markers) that is the meaning
+/// wanted.
 DateTime dayStamp(DateTime t) => DateTime.utc(t.year, t.month, t.day);
 
-/// Wie viele Kalendertage [a]s Datum nach [b]s Datum liegt (negativ, wenn
-/// davor). Ersetzt `a.difference(b).inDays`, das an einer
-/// Sommerzeit-Umstellung um einen Tag zu klein ist.
+/// How many calendar days [a]'s date lies after [b]'s date (negative if
+/// before). Replaces `a.difference(b).inDays`, which is one day too small
+/// across a daylight-saving transition.
 int dayDistance(DateTime a, DateTime b) =>
     dayStamp(a).difference(dayStamp(b)).inDays;
 
-/// Der `YYYY-MM-DD`-Schlüssel, unter dem ein Tag in `AppState.pendingDayValues`
-/// und `pendingDayInstantAnchored` steht.
+/// The `YYYY-MM-DD` key under which a day is stored in
+/// `AppState.pendingDayValues` and `pendingDayInstantAnchored`.
 String isoDate(DateTime day) =>
     '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';

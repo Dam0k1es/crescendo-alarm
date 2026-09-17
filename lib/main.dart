@@ -262,8 +262,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   /// foreground transition, not only when this widget is first mounted.
   /// `initState`'s post-frame call covers a cold start (reboot, force-quit);
   /// this covers resuming a warm process, which is the normal case on Android
-  /// and the third gap FR-17 explicitly names ("ein App-Öffnen zwischendurch
-  /// ist ein zusätzlicher, günstiger Gelegenheits-Neuread"). Idempotent by
+  /// and the third gap FR-17 explicitly names ("opening the app in between is
+  /// an additional, cheap opportunistic re-read"). Idempotent by
   /// FR-17's own guard: the checkpoint is a no-op when today has already been
   /// replanned - and it is serialized against the ring checkpoint that the
   /// full-screen intent bringing us to the foreground has just started

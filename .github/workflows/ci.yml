@@ -22,31 +22,30 @@ env:
 
 jobs:
   analyze-and-test:
-    # Der Name bleibt, weil release.yml und die needs: unten darauf verweisen.
-    # Inhaltlich ist das jetzt eine Matrix ueber Zeitzonen - siehe unten.
+    # The name stays, because release.yml and the needs: below refer to it.
+    # In substance this is now a matrix over timezones - see below.
     name: Analyze & Test (TZ=${{ matrix.tz }})
     runs-on: ubuntu-latest
     strategy:
-      # Ein Fehlschlag in einer Zone soll die anderen Zonen noch zu Ende
-      # laufen lassen: bei einem Frame-Fehler ist das MUSTER ueber die Zonen
-      # die eigentliche Diagnose (nur Halbstunden-Offsets? nur Sommerzeit?).
+      # Let a failure in one zone still let the other zones run to
+      # completion: with a frame bug, the PATTERN across zones is the
+      # actual diagnosis (only half-hour offsets? only daylight saving?).
       fail-fast: false
       matrix:
-        # Die dominante Fehlerklasse dieses Projekts ist Frame-Verwirrung
-        # (Instant gegen Wanduhrzeit). Drei echte Bugs - docs/TODO.md T-61,
-        # T-74d, T-76 - waren auf der Entwicklungsmaschine PRINZIPIELL
-        # unsichtbar, weil die auf UTC+0 laeuft; GitHubs Runner auch. Die
-        # Zonen sind deshalb nach Fehlerpotenzial gewaehlt, nicht nach
-        # Bekanntheit:
-        #   Europe/Berlin      Sommerzeitumstellung (T-74d/T-76)
-        #   Asia/Tokyo         grosser Versatz, KEINE Sommerzeit
-        #   America/St_Johns   -03:30 und Sommerzeit
-        #   Pacific/Chatham    +12:45, jenseits der Datumsgrenze
-        #   Australia/Lord_Howe +10:30 mit halbstuendiger Umstellung
-        # An den Halb- und Dreiviertelstunden faellt Ziffernarithmetik am
-        # ehesten auf. Verifiziert (2026-09-10), dass die TZ-Variable Darts
-        # DateTime im flutter-test-Prozess wirklich erreicht - die Matrix ist
-        # kein Vakuum. Kosten: rund eine Minute pro Zone.
+        # The dominant bug class in this project is frame confusion
+        # (instant vs. wall clock time). Three real bugs - docs/TODO.md T-61,
+        # T-74d, T-76 - were STRUCTURALLY invisible on the dev machine,
+        # because it runs on UTC+0; so do GitHub's runners. The zones are
+        # therefore chosen for bug potential, not familiarity:
+        #   Europe/Berlin      daylight saving transition (T-74d/T-76)
+        #   Asia/Tokyo         large offset, NO daylight saving
+        #   America/St_Johns   -03:30 and daylight saving
+        #   Pacific/Chatham    +12:45, beyond the date line
+        #   Australia/Lord_Howe +10:30 with a half-hour transition
+        # Digit arithmetic fails first at the half- and three-quarter-hour
+        # marks. Verified (2026-09-10) that the TZ variable really reaches
+        # Dart's DateTime inside the flutter-test process - the matrix is
+        # not running in a vacuum. Cost: roughly one minute per zone.
         tz:
           - UTC
           - Europe/Berlin
@@ -69,33 +68,34 @@ jobs:
           restore-keys: pub-
       - run: flutter pub get
       - name: Confirm the runner really is in this timezone
-        # Ohne diesen Beweis koennte die Matrix sechsmal dasselbe pruefen und
-        # niemandem auffallen. `date` zeigt den Versatz, den auch Dart sieht.
+        # Without this proof the matrix could check the same thing six
+        # times over and nobody would notice. `date` shows the offset that
+        # Dart sees too.
         run: date +"%Z %z (%Y-%m-%d %H:%M)"
-      # Die Alarm-Ueberlebensmessung faellt ein Urteil ("hat den Reboot
-      # ueberlebt" / "nicht"), also muss ihr Messinstrument selbst geprueft
-      # sein. Zweimal hat es hier danebengelegen: erst fand das Muster nichts,
-      # dann zaehlte es fremde Alarme mit und meldete ein unbegruendetes FAIL
-      # (docs/TODO.md T-99, T-102). Der Selbsttest laeuft gegen aufgezeichnete
-      # dumpsys-Ausgabe, braucht also keinen Emulator - und gehoert deshalb in
-      # die schnelle Spur, nicht erst in den E2E-Job.
+      # The alarm-survival measurement produces a verdict ("survived the
+      # reboot" / "did not"), so its measuring instrument must itself be
+      # verified. It has gotten this wrong twice before: first the pattern
+      # found nothing, then it counted foreign alarms and reported an
+      # unfounded FAIL (docs/TODO.md T-99, T-102). The self-test runs
+      # against recorded dumpsys output, so it needs no emulator - and
+      # therefore belongs in the fast lane, not only in the E2E job.
       - name: Alarm-survival detection self-test
         if: matrix.tz == 'UTC'
         run: bash .github/scripts/check_alarm_survival.sh --self-test
       - name: Analyze
-        # Frame-unabhaengig, deshalb nur im UTC-Bein - sechsmal waere
-        # Verschwendung ohne zusaetzliche Aussage.
+        # Frame-independent, hence only in the UTC leg - running it six
+        # times would be waste with no additional signal.
         if: matrix.tz == 'UTC'
         run: flutter analyze
       - name: Test
         run: flutter test --concurrency 2
       - name: Test with coverage
         if: matrix.tz == 'UTC'
-        # Bewusst KEIN Prozent-Gate: eine willkuerliche Schwelle belohnt hier
-        # das Falsche - triviale Getter-Tests heben sie, waehrend die
-        # Fehlerklasse dieses Projekts (Frame- und Strukturfehler) von
-        # Zeilenabdeckung ueberhaupt nicht erfasst wird. Die lcov-Datei ist
-        # ein Artefakt zum Nachsehen, kein Tor.
+        # Deliberately NO percentage gate: an arbitrary threshold would
+        # reward the wrong thing here - trivial getter tests raise it,
+        # while this project's actual bug class (frame and structural
+        # errors) isn't captured by line coverage at all. The lcov file is
+        # an artifact to inspect, not a gate.
         run: flutter test --coverage --concurrency 2
       - name: Upload coverage
         if: matrix.tz == 'UTC'
@@ -127,15 +127,14 @@ jobs:
           restore-keys: pub-
       - uses: actions/cache@v4
         with:
-          # docs/TODO.md T-102: vorher lag hier `~/.gradle/caches` komplett drin.
-          # Das waechst unbegrenzt - es enthaelt neben den heruntergeladenen
-          # Abhaengigkeiten auch jede transformierte AAR und jeden
-          # Build-Cache-Eintrag. Ergebnis: zwei Gradle-Caches mit 3746 MB und
-          # 2397 MB, und ein Restore, der laenger dauert als der Build spart.
-          # Im Lauf 34535358135 ist der Release-Build daran gestorben - der
-          # Cache-Schritt kippte nach 2m49s, `flutter build apk` lief nie.
-          # Gecacht wird jetzt nur, was sich wirklich lohnt: die geladenen
-          # Module und der Wrapper.
+          # docs/TODO.md T-102: this used to hold the whole of `~/.gradle/caches`.
+          # That grows without bound - besides the downloaded dependencies it
+          # also holds every transformed AAR and every build-cache entry. Result:
+          # two Gradle caches of 3746 MB and 2397 MB, and a restore that took
+          # longer than the build it was meant to save. In run 34535358135 the
+          # release build died from it - the cache step timed out after 2m49s,
+          # `flutter build apk` never ran. Now only what's actually worth it is
+          # cached: the downloaded modules and the wrapper.
           path: |
             ~/.gradle/caches/modules-2
             ~/.gradle/wrapper
@@ -147,20 +146,20 @@ jobs:
         with:
           name: app-development-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
-          # docs/TODO.md T-100: ohne dieses Feld greift GitHubs Standard von
-          # 90 Tagen. Bei ~94 MB je Debug-APK und einem Push pro Arbeitsschritt
-          # waren so 1375 MB Artefaktspeicher aufgelaufen - beim 500-MB-
-          # Kontingent eines privaten Repos das 2,75-fache. Ein Entwicklungs-APK
-          # ist nach wenigen Tagen wertlos, weil der naechste Push es ersetzt.
+          # docs/TODO.md T-100: without this field, GitHub's default of
+          # 90 days applies. At ~94 MB per debug APK and one push per work
+          # step, that had built up to 1375 MB of artifact storage - 2.75x
+          # a private repo's 500 MB quota. A development APK is worthless
+          # after a few days anyway, since the next push replaces it.
           retention-days: 5
 
   # Everything below only runs for the full pipeline (master pushes and PRs into master) -
   # not for plain dev-branch pushes.
 
   security-gate:
-    # Das SCA-/Secret-/SAST-Tor liegt in einer wiederverwendbaren Datei, damit
-    # der Tag-getriggerte Release-Pfad (release.yml) dasselbe Tor durchlaeuft -
-    # vorher hatte er ueberhaupt keins.
+    # The SCA/secret/SAST gate lives in a reusable file so the tag-triggered
+    # release path (release.yml) goes through the same gate - it used to
+    # have none at all.
     if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     uses: ./.github/workflows/security-gate.yml
 
@@ -194,15 +193,14 @@ jobs:
           restore-keys: pub-
       - uses: actions/cache@v4
         with:
-          # docs/TODO.md T-102: vorher lag hier `~/.gradle/caches` komplett drin.
-          # Das waechst unbegrenzt - es enthaelt neben den heruntergeladenen
-          # Abhaengigkeiten auch jede transformierte AAR und jeden
-          # Build-Cache-Eintrag. Ergebnis: zwei Gradle-Caches mit 3746 MB und
-          # 2397 MB, und ein Restore, der laenger dauert als der Build spart.
-          # Im Lauf 34535358135 ist der Release-Build daran gestorben - der
-          # Cache-Schritt kippte nach 2m49s, `flutter build apk` lief nie.
-          # Gecacht wird jetzt nur, was sich wirklich lohnt: die geladenen
-          # Module und der Wrapper.
+          # docs/TODO.md T-102: this used to hold the whole of `~/.gradle/caches`.
+          # That grows without bound - besides the downloaded dependencies it
+          # also holds every transformed AAR and every build-cache entry. Result:
+          # two Gradle caches of 3746 MB and 2397 MB, and a restore that took
+          # longer than the build it was meant to save. In run 34535358135 the
+          # release build died from it - the cache step timed out after 2m49s,
+          # `flutter build apk` never ran. Now only what's actually worth it is
+          # cached: the downloaded modules and the wrapper.
           path: |
             ~/.gradle/caches/modules-2
             ~/.gradle/wrapper
@@ -237,10 +235,11 @@ jobs:
         with:
           name: app-production-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-          # Laenger als das Entwicklungs-APK, weil das gegatete Release-Artefakt
-          # der Sache nach das ist, was man verprobt oder verteilt - aber nicht
-          # 90 Tage (docs/TODO.md T-100). Ein Tag-Release haengt sein APK
-          # ohnehin dauerhaft an die GitHub-Release-Seite.
+          # Longer than the development APK, because the gated release
+          # artifact is, in substance, what actually gets trialed or
+          # distributed - but not 90 days (docs/TODO.md T-100). A tag
+          # release attaches its APK permanently to the GitHub Release
+          # page anyway.
           retention-days: 30
 
   mobsf-full-scan:

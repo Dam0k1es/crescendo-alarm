@@ -5,10 +5,10 @@ import 'package:wakeywakey/models/scheduling/replan.dart';
 import 'package:wakeywakey/models/scheduling/replan_notifications.dart';
 import 'package:wakeywakey/utils/notifications.dart';
 
-// docs/TODO.md T-67/T-74a/T-74b: die drei Warn-Flags (FR-6, FR-9, FR-12)
-// wurden vorher nur im Klingel-Pfad gemeldet, teilten ein gemeinsames try und
-// waren nicht testbar. FR-6 forderte zudem "einmalig", meldete aber bei jedem
-// Replan neu.
+// docs/TODO.md T-67/T-74a/T-74b: the three warning flags (FR-6, FR-9, FR-12)
+// used to be reported only in the ring path, shared one common try, and
+// weren't testable. FR-6 also required "once", but reported again on every
+// replan.
 
 class _RecordingNotifications implements Notifications {
   final List<String> bodies = [];
@@ -65,7 +65,7 @@ Future<AppState> _freshAppState() async {
 }
 
 void main() {
-  test('alle drei Flags werden zu je einer eigenen Meldung', () async {
+  test('all three flags each become their own notification', () async {
     final appState = await _freshAppState();
     final notifications = _RecordingNotifications();
 
@@ -73,11 +73,11 @@ void main() {
         notifications: notifications);
 
     expect(notifications.bodies.length, 3);
-    // unterscheidbare Texte (FR-12 muss von FR-6/FR-9 unterscheidbar sein)
+    // distinguishable texts (FR-12 must be distinguishable from FR-6/FR-9)
     expect(notifications.bodies.toSet().length, 3);
   });
 
-  test('T-74b: eine fehlgeschlagene Meldung unterdrückt die anderen nicht',
+  test('T-74b: one failed notification does not suppress the others',
       () async {
     final appState = await _freshAppState();
     final notifications = _RecordingNotifications()..failuresRemaining = 1;
@@ -85,11 +85,11 @@ void main() {
     await reportReplanNotifications(appState, _allFlags,
         notifications: notifications);
 
-    // Die erste (FR-6) schlägt fehl, FR-9 und FR-12 kommen trotzdem durch.
+    // The first one (FR-6) fails, FR-9 and FR-12 still get through.
     expect(notifications.bodies.length, 2);
   });
 
-  test('T-74a: FR-6 meldet nur einmal pro Overrun-Episode', () async {
+  test('T-74a: FR-6 reports only once per overrun episode', () async {
     final appState = await _freshAppState();
     final notifications = _RecordingNotifications();
     const onlyOverrun = ReplanResult(
@@ -109,7 +109,7 @@ void main() {
     expect(appState.overrunNotificationSent, isTrue);
   });
 
-  test('T-74a: nach Ende der Episode darf wieder gemeldet werden', () async {
+  test('T-74a: reporting is allowed again after the episode ends', () async {
     final appState = await _freshAppState();
     final notifications = _RecordingNotifications();
     const onlyOverrun = ReplanResult(
@@ -120,24 +120,24 @@ void main() {
 
     await reportReplanNotifications(appState, onlyOverrun,
         notifications: notifications);
-    // Episode vorbei -> Merker wird zurückgesetzt.
+    // Episode over -> the marker is reset.
     await reportReplanNotifications(appState, _noFlags,
         notifications: notifications);
     expect(appState.overrunNotificationSent, isFalse);
-    // Neue Episode -> wieder eine Meldung.
+    // New episode -> a notification again.
     await reportReplanNotifications(appState, onlyOverrun,
         notifications: notifications);
 
     expect(notifications.bodies.length, 2);
   });
 
-  // docs/TODO.md T-81: FR-9s Ventil-Meldung hatte - anders als FR-6s - keine
-  // Drosselung, `safetyValveTriggered` wird aber von computeWeekPlan bei JEDEM
-  // Replan neu abgeleitet. Und da nach dem Auslösen kein Alarm mehr klingelt
-  // (T-78), kam die Meldung bei jedem App-Öffnen und jeder
-  // Einstellungsänderung erneut.
-  group('T-81: FR-9 meldet einmal pro Episode', () {
-    test('drei Replans mit stehendem Ventil -> genau eine Meldung', () async {
+  // docs/TODO.md T-81: FR-9's valve notification had - unlike FR-6's - no
+  // throttling, but `safetyValveTriggered` is re-derived by computeWeekPlan on
+  // EVERY replan. And since no alarm rings any more after it fires (T-78),
+  // the notification kept coming back on every app open and every setting
+  // change.
+  group('T-81: FR-9 reports once per episode', () {
+    test('three replans with the valve still tripped -> exactly one notification', () async {
       final appState = await _freshAppState();
       final notifications = _RecordingNotifications();
 
@@ -152,7 +152,7 @@ void main() {
       expect(appState.safetyValveNotificationSent, isTrue);
     });
 
-    test('nach Ende der Episode darf wieder gemeldet werden', () async {
+    test('reporting is allowed again after the episode ends', () async {
       final appState = await _freshAppState();
       final notifications = _RecordingNotifications();
 
@@ -168,11 +168,11 @@ void main() {
     });
   });
 
-  // docs/TODO.md T-88: der Merker wurde VOR dem await gesetzt - schlug die
-  // Meldung fehl, galt sie trotzdem als gesendet und wurde für die ganze
-  // Episode nie nachgeholt.
-  group('T-88: ein Fehlschlag verbraucht den Merker nicht', () {
-    test('FR-6: fehlgeschlagene Meldung wird beim nächsten Replan nachgeholt',
+  // docs/TODO.md T-88: the marker was set BEFORE the await - if the
+  // notification failed, it still counted as sent and was never caught up
+  // for the rest of the episode.
+  group('T-88: a failure does not consume the marker', () {
+    test('FR-6: a failed notification is caught up on the next replan',
         () async {
       final appState = await _freshAppState();
       final notifications = _RecordingNotifications()..failuresRemaining = 1;
@@ -186,7 +186,7 @@ void main() {
           notifications: notifications);
       expect(notifications.bodies, isEmpty);
       expect(appState.overrunNotificationSent, isFalse,
-          reason: 'nichts gesendet -> Merker darf nicht gesetzt sein');
+          reason: 'nothing sent -> the marker must not be set');
 
       await reportReplanNotifications(appState, onlyOverrun,
           notifications: notifications);
@@ -195,7 +195,7 @@ void main() {
       expect(appState.overrunNotificationSent, isTrue);
     });
 
-    test('FR-9: dito für das Sicherheitsventil', () async {
+    test('FR-9: same for the safety valve', () async {
       final appState = await _freshAppState();
       final notifications = _RecordingNotifications()..failuresRemaining = 1;
 
@@ -210,9 +210,9 @@ void main() {
     });
   });
 
-  // Die beiden T-67-Tests, die den Meldepfad über die injizierten
-  // `checkpoint`/`report`-Nähte von runForegroundCheckpointSafely geprüft
-  // haben, sind nach test/checkpoint_test.dart gewandert (Gruppe "T-67"):
-  // dort laufen sie durch die echte Verdrahtung statt durch eine Naht, was
-  // mehr absichert. Hier bleibt die reine Melde-Funktion.
+  // The two T-67 tests that checked the reporting path via the injected
+  // `checkpoint`/`report` seams of runForegroundCheckpointSafely have moved
+  // to test/checkpoint_test.dart (group "T-67"): there they run through the
+  // real wiring instead of a seam, which proves more. What remains here is
+  // the pure reporting function.
 }
