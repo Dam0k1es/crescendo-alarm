@@ -9,6 +9,7 @@ import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/utils/diag/diag_log.dart';
 import 'package:wakeywakey/models/alarms/handler.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
+import 'package:wakeywakey/models/scan_code/deactivation_stop.dart';
 import 'package:wakeywakey/models/scan_code/scan_result.dart';
 
 /// Pure comparison at the heart of the "guaranteed wake-up" gate: does the
@@ -20,7 +21,8 @@ import 'package:wakeywakey/models/scan_code/scan_result.dart';
 /// fails open (returns true) to match the app's existing "illegal state"
 /// behavior, which prioritizes not locking a user in behind a scanner over
 /// enforcing a code that was never actually set.
-bool isDeactivationCodeValid(DeactivationCode? storedCode, String? scannedPayload) {
+bool isDeactivationCodeValid(
+    DeactivationCode? storedCode, String? scannedPayload) {
   if (storedCode == null) {
     return true;
   }
@@ -71,12 +73,31 @@ class _QrScannerState extends State<QrScanner> {
   StreamSubscription<Object?>? _subscription;
   late final AppState _appState;
 
-  /// Set when the camera could not be opened at all (permission revoked,
-  /// hardware busy, unsupported device). It drives the emergency stop button
-  /// below - without it a "guaranteed wake-up" alarm whose scanner never
-  /// initialises would leave the user on a `PopScope(canPop: false)` screen
-  /// with no scanner and no way out.
+  /// Set when the scanner is not working. It drives the emergency stop button
+  /// below - without it a "guaranteed wake-up" alarm whose scanner never comes
+  /// up leaves the user on a `PopScope(canPop: false)` screen with no scanner
+  /// and no way out.
   bool _cameraFailed = false;
+
+  /// Evidence that the decode loop is alive: a scan arrived, successful or not.
+  bool _scannerProvedAlive = false;
+
+  /// The escape hatch's real trigger.
+  ///
+  /// An independent review listed six ways the camera can end up dead without
+  /// `onControllerCreated` ever reporting an error - an empty camera list, a
+  /// throwing image stream (which reports success first), a controller
+  /// replaced mid-init, a re-entrant init hitting the library's own guard, a
+  /// decode isolate that failed to start, and an unscannable frame format.
+  /// Several of those are likeliest exactly when this screen appears: while
+  /// the device is waking from the lock screen.
+  ///
+  /// So the button is not driven by an initialisation event any more but by
+  /// the absence of evidence that scanning works. If nothing has been decoded
+  /// after this long, the user gets a way out regardless of what any callback
+  /// did or did not report.
+  static const Duration _proofOfLifeTimeout = Duration(seconds: 20);
+  Timer? _proofOfLifeTimer;
 
   @override
   void initState() {
@@ -93,10 +114,20 @@ class _QrScannerState extends State<QrScanner> {
     // The camera is driven by ReaderWidget in build(); only the injected test
     // stream needs a subscription here.
     _subscription = QrScanner.debugScanStreamOverride?.listen(_handleScan);
+
+    _proofOfLifeTimer = Timer(_proofOfLifeTimeout, () {
+      if (!mounted || _scannerProvedAlive) return;
+      debugPrint(
+          '=====qrScanner: no scan within ${_proofOfLifeTimeout.inSeconds}s '
+          '- offering the emergency stop');
+      setState(() => _cameraFailed = true);
+    });
   }
 
   @override
   void dispose() {
+    _proofOfLifeTimer?.cancel();
+
     // Stop listening to the injected events, if any. ReaderWidget disposes of
     // its own camera controller.
     unawaited(_subscription?.cancel());
@@ -105,27 +136,42 @@ class _QrScannerState extends State<QrScanner> {
     super.dispose();
   }
 
+  /// Any frame that reached the decoder - hit or miss - proves the loop runs.
+  void _noteScannerAlive() {
+    _scannerProvedAlive = true;
+    _proofOfLifeTimer?.cancel();
+  }
+
   Future<void> _handleScan(ScanResult scan) async {
+    _noteScannerAlive();
     if (mounted) {
-      // A decode without text is a normal outcome for a blurred frame. It must
-      // never be imported as a code of `null`, which nobody could reproduce.
-      if (scan.payload == null) {
+      // A decode with no usable text must never become a stored code: an
+      // empty payload would leave a gate nobody can ever open again. `null`
+      // comes from the test seam; `''` a decoder can genuinely produce.
+      final payload = scan.payload;
+      if (payload == null || payload.isEmpty) {
         return;
       }
 
       // IMPORT QR CODE IF NONE IS SET
       if (_appState.deactivationCode == null) {
-        final data = scan.payload;
-        // docs/TODO.md T-89: der Payload ist das Deaktivierungsgeheimnis -
-        // wer diese Logzeile hat, kann den "garantierten" Wecker beliebig
-        // aushebeln. Geloggt wird nur, DASS importiert wurde.
-        debugPrint('=====qrScanner: Imported a deactivation code '
-            '(${data == null ? 'empty' : 'non-empty'})');
+        // docs/TODO.md T-89: the payload IS the deactivation secret - anyone
+        // holding this log line could defeat the "guaranteed" wake-up at will.
+        // Only the fact of an import is logged, never the value.
+        debugPrint('=====qrScanner: Imported a deactivation code');
         Diag.qrGate(outcome: QrOutcome.imported, codeWasSet: false);
-        final newDeactivationCode = DeactivationCode(payload: data);
+        final newDeactivationCode = DeactivationCode(payload: payload);
         setState(() {
           _appState.deactivationCode = newDeactivationCode;
         });
+
+        // Close immediately. Leaving the camera running meant the SAME code
+        // decoded again a second later - and that second decode took the
+        // validation branch, which with no `alarmId` used to cancel every
+        // armed alarm. This branch is only reachable from the import screen
+        // (a ringing alarm opens the scanner only when a code is already set),
+        // so there is nothing else for it to do here.
+        _closeView();
       }
       // VALIDATE QR CODE AND CLOSE OVERLAY ON SUCCESS
       else {
@@ -167,26 +213,25 @@ class _QrScannerState extends State<QrScanner> {
     Diag.qrGate(outcome: QrOutcome.accepted, codeWasSet: true);
 
     try {
-      // docs/TODO.md T-74e: stop exactly the ringing alarm when we know which
-      // one it is, instead of every saved alarm.
-      final ringingId = widget.alarmId;
-      final List<int> idsToStop;
-      if (ringingId != null) {
-        idsToStop = [ringingId];
-      } else {
-        final alarmsSettings = await Alarm.getAlarms();
-        idsToStop = alarmsSettings.map((a) => a.id).toList();
-      }
+      final idsToStop = deactivationStopTargets(
+        ringingAlarmId: widget.alarmId,
+        platformAlarmIds: widget.alarmId == null
+            ? (await Alarm.getAlarms()).map((a) => a.id).toList()
+            : const <int>[],
+        anythingRinging: widget.alarmId != null || await Alarm.isRinging(),
+      );
       for (final id in idsToStop) {
         try {
           await Alarm.stop(id);
           Handler.onAlarmHandled(_appState, id);
         } catch (e) {
-          debugPrint("=====ScreenAlarmActiveState: Failed to stop alarm: ${e.runtimeType}");
+          debugPrint(
+              "=====ScreenAlarmActiveState: Failed to stop alarm: ${e.runtimeType}");
         }
       }
     } catch (e) {
-      debugPrint('=====validateDeactivationCode: Error stopping alarms: ${e.runtimeType}');
+      debugPrint(
+          '=====validateDeactivationCode: Error stopping alarms: ${e.runtimeType}');
     }
 
     // Only close the scanner if nothing is still ringing - a stop failure
@@ -269,6 +314,21 @@ class _QrScannerState extends State<QrScanner> {
                   showToggleCamera: true,
                   scanDelaySuccess: const Duration(milliseconds: 500),
                   onScan: (code) => _handleScan(ScanResult(code.text)),
+                  // A failed decode is still proof that frames are arriving
+                  // and being looked at - it keeps the escape hatch closed and
+                  // distinguishes "I see nothing" from "that is the wrong
+                  // code", which the app could not tell apart before.
+                  onScanFailure: (_) => _noteScannerAlive(),
+                  loading: const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text(
+                        'Starting the camera...',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white, fontSize: 18),
+                      ),
+                    ),
+                  ),
                   onControllerCreated: (controller, error) {
                     if (!mounted) return;
                     setState(() => _cameraFailed = error != null);

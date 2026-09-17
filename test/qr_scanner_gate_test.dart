@@ -129,6 +129,72 @@ void main() {
     expect(_acceptedScans(), 1);
   });
 
+  testWidgets('importing a code closes the screen', (tester) async {
+    // Found by an independent review: the import screen left the camera
+    // running after the import, so the SAME code decoded again about a second
+    // later - and that second decode took the "nothing was said about which
+    // alarm rings, so stop them all" path. Closing as soon as the code is
+    // learned removes the whole sequence. The screen's job is done at that
+    // point: this branch is only reachable from PageImportQr, because a
+    // ringing alarm only ever opens the scanner when a code is already set.
+    await _pumpScanner(tester);
+
+    scans.add(const ScanResult('the-code'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(QrScanner), findsNothing);
+  });
+
+  testWidgets('an empty payload is not imported as a code', (tester) async {
+    // `ScanResult('')` is not null, so the null guard let it through and the
+    // user ended up with a deactivation code nobody can ever reproduce - the
+    // gate would then be unopenable.
+    final appState = await _pumpScanner(tester);
+
+    scans.add(const ScanResult(''));
+    await tester.pumpAndSettle();
+
+    expect(appState.deactivationCode, isNull);
+    expect(find.byType(QrScanner), findsOneWidget,
+        reason: 'and nothing was learned, so the screen stays open');
+  });
+
+  testWidgets('a scanner that never decodes offers a way out', (tester) async {
+    // The lock-in half of the "guaranteed wake-up" promise. An independent
+    // review listed six ways the camera can be dead while the library's
+    // creation callback reports success or says nothing at all - an empty
+    // camera list, a throwing image stream, a controller replaced mid-init, a
+    // re-entrant init, a dead decode isolate, an unscannable frame format.
+    // Behind `PopScope(canPop: false)` that is a user who cannot stop their
+    // alarm.
+    await _pumpScanner(tester, storedCode: DeactivationCode(payload: 'right'));
+
+    expect(find.text('Stop alarm'), findsNothing,
+        reason: 'not offered while the scanner may still be starting');
+
+    await tester.pump(const Duration(seconds: 21));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Stop alarm'), findsOneWidget,
+        reason: 'nothing has been decoded, so the user gets an escape hatch '
+            'whatever the camera callbacks claimed');
+  });
+
+  testWidgets('a working scanner does not offer the escape hatch',
+      (tester) async {
+    // Counter-test: the button must not appear just because the user is slow
+    // to hold the code up. One decode - even a wrong code - proves the loop
+    // runs.
+    await _pumpScanner(tester, storedCode: DeactivationCode(payload: 'right'));
+
+    scans.add(const ScanResult('wrong'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 21));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Stop alarm'), findsNothing);
+  });
+
   testWidgets('an empty scan changes nothing', (tester) async {
     // A decode that yields no text must not be treated as an import of "null",
     // which would leave a code nobody can ever reproduce.

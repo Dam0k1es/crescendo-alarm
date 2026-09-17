@@ -639,9 +639,18 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
       pulls. The scanner creates its controller with `enableAudio: false`, so it is never used -
       an alarm clock asking for the microphone is exactly the unexplainable permission this item
       is about, and it is removed again with `tools:node="remove"`;
-      **`WRITE_EXTERNAL_STORAGE` (maxSdk 28) appeared** via `image_picker` and is removed the same
-      way. `image_picker` also lost its direct entry in `pubspec.yaml` - nothing in `lib/` had used
-      it since the gallery button went (T-44).
+      **`WRITE_EXTERNAL_STORAGE` (maxSdk 28) appeared** and is removed the same way. It comes from
+      the same camera plugin; an independent audit corrected an earlier claim here that blamed
+      `image_picker`, whose manifest declares no permissions at all. `image_picker` did lose its
+      direct entry in `pubspec.yaml` - nothing in `lib/` had used it since the gallery button went
+      (T-44).
+- [x] **A fourth change the permission diff could not show:** the merged manifest gained
+      `<uses-feature android:name="android.hardware.camera.any">` **without** `android:required`,
+      which defaults to true, where the previous scanner declared the camera not required. That
+      would have let the Play Store hide an alarm clock from camera-less devices over an optional
+      QR gate. Both camera features are now declared `required="false"` with `tools:replace`.
+      Lesson for this item: `aapt2 dump permissions` does not show `uses-feature`, so the
+      comparison has to be `aapt2 dump badging` or the merged manifest itself.
 - [ ] Still open: the full "name every permission and say why" table, and a traffic capture during
       an E2E run.
 - **Why:** R7 asserted "no user data leaves the device — met" on the basis of a check scoped to
@@ -807,6 +816,72 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   cleanly" against this repo's current, clean state (`flutter analyze`: no issues; `osv-scanner`:
   131 packages, no issues; `trufflehog`: 0 verified/unverified secrets).
 - **Requirement:** R1
+
+### T-142 · The scanner's compiled-in native code has no licence notices
+
+- [ ] Ship the Apache-2.0 and BSD-3 notices for the C/C++ that is statically linked into
+      `libflutter_zxing.so`, or decide and record why not.
+- **Why:** `flutter_zxing` vendors four bodies of third-party native code - zxing-cpp core
+      (Apache-2.0, 260 files), librscpp (Apache-2.0), libzueci (BSD-3) and libzint (BSD-3, 102
+      files). All are GPLv3-compatible, so `docs/licence-position.md`'s compatibility claim holds -
+      but Apache-2.0 §4(a) requires the licence text to travel with the distribution, and BSD-3
+      requires the copyright notices to be retained. The package ships exactly one licence file
+      (zint's), and the APK's `NOTICES` contains flutter_zxing's MIT block and nothing else.
+- **The trap:** T-36 (`showLicensePage`) would **not** fix this. Flutter's licence collector reads
+      package-root `LICENSE` files; C++ compiled by CMake is invisible to it. This needs the
+      notices assembled by hand into an asset.
+- **Done when:** the shipped app carries the Apache-2.0 text and the zint/zueci copyright notices,
+      or `docs/licence-position.md` records a reasoned decision not to.
+- **Requirement:** R9
+
+### T-143 · The QR gate has never decoded through a real camera
+
+- [ ] Run the scan path on a device and tune what only a device can answer.
+- **Why:** the migration to `flutter_zxing` (T-33) changed the decoder, and nothing in any suite
+      instantiates `ReaderWidget` or loads the zxing native library - the unit tests inject through
+      the seam, and the E2E scenario now skips building the preview because the seam is set. A
+      `ReaderWidget` that throws on mount would ship green.
+- **What to look at, all defaults that were not chosen deliberately:** `scanDelay` is 1000 ms and
+      `scanDelaySuccess` 500 ms, so the gate attempts roughly **one decode per second** where
+      mobile_scanner decoded at frame rate; `cropPercent` is 0.5, so the code must sit in a centred
+      square of half the shorter frame side; `tryHarder` and `tryInverted` are off. For a
+      half-asleep user in a dark bedroom, each of those is the difference between a gate that opens
+      and one that does not.
+- **Also check:** that the snooze button at the top of the screen is still hit-testable through the
+      scanner's own full-bleed overlay and pinch-zoom detector.
+- **Done when:** a device trial records a decode at a realistic distance and light level, and the
+      three settings above are either changed or justified. `docs/device-trial-checklist.md` is the
+      place for the result.
+- **Requirement:** R4
+
+### T-144 · The proprietary-dependency guard cannot see the channel the offender used
+
+- [ ] Extend `test/no_proprietary_dependencies_test.dart` to the resolved tree and to Gradle.
+- **Why:** the guard reads `pubspec.yaml` and the imports in `lib/`. ML Kit - the offender it was
+      written for - never appeared in either: it arrived through `mobile_scanner`'s own
+      `build.gradle`. A different package linking a proprietary AAR would be just as invisible, and
+      so would a forbidden package returning transitively, since the test never reads
+      `pubspec.lock`. R8 credits this test with more than it can do.
+- **Done when:** the guard also fails on a forbidden name in `pubspec.lock`, and something checks
+      the Android artifacts the build actually resolves.
+- **Requirement:** R8
+
+### T-145 · Opening the Schedule screen no longer triggers a calendar fetch
+
+- [ ] Fetch on open and on view switch, not only when the user pages.
+- **Why:** `SfCalendar.onViewChanged` fired on initial layout; `calendar_view`'s `onPageChange` is
+      wired to `PageView.onPageChanged`, which does not fire for the first page (T-05). Switching
+      view through the menu and the Today button do trigger a fetch now, but opening the screen
+      does not. Mostly masked by `preloadCalendarData` at startup - the case that bites is a
+      preload that ran before calendar permission was granted: the screen then shows an empty week
+      until the user pages away and back.
+- **Also, from the same review:** in month view `onPageChange` delivers the 1st of the month, not a
+      week start, so `appState.fetchedCalendarWeeks` collects entries that are not week keys and
+      the 7-day fetch covers one week of a five-week grid. The short fetch window is inherited, not
+      new; the non-week keys are new.
+- **Done when:** opening the screen fetches the visible range, and month view either hands over a
+      week start or the cache stops assuming one.
+- **Requirement:** R2
 
 ### T-141 · Past scheduled alarms pile up in the list forever
 

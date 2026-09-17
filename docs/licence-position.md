@@ -38,8 +38,13 @@ absorbs without further conditions. That includes the Flutter SDK and first-part
 `awesome_notifications`, `provider`, `timezone`, `intl`, `qr_flutter`, `uuid`,
 `flutter_colorpicker`, `flutter_markdown_plus`, and the two replacements themselves,
 `calendar_view` and `flutter_zxing`. (`camera` and `image_picker` are no longer declared directly -
-they arrive with `flutter_zxing` - and `image_picker`'s own manifest entry is stripped again, see
-`docs/TODO.md` T-49.)
+they arrive with `flutter_zxing`. The two permissions stripped from the manifest both come from
+`camera_android_camerax`, not from `image_picker`; see `docs/TODO.md` T-49.)
+
+`flutter_zxing` additionally compiles four bodies of third-party C/C++ into the app - zxing-cpp and
+librscpp under Apache-2.0, libzueci and libzint under BSD-3. All GPLv3-compatible, so the claim
+above holds for them too; their **notice** obligations are a separate, open matter tracked as
+`docs/TODO.md` T-142.
 
 What this document does **not** claim: that every transitive dependency has been individually
 audited. R8 scopes that out deliberately. The claim is narrower and checkable - no dependency in
@@ -60,9 +65,12 @@ only, which is not distribution. The condition to be met **before the first rele
 else** is therefore simply that the repository is public, and the release then points at the tag it
 was built from.
 
-Two further pieces of the same obligation, tracked separately because they are real work rather
+Three further pieces of the same obligation, tracked separately because they are real work rather
 than decisions: the app still has no in-app licence/notice surface for its dependencies
-(`docs/TODO.md` T-36), and the per-file licence headers question is open (T-48).
+(`docs/TODO.md` T-36), the per-file licence headers question is open (T-48), and the notices for
+the statically linked native code are missing (T-142). The last one is not covered by the first:
+Flutter's licence collector reads package-root `LICENSE` files and cannot see C++ compiled by
+CMake.
 
 ## Bundled assets
 

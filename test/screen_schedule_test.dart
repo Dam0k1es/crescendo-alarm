@@ -122,6 +122,37 @@ void main() {
         appState.accentColor);
   });
 
+  testWidgets('the hour axis is 24-hour, not AM/PM', (tester) async {
+    // SfCalendar was configured with `timeFormat: 'HH:mm'`; calendar_view's
+    // default mark reads "1 PM". An independent review found the setting had
+    // been dropped in the migration - immediately visible, and wrong for most
+    // of this app's users.
+    await _pumpSchedule(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('13:00'), findsWidgets);
+    expect(find.textContaining('PM'), findsNothing);
+  });
+
+  testWidgets('paging does not tear the calendar down', (tester) async {
+    // The view key must not contain the displayed date: paging writes
+    // `visibleDate`, which notifies listeners, which rebuilds this screen - so
+    // a date in the key destroyed and recreated the WeekView on every swipe,
+    // resetting the time grid's scroll to midnight.
+    await _pumpSchedule(tester);
+    await tester.pumpAndSettle();
+    final before = tester.state(find.byType(WeekView<Meeting>));
+
+    // A real swipe, not a simulated one: it is the library's own page change
+    // that writes `visibleDate`, and that write is what rebuilds this screen.
+    await tester.drag(find.byType(PageView).first, const Offset(-500, 0));
+    await tester.pumpAndSettle();
+
+    expect(tester.state(find.byType(WeekView<Meeting>)), same(before),
+        reason: 'same State object - the calendar was not rebuilt from '
+            'scratch, so the time grid keeps its scroll position');
+  });
+
   testWidgets('the week starts on Monday', (tester) async {
     // `firstDayOfWeek: 1` in the SfCalendar configuration this replaced. Easy
     // to lose in a migration and immediately wrong for the user.

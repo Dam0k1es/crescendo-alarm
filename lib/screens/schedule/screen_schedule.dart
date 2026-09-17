@@ -4,6 +4,7 @@ import 'package:calendar_view/calendar_view.dart';
 import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 // Dependencies of calendar.dart
@@ -50,6 +51,16 @@ class ScreenSchedule extends StatefulWidget {
 class _ScreenScheduleState extends State<ScreenSchedule> {
   _ScheduleView _view = _ScheduleView.week;
   late DateTime _displayDate;
+
+  /// Bumped only when the date is set *programmatically* (first build, Today
+  /// button), never when the user pages. It is part of the view's key, and the
+  /// key is what forces a fresh State so `initialDay` is re-read.
+  ///
+  /// The date itself must NOT be in that key: paging writes `visibleDate`,
+  /// which notifies listeners, which rebuilds this screen with a new key - so
+  /// every swipe tore the calendar down and rebuilt it, resetting the time
+  /// grid's scroll position to midnight and killing the fling mid-flight.
+  int _jumpCounter = 0;
 
   @override
   void initState() {
@@ -167,10 +178,43 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
     ];
   }
 
+  /// Moves the calendar to [date] and tells AppState, which paging does for
+  /// itself. Without the second half the Today button moved the view but left
+  /// `visibleDate` on the week the user had swiped to, so leaving the screen
+  /// and coming back jumped there again.
+  void _jumpTo(DateTime date) {
+    setState(() {
+      _displayDate = date;
+      _jumpCounter++;
+    });
+    appState.visibleDate = date;
+    updateCalendarData(appState, const Duration(days: 7));
+  }
+
+  /// `timeFormat: 'HH:mm'` in SfCalendar terms. calendar_view's default hour
+  /// label is "1 PM", which ignores the phone's 24-hour setting and is simply
+  /// wrong for most of this app's users. `DayView` offers no string-only hook,
+  /// so the whole mark is built here - which also lets the label take its
+  /// colour from the theme like every other calendar surface.
+  Widget _timeLineMark(DateTime date) => Transform.translate(
+        offset: const Offset(0, -7.5),
+        child: Padding(
+          padding: const EdgeInsets.only(right: 7),
+          child: Text(
+            DateFormat('HH:mm').format(date),
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+
   Widget _buildCalendar(BuildContext context) {
     // The key makes a view switch rebuild the widget from scratch, so the newly
     // chosen view opens on the date the user was looking at rather than today.
-    final key = ValueKey<String>('${_view.name}-$_displayDate');
+    final key = ValueKey<String>('${_view.name}-$_jumpCounter');
 
     switch (_view) {
       case _ScheduleView.day:
@@ -179,6 +223,7 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
           controller: _events,
           initialDay: _displayDate,
           onPageChange: _onPageChange,
+          timeLineBuilder: _timeLineMark,
           showLiveTimeLineInAllDays: true,
           heightPerMinute: 1,
         );
@@ -189,6 +234,7 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
           controller: _events,
           initialDay: _displayDate,
           onPageChange: _onPageChange,
+          timeLineBuilder: _timeLineMark,
           startDay: WeekDays.monday,
           // `firstDayOfWeek: 1` in SfCalendar terms.
           weekDays: _view == _ScheduleView.workWeek
@@ -234,7 +280,7 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
           IconButton(
             tooltip: 'Today',
             icon: const Icon(Icons.today),
-            onPressed: () => setState(() => _displayDate = DateTime.now()),
+            onPressed: () => _jumpTo(DateTime.now()),
           ),
           PopupMenuButton<_ScheduleView>(
             tooltip: 'Calendar View',
@@ -290,7 +336,8 @@ Future<void> loadCalendarData(AppState appState, Duration timeToFetch,
       updateCalendarData(appState, timeToFetch, backwards, specificDate);
     }
   } catch (e) {
-    debugPrint("=====loadCalendarData: Error loading app state: ${e.runtimeType}");
+    debugPrint(
+        "=====loadCalendarData: Error loading app state: ${e.runtimeType}");
   }
 }
 
@@ -304,7 +351,8 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
   try {
     appState.isReadingCalendarMutex = true;
   } catch (e) {
-    debugPrint("=====updateCalendarData: Error setting mutex: ${e.runtimeType}");
+    debugPrint(
+        "=====updateCalendarData: Error setting mutex: ${e.runtimeType}");
     return; // Return early on error
   }
 
@@ -358,7 +406,8 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
       }
     }
   } catch (e) {
-    debugPrint("=====updateCalendarData: Error loading app state: ${e.runtimeType}");
+    debugPrint(
+        "=====updateCalendarData: Error loading app state: ${e.runtimeType}");
   }
 
   try {
@@ -370,13 +419,15 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
     _events.removeWhere((_) => true);
     _events.addAll(appState.meetings.map(meetingToCalendarEvent).toList());
   } catch (e) {
-    debugPrint("=====updateCalendarData: Error updating data source: ${e.runtimeType}");
+    debugPrint(
+        "=====updateCalendarData: Error updating data source: ${e.runtimeType}");
   }
 
   // Release the mutex
   try {
     appState.isReadingCalendarMutex = false;
   } catch (e) {
-    debugPrint("=====updateCalendarData: Error loading app state: ${e.runtimeType}");
+    debugPrint(
+        "=====updateCalendarData: Error loading app state: ${e.runtimeType}");
   }
 }

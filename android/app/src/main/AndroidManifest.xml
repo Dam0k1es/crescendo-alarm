@@ -12,10 +12,24 @@
          microphone access, which is exactly the kind of permission nobody can
          explain later.
 
-         WRITE_EXTERNAL_STORAGE (maxSdk 28) arrives with image_picker, a
-         transitive dependency of the same package. The gallery path it exists
-         for is switched off (T-44), and the app writes nothing outside its own
-         sandbox. -->
+         WRITE_EXTERNAL_STORAGE (maxSdk 28) comes from the same camera plugin -
+         an independent audit corrected an earlier note here that blamed
+         image_picker, whose own manifest declares no permissions at all. The
+         app writes nothing outside its own sandbox, and image_picker's gallery
+         path (switched off, T-44) writes only to the cache directory, so even
+         re-enabling it would not need this. -->
+    <!-- The QR gate is optional: a user who never sets a deactivation code
+         never needs a camera. The camera plugin behind the scanner declares
+         `android.hardware.camera.any` WITHOUT `android:required`, which
+         defaults to true, and the CAMERA permission implies the feature as
+         required as well - together that would let the Play Store hide an
+         alarm clock from camera-less devices. The previous scanner declared it
+         `required="false"`; this restores that. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false"
+        tools:replace="android:required" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false"
+        tools:replace="android:required" />
+
     <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
 

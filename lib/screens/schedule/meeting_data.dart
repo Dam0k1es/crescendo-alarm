@@ -65,21 +65,49 @@ class Meeting {
 /// Maps one [Meeting] onto the event object calendar_view draws
 /// (docs/TODO.md T-05).
 ///
-/// **The timezone conversion lives here, and it has to.** Syncfusion's
-/// `CalendarDataSource` took a `startTimeZone` per appointment and converted
-/// internally; `calendar_view` has no timezone concept at all and renders the
-/// fields of whatever `DateTime` it is given. So a value arriving in another
-/// frame - `device_calendar` hands out `TZDateTime` in the event's own zone -
-/// must be read as DEVICE-LOCAL wall clock before it goes in, or every
-/// appointment is drawn at the wrong hour. That is exactly the mistake class of
-/// docs/TODO.md T-61/T-83, one layer further out.
+/// **The frame conversion lives here, and getting it right is the whole job.**
+/// Syncfusion's `CalendarDataSource` took a `startTimeZone` per appointment;
+/// `calendar_view` has no timezone concept at all and draws the raw fields of
+/// whatever `DateTime` it is handed. `device_calendar` hands out
+/// `tz.TZDateTime` in the *event's own* zone, so something has to convert.
 ///
-/// An all-day entry deliberately carries no start/end time: calendar_view reads
-/// that as a full-day event, while 00:00-00:00 would be drawn as a sliver at
-/// the top of the time grid.
+/// It must NOT be `toLocal()`. On a `TZDateTime` that converts to `tz.local`,
+/// and `tz.local` stays `Etc/UTC` unless somebody calls `tz.setLocalLocation` -
+/// which this app never does (`tzdata.initializeTimeZones()` in main.dart only
+/// loads the database). `toLocal()` on these values is therefore `toUtc()` in
+/// disguise, and the first version of this function used it: a 09:00 Berlin
+/// appointment was drawn at 07:00 in summer. `DateTime.fromMillisecondsSinceEpoch`
+/// is the conversion that actually asks the *device* - same instant, read in
+/// the zone the user's clock shows. (`alarmPlatformTime` in lib/utils/utils.dart
+/// uses `.toLocal()` and is correct, because its receiver is a plain UTC
+/// `DateTime`. Same method name, different runtime type, different frame - the
+/// T-61/T-83 trap one level deeper.)
+///
+/// **All-day entries are the exception and must not take that path.**
+/// `device_calendar` deliberately normalises an Android all-day event to
+/// midnight UTC to preserve its calendar date (see its `Event.fromJson`), so
+/// their date has to be read in UTC too. Converting them to device time would
+/// move every all-day event one day earlier for any device west of UTC. They
+/// also carry no start/end time: calendar_view reads that as a full-day event,
+/// while 00:00-00:00 would be drawn as a sliver at the top of the time grid.
 CalendarEventData<Meeting> meetingToCalendarEvent(Meeting meeting) {
-  final from = meeting.from.toLocal();
-  final to = meeting.to.toLocal();
+  if (meeting.isAllDay) {
+    final fromDay = meeting.from.toUtc();
+    final toDay = meeting.to.toUtc();
+    return CalendarEventData<Meeting>(
+      title: meeting.eventName,
+      description: meeting.description,
+      color: meeting.background,
+      event: meeting,
+      date: DateTime(fromDay.year, fromDay.month, fromDay.day),
+      endDate: DateTime(toDay.year, toDay.month, toDay.day),
+    );
+  }
+
+  final from =
+      DateTime.fromMillisecondsSinceEpoch(meeting.from.millisecondsSinceEpoch);
+  final to =
+      DateTime.fromMillisecondsSinceEpoch(meeting.to.millisecondsSinceEpoch);
 
   return CalendarEventData<Meeting>(
     title: meeting.eventName,
@@ -88,8 +116,8 @@ CalendarEventData<Meeting> meetingToCalendarEvent(Meeting meeting) {
     event: meeting,
     date: DateTime(from.year, from.month, from.day),
     endDate: DateTime(to.year, to.month, to.day),
-    startTime: meeting.isAllDay ? null : from,
-    endTime: meeting.isAllDay ? null : to,
+    startTime: from,
+    endTime: to,
   );
 }
 

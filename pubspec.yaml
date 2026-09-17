@@ -67,7 +67,15 @@ dependencies:
   # they cannot travel inside a GPLv3 APK. flutter_zxing is MIT and wraps
   # zxing-cpp (Apache-2.0); nothing proprietary is linked. Guarded by
   # test/no_proprietary_dependencies_test.dart.
-  flutter_zxing: ^3.0.1
+  #
+  # Pinned EXACTLY, unlike everything else here. An independent audit of the
+  # swap found: no verified publisher, a single maintainer, 3.0.0 replaced the
+  # vendored zxing-cpp wholesale 16 days before this adoption, and the package
+  # compiles ~450 C/C++ translation units into the app. Its Android module also
+  # hardcodes `compileSdk 36` - the exact shape of the problem that already
+  # forced the permission_handler_android override below. A `^` range on that
+  # combination is a bet this project has lost before.
+  flutter_zxing: 3.0.1
 
 dev_dependencies:
   flutter_test:
