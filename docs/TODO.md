@@ -158,10 +158,19 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   the foreground.
 - **Requirement:** R3
 
-### T-05 · A direct dependency is not open source — GPLv3 conflict
+### T-05 · A direct dependency is not open source — GPLv3 conflict — BEHOBEN (2026-09-17)
 
-- [ ] Decide and document: replace the Syncfusion calendar packages, or change the project's
-      licensing/distribution position.
+- [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
+      and `syncfusion_localizations`) is out; the Schedule screen now draws with `calendar_view`
+      (MIT). `Meeting` is unchanged - the scheduling engine and most of the suite depend on it - so
+      the migration is a mapping, `meetingToCalendarEvent`, tested in
+      `test/schedule_events_test.dart`. The timezone conversion had to move INTO that mapping:
+      SfCalendar took a `startTimeZone` per appointment, `calendar_view` has no timezone concept
+      and draws the raw fields, so a value left in another frame is drawn at the wrong hour (the
+      T-61/T-83 class, one layer out). A mutation dropping `.toLocal()` turns the test red.
+      Deleted with it: `appointment_editor.dart` and `color_picker.dart`, 450 lines reachable only
+      from commented-out code - porting dead code to a new library would have been pure waste.
+      The decision itself is written down in `docs/licence-position.md`.
 - **Why:** `syncfusion_flutter_calendar`, `_core` and `_datepicker` ship under the Syncfusion
   Essential Studio licence, which requires a commercial licence or qualifying for their community
   programme (revenue and team-size caps). That makes R8's *"all direct dependencies are
@@ -450,9 +459,25 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   `docs/REQUIREMENTS.md` corrected to state what the original review actually covered.
 - **Requirement:** R11
 
-### T-33 · Proprietary Google/ML Kit binaries are a second GPLv3 exposure
+### T-33 · Proprietary Google/ML Kit binaries are a second GPLv3 exposure — BEHOBEN (2026-09-17)
 
-- [ ] Assess the licence position of the barcode-scanning stack alongside T-05.
+- [x] Assessed **and** resolved. The maintainer chose to replace the scanner rather than grant a
+      GPLv3 §7 linking exception, which as sole copyright holder he could have done in a few lines
+      - the reasoning is in `docs/licence-position.md`. `mobile_scanner` is out, `flutter_zxing`
+      (MIT, wrapping zxing-cpp under Apache-2.0) is in.
+- [x] The swap introduced `ScanResult` (`lib/models/scan_code/scan_result.dart`): nothing outside
+      `lib/screens/scan_code/` names a scanner package's type any more. That is what made this
+      migration expensive in the first place - `BarcodeCapture` had reached into four widgets, the
+      public test seam and the E2E suite - and it makes the next swap a one-file change.
+- [x] The gate got the negative test it never had outside E2E
+      (`test/qr_scanner_gate_test.dart`, T-08). Worth recording how it got there: the first two
+      versions were **vacuous** - a mutation making `isDeactivationCodeValid` accept everything
+      stayed green, because "the screen did not close" also depends on the alarm plugin, which has
+      no channel in a unit test. The oracle is now `Diag.qrGate`, recorded at the moment the gate
+      decides. Mutations in both directions (always accept, always refuse) are red.
+- [x] `docs/licence-position.md` records the licence basis for the **whole** shipped set, which is
+      what this item's acceptance criterion asked for, and
+      `test/no_proprietary_dependencies_test.dart` keeps it true.
 - **Why:** T-05 covers Syncfusion, but the QR feature itself links proprietary Google binaries:
   `mobile_scanner` pulls `play-services-mlkit-barcode-scanning` and `com.google.mlkit:barcode-scanning`,
   which ship under Google's terms rather than an open-source licence. For a GPLv3 work these raise
@@ -463,9 +488,16 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
   not just Syncfusion.
 - **Requirement:** R8, R9
 
-### T-34 · GPLv3 source-offer obligations are unaddressed for the distributed APK
+### T-34 · GPLv3 source-offer obligations are unaddressed for the distributed APK — DECIDED (2026-09-17), one condition open
 
-- [ ] Decide how Corresponding Source is provided to anyone who receives the APK.
+- [x] Decided: **the repository becomes public at the first public release**, rather than attaching
+      a written §6(b) offer to each release. An offer would bind the maintainer to fulfil requests
+      for three years and would need a contact address, which sits badly with this project's policy
+      of keeping real personal details out of tracked files. Written down in
+      `docs/licence-position.md`.
+- [ ] Open, and it is a condition rather than a task: the repository has to actually be public
+      **before the APK reaches anyone else**. Until then nothing is conveyed - builds go to the
+      maintainer's own test devices, which is not distribution.
 - **Why:** the release workflow attaches a signed APK to a GitHub Release while the repository is
   private, and nothing publishes or offers the corresponding source. Conveying a GPLv3 binary
   carries that obligation; right now there is no mechanism and no written position.
@@ -806,9 +838,12 @@ T-123 … T-128) — das ist die Grundlage, gegen die eine Entscheidung formulie
 - **Evidence:** `lib/app_state.dart:487`.
 - **Done when:** the ramp length is either a setting or documented as fixed at 60 seconds.
 
-### T-44 · A dead gallery-scan button would bypass the camera gate if wired in
+### T-44 · A dead gallery-scan button would bypass the camera gate if wired in — BEHOBEN (2026-09-17)
 
-- [ ] Remove `AnalyzeImageFromGalleryButton`, or gate it so it cannot dismiss an alarm.
+- [x] Gone with the scanner swap (T-33): `scanner_button_widgets.dart` was deleted along with the
+      rest of the mobile_scanner-specific widgets, and the replacement's own gallery button is
+      switched off explicitly (`showGallery: false`, with the reason at that line). Decoding a
+      stored image would let a user photograph the code once and defeat the gate from bed.
 - **Why:** the widget picks an image from the gallery and runs it through the scanner. It is
   currently never instantiated, but it sits in the scanner's own button file — wiring it into the
   alarm-dismissal scanner would let a screenshot of the QR code dismiss the alarm, defeating the

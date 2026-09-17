@@ -31,15 +31,13 @@ dependencies:
   flutter:
     sdk: flutter
 
-    # TODO syncfusion_flutter_* 25.2.5 break support for sdk <= 3.19
   flutter_launcher_icons: ^0.14.4
 
-  # syncfusion_flutter_core und _datepicker sind bewusst NICHT mehr direkt
-  # aufgefuehrt: syncfusion_flutter_calendar fordert beide selbst
-  # (^34.2.6 in dessen eigener pubspec.yaml), die direkten Eintraege waren
-  # reine Redundanz. An der Lizenzfrage (docs/REQUIREMENTS.md R8/R9) aendert
-  # das nichts - die Pakete kommen transitiv weiterhin mit.
-  syncfusion_flutter_calendar: ^34.2.6
+  # docs/TODO.md T-05: replaced the Syncfusion calendar packages, whose licence
+  # forbids use without a community or commercial licence and therefore cannot
+  # travel inside a GPLv3 APK. calendar_view is MIT. Guarded by
+  # test/no_proprietary_dependencies_test.dart so it cannot come back quietly.
+  calendar_view: ^2.0.0
   device_calendar: ^4.3.2
 
   provider: ^6.1.2
@@ -54,7 +52,6 @@ dependencies:
 
   uuid: ^4.4.0
 
-  mobile_scanner: ^7.4.0
   image_picker: ^1.1.1
 
   intl: ^0.20.3
@@ -67,6 +64,12 @@ dependencies:
   # `any` war eine offene Flanke: eine bruchhafte Version haette still
   # hereinkommen koennen. Gepinnt auf die ohnehin aufgeloeste Version.
   awesome_notifications: ^0.12.1
+  # docs/TODO.md T-33: replaced mobile_scanner, which links Google's
+  # proprietary ML Kit barcode binaries (bundled into the APK by default) -
+  # they cannot travel inside a GPLv3 APK. flutter_zxing is MIT and wraps
+  # zxing-cpp (Apache-2.0); nothing proprietary is linked. Guarded by
+  # test/no_proprietary_dependencies_test.dart.
+  flutter_zxing: ^3.0.1
 
 dev_dependencies:
   flutter_test:
@@ -79,7 +82,8 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 
 # device_calendar (even its latest release, 4.3.3) still pins `timezone: ^0.9.0`,
-# while syncfusion_flutter_calendar >=29.2.7 requires `timezone: ^0.11.0` -
+# while this app itself declares `timezone: ^0.11.0` above and uses 0.11's
+# refreshed IANA data for the frame handling in lib/models/scheduling/ -
 # a genuine, currently unresolved conflict between the two packages' declared
 # constraints. Forcing timezone to 0.11.x here is safe in practice: the public
 # API (TZDateTime, Location, getLocation) hasn't changed between 0.9.x and

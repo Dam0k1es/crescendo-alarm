@@ -62,34 +62,35 @@ class Meeting {
 // }
 }
 
-class DataSource extends CalendarDataSource {
-  DataSource(List<Meeting> source) {
-    appointments = source;
-  }
+/// Maps one [Meeting] onto the event object calendar_view draws
+/// (docs/TODO.md T-05).
+///
+/// **The timezone conversion lives here, and it has to.** Syncfusion's
+/// `CalendarDataSource` took a `startTimeZone` per appointment and converted
+/// internally; `calendar_view` has no timezone concept at all and renders the
+/// fields of whatever `DateTime` it is given. So a value arriving in another
+/// frame - `device_calendar` hands out `TZDateTime` in the event's own zone -
+/// must be read as DEVICE-LOCAL wall clock before it goes in, or every
+/// appointment is drawn at the wrong hour. That is exactly the mistake class of
+/// docs/TODO.md T-61/T-83, one layer further out.
+///
+/// An all-day entry deliberately carries no start/end time: calendar_view reads
+/// that as a full-day event, while 00:00-00:00 would be drawn as a sliver at
+/// the top of the time grid.
+CalendarEventData<Meeting> meetingToCalendarEvent(Meeting meeting) {
+  final from = meeting.from.toLocal();
+  final to = meeting.to.toLocal();
 
-  @override
-  bool isAllDay(int index) => appointments![index].isAllDay;
-
-  @override
-  String getSubject(int index) => appointments![index].eventName;
-
-  @override
-  String getStartTimeZone(int index) => appointments![index].startTimeZone;
-
-  @override
-  String getNotes(int index) => appointments![index].description;
-
-  @override
-  String getEndTimeZone(int index) => appointments![index].endTimeZone;
-
-  @override
-  Color getColor(int index) => appointments![index].background;
-
-  @override
-  DateTime getStartTime(int index) => appointments![index].from;
-
-  @override
-  DateTime getEndTime(int index) => appointments![index].to;
+  return CalendarEventData<Meeting>(
+    title: meeting.eventName,
+    description: meeting.description,
+    color: meeting.background,
+    event: meeting,
+    date: DateTime(from.year, from.month, from.day),
+    endDate: DateTime(to.year, to.month, to.day),
+    startTime: meeting.isAllDay ? null : from,
+    endTime: meeting.isAllDay ? null : to,
+  );
 }
 
 // For future development

@@ -257,6 +257,22 @@ removed the offending AAR from the build, so the workaround lost its reason. Ver
 Both overrides carry explanatory comments in `pubspec.yaml` itself - keep them in sync if you
 change either.
 
+## Licence position (GPLv3)
+
+`docs/licence-position.md` is the tracked decision for requirements R8/R9, and two things in it are
+standing rules rather than history:
+
+- **A dependency whose licence conflicts with GPLv3 gets replaced, not excepted.** The maintainer
+  is the sole copyright holder and could grant a GPLv3 §7 linking exception in a few lines; that
+  was considered and rejected. Syncfusion (calendar) and `mobile_scanner` (proprietary Google ML
+  Kit binaries) were replaced by `calendar_view` and `flutter_zxing` accordingly
+  (`docs/TODO.md` T-05, T-33). `test/no_proprietary_dependencies_test.dart` enforces this against
+  `pubspec.yaml` and every import in `lib/` - adding a name to its list is a licence decision, and
+  each entry says why.
+- **Corresponding Source is provided by making the repository public at the first public release**
+  (T-34), not by a written offer. Until that release nothing is conveyed: builds go to the
+  maintainer's own test devices.
+
 ## PII policy
 
 Don't add real personal names, emails, addresses, or other identifying info to any tracked file.

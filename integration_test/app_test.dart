@@ -19,7 +19,7 @@
 //   test/handler_stale_alarm_test.dart instead, since it needs no device/UI.
 //
 // Scope note: scenario 2 (QR deactivation) injects the scan result via
-// QrScanner.debugBarcodeStreamOverride rather than actually feeding camera
+// QrScanner.debugScanStreamOverride rather than actually feeding camera
 // data - see that field's doc comment in lib/screens/scan_code/qr_scanner.dart
 // and docs/TODO.md T-16 for why, and what that does and doesn't prove.
 
@@ -29,7 +29,6 @@ import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -39,6 +38,7 @@ import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
 import 'package:wakeywakey/screens/alarms/screen_active_alarm.dart';
 import 'package:wakeywakey/screens/alarms/screen_alarms.dart';
+import 'package:wakeywakey/models/scan_code/scan_result.dart';
 import 'package:wakeywakey/screens/scan_code/qr_scanner.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 import 'package:wakeywakey/utils/notifications.dart';
@@ -244,7 +244,7 @@ void main() {
   });
 
   tearDown(() async {
-    QrScanner.debugBarcodeStreamOverride = null;
+    QrScanner.debugScanStreamOverride = null;
     await Alarm.stopAll();
   });
 
@@ -288,8 +288,8 @@ void main() {
       // pumpUntilFound polling gap and never be observed as "found" at
       // all. Waiting to add the event until after QrScanner is confirmed
       // mounted removes that race entirely.
-      final barcodeController = StreamController<BarcodeCapture>();
-      QrScanner.debugBarcodeStreamOverride = barcodeController.stream;
+      final barcodeController = StreamController<ScanResult>();
+      QrScanner.debugScanStreamOverride = barcodeController.stream;
       addTearDown(barcodeController.close);
 
       await createManualAlarmOneMinuteFromNow(tester, appState);
@@ -302,19 +302,15 @@ void main() {
 
       // T-08: the "guaranteed wake-up" gate's one job is refusing a wrong
       // code - a mismatching scan must never dismiss it.
-      barcodeController.add(BarcodeCapture(barcodes: [
-        Barcode(rawValue: 'not-the-right-code', format: BarcodeFormat.qrCode),
-      ]));
+      barcodeController.add(const ScanResult('not-the-right-code'));
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byType(QrScanner), findsOneWidget);
       expect(await Alarm.getAlarms(), isNotEmpty);
 
-      barcodeController.add(BarcodeCapture(barcodes: [
-        Barcode(rawValue: testPayload, format: BarcodeFormat.qrCode),
-      ]));
+      barcodeController.add(ScanResult(testPayload));
 
-      // _handleBarcode validates the injected code and pops the scanner
+      // _handleScan validates the injected code and pops the scanner
       // automatically - just wait for it to close.
       await pumpUntilGone(
         tester,

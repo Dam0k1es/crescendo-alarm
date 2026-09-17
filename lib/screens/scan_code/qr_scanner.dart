@@ -2,17 +2,14 @@ import 'dart:async';
 
 import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:flutter_zxing/flutter_zxing.dart';
 import 'package:provider/provider.dart';
 import 'package:wakeywakey/screens/alarms/snooze_button.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/utils/diag/diag_log.dart';
 import 'package:wakeywakey/models/alarms/handler.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
-import 'package:wakeywakey/screens/scan_code/scanned_barcode_label.dart';
-import 'package:wakeywakey/screens/scan_code/scanner_button_widgets.dart';
-import 'package:wakeywakey/screens/scan_code/scanner_error_widget.dart';
-import 'package:wakeywakey/screens/scan_code/scanner_overlay.dart';
+import 'package:wakeywakey/models/scan_code/scan_result.dart';
 
 /// Pure comparison at the heart of the "guaranteed wake-up" gate: does the
 /// scanned payload match the stored deactivation code? Extracted out of
@@ -47,33 +44,39 @@ class QrScanner extends StatefulWidget {
     this.alarmId,
   });
 
-  /// Test-only seam: when set, this stream is used by every `QrScanner`
-  /// instance instead of the real camera's
-  /// [MobileScannerController.barcodes]. It's a static field (not a
-  /// constructor parameter) because production code
-  /// (`Handler.handleAlarm`) constructs `QrScanner()` directly with no way
-  /// to thread a parameter through - E2E tests instead set this before
-  /// triggering the alarm-ringing flow, to exercise the deactivation logic
-  /// (`_handleBarcode`/`_validateDeactivationCode`) without simulating an
-  /// actual camera feed (mobile_scanner's native camera preview isn't
-  /// something integration_test can drive directly). Never set outside of
-  /// tests; must be reset to null in the test's `tearDown`.
+  /// Test-only seam: when set, this stream replaces the camera for every
+  /// `QrScanner` instance, and the live preview is not built at all.
+  ///
+  /// A static field, not a constructor parameter, because production code
+  /// (`Handler.handleAlarm`) constructs `QrScanner()` directly with nowhere to
+  /// thread a parameter through. Tests set it before triggering the ringing
+  /// flow and exercise the deactivation logic without a camera feed - no
+  /// scanner plugin's native preview can be driven from a test.
+  ///
+  /// It carries the app's own [ScanResult] since docs/TODO.md T-33, so the
+  /// seam no longer names a scanner package's type.
+  ///
+  /// docs/TODO.md T-16 records the cost of this seam honestly: it exists in
+  /// release builds too. What it buys, beyond the E2E scenarios, is the
+  /// negative test the gate had never had (test/qr_scanner_gate_test.dart) -
+  /// a wrong code must not open it.
   @visibleForTesting
-  static Stream<BarcodeCapture>? debugBarcodeStreamOverride;
+  static Stream<ScanResult>? debugScanStreamOverride;
 
   @override
   State<QrScanner> createState() => _QrScannerState();
 }
 
 class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
-  final MobileScannerController controller = MobileScannerController(
-    // required options for the scanner
-    formats: const [BarcodeFormat.qrCode],
-  );
-
   StreamSubscription<Object?>? _subscription;
-  Barcode? _barcode;
   late final AppState _appState;
+
+  /// Set when the camera could not be opened at all (permission revoked,
+  /// hardware busy, unsupported device). It drives the emergency stop button
+  /// below - without it a "guaranteed wake-up" alarm whose scanner never
+  /// initialises would leave the user on a `PopScope(canPop: false)` screen
+  /// with no scanner and no way out.
+  bool _cameraFailed = false;
 
   @override
   void initState() {
@@ -83,29 +86,9 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
     // Start listening to lifecycle changes.
     WidgetsBinding.instance.addObserver(this);
 
-    // Start listening to the barcode events (or the injected test stream).
-    _subscription =
-        (QrScanner.debugBarcodeStreamOverride ?? controller.barcodes)
-            .listen(_handleBarcode);
-
-    if (QrScanner.debugBarcodeStreamOverride != null) {
-      // Test mode: never touch the real camera.
-      return;
-    }
-
-    // Start existing scanner if it was running.
-    try {
-      unawaited(controller.stop());
-    } catch (e) {
-      debugPrint('=====initState: Error stopping scanner: ${e.runtimeType}');
-    }
-
-    // Finally, start the scanner itself.
-    try {
-      unawaited(controller.start());
-    } catch (e) {
-      debugPrint('=====initState: Error starting scanner: ${e.runtimeType}');
-    }
+    // The camera is driven by ReaderWidget in build(); only the injected test
+    // stream needs a subscription here.
+    _subscription = QrScanner.debugScanStreamOverride?.listen(_handleScan);
   }
 
   @override
@@ -113,31 +96,25 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
     // Stop listening to lifecycle changes.
     WidgetsBinding.instance.removeObserver(this);
 
-    // Stop listening to the barcode events.
+    // Stop listening to the injected events, if any. ReaderWidget disposes of
+    // its own camera controller.
     unawaited(_subscription?.cancel());
-
-    //_subscription = null;
-
-    // Finally, dispose of the controller.
-    unawaited(controller.stop());
-    unawaited(controller.dispose());
 
     // Dispose the widget itself.
     super.dispose();
   }
 
-  Future<void> _handleBarcode(BarcodeCapture barcodes) async {
+  Future<void> _handleScan(ScanResult scan) async {
     if (mounted) {
-      setState(() {
-        _barcode = barcodes.barcodes.firstOrNull;
-        if (_barcode == null) {
-          return;
-        }
-      });
+      // A decode without text is a normal outcome for a blurred frame. It must
+      // never be imported as a code of `null`, which nobody could reproduce.
+      if (scan.payload == null) {
+        return;
+      }
 
       // IMPORT QR CODE IF NONE IS SET
       if (_appState.deactivationCode == null) {
-        final data = _barcode!.rawValue;
+        final data = scan.payload;
         // docs/TODO.md T-89: der Payload ist das Deaktivierungsgeheimnis -
         // wer diese Logzeile hat, kann den "garantierten" Wecker beliebig
         // aushebeln. Geloggt wird nur, DASS importiert wurde.
@@ -153,10 +130,10 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
       else {
         bool validationSuccessful = false;
         try {
-          validationSuccessful = await _validateDeactivationCode(_barcode!);
+          validationSuccessful = await _validateDeactivationCode(scan);
         } catch (e) {
           debugPrint(
-              '=====handleBarcode: Error validating Deactivation Code: ${e.runtimeType}');
+              '=====handleScan: Error validating Deactivation Code: ${e.runtimeType}');
         }
         if (validationSuccessful) {
           _closeView();
@@ -165,10 +142,10 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
     } // end of 'if mounted'
   }
 
-  Future<bool> _validateDeactivationCode(Barcode barcode) async {
+  Future<bool> _validateDeactivationCode(ScanResult scan) async {
     // Validate the scanned code BEFORE stopping any alarms, so a wrong or
     // arbitrary QR code can never silently disarm the alarm.
-    if (!isDeactivationCodeValid(_appState.deactivationCode, barcode.rawValue)) {
+    if (!isDeactivationCodeValid(_appState.deactivationCode, scan.payload)) {
       return false;
     }
 
@@ -224,40 +201,14 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // If the controller is not ready, do not try to start or stop it.
-    // Permission dialogs can trigger lifecycle changes before the controller is ready.
-    if (!controller.value.isInitialized) {
-      return;
-    }
-
-    switch (state) {
-      case AppLifecycleState.detached:
-      case AppLifecycleState.hidden:
-      case AppLifecycleState.paused:
-        return;
-      case AppLifecycleState.resumed:
-        // Restart the scanner when the app is resumed.
-        // Don't forget to resume listening to the barcode events.
-        _subscription = controller.barcodes.listen(_handleBarcode);
-
-        unawaited(controller.start());
-      case AppLifecycleState.inactive:
-        // Stop the scanner when the app is paused.
-        // Also stop the barcode events subscription.
-        unawaited(_subscription?.cancel());
-        _subscription = null;
-        unawaited(controller.stop());
-    }
+    // Nothing to do any more: ReaderWidget starts and stops its own camera
+    // with the lifecycle. The observer stays registered because the previous
+    // scanner needed one, and removing the hook is a behaviour change worth
+    // keeping visible rather than silently deleting.
   }
 
   @override
   Widget build(BuildContext context) {
-    final scanWindow = Rect.fromCenter(
-      center: MediaQuery.sizeOf(context).center(Offset.zero),
-      width: 200,
-      height: 200,
-    );
-
     final exitButton = ElevatedButton.icon(
       onPressed: _closeView,
       label: Text(
@@ -308,61 +259,45 @@ class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
                   ),
                 ),
               ),
-            Center(
-              child: MobileScanner(
-                fit: BoxFit.contain,
-                controller: controller,
-                scanWindow: scanWindow,
-                errorBuilder: (context, error) {
-                  return ScannerErrorWidget(error: error);
-                },
-                overlayBuilder: (context, constraints) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: widget.displayExitButton
-                          ? const SizedBox()
-                          : ScannedBarcodeLabel(barcodes: controller.barcodes),
-                    ),
-                  );
-                },
+            // The live preview. Not built at all when a test stream is
+            // injected: no scanner plugin's camera can run in a widget test,
+            // and building it would be the only thing standing between the
+            // gate and a unit test of it.
+            if (QrScanner.debugScanStreamOverride == null)
+              Center(
+                child: ReaderWidget(
+                  codeFormat: Format.qrCode,
+                  // docs/TODO.md T-44: the gallery button is off, deliberately.
+                  // Decoding a QR code from a stored image would let a user
+                  // photograph the code once and defeat the "guaranteed
+                  // wake-up" gate from bed. The camera is the point.
+                  showGallery: false,
+                  showFlashlight: true,
+                  showToggleCamera: true,
+                  scanDelaySuccess: const Duration(milliseconds: 500),
+                  onScan: (code) => _handleScan(ScanResult(code.text)),
+                  onControllerCreated: (controller, error) {
+                    if (!mounted) return;
+                    setState(() => _cameraFailed = error != null);
+                    if (error != null) {
+                      debugPrint(
+                          '=====qrScanner: camera unavailable: ${error.runtimeType}');
+                    }
+                  },
+                ),
               ),
-            ),
-            ValueListenableBuilder(
-              valueListenable: controller,
-              builder: (context, value, child) {
-                if (!value.isInitialized ||
-                    !value.isRunning ||
-                    value.error != null) {
-                  return const SizedBox();
-                }
-
-                return CustomPaint(
-                  painter: ScannerOverlay(scanWindow: scanWindow),
-                );
-              },
-            ),
             Align(
               alignment: Alignment.bottomCenter,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: ValueListenableBuilder(
-                  valueListenable: controller,
-                  builder: (context, value, child) {
-                    final bool cameraFailed = value.error != null;
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        ToggleFlashlightButton(controller: controller),
-                        if (widget.displayExitButton)
-                          exitButton
-                        else if (cameraFailed)
-                          emergencyStopButton,
-                        SwitchCameraButton(controller: controller),
-                      ],
-                    );
-                  },
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (widget.displayExitButton)
+                      exitButton
+                    else if (_cameraFailed)
+                      emergencyStopButton,
+                  ],
                 ),
               ),
             ),

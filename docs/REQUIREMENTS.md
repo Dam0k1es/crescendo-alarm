@@ -191,33 +191,36 @@ No user data leaves the device. The app must be GDPR-compliant.
 Every dependency should be open-source; a full source audit of each isn't in scope, but a
 reasonable trust assessment is.
 
-- **Checked by:** `pubspec.yaml`/`pubspec.lock` review. `osv-scanner` additionally checks for known
-  vulnerabilities in the resolved dependency tree.
-- **Status: not met.** `syncfusion_flutter_calendar` is a direct dependency published under the
-  Syncfusion Essential Studio licence, and it pulls `syncfusion_flutter_core` and
-  `syncfusion_flutter_datepicker` in transitively. Those two lost their *direct* entries in
-  `pubspec.yaml` in the 2026-09-10 hygiene pass (`docs/TODO.md` T-97); that changed nothing about
-  this requirement - the packages are still in the resolved tree and still under the same licence.
-  Only dropping `syncfusion_flutter_calendar` itself (the standing decision is to replace it with
-  `calendar_view`) removes the surface. The licence is - a commercial licence or a
-  revenue/team-size-limited community programme, not an open-source licence. The QR-scanning stack
-  (`mobile_scanner`) additionally pulls in proprietary Google/ML Kit Android dependencies
-  (`play-services-mlkit-barcode-scanning`, `com.google.mlkit:barcode-scanning`). See
-  `docs/TODO.md` T-05 and T-33 for what resolving this requires.
+- **Checked by:** `pubspec.yaml`/`pubspec.lock` review, plus
+  `test/no_proprietary_dependencies_test.dart`, which fails the suite if either of the two
+  offenders below is declared again or imported anywhere in `lib/`. `osv-scanner` additionally
+  checks for known vulnerabilities in the resolved dependency tree.
+- **Status: met** (2026-09-17). The two dependencies that were not open-source are gone:
+  `syncfusion_flutter_calendar` (Syncfusion Essential Studio licence - a commercial licence or a
+  revenue/team-size-limited community programme) was replaced by `calendar_view` (MIT), and
+  `mobile_scanner`, whose Android build links Google's proprietary ML Kit barcode binaries, by
+  `flutter_zxing` (MIT, wrapping zxing-cpp under Apache-2.0). The remaining direct dependencies are
+  BSD-3, MIT or Apache-2.0. A full source audit of each is still explicitly out of scope, as this
+  requirement says. See `docs/licence-position.md` for the reasoning, and `docs/TODO.md` T-05/T-33.
 
 ## R9 - License compatibility
 
 All dependency licenses must be compatible with this project's GNU GPLv3 license, and all legal
 licensing obligations must be met.
 
-- **Checked by:** not automated; manually reviewed following R8's finding.
-- **Status: not met - a concrete conflict, not just an unrun scan.** Distributing a GPLv3 work that
-  links the proprietary Syncfusion and Google/ML Kit components named under R8 is a real
-  incompatibility, already visible without a scan. Separately, GPLv3's source-offer obligation for
-  the signed APK attached to GitHub Releases is unaddressed (`docs/TODO.md` T-34), and the app
-  ships no in-app licence/notice surface for its dependencies (`docs/TODO.md` T-36). A
-  `license_checker`/`flutter pub deps`-based automated scan is still worth adding, but would not by
-  itself resolve the Syncfusion/ML Kit conflict.
+- **Checked by:** not automated; manually reviewed and written down in
+  `docs/licence-position.md`, with the dependency half guarded by
+  `test/no_proprietary_dependencies_test.dart`.
+- **Status: largely met, one condition outstanding.** The concrete conflict is resolved: nothing in
+  the shipped set carries a licence that conflicts with GPLv3 any more (see R8). The project's rule
+  is recorded there too - a conflicting dependency is replaced, not covered by a GPLv3 §7 linking
+  exception, although as sole copyright holder the maintainer could grant one.
+  **Outstanding:** GPLv3's Corresponding Source obligation is discharged by making the repository
+  public, and that has to actually happen **before the first release to anyone else**
+  (`docs/TODO.md` T-34). Until then nothing is conveyed - builds go to the maintainer's own test
+  devices, which is not distribution. Also still open, and real work rather than decisions: no
+  in-app licence/notice surface for dependencies (T-36) and no per-file licence headers (T-48). An
+  automated `license_checker`-style scan remains worth adding as a second line of defence.
 
 ## R10 - All bundled assets are properly licensed for use
 
