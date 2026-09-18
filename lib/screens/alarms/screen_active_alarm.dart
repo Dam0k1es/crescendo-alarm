@@ -21,6 +21,13 @@ class ScreenAlarmActive extends StatefulWidget {
   @visibleForTesting
   static Stream<AlarmSet>? debugRingingStreamOverride;
 
+  /// Test-only seam: the real `Handler.onAlarmHandled` has no way of its own
+  /// to observe how many times it was called - needed to pin down the
+  /// double-dismiss bug `_callOnAlarmHandledOnce` guards against.
+  @visibleForTesting
+  static void Function(AppState appState, int alarmId)?
+      debugOnAlarmHandledOverride;
+
   @override
   State<ScreenAlarmActive> createState() => _ScreenAlarmActiveState();
 }
@@ -35,6 +42,41 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
   late TimeOfDay _currentTime;
   late DateTime _currentDateTime;
 
+  /// Guards `Handler.onAlarmHandled` against being called more than once for
+  /// this ring - see `_callOnAlarmHandledOnce`.
+  bool _onAlarmHandledCalled = false;
+
+  /// Set synchronously the instant Snooze is pressed, before anything
+  /// asynchronous happens - see `SnoozeButton.onBeforeSnooze`'s doc comment
+  /// for why "before", not "after a successful postponement": a successful
+  /// snooze calls `Alarm.stop()` on the *old* alarm as its last internal
+  /// step, which [RingingWatch] also observes, and in practice its listener
+  /// fires before the snooze's own completion handler gets a chance to say
+  /// "this one was a postponement, not a real stop". Bug report: pressing
+  /// Stop threw a Navigator "!_debugLocked" assertion, from the same
+  /// `Alarm.stop()`-updates-`Alarm.ringing` mechanism racing the Stop
+  /// button's own dismissal - not from snoozing, but the underlying hazard
+  /// (two independent reactions to one platform change) is identical, so
+  /// both needed the same treatment.
+  bool _snoozing = false;
+
+  /// See [_onAlarmHandledCalled].
+  void _callOnAlarmHandledOnce() {
+    if (_onAlarmHandledCalled) return;
+    _onAlarmHandledCalled = true;
+    (ScreenAlarmActive.debugOnAlarmHandledOverride ?? Handler.onAlarmHandled)(
+        _appState, widget.alarmId);
+  }
+
+  /// Idempotent by construction (`ModalRoute.isCurrent`), so every caller -
+  /// Stop, Snooze, and [RingingWatch] - can call it unconditionally without
+  /// its own guard.
+  void _pop() {
+    if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+      Navigator.pop(context);
+    }
+  }
+
   @override
   void initState() {
     debugPrint("=====initState: Creating new ScreenAlarmActiveState");
@@ -46,14 +88,18 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
     // ringing and no way out (PopScope below). `Alarm.ringing` is the only
     // place Dart learns about a stop that happened entirely at the native
     // level - see RingingWatch's doc comment for why its first event is
-    // deliberately ignored.
+    // deliberately ignored. `androidStopAlarmOnDismiss: false`
+    // (ringing_alarm_settings.dart) means a notification swipe can no longer
+    // trigger this particular path in practice, but RingingWatch stays as
+    // the safety net for the paths that remain - e.g. the QR gate's
+    // emergency-stop-all button silencing an alarm this screen is showing.
     _ringingWatch = RingingWatch(
       alarmId: widget.alarmId,
       ringingStream: ScreenAlarmActive.debugRingingStreamOverride,
       onGone: () {
         if (!mounted) return;
-        Handler.onAlarmHandled(_appState, widget.alarmId);
-        Navigator.pop(context);
+        if (!_snoozing) _callOnAlarmHandledOnce();
+        _pop();
       },
     );
     _currentTime = TimeOfDay.now();
@@ -102,9 +148,9 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
               // the budget is exhausted.
               SnoozeButton(
                 alarmId: widget.alarmId,
-                onSnoozed: () {
-                  if (context.mounted) Navigator.pop(context);
-                },
+                onBeforeSnooze: () => _snoozing = true,
+                onSnoozeAttemptFailed: () => _snoozing = false,
+                onSnoozed: _pop,
               ),
               Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -161,9 +207,6 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
                     bool stopped = false;
                     try {
                       stopped = await Alarm.stop(widget.alarmId);
-                      if (stopped) {
-                        Handler.onAlarmHandled(_appState, widget.alarmId);
-                      }
                     } catch (e) {
                       debugPrint(
                           "=====ScreenAlarmActiveState: Failed to stop alarm: ${e.runtimeType}");
@@ -184,9 +227,8 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
                       }
                       return;
                     }
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                    }
+                    _callOnAlarmHandledOnce();
+                    _pop();
                   },
                   child: const Text(
                     'Stop',

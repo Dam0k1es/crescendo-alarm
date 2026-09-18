@@ -91,6 +91,42 @@ void main() {
     await controller.close();
   });
 
+  test('only fires once on the present-to-absent edge, not again for every '
+      'later event where the alarm is still absent', () async {
+    // Bug found while diagnosing the Navigator "!_debugLocked" crash after
+    // the Stop button: an unrelated alarm's OWN ring/stop can add further
+    // events to the shared Alarm.ringing stream while ours has already
+    // disappeared - each of those re-confirmed "still absent" and, before
+    // this fix, called onGone again every time, multiplying however many
+    // times the screen tries to pop itself.
+    final controller = StreamController<AlarmSet>();
+    var goneCallCount = 0;
+    final watch = RingingWatch(
+      alarmId: 1,
+      ringingStream: controller.stream,
+      onGone: () => goneCallCount++,
+    );
+
+    controller.add(AlarmSet([_fakeAlarmSettings(1)]));
+    await Future<void>.delayed(Duration.zero);
+
+    controller.add(AlarmSet.empty());
+    await Future<void>.delayed(Duration.zero);
+    // A second, unrelated alarm now starts ringing - alarm 1 is still gone.
+    controller.add(AlarmSet([_fakeAlarmSettings(2)]));
+    await Future<void>.delayed(Duration.zero);
+    // ...and stops again - alarm 1 is still, still gone.
+    controller.add(AlarmSet.empty());
+    await Future<void>.delayed(Duration.zero);
+
+    expect(goneCallCount, 1,
+        reason: 'the disappearance is one event, not one per confirmation '
+            'that it is still gone');
+
+    watch.cancel();
+    await controller.close();
+  });
+
   test('cancel stops further notifications', () async {
     final controller = StreamController<AlarmSet>();
     var goneCalled = false;

@@ -9,6 +9,7 @@ import 'package:wakeywakey/models/alarms/custom_tone.dart' as custom_tone;
 import 'package:wakeywakey/models/alarms/manual_alarm.dart';
 import 'package:wakeywakey/models/alarms/manual_alarm_enable.dart';
 import 'package:wakeywakey/models/alarms/myalarm.dart';
+import 'package:wakeywakey/models/alarms/ringing_alarm_settings.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
@@ -822,31 +823,17 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _setAlarm(MyAlarm alarm, DateTime alarmDateTime) async {
-    // Set the alarm with the proper settings
-    final alarmSettings = AlarmSettings(
+    final alarmSettings = buildRingingAlarmSettings(
       id: alarm.id,
       // docs/TODO.md T-61: converts the instant to local time first instead of
       // reinterpreting its raw digits as local (see alarmPlatformTime).
       dateTime: alarmPlatformTime(alarmDateTime),
-      assetAudioPath: alarm.tone,
-      // docs/TODO.md T-96: the ramp duration used to come from here as a
-      // hardcoded `Duration(seconds: 60)`. Now the alarm carries it itself,
-      // so `planAlarmSync` can recognize a change as a deviation and
-      // replace the alarm (the lesson from T-84).
-      volumeSettings: alarm.gentlewake
-          ? VolumeSettings.fade(
-              volume: alarm.volume,
-              fadeDuration: alarm.gentleWakeDuration,
-            )
-          : VolumeSettings.fixed(volume: alarm.volume),
-      notificationSettings: NotificationSettings(
-        title: alarm.title,
-        body: "Your alarm is ringing",
-      ),
-      loopAudio: true,
-      vibrate: true,
-      warningNotificationOnKill: true,
-      androidFullScreenIntent: true,
+      tone: alarm.tone,
+      gentlewake: alarm.gentlewake,
+      volume: alarm.volume,
+      gentleWakeDuration: alarm.gentleWakeDuration,
+      title: alarm.title,
+      body: "Your alarm is ringing",
     );
 
     // Set the alarm
@@ -864,24 +851,15 @@ class AppState extends ChangeNotifier {
   /// call should sound like the one it replaces.
   Future<void> setSnoozeAlarm(int id, DateTime at) async {
     await Alarm.set(
-      alarmSettings: AlarmSettings(
+      alarmSettings: buildRingingAlarmSettings(
         id: id,
         dateTime: alarmPlatformTime(at),
-        assetAudioPath: _selectedTone,
-        volumeSettings: _gentleWakeUpEnabled
-            ? VolumeSettings.fade(
-                volume: _selectedVolume,
-                fadeDuration: _gentleWakeUpDuration,
-              )
-            : VolumeSettings.fixed(volume: _selectedVolume),
-        notificationSettings: const NotificationSettings(
-          title: 'Snoozed alarm',
-          body: "Your alarm is ringing",
-        ),
-        loopAudio: true,
-        vibrate: true,
-        warningNotificationOnKill: true,
-        androidFullScreenIntent: true,
+        tone: _selectedTone,
+        gentlewake: _gentleWakeUpEnabled,
+        volume: _selectedVolume,
+        gentleWakeDuration: _gentleWakeUpDuration,
+        title: 'Snoozed alarm',
+        body: "Your alarm is ringing",
       ),
     );
   }

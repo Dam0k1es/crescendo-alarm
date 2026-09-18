@@ -73,6 +73,16 @@ class QrScanner extends StatefulWidget {
   @visibleForTesting
   static Stream<AlarmSet>? debugRingingStreamOverride;
 
+  /// Test-only seam: the real `Handler.onAlarmHandled` has no way of its own
+  /// to observe how many times it was called - needed to pin down the
+  /// double-dismiss bug `_handleAlarmOnce` guards against (see
+  /// `screen_active_alarm.dart`'s identical seam and doc comment for the
+  /// full story - the same `Alarm.stop()`-updates-`Alarm.ringing` race
+  /// applies here between a successful QR validation and `RingingWatch`).
+  @visibleForTesting
+  static void Function(AppState appState, int alarmId)?
+      debugOnAlarmHandledOverride;
+
   @override
   State<QrScanner> createState() => _QrScannerState();
 }
@@ -115,6 +125,16 @@ class _QrScannerState extends State<QrScanner> {
   /// learns about.
   RingingWatch? _ringingWatch;
 
+  /// Guards `widget.alarmId` specifically against a double
+  /// `Handler.onAlarmHandled` call - see `_handleAlarmOnce`.
+  bool _ringingAlarmHandled = false;
+
+  /// Set synchronously the instant Snooze is pressed - see
+  /// `SnoozeButton.onBeforeSnooze`'s doc comment and
+  /// `screen_active_alarm.dart`'s identical field for why "before", not
+  /// "after a successful postponement".
+  bool _snoozing = false;
+
   @override
   void initState() {
     debugPrint("=====initState: Creating new QRScannerState");
@@ -127,7 +147,7 @@ class _QrScannerState extends State<QrScanner> {
         ringingStream: QrScanner.debugRingingStreamOverride,
         onGone: () {
           if (!mounted) return;
-          Handler.onAlarmHandled(_appState, ringingId);
+          if (!_snoozing) _handleAlarmOnce(ringingId);
           _closeView();
         },
       );
@@ -252,7 +272,7 @@ class _QrScannerState extends State<QrScanner> {
       for (final id in idsToStop) {
         try {
           await Alarm.stop(id);
-          Handler.onAlarmHandled(_appState, id);
+          _handleAlarmOnce(id);
         } catch (e) {
           debugPrint(
               "=====ScreenAlarmActiveState: Failed to stop alarm: ${e.runtimeType}");
@@ -320,9 +340,9 @@ class _QrScannerState extends State<QrScanner> {
                   alignment: Alignment.topCenter,
                   child: SnoozeButton(
                     alarmId: ringingId,
-                    onSnoozed: () {
-                      if (context.mounted) Navigator.pop(context);
-                    },
+                    onBeforeSnooze: () => _snoozing = true,
+                    onSnoozeAttemptFailed: () => _snoozing = false,
+                    onSnoozed: _closeView,
                   ),
                 ),
               ),
@@ -387,6 +407,23 @@ class _QrScannerState extends State<QrScanner> {
         ),
       ),
     );
+  }
+
+  /// `Alarm.stop(id)` (in the validation loop below) updates `Alarm.ringing`
+  /// as part of that same call, which `RingingWatch` also observes - so a
+  /// successful validation and `RingingWatch.onGone` could both call
+  /// `Handler.onAlarmHandled` for `widget.alarmId` (the one id `RingingWatch`
+  /// watches). Harmless before T-14 started re-arming a repeating
+  /// `ManualAlarm` from `onAlarmHandled`; a double re-arm since. Other
+  /// stopped ids (the `alarmId == null` stop-everything fallback) have no
+  /// `RingingWatch` of their own and are unaffected.
+  void _handleAlarmOnce(int id) {
+    if (id == widget.alarmId) {
+      if (_ringingAlarmHandled) return;
+      _ringingAlarmHandled = true;
+    }
+    (QrScanner.debugOnAlarmHandledOverride ?? Handler.onAlarmHandled)(
+        _appState, id);
   }
 
   void _closeView() {

@@ -17,13 +17,37 @@ import 'package:wakeywakey/utils/utils.dart';
 /// there is no button - the alarm keeps ringing, and only the regular
 /// switch-off remains (on the QR screen, that means a scan).
 class SnoozeButton extends StatelessWidget {
-  const SnoozeButton({super.key, required this.alarmId, this.onSnoozed});
+  const SnoozeButton({
+    super.key,
+    required this.alarmId,
+    this.onSnoozed,
+    this.onBeforeSnooze,
+    this.onSnoozeAttemptFailed,
+  });
 
   final int alarmId;
 
   /// Runs after a successful postponement - the screens close themselves in
   /// response to it.
   final VoidCallback? onSnoozed;
+
+  /// Runs synchronously the instant the button is pressed, before anything
+  /// asynchronous happens.
+  ///
+  /// `snoozeRingingAlarm` stops the *old* alarm as its last step, which is
+  /// the same `Alarm.stop()` a real dismissal uses - and therefore the same
+  /// update to `Alarm.ringing` a `RingingWatch` on the calling screen also
+  /// observes. Waiting for [onSnoozed] to mark "this was a snooze, not a
+  /// real stop" is too late: by the time it runs, several `await` hops have
+  /// already given `RingingWatch`'s own listener a chance to fire first (and
+  /// in practice, does). Claiming that *before* the stop call even happens
+  /// closes the race regardless of which side actually wins it.
+  final VoidCallback? onBeforeSnooze;
+
+  /// Runs when the attempt did not actually postpone anything (budget
+  /// exhausted, or the platform refused) - undoes [onBeforeSnooze]'s claim,
+  /// since nothing was stopped and the alarm is still ringing as before.
+  final VoidCallback? onSnoozeAttemptFailed;
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +80,7 @@ class SnoozeButton extends StatelessWidget {
           side: BorderSide(color: appState.accentColor, width: 2),
         ),
         onPressed: () async {
+          onBeforeSnooze?.call();
           final moved = await snoozeRingingAlarm(
             appState,
             alarmId: alarmId,
@@ -63,10 +88,12 @@ class SnoozeButton extends StatelessWidget {
             setAlarm: appState.setSnoozeAlarm,
             stopAlarm: appState.stopPlatformAlarm,
           );
-          if (!context.mounted) return;
           if (!moved) {
             // FR-20: NOTHING was switched off - the alarm keeps ringing.
-            displayToast(context, 'Snooze is used up - time to get up.');
+            onSnoozeAttemptFailed?.call();
+            if (context.mounted) {
+              displayToast(context, 'Snooze is used up - time to get up.');
+            }
             return;
           }
           onSnoozed?.call();

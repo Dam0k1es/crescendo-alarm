@@ -1040,6 +1040,49 @@ that is the basis a decision can be formulated against.
   `debugScanStreamOverride` pattern in `qr_scanner.dart`) - covering the stuck-open bug itself, an
   unrelated alarm's disappearance not closing the wrong screen, and the no-`alarmId` code-import
   path staying unaffected.
+- **Still stuck on a real device after this fix, and a new crash - continued (2026-09-18):** the
+  maintainer reported the screen still getting stuck open in some runs, plus a new `Navigator`
+  `!_debugLocked` assertion after pressing Stop. Two further, related causes found:
+  1. **`RingingWatch` didn't fully solve the underlying problem, only reacted to it** - and the
+     maintainer's own call was that a notification should not be able to deactivate a "guaranteed
+     wake-up" style alarm at all: "Eigentlich sollte der Alarm nur per Stop Button deaktiviert
+     werden können." Fixed at the source instead: `lib/models/alarms/ringing_alarm_settings.dart`'s
+     `buildRingingAlarmSettings` (a pure function extracted from `AppState._setAlarm`/
+     `setSnoozeAlarm` specifically so this has a test that needs no platform channel) now sets
+     `androidStopAlarmOnDismiss: false`. A stray swipe puts the notification straight back for as
+     long as the alarm keeps ringing, per that field's own doc comment - only the Stop button (or a
+     QR scan) can end it now. `RingingWatch` stays as a safety net for what remains (e.g. the QR
+     gate's emergency-stop-all button silencing an alarm a *different* screen is showing), but the
+     scenario that originally caused T-147 can no longer happen at all.
+  2. **The Navigator crash's real cause: `Alarm.stop()` updates `Alarm.ringing` as part of the same
+     call the Stop button awaits** - which `RingingWatch` also observes. A normal, successful Stop
+     therefore raced its own `Navigator.pop()` against `RingingWatch.onGone`'s, both reacting to
+     the one underlying change; whichever ran second hit the Navigator mid-transaction from the
+     first. The same hazard applies to a successful Snooze (`snoozeRingingAlarm` stops the *old*
+     alarm as its last internal step) - in practice, `RingingWatch`'s listener fires *before* the
+     snooze's own completion handler gets a chance to say "this one was a postponement, not a real
+     stop", so the naive fix of "flag it after success" doesn't close the race. Fixed by claiming
+     responsibility as early as possible instead: `ScreenAlarmActive`/`QrScanner` each guard
+     `Handler.onAlarmHandled` against a second call (`_callOnAlarmHandledOnce`/`_handleAlarmOnce`),
+     and `SnoozeButton` gained an `onBeforeSnooze` callback that fires synchronously the instant the
+     button is pressed - before `Alarm.stop()` even runs - so a screen's "this is a snooze, not a
+     stop" flag (`_snoozing`) is reliably in place *before* the race can happen, not set reactively
+     after. Popping itself was already idempotent (`ModalRoute.isCurrent`) once QrScanner's
+     `_closeView` pattern was applied consistently to `ScreenAlarmActive` and to both screens'
+     Snooze buttons (which previously popped directly, ungated).
+  3. **`RingingWatch` itself had a second, compounding bug**, found while fixing the above: it
+     fired `onGone` on *every* event where the watched alarm was absent, not only on the
+     present-to-absent transition - so an unrelated alarm's own ring/stop later on the same shared
+     stream re-confirmed "still absent" and called `onGone` again, multiplying however many pop/
+     `onAlarmHandled` attempts a single real disappearance produced. Now tracks the previous
+     presence explicitly and only fires on a genuine edge - which also subsumes the original
+     "ignore the seed event" rule for free (with nothing observed yet, there is no edge to have
+     crossed).
+- **Test:** `test/ringing_alarm_settings_test.dart` (the notification-swipe guarantee, in
+  isolation from the real plugin), `test/ringing_watch_test.dart`'s new edge-triggering case, and
+  `test/screen_alarm_active_ringing_test.dart`'s new case (two present-to-absent edges fired
+  back-to-back with no pump in between, verifying `Handler.onAlarmHandled` - observed via a new
+  `debugOnAlarmHandledOverride` seam - still fires exactly once).
 - **Requirement:** R3
 
 ### T-148 · Security-gate audit findings: history-only secret scanning, no native-Android SCA, no update automation — FIXED (2026-09-18)

@@ -150,6 +150,14 @@ valve never needs to fire at all).
   force-stop" is therefore not an achievable goal but a platform boundary - R3 should track it as
   that boundary, not as a deficiency. What the app can do, and per FR-17 does: re-arm everything the
   next time the app is opened.
+- **Real-device confirmation (2026-09-18): force-stopping the app during a scheduled alarm indeed
+  loses it - no ring.** This is the boundary above actually observed, not just reasoned from the
+  code, and it is not fixable: it's Android's own platform guarantee for what `am force-stop` does
+  to a package (every AlarmManager entry it owns is dropped, unconditionally, by the OS itself,
+  before the app gets any chance to react). No app-level code change can prevent this. What R3
+  actually promises here is FR-17's recovery - alarms are re-armed the next time the app is opened
+  - which is a different, already-implemented guarantee that this test does not exercise (it would
+  need to check: after a force-stop, does *opening the app again* correctly re-arm the alarm?).
 
 ## R4 - All alarm-ringing prerequisites are met before an alarm fires
 

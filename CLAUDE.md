@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **415 tests across 53 files**, and CI runs them six times over -
+`flutter test` currently runs **420 tests across 54 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -383,9 +383,22 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   the user-imported-tone copy/validation logic and its `AppState` wiring, both against a real
   `dart:io` temporary directory rather than a mocked platform channel - `documentsDirectory` is
   injected the same way `fetchEvents`/`now` are elsewhere.
-- `test/ringing_watch_test.dart`, `test/screen_alarm_active_ringing_test.dart` and
-  `test/qr_scanner_ringing_test.dart` (`docs/TODO.md` T-147): the fix for a ring screen staying
-  stuck open after its alarm was already stopped by a notification swipe. The reusable watcher is
+- `test/ringing_watch_test.dart`, `test/screen_alarm_active_ringing_test.dart`,
+  `test/qr_scanner_ringing_test.dart` and `test/ringing_alarm_settings_test.dart`
+  (`docs/TODO.md` T-147): a ring screen staying stuck open after its alarm was already stopped
+  externally, and a real `Navigator` "!_debugLocked" crash after pressing Stop, found on a real
+  device. The actual fix for the notification half is at the source
+  (`ringing_alarm_settings.dart`'s `buildRingingAlarmSettings` sets `androidStopAlarmOnDismiss:
+  false`, tested without a platform channel since constructing `AlarmSettings` is plain data); the
+  crash's cause was `Alarm.stop()` updating `Alarm.ringing` as part of the same call the Stop
+  button (or a successful Snooze) awaits, which the screens' `RingingWatch` also observes - two
+  independent reactions to one change, one of them hitting the Navigator mid-transaction from the
+  other. Fixed by claiming responsibility as early as possible (`SnoozeButton.onBeforeSnooze` fires
+  synchronously before `Alarm.stop()` even runs) and guarding `Handler.onAlarmHandled` against a
+  second call, observed via a `debugOnAlarmHandledOverride` seam on both screens.
+  `RingingWatch` itself also had a second, compounding bug found along the way: it fired on every
+  event where the watched alarm was absent, not just the present-to-absent edge, so an unrelated
+  alarm's own ring/stop on the same shared stream could re-trigger it. The reusable watcher is
   tested in isolation against a fake `Stream<AlarmSet>`; both screens get their own
   `debugRingingStreamOverride` test seam (matching `qr_scanner.dart`'s existing
   `debugScanStreamOverride` pattern) since the real, static `Alarm.ringing` has no platform channel

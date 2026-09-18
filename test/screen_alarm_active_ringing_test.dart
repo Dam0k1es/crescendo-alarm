@@ -55,14 +55,17 @@ Future<void> _pumpScreen(WidgetTester tester, AppState appState,
 
 void main() {
   late StreamController<AlarmSet> ringing;
+  late int onAlarmHandledCalls;
 
   setUp(() {
     ringing = StreamController<AlarmSet>.broadcast();
     ScreenAlarmActive.debugRingingStreamOverride = ringing.stream;
+    onAlarmHandledCalls = 0;
   });
 
   tearDown(() async {
     ScreenAlarmActive.debugRingingStreamOverride = null;
+    ScreenAlarmActive.debugOnAlarmHandledOverride = null;
     await ringing.close();
   });
 
@@ -105,6 +108,48 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.byType(ScreenAlarmActive), findsOneWidget);
+  });
+
+  testWidgets(
+      'a dismiss is only ever actually acted on once, even if the alarm '
+      'disappears more than once before the screen has finished closing',
+      (tester) async {
+    // Bug report: pressing Stop threw a Navigator "!_debugLocked" assertion.
+    // Alarm.stop() updates Alarm.ringing as part of the same call the Stop
+    // button awaits, so its own dismissal and RingingWatch's onGone
+    // (triggered by that same update) could both try to act - two
+    // Navigator.pop() calls on one route, and (independently harmful once
+    // T-14 started re-arming a repeating ManualAlarm from onAlarmHandled)
+    // two calls to Handler.onAlarmHandled for the same ring. A screen must
+    // only ever actually dismiss itself once - verified here via an
+    // injectable onAlarmHandled, since the real Handler.onAlarmHandled has
+    // no test seam of its own to count calls through.
+    ScreenAlarmActive.debugOnAlarmHandledOverride =
+        (appState, alarmId) => onAlarmHandledCalls++;
+    SharedPreferences.setMockInitialValues({});
+    final appState = AppState();
+    await appState.initialized;
+    await _pumpScreen(tester, appState, alarmId: 1);
+
+    // All four fired back-to-back, no pump in between: two present-to-absent
+    // edges queue two onGone calls before the framework gets a chance to
+    // process either dismissal - the same shape as the real bug, where
+    // Alarm.stop()'s own dismissal and RingingWatch's onGone (both triggered
+    // by that one call updating Alarm.ringing) arrived close enough together
+    // that the second still saw the first's dismissal in progress, not
+    // finished.
+    ringing.add(AlarmSet([_fakeAlarmSettings(1)]));
+    ringing.add(AlarmSet.empty());
+    ringing.add(AlarmSet([_fakeAlarmSettings(1)]));
+    ringing.add(AlarmSet.empty());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(tester.takeException(), isNull);
+    expect(onAlarmHandledCalls, 1,
+        reason: 'a second, already-redundant dismissal must be a no-op, not '
+            'a second attempt at everything a dismissal does');
   });
 
   testWidgets('the very first (seed-like) event does not auto-close',

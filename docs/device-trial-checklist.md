@@ -126,4 +126,11 @@ is the evidence, not the task list.
   "already derivable from the code" in `docs/REQUIREMENTS.md` R3); not yet run through the
   scripted `dumpsys alarm` procedure (`.github/scripts/check_alarm_survival.sh`) or logged with
   device model/APK/commit via the table template above - do that on the next trial to make this a
-  full, repeatable C1/C2 entry. `am force-stop` survival (C4) is still unverified.
+  full, repeatable C1/C2 entry.
+- **2026-09-18, C4 (real device): confirmed, and confirmed as a platform boundary, not a bug.**
+  `am force-stop` during a scheduled alarm loses it - no ring. This is Android's own documented
+  behaviour (every AlarmManager entry a force-stopped package owns is dropped by the OS itself) and
+  is not something app code can prevent - see `docs/REQUIREMENTS.md` R3's own note on this
+  boundary. What's still open, and is the actually fixable half of C4/C5: after a force-stop,
+  does *opening the app again* correctly re-arm the alarm via FR-17's recovery path? Not yet
+  checked on a real device.

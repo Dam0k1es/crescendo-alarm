@@ -23,21 +23,27 @@ import 'package:alarm/utils/alarm_set.dart';
 /// ringing, which is exactly the state of `flutter test`'s unpopulated
 /// static `Alarm.ringing` in every existing test that calls
 /// `Handler.handleAlarm` directly rather than going through the plugin.
-/// [onGone] therefore only fires on a later event where [alarmId] is no
-/// longer present - a genuine disappearance.
+///
+/// [onGone] fires exactly once per present-to-absent **edge**, not once per
+/// event where [alarmId] happens to be absent. A later, unrelated alarm
+/// ringing and stopping still emits further events on the same shared
+/// stream, each of which would otherwise re-confirm "still absent" and call
+/// [onGone] again - multiplying however many times whatever it does (e.g. a
+/// screen popping itself) runs. Tracking the previous presence explicitly
+/// (rather than "ignore the very first event") also subsumes the seed-value
+/// case above for free: with nothing observed yet, there is no edge to have
+/// crossed.
 class RingingWatch {
   RingingWatch({
     required int alarmId,
     required void Function() onGone,
     Stream<AlarmSet>? ringingStream,
   }) {
-    var sawFirstEvent = false;
+    bool? wasPresent;
     _subscription = (ringingStream ?? Alarm.ringing).listen((ringing) {
-      if (!sawFirstEvent) {
-        sawFirstEvent = true;
-        return;
-      }
-      if (!ringing.containsId(alarmId)) onGone();
+      final isPresent = ringing.containsId(alarmId);
+      if (wasPresent == true && !isPresent) onGone();
+      wasPresent = isPresent;
     });
   }
 
