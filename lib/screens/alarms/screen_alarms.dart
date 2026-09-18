@@ -308,6 +308,8 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     Duration gentleWakeDuration =
         alarm?.gentleWakeDuration ?? _appState.gentleWakeUpDuration;
     double volume = alarm?.volume ?? _appState.selectedVolume;
+    // docs/TODO.md T-50: same inheritance rule as the others above.
+    bool vibrate = alarm?.vibrate ?? _appState.vibrationEnabled;
     String selectedTone = alarm?.tone ?? _appState.selectedTone;
     DateTime nowDT = DateTime.now().add(const Duration(minutes: 1));
     TimeOfDay nowTOD = TimeOfDay(hour: nowDT.hour, minute: nowDT.minute);
@@ -560,6 +562,7 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                       tone: selectedTone,
                       repeatOnDays: repeatOnDays,
                       volume: volume,
+                      vibrate: vibrate,
                     ));
                   },
                 ),

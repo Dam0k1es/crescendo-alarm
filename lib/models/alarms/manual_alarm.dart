@@ -15,6 +15,11 @@ class ManualAlarm extends MyAlarm {
     super.tone,
     super.id,
     super.volume = 0.8,
+    // docs/TODO.md T-50: same inheritance rule as tone/volume/gentlewake -
+    // a manual alarm carries its own vibrate value, defaulted from
+    // AppState.vibrationEnabled at creation time by the caller, not read
+    // live from AppState on every ring.
+    super.vibrate,
     Map<DayOfWeek, bool>? repeatOnDays,
   }) : repeatOnDays =
             repeatOnDays ?? {for (var day in DayOfWeek.values) day: true};
@@ -22,7 +27,7 @@ class ManualAlarm extends MyAlarm {
   factory ManualAlarm.fromJson(String jsonString) {
     final data = jsonDecode(jsonString);
 
-    // Map von String zu DayOfWeek konvertieren
+    // Convert the String keys back to DayOfWeek values.
     final repeatOnDays = (data['repeatOnDays'] as Map<String, dynamic>).map(
       (key, value) => MapEntry(
         DayOfWeek.values.firstWhere((day) => day.toString() == key),
@@ -40,6 +45,10 @@ class ManualAlarm extends MyAlarm {
           : Duration(seconds: data['gentleWakeSeconds'] as int),
       tone: data['tone'],
       volume: (data['volume'] as num).toDouble(),
+      // Missing for alarms stored before T-50 - then MyAlarm's default
+      // (true) applies, matching what every alarm did before this setting
+      // existed.
+      vibrate: data['vibrate'] as bool?,
       repeatOnDays: repeatOnDays,
       id: data['id'],
     );
@@ -55,6 +64,7 @@ class ManualAlarm extends MyAlarm {
       'gentleWakeSeconds': gentleWakeDuration.inSeconds,
       'tone': tone,
       'volume': volume,
+      'vibrate': vibrate,
       'repeatOnDays':
           repeatOnDays.map((day, value) => MapEntry(day.toString(), value)),
       'id': id,
@@ -76,6 +86,7 @@ class ManualAlarm extends MyAlarm {
           gentleWakeDuration == other.gentleWakeDuration &&
           tone == other.tone &&
           volume == other.volume &&
+          vibrate == other.vibrate &&
           id == other.id &&
           compareRepeatDays(repeatOnDays, other.repeatOnDays);
     } else {

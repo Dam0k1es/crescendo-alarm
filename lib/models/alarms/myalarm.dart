@@ -19,6 +19,15 @@ abstract class MyAlarm {
 
   String tone;
   double volume;
+
+  /// docs/TODO.md T-50: whether this alarm vibrates when it rings. A
+  /// property of the ALARM, not just an `AppState` default, for the same
+  /// reason [gentleWakeDuration] is (see its own doc comment): `planAlarmSync`
+  /// decides whether an already-armed alarm must be replaced based on the
+  /// alarm's own properties, and a value that only lived in `AppState` could
+  /// never be recognized as a deviation there.
+  bool vibrate;
+
   int id; // Added id property
 
   MyAlarm({
@@ -29,6 +38,7 @@ abstract class MyAlarm {
     Duration? gentleWakeDuration,
     String? tone,
     double? volume,
+    bool? vibrate,
     int? id,
   })  : title = title ?? 'Alarm',
         enabled = enabled ?? true,
@@ -38,6 +48,9 @@ abstract class MyAlarm {
         gentleWakeDuration = gentleWakeDuration ?? const Duration(minutes: 1),
         tone = tone ?? 'Default',
         volume = volume ?? 0.6,
+        // The previously hardcoded value passed to the `alarm` plugin - so
+        // existing installations keep vibrating unchanged.
+        vibrate = vibrate ?? true,
         id = id ?? getRandom();
 
   String toJson();

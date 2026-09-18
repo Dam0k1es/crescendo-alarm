@@ -1359,20 +1359,50 @@ that is the basis a decision can be formulated against.
 
 ---
 
-### T-50 · Manual alarms don't respect two global settings
+### T-50 · Manual alarms don't respect two global settings — PARTLY FIXED (2026-09-18)
 
-- [ ] Make manual alarms honor the vibration switch, and clarify/implement "respect time of day
-      change".
+- [x] (a) Make manual alarms honor a vibration switch.
+- [x] (b) Dropped — see below.
 - **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31). Two distinct gaps: (a)
-  there is a global vibration setting that manual alarms don't apply (no `vibration` field is
-  threaded through `ManualAlarm`/`MyAlarm`) - `lib/screens/alarms/screen_alarms.dart`'s alarm editor
-  has no vibration control at all, so this needs a settings-model change too, not just a scheduling
-  fix; (b) "respect time of day change" is not specified precisely enough in the original note to
-  know what behavior is wanted - possibly reacting to a live system clock/DST change while an alarm
-  is already scheduled. Clarify the intent before implementing (b).
-- **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x502`/`0x503` (see T-31).
-- **Done when:** (a) a vibration switch exists and manual alarms honor it, covered by a test; (b) is
-  either implemented with a test, or dropped with a written reason.
+  there was no vibration setting anywhere in the app at all - `vibrate: true` was hardcoded in
+  `buildRingingAlarmSettings` for every alarm, regardless of type; (b) "respect time of day change"
+  was never specified precisely enough in the original note to know what behavior was wanted.
+- **Evidence (before the fix):** `lib/main.dart`'s pre-triage TODO block, item `0x502`/`0x503` (see
+  T-31); the hardcoded `vibrate: true` was in `lib/models/alarms/ringing_alarm_settings.dart`.
+- **Fix (a):** `vibrate` is now a property of `MyAlarm` itself (default `true`, matching the
+  previously hardcoded behaviour so existing installs don't change), threaded through
+  `ScheduledAlarm`/`ManualAlarm`'s `toJson`/`fromJson`/`==` and into
+  `buildRingingAlarmSettings`, following the same shape T-84/T-96 already established for
+  tone/volume/gentle-wake duration: a setting that must reach an *already-armed* alarm has to be a
+  property of the alarm the reconciliation (`planAlarmSync`'s `propertiesMatch`) can compare
+  against, not just an `AppState` default a new alarm happens to inherit at creation time. A global
+  `AppState.vibrationEnabled` (persisted, default `true`) is the value new alarms inherit and the
+  one `applyPlannedAlarms` passes into `ScheduledAlarm` construction/reconciliation; a new
+  "Vibration" toggle in Settings > Alarm Tones (`page_alarmtones.dart`) sets it and, like the
+  existing tone/volume controls there, calls `runCheckpointSafely(..., trigger:
+  CheckpointTrigger.settingsChanged)` so an already-planned alarm picks up the change immediately
+  rather than only on the next incidental replan. A manual alarm inherits the current
+  `vibrationEnabled` value at creation (`screen_alarms.dart`), the same FR-15 rule tone/volume/
+  gentle-wake already follow for manual alarms - they're user-owned and edited directly, never
+  auto-regenerated the way scheduled alarms are, so a global setting only reaches a *new* manual
+  alarm, not retroactively into one that already exists.
+  - Along the way, found and fixed a pre-existing bug this change exposed:
+    `AppState.addAlarm` reconstructs a brand-new `ManualAlarm`/`ScheduledAlarm` object field-by-field
+    (to normalize a possibly past-dated time) instead of using the object passed in, and neither
+    reconstruction's field list included `vibrate` - so it silently reset to `MyAlarm`'s hardcoded
+    default on every add, regardless of what had actually been set. Fixed by adding `vibrate:
+    alarm.vibrate` to both reconstructions.
+- **Dropped (b):** "respect time of day change" remains too vague to implement against - the
+  original note doesn't say what device-clock/DST change it means an alarm should react to, or
+  what reacting should look like (re-fire? re-time? just re-notify?). Rather than guess at a
+  behavior nobody asked for, this half is dropped without an implementation. Revisit only if a
+  concrete scenario is reported.
+- **Tests:** `test/app_state_vibration_test.dart` (default, persistence, notifies listeners);
+  `apply_alarms_test.dart` gained a `propertiesMatch` case (a differing `vibrate` triggers
+  replacement) and an `applyPlannedAlarms` case (the setting reaches newly-planned alarms);
+  `ringing_alarm_settings_test.dart` gained a case asserting `vibrate` passes through unchanged;
+  `manual_alarm_inherits_settings_test.dart` gained an assertion that a new manual alarm inherits
+  the current vibration setting.
 
 ### T-51 · Theme does not follow the system light/dark setting — FIXED (2026-09-19)
 

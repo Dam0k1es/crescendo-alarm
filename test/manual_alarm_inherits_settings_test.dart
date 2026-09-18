@@ -21,6 +21,7 @@ void main() {
     appState.gentleWakeUpEnabled = true;
     appState.gentleWakeUpDuration = const Duration(minutes: 9);
     appState.selectedVolume = 0.42;
+    appState.vibrationEnabled = false;
 
     await tester.pumpWidget(
       ChangeNotifierProvider<AppState>.value(
@@ -51,5 +52,8 @@ void main() {
     // safeguard that the pre-fill as a whole stays intact.
     expect(created.volume, 0.42);
     expect(created.tone, appState.selectedTone);
+    // docs/TODO.md T-50: vibrate is the newest of these settings - same
+    // inheritance rule, same failure class if it were skipped.
+    expect(created.vibrate, isFalse);
   });
 }

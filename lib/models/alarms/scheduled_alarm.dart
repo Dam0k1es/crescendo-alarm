@@ -19,6 +19,9 @@ class ScheduledAlarm extends MyAlarm {
     // FR-18 rang with MyAlarm's default of 0.6 and ignored
     // appState.selectedVolume - even though there's a UI for it.
     super.volume,
+    // docs/TODO.md T-50: same lesson, for vibration - there was no setting
+    // at all before this, so every alarm always vibrated.
+    super.vibrate,
     super.id,
   }) : super(title: formatDateTime(time));
 
@@ -40,6 +43,10 @@ class ScheduledAlarm extends MyAlarm {
       // Missing for alarms stored before T-84 - then MyAlarm's default
       // applies.
       volume: (data['volume'] as num?)?.toDouble(),
+      // Missing for alarms stored before T-50 - then MyAlarm's default
+      // (true) applies, matching what every alarm did before this setting
+      // existed.
+      vibrate: data['vibrate'] as bool?,
       id: data['id'],
     );
   }
@@ -54,6 +61,7 @@ class ScheduledAlarm extends MyAlarm {
       'gentleWakeSeconds': gentleWakeDuration.inSeconds,
       'tone': tone,
       'volume': volume,
+      'vibrate': vibrate,
       'id': id,
     });
   }
@@ -73,6 +81,7 @@ class ScheduledAlarm extends MyAlarm {
           gentleWakeDuration == other.gentleWakeDuration &&
           tone == other.tone &&
           volume == other.volume &&
+          vibrate == other.vibrate &&
           id == other.id;
     } else {
       return false;

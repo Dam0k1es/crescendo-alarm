@@ -78,13 +78,14 @@ DateTime _toMinute(DateTime t) {
 /// are also frame-free, so the whole T-61 hazard of comparing a UTC-tagged
 /// instant against the plugin's local wall clock disappears from this boundary.
 ///
-/// [tone]/[volume]/[gentleWake]/[gentleWakeDuration] are the properties the plan calls for
-/// (`AppState`'s current settings). When given, an existing alarm whose own
-/// properties differ is replaced, not kept (docs/TODO.md T-84): the comparison
-/// used to be time-only, so a changed tone or volume only ever took effect on
-/// days that happened to be replanned anyway. Omitting them keeps the
-/// time-only comparison, so no caller that doesn't know the settings can
-/// accidentally re-set every alarm.
+/// [tone]/[volume]/[vibrate]/[gentleWake]/[gentleWakeDuration] are the
+/// properties the plan calls for (`AppState`'s current settings). When
+/// given, an existing alarm whose own properties differ is replaced, not
+/// kept (docs/TODO.md T-84, and T-50 for [vibrate]): the comparison used to
+/// be time-only, so a changed tone or volume only ever took effect on days
+/// that happened to be replanned anyway. Omitting them keeps the time-only
+/// comparison, so no caller that doesn't know the settings can accidentally
+/// re-set every alarm.
 AlarmSyncPlan planAlarmSync({
   required Map<String, int?> pendingDayValues,
   required List<ScheduledAlarm> existingScheduledAlarms,
@@ -98,6 +99,7 @@ AlarmSyncPlan planAlarmSync({
   Set<String>? disabledDays,
   String? tone,
   double? volume,
+  bool? vibrate,
   bool? gentleWake,
   Duration? gentleWakeDuration,
 }) {
@@ -128,6 +130,7 @@ AlarmSyncPlan planAlarmSync({
   bool propertiesMatch(ScheduledAlarm alarm) =>
       (tone == null || alarm.tone == tone) &&
       (volume == null || alarm.volume == volume) &&
+      (vibrate == null || alarm.vibrate == vibrate) &&
       (gentleWake == null || alarm.gentlewake == gentleWake) &&
       // docs/TODO.md T-96: only relevant while Gentle Wake is on at all -
       // with Gentle Wake off, `_setAlarm` doesn't use the ramp at all, so a
@@ -250,6 +253,7 @@ Future<void> applyPlannedAlarms(
     // otherwise a changed setting only affects days that get freshly planned anyway.
     tone: appState.selectedTone,
     volume: appState.selectedVolume,
+    vibrate: appState.vibrationEnabled,
     gentleWake: appState.gentleWakeUpEnabled,
     gentleWakeDuration: appState.gentleWakeUpDuration,
   );
@@ -279,6 +283,7 @@ Future<void> applyPlannedAlarms(
         gentleWakeDuration: appState.gentleWakeUpDuration,
         tone: appState.selectedTone,
         volume: appState.selectedVolume,
+        vibrate: appState.vibrationEnabled,
         id: getRandom(),
       ));
     } catch (e) {

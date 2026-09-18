@@ -142,6 +142,8 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
               _buildCustomToneTile(context),
               const SizedBox(height: 32.0),
               _buildVolumeSlider(context),
+              const SizedBox(height: 16.0),
+              _buildVibrationToggle(context),
             ],
           ),
         ),
@@ -276,6 +278,39 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
               divisions: 10,
               activeColor: _appState.accentColor,
               label: '${(_appState.selectedVolume * 100).round()}%',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // docs/TODO.md T-50: there was no vibration setting anywhere in the app
+  // before this - every alarm always vibrated regardless of anything the
+  // user could do.
+  Widget _buildVibrationToggle(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Vibration',
+              style: TextStyle(fontSize: 18.0),
+            ),
+            Switch(
+              value: context.watch<AppState>().vibrationEnabled,
+              onChanged: (value) {
+                _appState.vibrationEnabled = value;
+                // The setting belongs to already-armed alarms too (T-84's
+                // lesson) - without a checkpoint it would only reach a day
+                // that gets replanned anyway.
+                runCheckpointSafely(_appState,
+                    trigger: CheckpointTrigger.settingsChanged);
+              },
+              activeThumbColor:
+                  context.watch<AppState>().accentColor.withValues(alpha: 0.05),
             ),
           ],
         ),

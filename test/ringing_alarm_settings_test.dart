@@ -28,6 +28,7 @@ void main() {
       gentleWakeDuration: const Duration(minutes: 1),
       title: 'Alarm',
       body: 'Your alarm is ringing',
+      vibrate: true,
     );
 
     expect(settings.notificationSettings.androidStopAlarmOnDismiss, isFalse);
@@ -43,6 +44,7 @@ void main() {
       gentleWakeDuration: const Duration(minutes: 3),
       title: 'Alarm',
       body: 'Your alarm is ringing',
+      vibrate: true,
     );
     final fixed = buildRingingAlarmSettings(
       id: 1,
@@ -53,6 +55,7 @@ void main() {
       gentleWakeDuration: const Duration(minutes: 3),
       title: 'Alarm',
       body: 'Your alarm is ringing',
+      vibrate: true,
     );
 
     expect(fading.volumeSettings.fadeDuration, const Duration(minutes: 3));
@@ -69,6 +72,7 @@ void main() {
       gentleWakeDuration: const Duration(minutes: 1),
       title: 'Wake up',
       body: 'Time to go',
+      vibrate: true,
     );
 
     expect(settings.id, 42);
@@ -76,5 +80,33 @@ void main() {
     expect(settings.assetAudioPath, 'assets/sounds/wake_up.mp3');
     expect(settings.notificationSettings.title, 'Wake up');
     expect(settings.notificationSettings.body, 'Time to go');
+  });
+
+  test('carries the vibrate setting through unchanged', () {
+    final vibrating = buildRingingAlarmSettings(
+      id: 1,
+      dateTime: DateTime(2026, 3, 10, 7, 30),
+      tone: null,
+      gentlewake: false,
+      volume: 0.5,
+      gentleWakeDuration: const Duration(minutes: 1),
+      title: 'Alarm',
+      body: 'Your alarm is ringing',
+      vibrate: true,
+    );
+    final silent = buildRingingAlarmSettings(
+      id: 1,
+      dateTime: DateTime(2026, 3, 10, 7, 30),
+      tone: null,
+      gentlewake: false,
+      volume: 0.5,
+      gentleWakeDuration: const Duration(minutes: 1),
+      title: 'Alarm',
+      body: 'Your alarm is ringing',
+      vibrate: false,
+    );
+
+    expect(vibrating.vibrate, isTrue);
+    expect(silent.vibrate, isFalse);
   });
 }

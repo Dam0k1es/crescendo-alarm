@@ -281,6 +281,31 @@ void main() {
         expect(plan.toAdd, [planned]);
       });
 
+      // docs/TODO.md T-50: no vibration field existed at all before this -
+      // every alarm always vibrated regardless of any setting. Same lesson
+      // as tone/volume/gentle-wake: a property `planAlarmSync` doesn't
+      // compare never reaches an already-armed alarm.
+      test('a differing vibrate setting -> the alarm is replaced', () {
+        final plan = planAlarmSync(
+          pendingDayValues: {_iso(planned): planned.millisecondsSinceEpoch},
+          existingScheduledAlarms: [
+            ScheduledAlarm(
+              time: planned,
+              enabled: true,
+              gentlewake: false,
+              tone: 'assets/sounds/lollipop.mp3',
+              vibrate: true,
+              id: 22,
+            )
+          ],
+          now: now,
+          vibrate: false,
+        );
+
+        expect(plan.toRemove.single.id, 22);
+        expect(plan.toAdd, [planned]);
+      });
+
       test('identical properties -> still a no-op', () {
         final plan = planAlarmSync(
           pendingDayValues: {_iso(planned): planned.millisecondsSinceEpoch},
@@ -429,6 +454,19 @@ void main() {
       expect(alarm.tone, 'assets/sounds/alt.mp3');
       expect(alarm.volume, 0.35);
       expect(alarm.gentlewake, isTrue);
+    });
+
+    test('T-50: picks up the vibration setting too', () async {
+      final appState = await _freshAppState();
+      appState.vibrationEnabled = false;
+      final planned = DateTime.now().add(const Duration(days: 1));
+      appState.pendingDayValues = {
+        _iso(planned): planned.millisecondsSinceEpoch,
+      };
+
+      await applyPlannedAlarms(appState);
+
+      expect(appState.scheduledAlarms.single.vibrate, isFalse);
     });
 
     test('T-84: a changed volume affects already-planned alarms',

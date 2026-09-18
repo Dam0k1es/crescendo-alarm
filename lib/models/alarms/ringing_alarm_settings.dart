@@ -31,6 +31,10 @@ AlarmSettings buildRingingAlarmSettings({
   required Duration gentleWakeDuration,
   required String title,
   required String body,
+  // docs/TODO.md T-50: used to be hardcoded `true` here - there was no
+  // vibration setting anywhere in the app, so every alarm always vibrated
+  // regardless of anything the user could do.
+  required bool vibrate,
 }) {
   return AlarmSettings(
     id: id,
@@ -49,7 +53,7 @@ AlarmSettings buildRingingAlarmSettings({
       androidStopAlarmOnDismiss: false,
     ),
     loopAudio: true,
-    vibrate: true,
+    vibrate: vibrate,
     warningNotificationOnKill: true,
     androidFullScreenIntent: true,
   );

@@ -104,6 +104,11 @@ class AppState extends ChangeNotifier {
   String _selectedTone = 'assets/sounds/lollipop.mp3';
   double _selectedVolume = 0.8;
 
+  /// docs/TODO.md T-50: the default new alarms inherit (mirroring
+  /// `selectedVolume`/`selectedTone`) - `true` to match the previously
+  /// hardcoded behaviour, since this setting didn't exist before.
+  bool _vibrationEnabled = true;
+
   /// The user's own imported tone, as a path relative to the app's Documents
   /// directory (see `custom_tone.dart`'s doc comment for why) - `null` until
   /// they've imported one. Distinct from [_selectedTone]/a `MyAlarm.tone`,
@@ -350,6 +355,8 @@ class AppState extends ChangeNotifier {
   String get selectedTone => _selectedTone;
 
   double get selectedVolume => _selectedVolume;
+
+  bool get vibrationEnabled => _vibrationEnabled;
 
   String? get customTonePath => _customTonePath;
 
@@ -643,6 +650,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  set vibrationEnabled(bool value) {
+    _vibrationEnabled = value;
+    _prefs.setBool('vibrationEnabled', _vibrationEnabled);
+    notifyListeners();
+  }
+
   /// Copies [sourcePath] (wherever the system file picker pointed at) into
   /// the app's own storage and remembers it as [customTonePath] - see
   /// `custom_tone.dart`'s doc comment for why a copy, not a reference.
@@ -690,6 +703,7 @@ class AppState extends ChangeNotifier {
           gentleWakeDuration: alarm.gentleWakeDuration,
           tone: alarm.tone,
           volume: alarm.volume,
+          vibrate: alarm.vibrate,
           repeatOnDays: alarm.repeatOnDays);
       if (_manualAlarms.contains(alarm)) {
         debugPrint(
@@ -719,7 +733,8 @@ class AppState extends ChangeNotifier {
           gentlewake: alarm.gentlewake,
           gentleWakeDuration: alarm.gentleWakeDuration,
           tone: alarm.tone,
-          volume: alarm.volume);
+          volume: alarm.volume,
+          vibrate: alarm.vibrate);
       if (_scheduledAlarms.contains(alarm)) {
         debugPrint(
             'ScheduledAlarm with id ${alarm.id} is already in list! Removing it.');
@@ -873,6 +888,7 @@ class AppState extends ChangeNotifier {
       gentleWakeDuration: alarm.gentleWakeDuration,
       title: alarm.title,
       body: "Your alarm is ringing",
+      vibrate: alarm.vibrate,
     );
 
     // Set the alarm
@@ -899,6 +915,7 @@ class AppState extends ChangeNotifier {
         gentleWakeDuration: _gentleWakeUpDuration,
         title: 'Snoozed alarm',
         body: "Your alarm is ringing",
+        vibrate: _vibrationEnabled,
       ),
     );
   }
@@ -1192,6 +1209,8 @@ class AppState extends ChangeNotifier {
       _selectedTone = _prefs.getString('selectedTone') ?? _selectedTone;
       _customTonePath = _prefs.getString('customTonePath') ?? _customTonePath;
       _selectedVolume = _prefs.getDouble('selectedVolume') ?? _selectedVolume;
+      _vibrationEnabled =
+          _prefs.getBool('vibrationEnabled') ?? _vibrationEnabled;
       _darkMode = _prefs.getBool('darkMode') ?? _darkMode;
       _followSystemTheme =
           _prefs.getBool('followSystemTheme') ?? _followSystemTheme;
