@@ -139,6 +139,10 @@ flutter:
     - assets/icons/icon_no_shadow.png
     - assets/sounds/lollipop.mp3
     - assets/text/Privacy.md
+    # docs/TODO.md T-36: the root LICENSE file itself, bundled directly
+    # (not copied into assets/) so there is exactly one copy to keep in
+    # sync - page_license.dart reads it straight from here.
+    - LICENSE
     - assets/sounds/annoying_alarm.mp3
     - assets/sounds/old_telephone_ring.mp3
     - assets/sounds/wake_up.mp3
