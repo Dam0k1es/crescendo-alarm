@@ -21,6 +21,13 @@ Medium/informational findings don't block a release but must be recorded and rev
   built APK (`ci.yml`'s `mobsf-full-scan`) is gating too, with the same exceptions file as its
   threshold, and on an un-accepted HIGH it additionally **deletes the uploaded production APK
   artifact** so a red run leaves nothing downloadable (`docs/TODO.md` T-11).
+  **Since 2026-09-18 (`docs/TODO.md` T-148):** `trufflehog` scans the full git history
+  (`trufflehog git`), not only the current checkout (`trufflehog filesystem`, the gap that would
+  have missed a secret exactly the way T-29's unlicensed audio blobs sat undetected in history for
+  ten days); and a second, independent `osv-scanner` pass in `ci.yml`/`release.yml`'s Android build
+  jobs checks the native dependency tree (a CycloneDX SBOM of the `releaseRuntimeClasspath`
+  configuration) that the original `--lockfile=pubspec.lock` pass never saw at all - it found and
+  fixed one real HIGH (`gson:2.8.8`, forced to the patched `2.8.9`) the same day it was added.
 - **Status: partially met.** All gating tools are currently green against the recorded exceptions.
   The two findings that are *accepted* rather than fixed, and therefore carry a dated rationale in
   `.github/security-exceptions.json`: `mobsfscan`'s one ERROR (`android_task_hijacking2`, a

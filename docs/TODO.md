@@ -1042,6 +1042,54 @@ that is the basis a decision can be formulated against.
   path staying unaffected.
 - **Requirement:** R3
 
+### T-148 · Security-gate audit findings: history-only secret scanning, no native-Android SCA, no update automation — FIXED (2026-09-18)
+
+- [x] `trufflehog` only ever scanned the current checkout, never git history.
+- [x] `osv-scanner` only ever covered `pubspec.lock` (the Dart side) - the native Android
+      dependency tree had zero SCA coverage.
+- [x] No Dependabot/Renovate - vulnerability scanning was purely reactive against whatever was
+      currently pinned, with nothing proactively flagging outdated dependencies.
+- **Why:** an audit of the SAST/SCA/secret-scan configuration itself (not just its output) turned
+  up three real gaps rather than tuning nitpicks:
+  1. **`trufflehog filesystem` vs. `trufflehog git`.** `.github/workflows/security-gate.yml`'s
+     checkout step already fetched `fetch-depth: 0` (full history), but the scan itself only
+     covered the current working tree - a secret committed and later removed would never have been
+     flagged. This is exactly the shape of gap T-29's unlicensed audio blobs were in git history for
+     ten days across many green CI runs, just for credentials instead of copyright.
+  2. **No native Android SCA at all.** `osv-scanner --lockfile=pubspec.lock` cannot see
+     AndroidX/media3/the camera plugin's own transitive Java/Kotlin dependencies - there is no
+     `gradle.lockfile` for it to read, and it doesn't resolve `build.gradle.kts` manifests directly.
+     Confirmed real, not theoretical: a properly-scoped scan (below) immediately found
+     `gson:2.8.8`, carrying GHSA-4jrv-ppp4-jm57/CVE-2022-25647 (CVSS 7.7), transitively via
+     `device_calendar`.
+  3. **No Dependabot/Renovate.** `flutter pub outdated` showed 14 packages behind during this same
+     session - nothing had ever proposed catching any of them up automatically.
+- **Fix 1:** `trufflehog git file://.` replaces `trufflehog filesystem` in both
+  `security-gate.yml` and `scripts/security-scan.sh` - same flags otherwise, verified locally
+  against the full (already-rewritten, per T-29) history in ~2 seconds, 0 findings.
+- **Fix 2:** `android/settings.gradle.kts`/`android/app/build.gradle.kts` apply the
+  `org.cyclonedx.bom` Gradle plugin, scoped via `includeConfigs = ["releaseRuntimeClasspath"]` -
+  deliberately not the unscoped default, which also pulled in `androidTestImplementation`/
+  instrumentation-test infrastructure and flagged a long list of real CVEs against `netty`
+  (transitively via `com.google.testing.platform:core`/`com.android.tools.emulator:proto`, which
+  never reach a shipped build). `ci.yml`'s `build-android-release` and `release.yml`'s
+  `build-signed-release` now run `:app:cyclonedxBom` right after `flutter build apk --release`
+  (the release configuration is already resolved by then, so this is cheap - a few seconds warm)
+  and feed the resulting SBOM to `osv-scanner`. The one real finding it turned up, `gson:2.8.8`
+  (see above), was forced to the patched `2.8.9` (`resolutionStrategy.force`) rather than accepted
+  as an exception - a same-minor-series patch bump carries essentially no compatibility risk, and
+  there is no reason to carry a fixable HIGH.
+- **Fix 3:** `.github/dependabot.yml`, covering `pub`, `gradle`, and `github-actions`. All three
+  target `dev`, never `master` (the pinned "work-on-dev-not-master" project rule) - a `master`
+  push triggers the full, ~45-minute gated pipeline, and Dependabot PRs have no business paying
+  that cost on every open.
+- **Deliberately not done as part of this item** (out of scope for the audit that was asked for,
+  and each is a separable decision): pinning GitHub Actions to commit SHAs instead of floating
+  major-version tags, and adding a Dart-specific security-focused static analyzer (`flutter_lints`
+  is a style/quality ruleset, not a security one - though this app's own attack surface here is
+  low, given no crypto beyond `Random.secure()` and no network calls anywhere in `lib/`).
+- **Requirement:** R1
+
 ### T-141 · Past scheduled alarms pile up in the list forever
 
 - [ ] Prune scheduled alarms that are safely in the past, without touching FR-18's rule that a past

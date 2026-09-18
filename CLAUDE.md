@@ -167,13 +167,23 @@ Four workflows under `.github/workflows/`:
 - **`e2e-tests.yml`** (reusable, `workflow_call`) runs `integration_test/` against a real Android
   emulator with KVM acceleration, collecting video, an audio-focus timeline and ActivityManager
   logs as an evidence artifact. Called by both `ci.yml` and `release.yml`.
-- **`security-gate.yml`** (reusable, `workflow_call`) is the SCA/secret/SAST gate: `osv-scanner`,
-  `trufflehog --fail`, and `mobsfscan` filtered through `.github/security-exceptions.json`. It
-  lives in its own file because the **tag-triggered release path used to have no security gate at
-  all** (`docs/TODO.md` T-92) - a signed APK could be attached to a GitHub Release with a
-  vulnerable dependency that the same commit on `master` would have been rejected for.
+- **`security-gate.yml`** (reusable, `workflow_call`) is the SCA/secret/SAST gate: `osv-scanner`
+  against `pubspec.lock`, `trufflehog git --fail` against the **full git history** (not just the
+  checkout - `docs/TODO.md` T-148), and `mobsfscan` filtered through
+  `.github/security-exceptions.json`. It lives in its own file because the **tag-triggered release
+  path used to have no security gate at all** (`docs/TODO.md` T-92) - a signed APK could be
+  attached to a GitHub Release with a vulnerable dependency that the same commit on `master` would
+  have been rejected for. A second, independent `osv-scanner` pass lives in `ci.yml`'s
+  `build-android-release` and `release.yml`'s `build-signed-release` instead of here - it needs a
+  resolved `releaseRuntimeClasspath` (a CycloneDX SBOM via the `org.cyclonedx.bom` Gradle plugin,
+  scoped to that one configuration so debug/androidTest-only dependencies don't produce noise), which
+  this reusable workflow has no Android build to provide. That pass exists because the
+  `pubspec.lock`-only scan can't see the native Android dependency tree at all (`docs/TODO.md`
+  T-148) - AndroidX, media3, the camera plugin's own transitive deps.
 - **`release.yml`** is triggered by a `v*.*.*` tag or `workflow_dispatch` and gates its signed
   build on **both** `e2e-tests` and `security-gate`.
+- **`.github/dependabot.yml`** (`docs/TODO.md` T-148) opens weekly update PRs for `pub`, `gradle`,
+  and `github-actions` - all three against `dev`, never `master`, per "Work goes on `dev`" above.
 
 Two things about the test job that are easy to undo by accident:
 
@@ -193,8 +203,9 @@ travels through the domain layer while `alarmPlatformTime` reads the real device
 `check_alarm_survival.sh` (reboot/force-stop evidence via `dumpsys alarm`, deliberately
 non-gating until it has been green once - `docs/TODO.md` T-93).
 
-`scripts/security-scan.sh` mirrors part of the pipeline locally (analyze + osv-scanner +
-trufflehog) but is narrower than CI - no mobsfscan/MobSF.
+`scripts/security-scan.sh` mirrors part of the pipeline locally (analyze + osv-scanner against
+`pubspec.lock` + `trufflehog git` against the full history) but is narrower than CI - no
+mobsfscan/MobSF, and no native-Android `osv-scanner` pass (needs a resolved Gradle build).
 
 **Validate workflow changes locally before pushing: `actionlint` is installed on the dev VM** and
 checks all four workflows (plus shellcheck over every `run:` block) in under a second. Invalid
