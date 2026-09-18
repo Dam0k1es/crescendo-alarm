@@ -10,6 +10,7 @@ import 'package:alarm/alarm.dart';
 import 'package:flutter/foundation.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
+import 'package:wakeywakey/models/scheduling/day_marker.dart';
 import 'package:wakeywakey/models/scheduling/stored_values.dart';
 import 'package:wakeywakey/utils/diag/diag_log.dart';
 import 'package:wakeywakey/utils/utils.dart';
@@ -177,6 +178,38 @@ AlarmSyncPlan planAlarmSync({
       .toList();
 
   return AlarmSyncPlan(toRemove: toRemove, toAdd: toAdd);
+}
+
+/// docs/TODO.md T-141: `planAlarmSync`'s removal loop above deliberately
+/// never removes a past-dated alarm - it could be ringing at this very
+/// moment, and treating it as stale would let a replan call `Alarm.stop()`
+/// mid-ring and defeat the guaranteed wake-up. Nothing else ever shrinks
+/// `AppState.scheduledAlarms`, so it grows by one entry per planned day
+/// forever (seen live: seven alarms in the Scheduled tab, six of them for
+/// days already over). This is that separate, bounded cleanup - kept apart
+/// from `planAlarmSync` on purpose, so its own safety-critical "never touch
+/// anything that could be ringing" rule stays the only thing governing
+/// removal there.
+///
+/// [oldestKeptDay] is an ISO date (`isoDate`) - the same bound `replan()`
+/// already uses for `pendingDayValues`/`disabledDays` (docs/TODO.md T-82,
+/// "yesterday", so a recovery checkpoint whose `lastConcludedDay` *is*
+/// yesterday still has it to read). An alarm is kept if its own day (by
+/// `ScheduledAlarm.time`'s wall-clock digits - the same frame its FR-21
+/// toggle already keys `disabledDays` by) is on or after it.
+///
+/// Deliberately day-based, not "still in the future": today's alarm is
+/// always kept even though `time` may already be minutes in the past by the
+/// moment this runs - it could still be actively ringing. Cleaning up a
+/// genuinely stale one (already rung, in the past) is `Handler.handleAlarm`'s
+/// job (`isAlarmStale`), not this function's.
+List<ScheduledAlarm> pruneScheduledAlarms(
+  List<ScheduledAlarm> alarms, {
+  required String oldestKeptDay,
+}) {
+  return alarms
+      .where((alarm) => isoDate(alarm.time).compareTo(oldestKeptDay) >= 0)
+      .toList();
 }
 
 /// Applies [planAlarmSync]'s result to [appState] - the step that actually

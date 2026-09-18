@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:alarm/alarm.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -90,6 +91,13 @@ class AppState extends ChangeNotifier {
 
   // Theming variables
   bool _darkMode = false;
+
+  /// docs/TODO.md T-51: whether the theme should follow the OS setting
+  /// instead of [_darkMode]'s manual value. Kept as a separate flag, not a
+  /// tri-state replacement of [_darkMode] itself, so switching it back off
+  /// restores the user's manual choice instead of losing it - see
+  /// [themeMode]'s own doc comment.
+  bool _followSystemTheme = false;
   Color _accentColor = Colors.blue;
 
   // Alarm tone and volume variables
@@ -139,6 +147,18 @@ class AppState extends ChangeNotifier {
   int get startOfWeekDay => _startOfWeekDay;
 
   bool get darkMode => _darkMode;
+
+  bool get followSystemTheme => _followSystemTheme;
+
+  /// docs/TODO.md T-51: the one thing `MyApp.build` actually needs -
+  /// combining [followSystemTheme] and [darkMode] into the `ThemeMode`
+  /// Flutter's `MaterialApp` takes, computed here so main.dart can't drift
+  /// from this by re-deriving it itself (the same "one source of truth"
+  /// reasoning as every other computed value in this project).
+  ThemeMode get themeMode {
+    if (_followSystemTheme) return ThemeMode.system;
+    return _darkMode ? ThemeMode.dark : ThemeMode.light;
+  }
 
   TimeOfDay get sleepGoal => _sleepGoal;
 
@@ -522,6 +542,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// docs/TODO.md T-141: the "assign and persist" half of pruning stale
+  /// `ScheduledAlarm`s - the retention policy itself
+  /// (`pruneScheduledAlarms`) lives in `apply_alarms.dart`, not here, so this
+  /// class doesn't have to import scheduling code and break the one-way
+  /// layering every other scheduling file already depends on (they import
+  /// `AppState`, never the reverse).
+  void setPrunedScheduledAlarms(List<ScheduledAlarm> alarms) {
+    if (listEquals(alarms, _scheduledAlarms)) return;
+    _scheduledAlarms = alarms;
+    _saveScheduledAlarms();
+    notifyListeners();
+  }
+
   set visibleDate(DateTime value) {
     _visibleDate = value;
     // Must not persist
@@ -570,6 +603,12 @@ class AppState extends ChangeNotifier {
   set darkMode(bool value) {
     _darkMode = value;
     _prefs.setBool('darkMode', _darkMode);
+    notifyListeners();
+  }
+
+  set followSystemTheme(bool value) {
+    _followSystemTheme = value;
+    _prefs.setBool('followSystemTheme', _followSystemTheme);
     notifyListeners();
   }
 
@@ -1154,6 +1193,8 @@ class AppState extends ChangeNotifier {
       _customTonePath = _prefs.getString('customTonePath') ?? _customTonePath;
       _selectedVolume = _prefs.getDouble('selectedVolume') ?? _selectedVolume;
       _darkMode = _prefs.getBool('darkMode') ?? _darkMode;
+      _followSystemTheme =
+          _prefs.getBool('followSystemTheme') ?? _followSystemTheme;
       _accentColor =
           Color(_prefs.getInt('accentColor') ?? _accentColor.toARGB32());
       _deactivationCode = _loadDeactivationCode();

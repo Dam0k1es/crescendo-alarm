@@ -272,6 +272,13 @@ Future<ReplanResult> replan(
   // FR-21 + T-82: clean up switched-off days with the same bound as the
   // values - a switched-off day in the past interests nobody anymore.
   appState.pruneDisabledDays(oldestKeptDay);
+  // docs/TODO.md T-141: the same bound again, for the same reason - nothing
+  // else ever shrinks appState.scheduledAlarms, since planAlarmSync's own
+  // removal loop deliberately never removes a past-dated alarm (it could be
+  // ringing right now).
+  appState.setPrunedScheduledAlarms(
+    pruneScheduledAlarms(appState.scheduledAlarms, oldestKeptDay: oldestKeptDay),
+  );
 
   // FR-16: the same merge as above (with the same bound), so checkpoint 2
   // also knows, for today's (not-yet-rung) day too, whether its value is
