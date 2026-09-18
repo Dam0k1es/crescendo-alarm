@@ -121,3 +121,9 @@ is the evidence, not the task list.
 - **2026-09-18, found via the same session:** an alarm switched off via its notification (swipe,
   no app UI open) instead left the ring screen stuck showing on the next app open, with nothing
   actually ringing behind it. Fixed - see `docs/TODO.md` T-147.
+- **2026-09-18, C2/C3 (real device):** device rebooted with a scheduled alarm armed, app **not**
+  opened afterward - the alarm rang anyway. First real observation of this leg (previously only
+  "already derivable from the code" in `docs/REQUIREMENTS.md` R3); not yet run through the
+  scripted `dumpsys alarm` procedure (`.github/scripts/check_alarm_survival.sh`) or logged with
+  device model/APK/commit via the table template above - do that on the next trial to make this a
+  full, repeatable C1/C2 entry. `am force-stop` survival (C4) is still unverified.

@@ -99,12 +99,21 @@ valve never needs to fire at all).
   real Android emulator (`integration_test/app_test.dart`, gating `.github/workflows/release.yml`).
   It does not reboot the emulator or force-stop the app, and its persistence check currently reads
   an in-process cache rather than a genuine storage round-trip (see `docs/TODO.md` T-04).
-- **Status: not met.** This remains the single highest-value gap - a missed alarm is a total
-  failure of the app's core purpose - and it is not touched by the new E2E suite. Also
-  unaddressed: the per-alarm enable/disable switch does not cancel the underlying OS alarm
-  (`docs/TODO.md` T-03), and a `SharedPreferences` load failure can currently block app startup
-  entirely rather than degrade to defaults (`docs/TODO.md` T-45). Needs a real-device test:
-  schedule an alarm, force-stop the app, reboot the device, and confirm it still fires.
+- **Real-device evidence (2026-09-18): a reboot, without opening the app afterward, still let a
+  scheduled alarm ring.** This is the first actual observation of the reboot leg described below
+  ("already derivable from the code") rather than a code-reading inference - the `alarm` plugin's
+  own `BootReceiver` re-armed the alarm and it fired with no user interaction at all in between.
+  Not yet captured with the scripted `dumpsys alarm` procedure (`check_alarm_survival.sh`) or
+  logged with device/APK details in `docs/device-trial-checklist.md`'s table format - see the
+  Findings entry there for now.
+- **Status: partially met, real evidence still thin.** A missed alarm is a total failure of the
+  app's core purpose, so this remains the single highest-value gap even with the reboot
+  observation above - `am force-stop` survival (a different, harsher kill than a reboot: Android
+  drops the package's AlarmManager entries entirely on force-stop, see the boundary noted below)
+  is still unverified, and the E2E suite doesn't touch either path. Also unaddressed: the
+  per-alarm enable/disable switch does not cancel the underlying OS alarm (`docs/TODO.md` T-03),
+  and a `SharedPreferences` load failure can currently block app startup entirely rather than
+  degrade to defaults (`docs/TODO.md` T-45).
 - **A procedure is now in place (2026-09-10, `docs/TODO.md` T-93):**
   `.github/scripts/check_alarm_survival.sh` answers the question via `dumpsys alarm` instead of via
   an actual ring - that makes "alarm is registered" distinguishable from "no alarm registered",
