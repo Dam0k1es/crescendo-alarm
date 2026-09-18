@@ -69,8 +69,8 @@ void main() {
 
     Handler.onAlarmHandled(appState, 501,
         notifications: _SilentNotifications());
-    // onAlarmHandled ist fire-and-forget - die Event-Queue mehrfach
-    // durchlaufen lassen, damit alles Asynchrone abgeschlossen ist.
+    // onAlarmHandled is fire-and-forget - run the event queue several times
+    // over so everything asynchronous has actually completed.
     for (var i = 0; i < 5; i++) {
       await Future<void>.delayed(Duration.zero);
     }
@@ -80,7 +80,7 @@ void main() {
             'got ${appState.scheduledAlarms.map((a) => a.id).toList()}');
   });
 
-  test('T-64: das gilt auch bei leerem Kalender (der reale Fall)', () async {
+  test('T-64: this also holds with an empty calendar (the real case)', () async {
     final appState = await _freshAppState();
     expect(appState.meetings, isEmpty);
     final tomorrow = DateTime.now().add(const Duration(days: 1));
@@ -95,8 +95,8 @@ void main() {
     expect(appState.scheduledAlarms.length, 1);
   });
 
-  test('die Bettzeit-Erinnerung wird weiterhin neu geplant', () async {
-    // Die eine Aufgabe, die onAlarmHandled nach Phase 6 noch hat.
+  test('the bedtime reminder is still rescheduled', () async {
+    // The one job onAlarmHandled still has after Phase 6.
     final appState = await _freshAppState();
     var scheduled = 0;
     final notifications = _CountingNotifications(() => scheduled++);

@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:wakeywakey/models/alarms/manual_alarm.dart';
+import 'package:wakeywakey/models/alarms/manual_alarm_enable.dart';
 import 'package:wakeywakey/models/scheduling/stored_values.dart';
 
 /// The next wake-up moment the user can actually expect, considering **both**
@@ -17,12 +18,14 @@ import 'package:wakeywakey/models/scheduling/stored_values.dart';
 /// who only ever sets manual alarms must still get a sensible bedtime - the
 /// old `Scheduler.nextAlarmTime()` considered both for exactly that reason.
 ///
-/// A manual alarm carries only a [TimeOfDay], so it resolves to its next
-/// occurrence: today at that time if that is still after [now], otherwise
-/// tomorrow - matching `AppState._getAlarmTime`, i.e. the time the alarm would
-/// actually be set to. `repeatOnDays` is deliberately not consulted, because
-/// nothing in the app evaluates it when setting alarms either (it is stored
-/// and editable, but never acted on).
+/// A manual alarm carries only a [TimeOfDay], so it resolves through
+/// `nextManualOccurrence` - the same function `AppState._getAlarmTime` and
+/// the FR-21 toggle use, honouring `repeatOnDays` (docs/TODO.md T-14). This
+/// used to hand-roll a "today or tomorrow" resolution here that ignored
+/// `repeatOnDays` entirely, which was correct only because nothing else
+/// acted on it either; once arming did, computing this independently would
+/// have let the bedtime reminder recommend sleep for a "tomorrow" wake-up
+/// that `repeatOnDays` says will not actually ring.
 ///
 /// `enabled` **is** consulted since FR-21 (docs/TODO.md T-03): a switched-off
 /// alarm does not ring, and a bedtime reminder computed from it would send the
@@ -61,12 +64,7 @@ DateTime? nextWakeUpTime({
     // `MyAlarm.time` is declared `dynamic` (a `DateTime` for `ScheduledAlarm`,
     // a `TimeOfDay` for `ManualAlarm`) - hence the cast.
     final time = alarm.time as TimeOfDay;
-    var occurrence =
-        DateTime(now.year, now.month, now.day, time.hour, time.minute);
-    if (!occurrence.isAfter(now)) {
-      occurrence = occurrence.add(const Duration(days: 1));
-    }
-    consider(occurrence);
+    consider(nextManualOccurrence(time, now, alarm.repeatOnDays));
   }
 
   return earliest;

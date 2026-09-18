@@ -4,6 +4,7 @@ import 'package:alarm/alarm.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import 'package:wakeywakey/app_state.dart';
+import 'package:wakeywakey/models/alarms/manual_alarm.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
 import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/models/scheduling/replan.dart';
@@ -205,16 +206,18 @@ class Handler {
     }
   }
 
-  /// Reschedules the sleep-time reminder after an alarm was handled - and
-  /// nothing else.
+  /// Reschedules the sleep-time reminder after an alarm was handled, and -
+  /// since docs/TODO.md T-14 - re-arms a repeating [ManualAlarm] for its
+  /// next selected day.
   ///
-  /// Always, regardless of [AppState.reminderEnabled] (FR-16
-  /// "Voraussetzung", docs/scheduling-v2-spec.md): Checkpoint 2 needs a
-  /// notification hook even when the visible reminder itself is disabled;
-  /// `scheduleSleepReminder()`/`sleepReminderContent()` decide
-  /// visible-vs-silent, not whether to schedule at all. Fire-and-forget (not
-  /// awaited), matching this method's callers (qr_scanner.dart,
-  /// screen_active_alarm.dart), neither of which awaits it either.
+  /// The sleep-reminder reschedule happens always, regardless of
+  /// [AppState.reminderEnabled] (FR-16 "Voraussetzung",
+  /// docs/scheduling-v2-spec.md): Checkpoint 2 needs a notification hook even
+  /// when the visible reminder itself is disabled; `scheduleSleepReminder()`/
+  /// `sleepReminderContent()` decide visible-vs-silent, not whether to
+  /// schedule at all. Fire-and-forget (not awaited), matching this method's
+  /// callers (qr_scanner.dart, screen_active_alarm.dart), none of which await
+  /// it either.
   ///
   /// **Phase 6 (docs/TODO.md T-64):** this used to also call the old
   /// `Scheduler.scheduleAlarms()` behind `rescheduleOnAlarm` - which deletes
@@ -222,17 +225,45 @@ class Handler {
   /// whenever `appState.meetings` is empty (the normal state in a process the
   /// alarm itself started). A dismiss therefore left the user with **no alarms
   /// at all**; `test/handler_on_alarm_handled_test.dart` pins that down. There
-  /// is nothing to replace it with here: the ring already ran the full
-  /// scheduling checkpoint via `handleAlarm()`'s `_fireReplanCheckpoint()`,
-  /// which re-plans the week and applies it (FR-8/FR-18).
+  /// is nothing to replace it with here for `ScheduledAlarm`s: the ring
+  /// already ran the full scheduling checkpoint via `handleAlarm()`'s
+  /// `_fireReplanCheckpoint()`, which re-plans the week and applies it
+  /// (FR-8/FR-18).
   ///
-  /// [notifications] is injectable (defaults to a real [Notifications])
-  /// purely for testability - see
-  /// test/sleep_reminder_always_scheduled_test.dart's regression test, which
-  /// needs to observe the scheduled title/body without touching the real
-  /// `awesome_notifications` plugin channel.
-  static void onAlarmHandled(AppState appState, int alarmID,
-      {Notifications? notifications}) {
+  /// **T-14: a `ManualAlarm`'s `repeatOnDays` promises a weekly recurrence,
+  /// but the platform alarm underneath it is one-shot** - honouring
+  /// `repeatOnDays` when first picking a day (`nextManualOccurrence`) only
+  /// makes it fire once, on whichever selected day comes first. Making it a
+  /// real, ongoing repeat means re-arming on every dismiss, and this is the
+  /// one place every dismissal path (the Stop button, the QR gate, and
+  /// T-147's auto-close) already funnels through. `ScheduledAlarm`s are
+  /// deliberately excluded - that is FR-18's domain, and re-arming one here
+  /// would be a second, conflicting scheduling path (the exact class of bug
+  /// T-64 above already fixed once).
+  ///
+  /// [notifications] and [setManualAlarmEnabled] are both injectable
+  /// (defaulting to the real [Notifications] and [AppState
+  /// .setManualAlarmEnabled]) purely for testability - see
+  /// test/sleep_reminder_always_scheduled_test.dart and
+  /// test/handler_manual_alarm_rearm_test.dart, neither of which can reach
+  /// the real `alarm` plugin from `flutter test`.
+  static void onAlarmHandled(
+    AppState appState,
+    int alarmID, {
+    Notifications? notifications,
+    Future<bool> Function(ManualAlarm alarm, bool enabled)?
+        setManualAlarmEnabled,
+  }) {
     scheduleSleepReminder(appState, notifications: notifications);
+
+    final alarm = appState.getAlarm(alarmID);
+    if (alarm is ManualAlarm && alarm.enabled) {
+      unawaited(
+        (setManualAlarmEnabled ?? appState.setManualAlarmEnabled)(
+          alarm,
+          true,
+        ),
+      );
+    }
   }
 }

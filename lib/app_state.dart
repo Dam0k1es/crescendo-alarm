@@ -767,7 +767,7 @@ class AppState extends ChangeNotifier {
     // The resolution itself lives in manual_alarm_enable.dart, so that
     // re-arming through the FR-21 toggle uses exactly this rule and cannot
     // drift away from it (a duplicate would be a silent off-by-one-day).
-    return nextManualOccurrence(alarm.time, DateTime.now());
+    return nextManualOccurrence(alarm.time, DateTime.now(), alarm.repeatOnDays);
   }
 
   /// FR-21 (docs/TODO.md T-03): makes the alarm-list toggle of a manual alarm

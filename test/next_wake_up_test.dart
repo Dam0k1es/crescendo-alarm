@@ -117,5 +117,29 @@ void main() {
 
       expect(result, isNull);
     });
+
+    // docs/TODO.md T-14: since `repeatOnDays` is now honoured when actually
+    // arming a manual alarm (manual_alarm_repeat_test.dart), this function
+    // has to agree - otherwise the bedtime reminder could send the user to
+    // bed for a "tomorrow" wake-up that repeatOnDays says will not ring.
+    test('a manual alarm repeating only on a later weekday is not treated '
+        'as tomorrow', () {
+      // 2026-03-10 is a Tuesday; the alarm only repeats on Friday.
+      final alarm = ManualAlarm(
+        time: const TimeOfDay(hour: 7, minute: 0),
+        repeatOnDays: {
+          for (final day in DayOfWeek.values) day: day == DayOfWeek.friday,
+        },
+      );
+
+      final result = nextWakeUpTime(
+        pendingDayValues: const {},
+        manualAlarms: [alarm],
+        now: now,
+      );
+
+      expect(result, DateTime(2026, 3, 13, 7, 0),
+          reason: '2026-03-13 is the next Friday, not "tomorrow"');
+    });
   });
 }
