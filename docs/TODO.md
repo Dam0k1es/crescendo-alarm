@@ -1091,17 +1091,30 @@ that is the basis a decision can be formulated against.
   dismissal path.
 - **Requirement:** R4
 
-### T-45 · A failure loading preferences can still prevent the app from starting
+### T-45 · A failure loading preferences can still prevent the app from starting — FIXED (2026-09-18)
 
-- [ ] Bring the `SharedPreferences.getInstance()` call inside the guard its own comment promises.
-- **Why:** `_loadFromPreferences` carries a comment stating that a failure must never throw out of
+- [x] Bring the `SharedPreferences.getInstance()` call inside the guard its own comment promises.
+- **Why:** `_loadFromPreferences` carried a comment stating that a failure must never throw out of
   the method, because `main()` awaits initialisation before `runApp` — but the `getInstance()` call
-  itself sits outside the `try`. If it throws, the app does not start at all, which for an alarm
-  clock means every armed alarm is silently unreachable.
-- **Evidence:** `lib/app_state.dart:660` (call), `:661-665` (the comment), `:666` (`try` starts
-  after).
-- **Done when:** a preferences failure degrades to defaults instead of blocking launch, covered by a
-  test.
+  itself sat outside the `try`. If it threw, the app did not start at all, which for an alarm
+  clock meant every armed alarm was silently unreachable.
+- **Fix:** `getInstance()` now has its own `try`/`catch`, ahead of the existing settings-loading
+  one. Deliberately a separate `try` rather than merging the call into the existing block: with
+  `_prefs` a `late final`, a failure here leaves it unassigned, and the existing block's own
+  `LateInitializationError` on its first `_prefs.getBool(...)` read already degrades to defaults
+  and reaches `notifyListeners()` at the end - so isolating the risky line was the only change
+  actually needed, not a rewrite of the fallback logic.
+- **Testability:** how the instance is obtained is injected (`AppState({getPrefsInstance})`), the
+  same pattern as `documentsDirectory`/`fetchEvents`/`now` elsewhere in this class, so a throwing
+  plugin call can be simulated without a platform channel.
+- **Accepted residual limitation:** this only guarantees the app *starts*. `_prefs` stays
+  unassigned on this path, so any later code that writes through it (a settings toggle, an alarm
+  being saved) would still throw an uncaught `LateInitializationError` when it runs - out of scope
+  for what this item's "done when" asked for, and a real `SharedPreferences.getInstance()` failure
+  on a real device is itself an unlikely, largely theoretical trigger.
+- **Test:** `test/app_state_prefs_failure_test.dart` - a throwing `getPrefsInstance` no longer
+  blocks `initialized` from completing, and listeners still get notified so the UI (a
+  `ChangeNotifierProvider` consumer) still builds.
 - **Requirement:** R3
 
 ### T-46 · The scheduling window is hardcoded — ANSWERED (2026-09-10, by scheduling-v2)

@@ -98,7 +98,14 @@ class AppState extends ChangeNotifier {
   bool _isReadingCalendarMutex = false;
   bool _firstUpdateOfCalendar = true;
 
-  AppState() {
+  /// docs/TODO.md T-45: how `SharedPreferences.getInstance()` itself is
+  /// obtained is injectable purely for testability - the same pattern as
+  /// `documentsDirectory`/`fetchEvents`/`now` elsewhere in this class - so a
+  /// throwing plugin can be simulated without a platform channel.
+  final Future<SharedPreferences> Function() _getPrefsInstance;
+
+  AppState({Future<SharedPreferences> Function()? getPrefsInstance})
+      : _getPrefsInstance = getPrefsInstance ?? SharedPreferences.getInstance {
     initialized = _loadFromPreferences();
   }
 
@@ -1096,7 +1103,23 @@ class AppState extends ChangeNotifier {
 
   // only overrides values not being already set
   Future<void> _loadFromPreferences() async {
-    _prefs = await SharedPreferences.getInstance();
+    // docs/TODO.md T-45: this call used to sit outside every try block below,
+    // so a throwing plugin (a platform-channel failure, corrupted storage)
+    // propagated straight out of this method - which `initialized` exposes
+    // and which main() awaits before runApp(), blocking the app from
+    // starting at all. For an alarm clock that means every already-armed
+    // platform alarm becomes unreachable: no checkpoint runs, no dismiss
+    // screen shows, nothing. Its own try, separate from the settings-loading
+    // one below: `_prefs` staying unassigned here is exactly the condition
+    // that try's own `LateInitializationError` catch degrades gracefully
+    // from, so nothing further needs to change to make that fallback take
+    // effect - only this line needed to stop escaping unguarded.
+    try {
+      _prefs = await _getPrefsInstance();
+    } catch (e) {
+      debugPrint(
+          "=====_loadFromPreferences: Error obtaining SharedPreferences instance: ${e.runtimeType}");
+    }
     // A failure below must never leave _prefs unassigned or throw out of
     // this method: main() awaits `initialized` before runApp(), so any
     // unhandled error here would prevent the app from starting at all.

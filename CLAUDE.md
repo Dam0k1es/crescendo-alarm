@@ -310,7 +310,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **381 tests across 44 files**, and CI runs them six times over -
+`flutter test` currently runs **383 tests across 45 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -379,6 +379,10 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   `debugRingingStreamOverride` test seam (matching `qr_scanner.dart`'s existing
   `debugScanStreamOverride` pattern) since the real, static `Alarm.ringing` has no platform channel
   in `flutter test` and never carries a test's fake alarm id.
+- `test/app_state_prefs_failure_test.dart` (`docs/TODO.md` T-45): a throwing `SharedPreferences
+  .getInstance()` must not block `initialized` from completing. `getPrefsInstance` is injected the
+  same way `documentsDirectory`/`fetchEvents`/`now` are, so the failure is simulated without a
+  platform channel.
 - `integration_test/app_test.dart`: real end-to-end tests, driven against an actual Android
   emulator in `.github/workflows/release.yml`'s `e2e-tests` job, gating the signed release build.
   Seven scenarios are covered. Three predate scheduling-v2: a manual alarm firing and being
