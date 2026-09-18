@@ -1287,14 +1287,28 @@ that is the basis a decision can be formulated against.
   `lib/screens/`; `lib/models/scheduling/scheduling.dart:141` consumes `wakeUpSteps`.
 - **Done when:** every persisted setting is either user-changeable and consumed, or gone.
 
-### T-43 · The gentle-wake ramp duration is hardcoded
+### T-43 · The gentle-wake ramp duration is hardcoded — RESOLVED (already fixed by T-96, confirmed 2026-09-18)
 
-- [ ] Make the fade duration configurable, or state that it is fixed.
-- **Why:** the whole tuning surface of a headline feature is `const Duration(seconds: 60)`. The one
-  user-facing duration that sounds related ("duration to wake up") feeds scheduling, not the ramp —
-  so a user adjusting it changes something else entirely.
-- **Evidence:** `lib/app_state.dart:487`.
-- **Done when:** the ramp length is either a setting or documented as fixed at 60 seconds.
+- [x] Already made configurable, as a side effect of fixing T-96 (the ramp duration had to become a
+      per-alarm property anyway so `planAlarmSync` could recognize a changed value as a deviation
+      on an already-armed alarm - see that item's own write-up). No code change was needed here;
+      this entry is closed by confirming the state of the code against T-43's own "Done when" bar.
+- **Why (historical):** the whole tuning surface of a headline feature used to be a single
+  `const Duration(seconds: 60)`. The one user-facing duration that sounds related ("duration to wake
+  up") feeds scheduling, not the ramp - so a user adjusting it changed something else entirely.
+- **Current state:** `AppState.gentleWakeUpDuration` (`lib/app_state.dart`) is a persisted setting,
+  enforced to a one-minute minimum, adjustable in Settings > Sleep Habits ("Gentle WakeUp",
+  `lib/screens/sleep_habits/screen_sleephabits.dart`); a manual alarm can override it per-alarm via
+  `gentleWakeDuration` in the alarm editor (`lib/screens/alarms/screen_alarms.dart`), inheriting the
+  global setting at creation time only new alarms - the same FR-15 rule this session's T-50 followed
+  for `vibrate`. The one remaining hardcoded `Duration(seconds: 60)` in the codebase is a comment in
+  `lib/models/alarms/ringing_alarm_settings.dart` documenting the value that used to be there, not
+  a live default.
+- **Evidence:** `lib/app_state.dart`'s `gentleWakeUpDuration` getter/setter and
+  `_gentleWakeUpDurationMinimum`; `grep -rn "Duration(seconds: 60)" lib/` returns only that comment.
+- **Tests:** `test/app_state_scheduling_v2_test.dart` ("gentleWakeUpDuration - round-trip and
+  enforced minimum"), plus the T-96 propagation tests in `apply_alarms_test.dart`,
+  `ringing_alarm_settings_test.dart` and `manual_alarm_inherits_settings_test.dart`.
 
 ### T-44 · A dead gallery-scan button would bypass the camera gate if wired in — RESOLVED (2026-09-17)
 
