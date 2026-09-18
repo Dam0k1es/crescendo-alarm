@@ -110,10 +110,11 @@ valve never needs to fire at all).
   app's core purpose, so this remains the single highest-value gap even with the reboot
   observation above - `am force-stop` survival (a different, harsher kill than a reboot: Android
   drops the package's AlarmManager entries entirely on force-stop, see the boundary noted below)
-  is still unverified, and the E2E suite doesn't touch either path. Also unaddressed: the
-  per-alarm enable/disable switch does not cancel the underlying OS alarm (`docs/TODO.md` T-03).
+  is still unverified, and the E2E suite doesn't touch either path.
   **Fixed (2026-09-18):** a `SharedPreferences` load failure could block app startup entirely
-  instead of degrading to defaults - see `docs/TODO.md` T-45.
+  instead of degrading to defaults - see `docs/TODO.md` T-45. (The per-alarm enable/disable switch
+  not cancelling the underlying OS alarm, `docs/TODO.md` T-03, was already resolved on 2026-09-16 -
+  this line was stale.)
 - **A procedure is now in place (2026-09-10, `docs/TODO.md` T-93):**
   `.github/scripts/check_alarm_survival.sh` answers the question via `dumpsys alarm` instead of via
   an actual ring - that makes "alarm is registered" distinguishable from "no alarm registered",

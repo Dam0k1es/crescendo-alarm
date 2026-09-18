@@ -248,16 +248,20 @@ that is the basis a decision can be formulated against.
 
 ## P1 — resolve or consciously accept before a public release
 
-### T-07 · Swiping the alarm notification away leaves the alarm screen up
+### T-07 · Swiping the alarm notification away leaves the alarm screen up — RESOLVED (2026-09-18, see T-147)
 
-- [ ] Dismiss the full-screen alarm UI when the alarm ends through the notification.
+- [x] Dismiss the full-screen alarm UI when the alarm ends through the notification.
 - **Why:** confirmed on a real device: pressing *Stop* on the screen clears notification, screen and
   alarm correctly, but swiping the notification away ends the alarm while the screen stays on
   display, leaving the user on a dead overlay.
 - **Evidence:** device test by the maintainer; `lib/screens/alarms/screen_active_alarm.dart`,
   `lib/utils/notifications.dart`, and the ringing subscription in `lib/main.dart:215-225`.
+- **Fixed:** this is the same bug, reported again independently and only then diagnosed and fixed
+  as T-147 - see that entry for the root cause (`NotificationSettings.androidStopAlarmOnDismiss`)
+  and the fix (`RingingWatch`). Left as two entries rather than deleting this one, so the fact that
+  it took a second independent report before it was connected to a root cause stays visible.
 - **Done when:** the overlay closes on any path that stops the alarm, and the ringing-stream
-  handler covers the notification-dismissal case.
+  handler covers the notification-dismissal case. ✓
 
 ### T-08 · The QR deactivation gate has no negative test — PARTIALLY RESOLVED (2026-09-09)
 
@@ -537,9 +541,10 @@ that is the basis a decision can be formulated against.
 - **Resolution so far:** the two lines are removed from `LICENSE`, which now starts directly with
   the canonical GPLv3 text; the copyright notice moved to `README.md`'s License section instead
   (`Copyright (C) 2026 Dam0k1es`).
-- **Still open:** whether GitHub now detects `GPL-3.0` needs confirming after this change is pushed
-  (detection re-runs on push, not retroactively); and the app itself still has no in-app licence/
-  notices screen to carry the copyright to an end user - that's T-36, unchanged by this fix.
+- **GitHub detection confirmed (2026-09-18):** `gh api repos/Dam0k1es/wakeywakey --jq '.license'`
+  now returns `spdx_id: GPL-3.0`, not `NOASSERTION`.
+- **Still open:** the app itself still has no in-app licence/notices screen to carry the copyright
+  to an end user - that's T-36, unchanged by this fix.
 - **Requirement:** R9
 
 ### T-36 · The app has no third-party licence or notice surface
