@@ -112,3 +112,12 @@ E6 is the point with the biggest leverage: that a silent notification actually t
 
 Enter anything notable here with a date and give it its own number in `docs/TODO.md` — this file
 is the evidence, not the task list.
+
+- **2026-09-18, C-adjacent (real device):** the app's UI was swiped away from the recent-apps list
+  (not `am force-stop`) while a manual alarm was armed. The alarm rang correctly. This is a
+  different process-death path from C1–C6 above (a user swipe rather than a forced kill or reboot)
+  and is the one most users actually trigger day to day - recorded here since the checklist above
+  has no line for it yet.
+- **2026-09-18, found via the same session:** an alarm switched off via its notification (swipe,
+  no app UI open) instead left the ring screen stuck showing on the next app open, with nothing
+  actually ringing behind it. Fixed - see `docs/TODO.md` T-147.

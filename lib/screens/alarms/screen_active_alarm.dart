@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:alarm/alarm.dart';
+import 'package:alarm/utils/alarm_set.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/models/alarms/handler.dart';
+import 'package:wakeywakey/models/alarms/ringing_watch.dart';
 import 'package:wakeywakey/screens/alarms/snooze_button.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
@@ -12,6 +14,12 @@ class ScreenAlarmActive extends StatefulWidget {
   final int alarmId;
 
   const ScreenAlarmActive({super.key, required this.alarmId});
+
+  /// Test-only seam: when set, [RingingWatch] observes this stream instead
+  /// of the real `Alarm.ringing` - which has no platform channel in
+  /// `flutter test` and never carries a test's fake alarm id.
+  @visibleForTesting
+  static Stream<AlarmSet>? debugRingingStreamOverride;
 
   @override
   State<ScreenAlarmActive> createState() => _ScreenAlarmActiveState();
@@ -23,6 +31,7 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
   late final AnimationController _controller;
   late final Animation<double> _animation;
   late final Timer _timer;
+  late final RingingWatch _ringingWatch;
   late TimeOfDay _currentTime;
   late DateTime _currentDateTime;
 
@@ -31,6 +40,22 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
     debugPrint("=====initState: Creating new ScreenAlarmActiveState");
     super.initState();
     _appState = Provider.of<AppState>(context, listen: false);
+
+    // Bug: an alarm stopped by swiping its notification away (no app UI
+    // open) left this screen stuck showing on reopen, with nothing actually
+    // ringing and no way out (PopScope below). `Alarm.ringing` is the only
+    // place Dart learns about a stop that happened entirely at the native
+    // level - see RingingWatch's doc comment for why its first event is
+    // deliberately ignored.
+    _ringingWatch = RingingWatch(
+      alarmId: widget.alarmId,
+      ringingStream: ScreenAlarmActive.debugRingingStreamOverride,
+      onGone: () {
+        if (!mounted) return;
+        Handler.onAlarmHandled(_appState, widget.alarmId);
+        Navigator.pop(context);
+      },
+    );
     _currentTime = TimeOfDay.now();
     _currentDateTime = DateTime.now();
     // The alarm library may trigger the event before the minutes have changed.
@@ -58,6 +83,7 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
   void dispose() {
     _controller.dispose();
     _timer.cancel();
+    _ringingWatch.cancel();
     super.dispose();
   }
 

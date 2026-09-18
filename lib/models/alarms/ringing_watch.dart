@@ -1,0 +1,47 @@
+import 'dart:async';
+
+import 'package:alarm/alarm.dart';
+import 'package:alarm/utils/alarm_set.dart';
+
+/// Notices [alarmId] disappearing from [Alarm.ringing] - the only place Dart
+/// learns that an alarm was stopped entirely outside the screen showing it,
+/// e.g. by swiping the alarm notification away rather than the in-app Stop
+/// button (`NotificationSettings.androidStopAlarmOnDismiss` defaults to
+/// `true` since plugin 5.0.3 and runs the native stop with no Dart code
+/// involved at all). Without this, the screen a ringing alarm opened
+/// (`ScreenAlarmActive`/`QrScanner`, both `PopScope(canPop: false)`) stayed
+/// stuck showing on reopen, with no alarm left to stop and no way out.
+///
+/// [ringingStream] defaults to the real [Alarm.ringing]; a test passes its
+/// own controller instead, since the real stream has no channel to a
+/// platform in `flutter test` and never carries a test's fake alarm id.
+///
+/// [Alarm.ringing] is a `BehaviorSubject`, so the first event a new
+/// subscriber gets is its current snapshot, not a change - deliberately
+/// ignored here. Reacting to it would auto-close a screen the instant it
+/// opens whenever nothing has (yet) told the real subject that this alarm is
+/// ringing, which is exactly the state of `flutter test`'s unpopulated
+/// static `Alarm.ringing` in every existing test that calls
+/// `Handler.handleAlarm` directly rather than going through the plugin.
+/// [onGone] therefore only fires on a later event where [alarmId] is no
+/// longer present - a genuine disappearance.
+class RingingWatch {
+  RingingWatch({
+    required int alarmId,
+    required void Function() onGone,
+    Stream<AlarmSet>? ringingStream,
+  }) {
+    var sawFirstEvent = false;
+    _subscription = (ringingStream ?? Alarm.ringing).listen((ringing) {
+      if (!sawFirstEvent) {
+        sawFirstEvent = true;
+        return;
+      }
+      if (!ringing.containsId(alarmId)) onGone();
+    });
+  }
+
+  late final StreamSubscription<AlarmSet> _subscription;
+
+  void cancel() => unawaited(_subscription.cancel());
+}

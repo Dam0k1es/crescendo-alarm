@@ -310,7 +310,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **371 tests across 41 files**, and CI runs them six times over -
+`flutter test` currently runs **381 tests across 44 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -372,6 +372,13 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   the user-imported-tone copy/validation logic and its `AppState` wiring, both against a real
   `dart:io` temporary directory rather than a mocked platform channel - `documentsDirectory` is
   injected the same way `fetchEvents`/`now` are elsewhere.
+- `test/ringing_watch_test.dart`, `test/screen_alarm_active_ringing_test.dart` and
+  `test/qr_scanner_ringing_test.dart` (`docs/TODO.md` T-147): the fix for a ring screen staying
+  stuck open after its alarm was already stopped by a notification swipe. The reusable watcher is
+  tested in isolation against a fake `Stream<AlarmSet>`; both screens get their own
+  `debugRingingStreamOverride` test seam (matching `qr_scanner.dart`'s existing
+  `debugScanStreamOverride` pattern) since the real, static `Alarm.ringing` has no platform channel
+  in `flutter test` and never carries a test's fake alarm id.
 - `integration_test/app_test.dart`: real end-to-end tests, driven against an actual Android
   emulator in `.github/workflows/release.yml`'s `e2e-tests` job, gating the signed release build.
   Seven scenarios are covered. Three predate scheduling-v2: a manual alarm firing and being

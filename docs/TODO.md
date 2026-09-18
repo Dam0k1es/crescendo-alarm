@@ -654,6 +654,19 @@ that is the basis a decision can be formulated against.
       comparison has to be `aapt2 dump badging` or the merged manifest itself.
 - [ ] Still open: the full "name every permission and say why" table, and a traffic capture during
       an E2E run.
+- [ ] **`ACCESS_NETWORK_STATE` traced (2026-09-18), removal deliberately held pending device
+      tests.** `aapt2 dump permissions` plus Gradle's
+      `android/app/build/outputs/logs/manifest-merger-blame-*-report.txt` on the built APK trace it
+      to `androidx.media3:media3-common:1.9.0`, a transitive dependency of the `alarm` plugin (its
+      audio playback stack) - not to anything network-related in this app's own code, consistent
+      with `INTERNET` already being gone. It could plausibly be opted out the same way
+      `READ_EXTERNAL_STORAGE`/`RECORD_AUDIO`/`WRITE_EXTERNAL_STORAGE` were above
+      (`tools:node="remove"`), but unlike those three, no confirmation yet exists that alarm
+      playback keeps working with it removed - `media3` uses `ConnectivityManager` internally for
+      things a removed permission could plausibly break silently (e.g. its own network-state-aware
+      codepaths, even if this app never plays networked audio). Left in place until a real-device
+      test confirms alarm playback (tone selection, gentle-wake ramp, custom tones) is unaffected
+      without it - do not remove based on the trace alone.
 - **Why:** R7 asserted "no user data leaves the device — met" on the basis of a check scoped to
   Dart source in `lib/`, but the shipped APK declares `INTERNET` and `ACCESS_NETWORK_STATE`, pulled
   in through plugin manifest merging. That does not prove data leaves the device, and the offline
@@ -938,6 +951,44 @@ that is the basis a decision can be formulated against.
   different file at any time. The per-alarm tone dropdown in `screen_alarms.dart` offers it too,
   once one exists.
 - **Requirement:** R4, R10
+
+### T-147 · A ring screen could get stuck open after its alarm was already stopped — FIXED (2026-09-18)
+
+- [x] `ScreenAlarmActive`/`QrScanner` notice when their own alarm stops ringing and close themselves.
+- **Bug report:** an alarm was deactivated via its notification (swiped away, app UI closed) with
+  no app process handling it; reopening the app afterward still showed the full-screen ring
+  overlay, with nothing actually ringing behind it and `PopScope(canPop: false)` blocking every
+  way out except the Stop button - which itself calls `Alarm.stop` again, gets `false` back
+  (there is nothing left to stop), and leaves the user on a "Failed to stop the alarm - please try
+  again" screen with no working retry.
+- **Root cause:** `NotificationSettings.androidStopAlarmOnDismiss` (package:alarm) defaults to
+  `true` and has since plugin 5.0.3 - swiping the alarm notification away runs the native stop
+  action directly, with no Dart code involved at all. `main.dart`'s `Alarm.ringing.listen`
+  subscription only reacted to alarms newly appearing in the ringing set (to call
+  `Handler.handleAlarm` exactly once per ring); nothing anywhere reacted to an alarm disappearing
+  from it, so the screen that `handleAlarm` had already pushed had no way to learn its alarm was
+  gone.
+- **Fix:** `lib/models/alarms/ringing_watch.dart`'s `RingingWatch` - both `ScreenAlarmActive` and
+  `QrScanner` (only when opened for a ringing alarm; a plain code-import scan has nothing to
+  watch) now subscribe to `Alarm.ringing` themselves and pop the screen (via `Navigator.pop`/
+  `_closeView`) plus run `Handler.onAlarmHandled` the moment their own `alarmId` is no longer in
+  the set - the same outcome the Stop button produces on a normal dismiss, just triggered by the
+  plugin's own stream instead of a button press.
+- **The first event is deliberately ignored:** `Alarm.ringing` is a `BehaviorSubject`, so a new
+  subscriber's first delivery is the stream's *current snapshot*, not a change. Reacting to it
+  would auto-close the screen the instant it opens whenever nothing has (yet) told the real,
+  static `Alarm.ringing` subject that this alarm is ringing - which is exactly the state of
+  `flutter test`'s unpopulated subject in every existing test that drives `Handler.handleAlarm`
+  directly rather than through the plugin (`test/handler_replan_wiring_test.dart`). `RingingWatch`
+  only calls `onGone` on a later event, a genuine disappearance.
+- **Test:** `test/ringing_watch_test.dart` (the reusable watcher in isolation: ignores the seed,
+  fires on a real transition, ignores an unrelated alarm's id, stops after `cancel()`),
+  `test/screen_alarm_active_ringing_test.dart` and `test/qr_scanner_ringing_test.dart` (both
+  screens, via a `debugRingingStreamOverride` test seam matching the existing
+  `debugScanStreamOverride` pattern in `qr_scanner.dart`) - covering the stuck-open bug itself, an
+  unrelated alarm's disappearance not closing the wrong screen, and the no-`alarmId` code-import
+  path staying unaffected.
+- **Requirement:** R3
 
 ### T-141 · Past scheduled alarms pile up in the list forever
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:alarm/alarm.dart';
+import 'package:alarm/utils/alarm_set.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_zxing/flutter_zxing.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import 'package:wakeywakey/screens/alarms/snooze_button.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/utils/diag/diag_log.dart';
 import 'package:wakeywakey/models/alarms/handler.dart';
+import 'package:wakeywakey/models/alarms/ringing_watch.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_stop.dart';
 import 'package:wakeywakey/models/scan_code/scan_result.dart';
@@ -65,6 +67,12 @@ class QrScanner extends StatefulWidget {
   @visibleForTesting
   static Stream<ScanResult>? debugScanStreamOverride;
 
+  /// Test-only seam: when set, [RingingWatch] observes this stream instead
+  /// of the real `Alarm.ringing` - which has no platform channel in
+  /// `flutter test` and never carries a test's fake alarm id.
+  @visibleForTesting
+  static Stream<AlarmSet>? debugRingingStreamOverride;
+
   @override
   State<QrScanner> createState() => _QrScannerState();
 }
@@ -99,11 +107,31 @@ class _QrScannerState extends State<QrScanner> {
   static const Duration _proofOfLifeTimeout = Duration(seconds: 20);
   Timer? _proofOfLifeTimer;
 
+  /// Only set when this screen was opened for a specific ringing alarm
+  /// (`widget.alarmId != null`) - a plain code-import/scan has nothing
+  /// ringing to watch. See RingingWatch's doc comment for the bug this
+  /// guards against: a notification-swipe stop happening at the native
+  /// level with no Dart code involved, which this screen otherwise never
+  /// learns about.
+  RingingWatch? _ringingWatch;
+
   @override
   void initState() {
     debugPrint("=====initState: Creating new QRScannerState");
     super.initState();
     _appState = Provider.of<AppState>(context, listen: false);
+
+    if (widget.alarmId case final int ringingId) {
+      _ringingWatch = RingingWatch(
+        alarmId: ringingId,
+        ringingStream: QrScanner.debugRingingStreamOverride,
+        onGone: () {
+          if (!mounted) return;
+          Handler.onAlarmHandled(_appState, ringingId);
+          _closeView();
+        },
+      );
+    }
 
     // No lifecycle observer any more: ReaderWidget starts and stops its own
     // camera with the app lifecycle. The previous scanner needed one, and its
@@ -127,6 +155,7 @@ class _QrScannerState extends State<QrScanner> {
   @override
   void dispose() {
     _proofOfLifeTimer?.cancel();
+    _ringingWatch?.cancel();
 
     // Stop listening to the injected events, if any. ReaderWidget disposes of
     // its own camera controller.

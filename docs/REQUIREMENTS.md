@@ -80,8 +80,20 @@ with the calendar screen.
 ## R3 - The app is always ready to trigger an alarm
 
 The app must remain able to fire a scheduled alarm after a device restart, after the app's UI is
-closed, and after long periods without being opened (e.g. a month-long vacation with no alarms
-set).
+closed, and after long periods without being opened. "Long period" is not an arbitrary example
+here: FR-9's rolling safety valve (`docs/scheduling-v2-spec.md`) is the one place scheduling-v2
+actually gives this a number - a rolling counter of consecutive appointment-free days that stops
+automatic advancement and notifies the user once it reaches **7**, precisely so a genuinely
+unattended stretch (no calendar appointments, no app opened) does not drift into a permanently dead
+alarm. Below that count, the app keeps scheduling on its own; at 7 it deliberately hands control
+back to the user instead of guessing further - that hand-back is by design, not an R3 failure, and
+only applies when no `preferredWakeUpTime` is set (with one set, FR-4 bounds the drift and the
+valve never needs to fire at all).
+
+- **Real-device evidence (2026-09-18):** the app's UI was swiped away from the recent-apps list
+  (not force-stopped) while a manual alarm was armed, and the alarm rang correctly regardless -
+  the process-death path that matters for most users day to day, distinct from the reboot and
+  `am force-stop` scenarios below. `docs/device-trial-checklist.md` records this.
 
 - **Checked by:** an automated E2E test now exercises alarm creation, firing and persistence on a
   real Android emulator (`integration_test/app_test.dart`, gating `.github/workflows/release.yml`).
@@ -110,6 +122,11 @@ set).
   plugin registers one and re-arms the stored alarms after boot via
   `setExactAndAllowWhileIdle(RTC_WAKEUP, …)`. Reboot survival is implemented there - only the
   evidence is missing.
+- **Adjacent defect found and fixed (2026-09-18, `docs/TODO.md` T-147):** not a triggering failure,
+  but the same "still ready after the app was left alone" theme on the tail end - an alarm stopped
+  via its notification (swipe-dismiss, no app UI open) left the ring screen stuck showing on
+  reopen, behind `PopScope(canPop: false)` with nothing left to stop. Fixed by having the ring
+  screens themselves notice the alarm disappearing from `Alarm.ringing`.
 - **An important boundary this requirement does not yet draw:** on `am force-stop`, Android removes
   all of the package's AlarmManager alarms at the platform level, and a force-stopped process no
   longer receives `BOOT_COMPLETED` afterwards until the user starts the app again. "Surviving a
