@@ -90,14 +90,24 @@ class Meeting {
 /// move every all-day event one day earlier for any device west of UTC. They
 /// also carry no start/end time: calendar_view reads that as a full-day event,
 /// while 00:00-00:00 would be drawn as a sliver at the top of the time grid.
-CalendarEventData<Meeting> meetingToCalendarEvent(Meeting meeting) {
+/// [ignored] (new feature, user request): drawn grey regardless of the
+/// event's real colour when the user has chosen to leave this appointment
+/// out of scheduling - `DefaultEventTile` (calendar_view) draws a
+/// `CalendarEventData`'s `color` as its whole background, so this is the
+/// entire "grayed out" half of the requirement. The X-overlay half needs an
+/// actual tile builder and lives in screen_schedule.dart instead.
+CalendarEventData<Meeting> meetingToCalendarEvent(
+  Meeting meeting, {
+  bool ignored = false,
+}) {
+  final color = ignored ? Colors.grey : meeting.background;
   if (meeting.isAllDay) {
     final fromDay = meeting.from.toUtc();
     final toDay = meeting.to.toUtc();
     return CalendarEventData<Meeting>(
       title: meeting.eventName,
       description: meeting.description,
-      color: meeting.background,
+      color: color,
       event: meeting,
       date: DateTime(fromDay.year, fromDay.month, fromDay.day),
       endDate: DateTime(toDay.year, toDay.month, toDay.day),
@@ -112,7 +122,7 @@ CalendarEventData<Meeting> meetingToCalendarEvent(Meeting meeting) {
   return CalendarEventData<Meeting>(
     title: meeting.eventName,
     description: meeting.description,
-    color: meeting.background,
+    color: color,
     event: meeting,
     date: DateTime(from.year, from.month, from.day),
     endDate: DateTime(to.year, to.month, to.day),

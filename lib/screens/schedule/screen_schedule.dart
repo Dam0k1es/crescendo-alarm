@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 // Dependencies of calendar.dart
 import 'package:timezone/timezone.dart' as tz;
 import 'package:wakeywakey/app_state.dart';
+import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/utils/utils.dart';
 import 'package:wakeywakey/utils/diag/diag_log.dart';
 
@@ -26,6 +27,22 @@ part 'meeting_data.dart';
 final EventController<Meeting> _events = EventController<Meeting>();
 
 late AppState appState;
+
+/// New feature (user request): the "X" that marks an ignored event's tile,
+/// on top of the grey `meetingToCalendarEvent` already gives it. A named
+/// widget of its own (rather than an inline `Icon`) purely so a test can
+/// find it by type without depending on icon data/colour, which is
+/// incidental to the requirement ("grayed out and with an X on it").
+class IgnoredEventMark extends StatelessWidget {
+  const IgnoredEventMark({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Icon(Icons.close, color: Colors.white70, size: 28),
+    );
+  }
+}
 
 /// The views the screen offers, unchanged from what SfCalendar's `allowedViews`
 /// offered - a migration should not quietly cost the user a feature.
@@ -211,6 +228,89 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
         ),
       );
 
+  /// New feature (user request): draws the same tile calendar_view always
+  /// has (`DefaultEventTile` - the grey background from `meetingToCalendarEvent`
+  /// already does the "grayed out" half), plus a centred X on top when every
+  /// event in this slot is ignored. Only "every" rather than "any": two
+  /// overlapping events, one ignored and one not, would otherwise mark the
+  /// live one as dead too - `DefaultEventTile` itself has no per-event
+  /// styling hook for that rarer case, so it is left with just its own grey
+  /// tint and no X, rather than drawn wrong.
+  Widget _eventTileBuilder(
+    DateTime date,
+    List<CalendarEventData<Meeting>> events,
+    Rect boundary,
+    DateTime startDuration,
+    DateTime endDuration,
+  ) {
+    final tile = DefaultEventTile<Meeting>(
+      date: date,
+      events: events,
+      boundary: boundary,
+      startDuration: startDuration,
+      endDuration: endDuration,
+    );
+    final allIgnored = events.isNotEmpty &&
+        events.every(
+            (e) => e.event != null && appState.isEventIgnored(e.event!));
+    if (!allIgnored) return tile;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        tile,
+        const IgnoredEventMark(),
+      ],
+    );
+  }
+
+  /// Opens the ignore/un-ignore sheet for a tap on the day/week views, where
+  /// several overlapping events can land on the same tap.
+  void _onEventTap(List<CalendarEventData<Meeting>> events, DateTime date) {
+    final meetings = events
+        .map((e) => e.event)
+        .whereType<Meeting>()
+        .toList(growable: false);
+    if (meetings.isEmpty) return;
+    _showIgnoreEventSheet(meetings);
+  }
+
+  void _showIgnoreEventSheet(List<Meeting> meetings) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final meeting in meetings)
+              StatefulBuilder(
+                builder: (context, setSheetState) => SwitchListTile(
+                  title: Text(
+                    meeting.eventName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: const Text('Ignore for scheduling'),
+                  value: appState.isEventIgnored(meeting),
+                  onChanged: (value) {
+                    appState.setEventIgnored(meeting, value);
+                    setSheetState(() {});
+                    setState(() => _syncEventsFromAppState(appState));
+                    // New feature (user request): consulted by hardFloor
+                    // derivation (replan.dart) - a change must take effect
+                    // immediately, the same as any other setting that feeds
+                    // the computation (FR-21's disabledDays toggle uses the
+                    // identical trigger for the identical reason).
+                    runCheckpointSafely(appState,
+                        trigger: CheckpointTrigger.settingsChanged);
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCalendar(BuildContext context) {
     // The key makes a view switch rebuild the widget from scratch, so the newly
     // chosen view opens on the date the user was looking at rather than today.
@@ -224,6 +324,8 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
           initialDay: _displayDate,
           onPageChange: _onPageChange,
           timeLineBuilder: _timeLineMark,
+          eventTileBuilder: _eventTileBuilder,
+          onEventTap: _onEventTap,
           showLiveTimeLineInAllDays: true,
           heightPerMinute: 1,
         );
@@ -235,6 +337,8 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
           initialDay: _displayDate,
           onPageChange: _onPageChange,
           timeLineBuilder: _timeLineMark,
+          eventTileBuilder: _eventTileBuilder,
+          onEventTap: _onEventTap,
           startDay: WeekDays.monday,
           // `firstDayOfWeek: 1` in SfCalendar terms.
           weekDays: _view == _ScheduleView.workWeek
@@ -256,6 +360,19 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
             initialMonth: _displayDate,
             startDay: WeekDays.monday,
           ),
+          // Ignore-toggle intentionally NOT wired up here (docs/TODO.md
+          // T-149): calendar_view 2.0.0's MonthView has a real generics bug -
+          // passing a typed (non-`Object?`) `onEventTap` throws
+          // "type '(CalendarEventData<Meeting>, DateTime) => void' is not a
+          // subtype of type '(CalendarEventData<Object?>, DateTime) =>
+          // void)?'" the moment a month cell with an event renders, because
+          // `FilledCell`'s internal tap wiring loses the type parameter
+          // somewhere between `MonthViewBuilders<T>` and the cell. There is
+          // also no eventTileBuilder equivalent for the month grid's compact
+          // per-day event list, so the X mark day/week view gets would need
+          // different treatment here anyway. The grey colour from
+          // meetingToCalendarEvent still shows in month view regardless -
+          // only the tap-to-toggle interaction is unavailable there.
           monthViewBuilders: MonthViewBuilders(onPageChange: _onPageChange),
         );
     }
@@ -341,6 +458,20 @@ Future<void> loadCalendarData(AppState appState, Duration timeToFetch,
   }
 }
 
+/// Rebuilds `_events` from `appState.meetings`, picking up the current
+/// ignored-state colouring (`meetingToCalendarEvent`'s `ignored` parameter) -
+/// shared by `updateCalendarData` (after a calendar fetch) and by toggling an
+/// event's ignored state (where `appState.meetings` itself hasn't changed, so
+/// there's nothing to re-fetch, but the tile colours still have to update
+/// immediately rather than waiting for the next fetch).
+void _syncEventsFromAppState(AppState appState) {
+  _events.removeWhere((_) => true);
+  _events.addAll(appState.meetings
+      .map((m) =>
+          meetingToCalendarEvent(m, ignored: appState.isEventIgnored(m)))
+      .toList());
+}
+
 // Update the calendar data source with the current appointments
 void updateCalendarData(AppState appState, Duration timeToFetch,
     [Duration backwards = const Duration(days: 0),
@@ -416,8 +547,7 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
     // Rebuild the whole set rather than diffing: the fetch above appends to
     // `appState.meetings`, so the list is the single source of truth and a
     // partial update would drift from it.
-    _events.removeWhere((_) => true);
-    _events.addAll(appState.meetings.map(meetingToCalendarEvent).toList());
+    _syncEventsFromAppState(appState);
   } catch (e) {
     debugPrint(
         "=====updateCalendarData: Error updating data source: ${e.runtimeType}");

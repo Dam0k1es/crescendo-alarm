@@ -137,7 +137,13 @@ Future<ReplanResult> replan(
       dayDistance(firstUnprocessedDay, lastConcludedDay) <= 0;
 
   final fetchStart = needsDayAdvance ? firstUnprocessedDay : windowStart;
-  final allEvents = await fetch(fetchStart, dayMarker(windowStart, 7));
+  // New feature (user request): an event the user chose to ignore must play
+  // no part in hardFloor derivation - filtered out here, once, so every pure
+  // function below (eventsForDay/hardFloor in scheduling_v2.dart) never has
+  // to know ignoring exists at all.
+  final allEvents = (await fetch(fetchStart, dayMarker(windowStart, 7)))
+      .where((event) => !appState.isEventIgnored(event))
+      .toList();
 
   final durationToWakeUp = durationFromTimeOfDay(appState.durationToWakeUp);
   final durationToGetReady = durationFromTimeOfDay(appState.durationToGetReady);

@@ -45,6 +45,15 @@ class AppState extends ChangeNotifier {
   // and gets raised to 00:10 when snooze is switched on.
   TimeOfDay _durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
   Set<String> _disabledDays = <String>{};
+
+  /// Calendar events (by their `device_calendar` id, `Meeting.ids`) the user
+  /// has chosen to leave out of scheduling - a feature request, not an FR:
+  /// some appointments (on a shared calendar the user doesn't own, or just
+  /// not worth waking up for) should not drive `hardFloor`, but marking that
+  /// must never write back to the calendar itself. Keyed by id, not by the
+  /// `Meeting` value, so a later sync's freshly-constructed `Meeting` for the
+  /// same real-world appointment is still recognised.
+  Set<String> _ignoredEventIds = <String>{};
   bool _snoozeEnabled = false;
   Duration _snoozeTime = const Duration(minutes: 5);
   Map<int, DateTime> _snoozeOriginOf = <int, DateTime>{};
@@ -161,6 +170,27 @@ class AppState extends ChangeNotifier {
     if (kept.length == _disabledDays.length) return;
     _disabledDays = kept;
     _prefs.setStringList('disabledDays', _disabledDays.toList()..sort());
+  }
+
+  /// The raw set of ignored `device_calendar` event ids - never the
+  /// `Meeting` objects themselves, so ignoring an event can never write
+  /// anything back to the calendar (which may not even belong to the user).
+  Set<String> get ignoredEventIds => _ignoredEventIds;
+
+  bool isEventIgnored(Meeting meeting) =>
+      meeting.ids.any(_ignoredEventIds.contains);
+
+  void setEventIgnored(Meeting meeting, bool ignored) {
+    if (ignored == isEventIgnored(meeting)) return;
+    final updated = {..._ignoredEventIds};
+    if (ignored) {
+      updated.addAll(meeting.ids);
+    } else {
+      updated.removeAll(meeting.ids);
+    }
+    _ignoredEventIds = updated;
+    _prefs.setStringList('ignoredEventIds', _ignoredEventIds.toList()..sort());
+    notifyListeners();
   }
 
   /// FR-20: may the user postpone the alarm? Default **off**.
@@ -1170,6 +1200,8 @@ class AppState extends ChangeNotifier {
           _prefs.getBool('diagnosticsEnabled') ?? _diagnosticsEnabled;
       _disabledDays =
           (_prefs.getStringList('disabledDays') ?? const <String>[]).toSet();
+      _ignoredEventIds =
+          (_prefs.getStringList('ignoredEventIds') ?? const <String>[]).toSet();
       _snoozeEnabled = _prefs.getBool('snoozeEnabled') ?? _snoozeEnabled;
       final snoozeMinutes = _prefs.getInt('snoozeTimeMinutes');
       if (snoozeMinutes != null) _snoozeTime = Duration(minutes: snoozeMinutes);

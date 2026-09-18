@@ -1090,6 +1090,54 @@ that is the basis a decision can be formulated against.
   low, given no crypto beyond `Random.secure()` and no network calls anywhere in `lib/`).
 - **Requirement:** R1
 
+### T-149 · Ignore a calendar event for scheduling — IMPLEMENTED (2026-09-18)
+
+- [x] Let the user mark a calendar appointment as ignored: it is excluded from `hardFloor`
+      derivation, shown grayed out with an X on its tile, persisted, and never written back to the
+      calendar itself.
+- **Why:** feature request. An appointment can drive a wake-up time the user doesn't actually want
+  to get up for - a recurring standing invite they never attend, a shared/family calendar entry
+  that isn't theirs to act on (and must not be, since writing to it would be writing to someone
+  else's calendar).
+- **Persistence, deliberately never touching the calendar:** `AppState.ignoredEventIds` is a bare
+  `Set<String>` of `device_calendar` event ids (`Meeting.ids`), not a set of `Meeting` objects and
+  not anything written through `device_calendar`'s own event-mutation API (which this app has
+  never used - see `calendar.dart`'s commented-out `meetingToEvent`/`addEvent` scaffolding, T-30).
+  Keyed by id rather than by value so a later calendar sync's freshly-constructed `Meeting` for the
+  same real-world appointment is still recognised (`AppState.isEventIgnored`/`setEventIgnored`,
+  mirroring `disabledDays`' own shape from FR-21).
+- **Scheduling side, kept pure:** `replan()` (`lib/models/scheduling/replan.dart`) filters
+  `allEvents` against `appState.isEventIgnored` exactly once, immediately after the calendar fetch
+  - every pure function downstream (`eventsForDay`/`hardFloor` in `scheduling_v2.dart`) never has
+  to know ignoring exists at all, the same "keep the domain layer pure" shape FR-15 (manual alarms)
+  and FR-21 (`disabledDays`) already use.
+- **UI:** the grey tint is free - `meetingToCalendarEvent`'s new `ignored` parameter just
+  overrides the `CalendarEventData`'s `color`, and `DefaultEventTile` (calendar_view) already
+  paints that as the whole tile background. The X mark needs an actual custom `eventTileBuilder`
+  (`_ScreenScheduleState._eventTileBuilder`), wired into `DayView`/`WeekView` only - `MonthView` has
+  no equivalent per-event tile hook, only a whole-cell `cellBuilder`. Tapping an event (`onEventTap`)
+  opens a bottom sheet with a switch per overlapping event at that tap point, toggling
+  `setEventIgnored` and immediately triggering `runCheckpointSafely(..., trigger:
+  CheckpointTrigger.settingsChanged)` - the identical trigger FR-21's own toggle uses, for the
+  identical reason (a setting that feeds the computation must take effect immediately, not wait for
+  the daily lock).
+- **A real calendar_view 2.0.0 bug found along the way, and worked around rather than fought:**
+  wiring the same tap-to-toggle interaction into `MonthView` threw `type
+  '(CalendarEventData<Meeting>, DateTime) => void' is not a subtype of type
+  '(CalendarEventData<Object?>, DateTime) => void)?'` the moment a month cell with an event
+  rendered - a generics mismatch somewhere between `MonthViewBuilders<T>` and `FilledCell`'s
+  internal tap wiring that a non-generic (`Object?`) `onEventTap` never triggers, because a null
+  callback is never type-checked. `MonthView` therefore still shows the grey tint (via the same
+  `meetingToCalendarEvent` path) but has no tap-to-toggle or X mark - only `DayView`/`WeekView` get
+  the full interaction. Not filed as a project bug since it lives in the third-party package.
+- **Test:** `test/ignored_events_test.dart` (persistence: default state, toggle round trip,
+  keyed-by-id survives a freshly-refetched `Meeting`, restart round trip, listener notification),
+  `test/replan_ignored_events_test.dart` (an ignored event's day becomes a gap day; a non-ignored
+  event on the same day still wins; un-ignoring restores the hardFloor), `test/meeting_data_test
+  .dart` (the grey-colour override, including all-day events), and `test/ignore_event_ui_test.dart`
+  (the tap-to-open-sheet interaction and the X mark appearing/disappearing with the toggle).
+- **Requirement:** R2
+
 ### T-141 · Past scheduled alarms pile up in the list forever
 
 - [ ] Prune scheduled alarms that are safely in the past, without touching FR-18's rule that a past
