@@ -527,7 +527,10 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
             "=====updateCalendarData: Error reading calendar data from OS: ${e.runtimeType}");
       }
       appState.meetings += meetings;
-      appState.fetchedCalendarWeeks.add(appState.visibleDate);
+      // docs/TODO.md T-55: recorded by the start of the week, matching
+      // `preloadCalendarData`'s convention - `isCalendarWeekFetched` compares
+      // against that, not against an arbitrary day within the week.
+      appState.fetchedCalendarWeeks.add(startOfWeek);
 
       // If the calendar has been initialized and fetched, set the first update flag to false
       if (appState.meetings.isNotEmpty) {

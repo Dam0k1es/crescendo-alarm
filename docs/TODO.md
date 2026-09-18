@@ -1454,19 +1454,40 @@ that is the basis a decision can be formulated against.
 - **Done when:** a calendar-selection UI exists and `scheduleAlarms` only considers entries from the
   selected calendar(s), covered by a test.
 
-### T-55 · Possible stale-data race when opening the Schedule screen before preload finishes
+### T-55 · Wrong "already fetched" answer for any day that isn't its own week's start — FIXED (2026-09-18)
 
-- [ ] Verify whether this is still reproducible, then fix or close it.
+- [x] Verified reproducible, then fixed.
 - **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31): "wrong scheduled alarm
   infos if opening scheduled alarm page before preloading finished" and "duplicate calendar entries
-  for preloaded weeks (on first load only?)". `screen_schedule.dart` does guard on
-  `appState.calendarsInitialized`/`firstUpdateOfCalendar`, which may already mitigate this - it was
-  not re-verified against a live race during this triage pass, only read statically.
+  for preloaded weeks (on first load only?)". The concurrency framing in the original note turned
+  out not to be the mechanism - `AppState.isCalendarWeekFetched` was reproducibly wrong even with
+  no race involved at all.
+- **Root cause:** `preloadCalendarData` (`lib/utils/utils.dart`) records each preloaded week in
+  `AppState.fetchedCalendarWeeks` keyed by the **start of that week**. But
+  `screen_schedule.dart`'s `updateCalendarData` calls `isCalendarWeekFetched(appState.visibleDate)`
+  - and `visibleDate` is normally "today", an arbitrary day within the week, not its Monday. The old
+  comparison checked that raw day against the start-of-week entries directly, so it only ever
+  matched on the one day per week that happened to already be the start-of-week day; every other
+  day reported an already-preloaded week as not fetched, triggering a redundant `getCalendarEntries`
+  call that appended a second copy of the same week's entries to `appState.meetings` - exactly the
+  duplicate-entries symptom the original note described, and unconditionally reproducible on any
+  non-start-of-week day, no timing race required. A second, smaller bug in the same method: its
+  "not fetched" debug log referenced `screen_schedule.dart`'s file-level `appState` variable instead
+  of `this` - harmless when a widget had already set that global, but a `LateInitializationError` in
+  any context that calls `isCalendarWeekFetched` without one (e.g. a plain unit test).
+- **Fix:** `isCalendarWeekFetched` now normalizes its argument to its own start of week before
+  comparing, the same rule `getStartOfWeek` already applies elsewhere - so a mid-week query matches
+  a start-of-week entry for the same week. `updateCalendarData`'s own successful-fetch branch was
+  also storing the raw `visibleDate` instead of `startOfWeek` in `fetchedCalendarWeeks`; changed it
+  to store `startOfWeek` too, so every entry in that list means the same thing. Fixed the stray
+  `appState.` debug-log reference along the way.
 - **Evidence:** `lib/main.dart`'s pre-triage TODO block, items `0x461`/`0x462` (see T-31);
-  `lib/app_state.dart`'s `calendarsInitialized`/`firstUpdateOfCalendar`;
-  `lib/screens/schedule/screen_schedule.dart:234,291`.
-- **Done when:** a test reproduces the race (or confirms it no longer occurs) by opening the
-  Schedule screen concurrently with `preloadCalendarData`.
+  `lib/app_state.dart`'s `isCalendarWeekFetched`; `lib/utils/utils.dart`'s `preloadCalendarData`;
+  `lib/screens/schedule/screen_schedule.dart`'s `updateCalendarData`.
+- **Tests:** `test/calendar_week_fetched_test.dart` - a mid-week day is reported as fetched once its
+  week's start date is in `fetchedCalendarWeeks` (red before the fix, since the raw day never
+  matched a start-of-week entry), and a mid-week day whose week was never fetched still correctly
+  reports `false`.
 
 ### T-57 · No fallback scheduling target when there are no calendar entries at all — RESOLVED (2026-09-10, by scheduling-v2)
 

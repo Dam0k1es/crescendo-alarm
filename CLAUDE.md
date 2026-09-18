@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **446 tests across 60 files**, and CI runs them six times over -
+`flutter test` currently runs **448 tests across 61 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -347,6 +347,11 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   `manual_alarm_inherits_settings_test.dart` instead of a separate file, following T-84/T-96's own
   precedent that a per-alarm property's tests belong alongside the reconciliation logic they
   exercise.
+
+- `calendar_week_fetched_test.dart` pins down T-55: `AppState.isCalendarWeekFetched` must normalize
+  the day it's asked about to its own start of week before comparing against
+  `fetchedCalendarWeeks` (which is keyed by week start), or every non-start-of-week query wrongly
+  reports an already-preloaded week as unfetched.
 
 - The scheduling-v2 suite (`scheduling_v2_test.dart`, `scheduling_v2_offset_test.dart`,
   `scheduling_v2_tz_test.dart`, `scheduling_v2_dst_test.dart`, `replan_test.dart`,

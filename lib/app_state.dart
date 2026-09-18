@@ -1118,8 +1118,21 @@ class AppState extends ChangeNotifier {
   //   }
   // }
 
+  /// docs/TODO.md T-55: `fetchedCalendarWeeks` records each preloaded week by
+  /// its *start* (see `preloadCalendarData`, `lib/utils/utils.dart`), but
+  /// [dateTime] here is typically an arbitrary day within a week (e.g.
+  /// "today"). Comparing [dateTime] itself against those start-of-week
+  /// entries used to only match on the rare day that happened to already be
+  /// the configured start-of-week day - every other day reported its
+  /// already-preloaded week as not fetched, triggering a redundant fetch that
+  /// duplicated the week's calendar entries. Normalizing [dateTime] to its
+  /// own start of week first makes the comparison apples-to-apples.
   Future<bool> isCalendarWeekFetched(DateTime dateTime) async {
-    DateTime dateOnly = DateTime(dateTime.year, dateTime.month, dateTime.day);
+    DateTime startOfWeek = dateTime.weekday != _startOfWeekDay
+        ? dateTime.subtract(Duration(days: dateTime.weekday - 1))
+        : dateTime;
+    DateTime dateOnly =
+        DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
 
     try {
       for (DateTime fetchedDate in _fetchedCalendarWeeks) {
@@ -1127,7 +1140,7 @@ class AppState extends ChangeNotifier {
             fetchedDate.month == dateOnly.month &&
             fetchedDate.day == dateOnly.day) {
           debugPrint(
-              "=====isCalendarWeekFetched: $visibleDate has been fetched. (See $fetchedCalendarWeeks)");
+              "=====isCalendarWeekFetched: $dateTime has been fetched. (See $_fetchedCalendarWeeks)");
           return true;
         }
       }
@@ -1137,7 +1150,7 @@ class AppState extends ChangeNotifier {
     }
 
     debugPrint(
-        "=====updateCalendarData: ${appState.visibleDate} has not been fetched. (See ${appState.fetchedCalendarWeeks})");
+        "=====isCalendarWeekFetched: $dateTime has not been fetched. (See $_fetchedCalendarWeeks)");
     return false;
   }
 
