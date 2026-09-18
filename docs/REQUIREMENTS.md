@@ -113,11 +113,18 @@ valve never needs to fire at all).
   Not yet captured with the scripted `dumpsys alarm` procedure (`check_alarm_survival.sh`) or
   logged with device/APK details in `docs/device-trial-checklist.md`'s table format - see the
   Findings entry there for now.
-- **Status: partially met, real evidence still thin.** A missed alarm is a total failure of the
-  app's core purpose, so this remains the single highest-value gap even with the reboot
-  observation above - `am force-stop` survival (a different, harsher kill than a reboot: Android
-  drops the package's AlarmManager entries entirely on force-stop, see the boundary noted below)
-  is still unverified, and the E2E suite doesn't touch either path.
+- **Status: met in substance on real hardware; formal/automated evidence still the gap.** As of
+  2026-09-18, every scenario R3 actually promises has been observed working on a real device: a UI
+  swipe-away, a reboot with no app interaction, and a force-stop followed by reopening the app
+  (FR-17's recovery). The one scenario that fails - a force-stop with the app never reopened again
+  - is Android's own platform boundary, not something this app can fix, and is documented as such
+  rather than counted against this requirement. What's left is making that evidence durable and
+  automatic rather than four one-off manual observations: the scripted `dumpsys alarm` procedure
+  (`check_alarm_survival.sh`) has still never actually been run and logged via
+  `docs/device-trial-checklist.md`'s table template, and the E2E suite still doesn't exercise
+  reboot or force-stop at all (structurally can't, for the reasons `docs/TODO.md` T-93/T-131
+  record). A missed alarm is a total failure of the app's core purpose, so closing that
+  automation gap remains worth doing even though the manual evidence is now good.
   **Fixed (2026-09-18):** a `SharedPreferences` load failure could block app startup entirely
   instead of degrading to defaults - see `docs/TODO.md` T-45. (The per-alarm enable/disable switch
   not cancelling the underlying OS alarm, `docs/TODO.md` T-03, was already resolved on 2026-09-16 -
@@ -154,10 +161,12 @@ valve never needs to fire at all).
   loses it - no ring.** This is the boundary above actually observed, not just reasoned from the
   code, and it is not fixable: it's Android's own platform guarantee for what `am force-stop` does
   to a package (every AlarmManager entry it owns is dropped, unconditionally, by the OS itself,
-  before the app gets any chance to react). No app-level code change can prevent this. What R3
-  actually promises here is FR-17's recovery - alarms are re-armed the next time the app is opened
-  - which is a different, already-implemented guarantee that this test does not exercise (it would
-  need to check: after a force-stop, does *opening the app again* correctly re-arm the alarm?).
+  before the app gets any chance to react). No app-level code change can prevent this.
+- **Real-device confirmation, same session: FR-17's recovery works.** After the force-stop above,
+  reopening the app re-armed the alarm and it rang. This is the actual, fixable half of C4/C5 that
+  the force-stop boundary itself doesn't cover - "the alarm survives force-stop" is impossible by
+  design, but "the app recovers as soon as it's opened again" is the real guarantee R3 depends on
+  for that path, and it now has real-device evidence rather than only a code-reading inference.
 
 ## R4 - All alarm-ringing prerequisites are met before an alarm fires
 

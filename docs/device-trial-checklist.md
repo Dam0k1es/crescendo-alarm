@@ -131,6 +131,10 @@ is the evidence, not the task list.
   `am force-stop` during a scheduled alarm loses it - no ring. This is Android's own documented
   behaviour (every AlarmManager entry a force-stopped package owns is dropped by the OS itself) and
   is not something app code can prevent - see `docs/REQUIREMENTS.md` R3's own note on this
-  boundary. What's still open, and is the actually fixable half of C4/C5: after a force-stop,
-  does *opening the app again* correctly re-arm the alarm via FR-17's recovery path? Not yet
-  checked on a real device.
+  boundary.
+- **2026-09-18, C5 (real device): confirmed - the actually fixable half of C4/C5.** After the
+  force-stop above, opening the app again re-armed the alarm and it rang, via FR-17's recovery
+  path. With this, every scenario R3 actually promises (UI swipe, reboot, force-stop-then-reopen)
+  now has real-device confirmation - only the scripted `dumpsys alarm` procedure
+  (`.github/scripts/check_alarm_survival.sh`) and this table's own device/APK/commit logging
+  remain to turn these one-off observations into a repeatable, dated record.
