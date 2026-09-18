@@ -3,12 +3,13 @@
 # Runs, independently of each other:
 #   1. flutter analyze         - static analysis / lints
 #   2. osv-scanner              - known vulnerabilities in pubspec.lock dependencies
-#   3. trufflehog                - secret scanning of the working tree
+#   3. trufflehog                - secret scanning of the full git history
 #
 # This covers 3 of R1's 5 tools (see docs/REQUIREMENTS.md) - it does not run
-# mobsfscan or a full MobSF scan (both need the built APK and, for MobSF, a
-# local Docker instance - see .github/workflows/ci.yml if you need to run
-# those too).
+# mobsfscan, a full MobSF scan, or the native-Android-dependency osv-scanner
+# pass (docs/TODO.md T-148) - all three need the built APK and/or a resolved
+# Gradle build (and MobSF also needs a local Docker instance) - see
+# .github/workflows/ci.yml if you need to run those too.
 #
 # Requires: flutter (on PATH), osv-scanner, trufflehog
 #   https://github.com/google/osv-scanner
@@ -42,11 +43,12 @@ status=$?
 [ "$status" -ne 0 ] && overall_status=1
 
 echo
-echo "== 3/3: trufflehog (filesystem) =="
-exclude_file="$(mktemp)"
-trap 'rm -f "$exclude_file"' EXIT
-printf 'build/\n.dart_tool/\n' > "$exclude_file"
-trufflehog filesystem --results=verified,unknown --fail --exclude-paths="$exclude_file" .
+echo "== 3/3: trufflehog (full git history) =="
+# docs/TODO.md T-148: was `trufflehog filesystem` (the current checkout
+# only) - a secret committed and later removed would never have been
+# flagged, the same shape of gap T-29's unlicensed audio blobs were in git
+# history, just for credentials instead of copyright.
+trufflehog git file://. --results=verified,unknown --fail
 status=$?
 [ "$status" -ne 0 ] && overall_status=1
 

@@ -10,8 +10,20 @@ name: Security gate (reusable)
 # that duplicated state creates - so the gate now lives here exactly once.
 #
 # What can turn red here is a real gate:
-#   osv-scanner    - known vulnerabilities in pubspec.lock
-#   trufflehog     - verified and unknown secrets (--fail)
+#   osv-scanner    - known vulnerabilities in pubspec.lock (the native Android
+#                    dependency tree is scanned separately - see
+#                    ci.yml/release.yml's "Scan native Android dependencies"
+#                    step, which needs a resolved Gradle build this reusable
+#                    workflow doesn't have)
+#   trufflehog     - verified and unknown secrets (--fail), across the full
+#                    git history (docs/TODO.md T-148), not just the current
+#                    checkout - `trufflehog filesystem` used to be what ran
+#                    here despite `fetch-depth: 0` below already fetching
+#                    that history for exactly this purpose. The gap that left
+#                    open: a secret committed and later removed - the same
+#                    shape of problem T-29's unlicensed audio blobs were,
+#                    just for credentials instead of copyright - would never
+#                    have been flagged.
 #   mobsfscan      - Android SAST, filtered against
 #                    .github/security-exceptions.json (mobsfscan's own exit
 #                    code doesn't distinguish accepted findings from new
@@ -39,8 +51,8 @@ jobs:
             | sh -s -- -b /usr/local/bin
       - name: osv-scanner (SCA)
         run: osv-scanner --lockfile=pubspec.lock
-      - name: trufflehog (secrets)
-        run: trufflehog filesystem --results=verified,unknown --fail .
+      - name: trufflehog (secrets, full git history)
+        run: trufflehog git file://. --results=verified,unknown --fail
 
   mobsfscan:
     name: mobsfscan (Android source)
