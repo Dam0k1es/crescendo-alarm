@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **420 tests across 54 files**, and CI runs them six times over -
+`flutter test` currently runs **440 tests across 59 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -407,6 +407,19 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   .getInstance()` must not block `initialized` from completing. `getPrefsInstance` is injected the
   same way `documentsDirectory`/`fetchEvents`/`now` are, so the failure is simulated without a
   platform channel.
+- `test/prune_scheduled_alarms_test.dart`, `test/app_state_prune_scheduled_alarms_test.dart` and
+  `test/replan_prunes_scheduled_alarms_test.dart` (`docs/TODO.md` T-141): past `ScheduledAlarm`s no
+  longer pile up in the list forever. Split across the same three layers as the `disabledDays`/
+  FR-21 tests elsewhere in this list - the pure retention-bound filter (kept deliberately apart from
+  `planAlarmSync`'s own safety-critical "never touch a possibly-ringing alarm" removal logic), the
+  `AppState` persistence half, and the actual `replan()` wiring, whose sharpest case is today's
+  alarm surviving even though its own time has already passed by the moment replan runs (it could
+  still be ringing).
+- `test/app_state_theme_mode_test.dart` and `test/page_appearance_theme_test.dart`
+  (`docs/TODO.md` T-51): a new "Follow System Theme" option. `AppState.themeMode` combines it with
+  the existing manual `darkMode` value in one place; the Settings > Appearance screen greys out the
+  Dark Mode switch (`onChanged: null`, not a no-op callback) while following the system, and a
+  disabled `Switch` genuinely can't be toggled by tapping it.
 - `test/manual_alarm_repeat_test.dart` and `test/handler_manual_alarm_rearm_test.dart`
   (`docs/TODO.md` T-14): a `ManualAlarm`'s `repeatOnDays` is now honoured both when first picking a
   day (`nextManualOccurrence`) and by re-arming on every dismiss (`Handler.onAlarmHandled`, injecting

@@ -1181,9 +1181,9 @@ that is the basis a decision can be formulated against.
   (the tap-to-open-sheet interaction and the X mark appearing/disappearing with the toggle).
 - **Requirement:** R2
 
-### T-141 · Past scheduled alarms pile up in the list forever
+### T-141 · Past scheduled alarms pile up in the list forever — FIXED (2026-09-19)
 
-- [ ] Prune scheduled alarms that are safely in the past, without touching FR-18's rule that a past
+- [x] Prune scheduled alarms that are safely in the past, without touching FR-18's rule that a past
       alarm is never cancelled.
 - **Why:** seen on the Linux desktop build on 2026-09-17: the Scheduled tab listed seven alarms,
   11. to 17. September, on the 17th. Six of them are for days that are over. They look live - each
@@ -1200,17 +1200,47 @@ that is the basis a decision can be formulated against.
   gone - harmless, because `pruneDisabledDays` clears it, but it shows these entries are not inert.
 - **Done when:** an alarm older than the retention bound disappears from the list, an alarm from
   *today* does not (it may still be ringing), and a test covers both - the second case is the one
-  that matters, and a naive "remove everything in the past" fix gets it wrong.
+  that matters, and a naive "remove everything in the past" fix gets it wrong. ✓
+- **Fix:** `pruneScheduledAlarms` (`lib/models/scheduling/apply_alarms.dart`), a pure function kept
+  deliberately apart from `planAlarmSync`'s own removal loop - that loop's job is safety-critical
+  ("never touch anything that could be ringing") and stays exactly as narrow as before. Uses the
+  same "yesterday" retention bound `replan()` already computes for `pendingDayValues`/`disabledDays`
+  (T-82), keyed by `isoDate(alarm.time)` - the same wall-clock frame FR-21's toggle already uses for
+  `disabledDays`, so a day is never split across two different readings of "which day is this
+  alarm on". Wired into `replan()` right alongside the existing `pruneDisabledDays` call.
+- **The "assign and persist" half lives in `AppState.setPrunedScheduledAlarms`,** not inside the
+  pure function itself: `AppState` currently imports nothing from `lib/models/scheduling/` (every
+  scheduling file imports it, never the reverse), and giving it the retention policy directly would
+  have been the first crack in that one-way layering. `replan()` computes the pruned list with
+  `pruneScheduledAlarms` (which it already has access to) and hands the result to `AppState`, which
+  only assigns, persists (`_saveScheduledAlarms`) and notifies.
+- **Test:** `test/prune_scheduled_alarms_test.dart` (the pure function: an old alarm is dropped,
+  today's alarm survives even though its own time has already passed, the retention-bound day
+  itself is kept and the day before it is not, a future alarm is always kept, a mixed list drops
+  only the stale ones), `test/app_state_prune_scheduled_alarms_test.dart` (persistence round trip,
+  notifies listeners, an unchanged list is a no-op), and `test/replan_prunes_scheduled_alarms_test
+  .dart` (the actual wiring: an old alarm is pruned on replan, today's alarm - already past its own
+  time by the moment replan runs, exactly the state it would be in while still ringing - is not).
 - **Requirement:** R3
 
-### T-27 · The global volume setting never reaches calendar-derived alarms
+### T-27 · The global volume setting never reaches calendar-derived alarms — STALE DUPLICATE, ALREADY RESOLVED (confirmed 2026-09-19)
 
-- [ ] Thread the configured volume through to scheduled alarms.
-- **Why:** `ScheduledAlarm` takes no volume, so calendar-derived alarms always ring at the hardcoded
-  default regardless of the user's setting — while manual alarms honour it.
-- **Evidence:** `lib/models/alarms/scheduled_alarm.dart` (no volume field) vs
-  `lib/models/alarms/manual_alarm.dart` and the volume default in `lib/app_state.dart`.
-- **Done when:** a calendar-derived alarm rings at the configured volume, asserted by a test.
+- [x] Thread the configured volume through to scheduled alarms.
+- **This was already fixed, by T-84 (2026-09-10), well before this item was picked off the ranked
+  top-10 list and looked at again.** `ScheduledAlarm` has carried a `volume` field since then
+  (`lib/models/alarms/scheduled_alarm.dart`), `applyPlannedAlarms` sets it from
+  `appState.selectedVolume` when creating a new alarm, and `planAlarmSync`'s `propertiesMatch`
+  replaces an already-armed alarm whose volume differs from the current setting - so a volume
+  change reaches alarms that already exist, not only ones planned afterward. Verified again
+  directly: `test/apply_alarms_test.dart`'s "T-84: picks up tone, volume, and gentle-wake from the
+  settings" and "T-84: a changed volume affects already-planned alarms" both pass against the
+  current code.
+- **Lesson for this list:** this entry's own wording ("carried forward from `lib/main.dart`'s old
+  TODO backlog") was never updated when T-84 closed the identical gap - the same staleness class as
+  T-07/T-03 (docs/TODO.md, 2026-09-18). Left here rather than deleted, so a duplicate discovered
+  this way stays visible instead of just vanishing.
+- **Evidence:** `lib/models/alarms/scheduled_alarm.dart` (the `volume` field);
+  `lib/models/scheduling/apply_alarms.dart` (`applyPlannedAlarms`/`propertiesMatch`).
 
 ### T-28 · Correct the stale claims in `CLAUDE.md` and `REQUIREMENTS.md` — RESOLVED (2026-09-08)
 
@@ -1344,14 +1374,30 @@ that is the basis a decision can be formulated against.
 - **Done when:** (a) a vibration switch exists and manual alarms honor it, covered by a test; (b) is
   either implemented with a test, or dropped with a written reason.
 
-### T-51 · Theme does not follow the system light/dark setting
+### T-51 · Theme does not follow the system light/dark setting — FIXED (2026-09-19)
 
-- [ ] Add a "follow system" option alongside the existing manual dark-mode toggle.
-- **Why:** `MyApp.build` sets `themeMode` from `appState.darkMode` (a manual boolean), never
-  `ThemeMode.system` - so the app cannot automatically match the OS theme, only be switched by hand.
-- **Evidence:** `lib/main.dart:106-108`; `lib/app_state.dart`'s `darkMode` getter/setter.
-- **Done when:** a "system" option exists in Settings > Appearance and actually drives `themeMode`,
-  covered by a widget test.
+- [x] Add a "follow system" option alongside the existing manual dark-mode toggle.
+- **Why:** `MyApp.build` set `themeMode` from `appState.darkMode` (a manual boolean), never
+  `ThemeMode.system` - so the app could not automatically match the OS theme, only be switched by
+  hand.
+- **Fix:** `AppState.followSystemTheme` (persisted, alongside the existing `darkMode`) and a new
+  computed `AppState.themeMode` getter that combines the two into the `ThemeMode` `MaterialApp`
+  actually takes - `ThemeMode.system` when following, otherwise `darkMode`'s manual value. Computed
+  in one place so `main.dart` can't independently re-derive it and drift, the same "one source of
+  truth" shape as every other computed `AppState` value. Turning "Follow System Theme" back off
+  restores the manual choice rather than losing it - the flag is a separate field, not a
+  replacement of `darkMode` itself.
+- **UI, per the maintainer's own spec:** a new "Follow System Theme" switch in Settings > Appearance,
+  above the Dark Mode toggle it overrides. While it's on, the Dark Mode switch is disabled
+  (`onChanged: null` - what actually makes Flutter's own `Switch` render itself greyed out, not a
+  no-op callback that leaves it looking interactive) and its label dims to
+  `Theme.of(context).disabledColor`.
+- **Test:** `test/app_state_theme_mode_test.dart` (the `themeMode` combination logic and
+  persistence) and `test/page_appearance_theme_test.dart` (the Dark Mode switch is enabled/disabled
+  correctly as "Follow System Theme" toggles, and a disabled switch genuinely can't be toggled by
+  tapping it).
+- **Evidence (before this fix):** `lib/main.dart:106-108`; `lib/app_state.dart`'s `darkMode`
+  getter/setter.
 
 ### T-52 · Several scheduling/sleep-habit options are hardcoded, not user-configurable
 

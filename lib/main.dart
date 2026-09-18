@@ -68,9 +68,10 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
       ),
-      themeMode: Provider.of<AppState>(context).darkMode
-          ? ThemeMode.dark
-          : ThemeMode.light,
+      // docs/TODO.md T-51: AppState.themeMode is the one computed value that
+      // combines darkMode and followSystemTheme - kept there so this line
+      // can't independently drift from that combination.
+      themeMode: Provider.of<AppState>(context).themeMode,
       home: appState.permissionsGranted
           ? const MyHomePage(title: 'WakeyWakey')
           : const SplashScreen(),

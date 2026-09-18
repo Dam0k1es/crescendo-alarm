@@ -36,6 +36,8 @@ class _PageAppearanceState extends State<PageAppearance> {
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         child: Column(
           children: [
+            _buildFollowSystemThemeToggle(),
+            const SizedBox(height: 16.0),
             _buildDarkModeToggle(),
             const SizedBox(height: 16.0),
             _buildAccentColorPicker(),
@@ -45,7 +47,11 @@ class _PageAppearanceState extends State<PageAppearance> {
     );
   }
 
-  Widget _buildDarkModeToggle() {
+  // docs/TODO.md T-51: "Follow System Theme" - drives AppState.themeMode
+  // to ThemeMode.system instead of the manual darkMode value. Placed above
+  // the Dark Mode toggle it overrides, since it grays that one out while on.
+  Widget _buildFollowSystemThemeToggle() {
+    final appState = context.watch<AppState>();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -53,18 +59,57 @@ class _PageAppearanceState extends State<PageAppearance> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              'Dark Mode',
+              'Follow System Theme',
               style: TextStyle(
                 fontSize: 18.0,
               ),
             ),
             Switch(
-              value: _appState.darkMode,
+              key: const Key('followSystemThemeSwitch'),
+              value: appState.followSystemTheme,
               onChanged: (value) {
-                _appState.darkMode = value;
+                _appState.followSystemTheme = value;
               },
-              activeThumbColor:
-                  context.watch<AppState>().accentColor.withValues(alpha: 0.05),
+              activeThumbColor: appState.accentColor.withValues(alpha: 0.05),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDarkModeToggle() {
+    final appState = context.watch<AppState>();
+    final followingSystem = appState.followSystemTheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Dark Mode',
+              style: TextStyle(
+                fontSize: 18.0,
+                // Greyed out to match the switch's own disabled look, so the
+                // label doesn't claim a control the user can't actually use.
+                color: followingSystem
+                    ? Theme.of(context).disabledColor
+                    : null,
+              ),
+            ),
+            Switch(
+              key: const Key('darkModeSwitch'),
+              value: appState.darkMode,
+              // null, not a no-op callback: that's what makes Switch render
+              // itself as disabled/greyed out, per the spec ("die manuelle
+              // Option ausgrauen").
+              onChanged: followingSystem
+                  ? null
+                  : (value) {
+                      _appState.darkMode = value;
+                    },
+              activeThumbColor: appState.accentColor.withValues(alpha: 0.05),
             ),
           ],
         ),
