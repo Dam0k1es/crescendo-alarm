@@ -6,6 +6,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // docs/TODO.md T-148: see settings.gradle.kts's comment on the plugin
+    // version - `:app:cyclonedxBom` (invoked from CI) writes
+    // build/reports/bom.json for osv-scanner.
+    id("org.cyclonedx.bom")
 }
 
 val keystoreProperties = Properties()
@@ -82,6 +86,33 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// docs/TODO.md T-148: scoped to exactly what ships in a release APK. Left
+// unscoped, the SBOM (and therefore osv-scanner) also picked up
+// `androidTestImplementation`/instrumentation-test infrastructure (found via
+// this project's own integration_test/androidTest setup) - `netty`,
+// pulled in transitively by `com.google.testing.platform:core` and
+// `com.android.tools.emulator:proto`, is real test-runner tooling that never
+// reaches a shipped build, and osv-scanner flagged a long list of real CVEs
+// against it. Scoping here, not by hand-listing every such CVE as an
+// exception, keeps the gate meaningful as those dependencies' versions
+// change.
+tasks.named<org.cyclonedx.gradle.CyclonedxDirectTask>("cyclonedxDirectBom") {
+    includeConfigs.set(listOf("releaseRuntimeClasspath"))
+}
+
+// docs/TODO.md T-148: the one real finding the scoped SBOM above turned up -
+// `device_calendar` transitively pulls `gson:2.8.8`, which carries
+// GHSA-4jrv-ppp4-jm57/CVE-2022-25647 (a deserialization type-confusion
+// issue, CVSS 7.7). Forced to the fixed 2.8.9 rather than accepted as an
+// exception: a same-minor-series patch release is exceedingly unlikely to
+// break anything `device_calendar` does with it, and there is no reason to
+// carry a fixable HIGH when the fix is a one-line version bump.
+configurations.all {
+    resolutionStrategy {
+        force("com.google.code.gson:gson:2.8.9")
+    }
 }
 
 dependencies {

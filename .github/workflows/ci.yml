@@ -206,6 +206,11 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-modules-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-modules-
+      - name: Install osv-scanner
+        run: |
+          curl -sSfL -o /usr/local/bin/osv-scanner \
+            "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64"
+          chmod +x /usr/local/bin/osv-scanner
 
       - name: Decode signing key
         run: |
@@ -226,6 +231,23 @@ jobs:
           BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
           "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --verbose \
             build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Scan native Android dependencies (osv-scanner)
+        # docs/TODO.md T-148: security-gate's own osv-scanner step only ever
+        # covered pubspec.lock (the Dart side) - the native Android
+        # dependency tree (AndroidX, media3, the camera plugin's own
+        # transitive deps, ...) had zero SCA coverage, since this project
+        # has no gradle.lockfile for osv-scanner to read directly. The
+        # `releaseRuntimeClasspath` configuration is already fully resolved
+        # by the build above, so generating its SBOM here is cheap - the
+        # scope (`includeConfigs` in app/build.gradle.kts) deliberately
+        # excludes debug/test/androidTest configurations, which pulled in
+        # unrelated CVEs against instrumentation-test tooling that never
+        # ships (found while wiring this up: `netty`, via
+        # `com.google.testing.platform`/`com.android.tools.emulator`).
+        run: |
+          ./android/gradlew -p android :app:cyclonedxBom
+          osv-scanner --lockfile=build/app/reports/cyclonedx/bom.json
 
       - name: Clean up signing key
         if: always()
