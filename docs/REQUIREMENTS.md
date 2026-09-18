@@ -264,8 +264,13 @@ licensing obligations must be met.
 Images, audio, and other bundled assets (`assets/`) must be used with proper rights/licensing.
 
 - **Checked by:** not currently automated or documented.
-- **Status: not verified.** No record exists of where `assets/sounds/*.mp3` or the icon assets
-  came from or under what license. Needs tracking down before public release (`docs/TODO.md` T-29).
+- **Status: partially met (2026-09-17).** `assets/sounds/*.mp3`: all six bundled tones were traced
+  by metadata (ID3 tags identified a YouTube-rip and a meme remix with no redistribution licence
+  among them - see `docs/TODO.md` T-29) and replaced with Mixkit Sound Effects Free License tracks,
+  recorded per-file in `assets/sounds/CREDITS.md`. **Still open:** the icon assets
+  (`assets/icons/icon.png`, `icon_no_shadow.png`) have no recorded source or licence, and
+  inspection found no embedded metadata to trace either way - needs tracking down (or replacing,
+  as the sounds were) before public release. This is the only remaining item under T-29.
 
 ## R11 - The privacy policy is accurate and complete
 
