@@ -310,7 +310,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **383 tests across 45 files**, and CI runs them six times over -
+`flutter test` currently runs **396 tests across 49 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -383,6 +383,19 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   .getInstance()` must not block `initialized` from completing. `getPrefsInstance` is injected the
   same way `documentsDirectory`/`fetchEvents`/`now` are, so the failure is simulated without a
   platform channel.
+- `test/manual_alarm_repeat_test.dart` and `test/handler_manual_alarm_rearm_test.dart`
+  (`docs/TODO.md` T-14): a `ManualAlarm`'s `repeatOnDays` is now honoured both when first picking a
+  day (`nextManualOccurrence`) and by re-arming on every dismiss (`Handler.onAlarmHandled`, injecting
+  `setManualAlarmEnabled` since the real `alarm` plugin has no channel in `flutter test`) - a
+  platform alarm is one-shot, so only the first half would still have made "repeat" fire exactly
+  once.
+- `test/page_aboutpage_licenses_test.dart` and
+  `test/page_aboutpage_third_party_licenses_test.dart` (`docs/TODO.md` T-36): the About page's new
+  "License" (the project's own GPLv3 text, read from the bundled root `LICENSE` file) and
+  "Third-Party Licenses" (Flutter's own `showLicensePage()`) buttons. Two files, not one - the same
+  isolate-pairing quirk as `qr_scanner_gate_test.dart`/`qr_scanner_close_test.dart`: paired in one
+  file the second case hangs on `pumpAndSettle` (against `LicensePage`'s own indefinitely-animating
+  progress indicator), alone it passes cleanly.
 - `integration_test/app_test.dart`: real end-to-end tests, driven against an actual Android
   emulator in `.github/workflows/release.yml`'s `e2e-tests` job, gating the signed release build.
   Seven scenarios are covered. Three predate scheduling-v2: a manual alarm firing and being

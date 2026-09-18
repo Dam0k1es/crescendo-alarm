@@ -408,17 +408,48 @@ that is the basis a decision can be formulated against.
   were then deleted (`gh release delete ... --cleanup-tag`) to avoid leaving permanent clutter;
   `gh api .../releases` and `.../tags` both confirmed back to empty afterward.
 
-### T-14 · Per-weekday repeat is inert
+### T-14 · Per-weekday repeat is inert — FIXED (2026-09-18)
 
-- [ ] Consult `repeatOnDays` when scheduling, or remove the control.
+- [x] Consult `repeatOnDays` when scheduling.
 - **Why:** the selector is editable and persisted but never read when deciding when to fire, so
-  manual alarms are effectively one-shot (today or tomorrow) while the UI promises a weekly
+  manual alarms were effectively one-shot (today or tomorrow) while the UI promises a weekly
   pattern.
-- **Evidence:** `lib/models/alarms/manual_alarm.dart:7,17-19,25,39,53-54,74` and
-  `lib/app_state.dart:323` are construction, serialization and comparison only — no scheduling
-  decision reads it.
-- **Done when:** an alarm set to repeat on specific weekdays fires on exactly those days, covered
-  by a test over the production scheduling function.
+- **Evidence (before this fix):** `lib/models/alarms/manual_alarm.dart:7,17-19,25,39,53-54,74` and
+  `lib/app_state.dart:323` were construction, serialization and comparison only — no scheduling
+  decision read it.
+- **Fix, part 1 - picking the right day:** `nextManualOccurrence` (`lib/models/alarms/
+  manual_alarm_enable.dart`) now takes `repeatOnDays` and searches up to a week ahead for the
+  earliest candidate that is both after `now` and falls on a selected day, rather than always
+  resolving to "today or tomorrow". It is the single function `AppState._getAlarmTime` (creating an
+  alarm), `applyManualAlarmEnabled` (the FR-21 toggle), and `Handler.onAlarmHandled` (see part 2)
+  all go through - by design, so none of the three can resolve the same alarm to a different day
+  than the others would (that guarantee predates this fix and is exactly why the signature was
+  extended in place rather than adding a second function).
+- **Fix, part 2 - actually repeating, not firing once:** a platform alarm is one-shot, so honouring
+  `repeatOnDays` only when first arming would still make the alarm fire exactly once, on whichever
+  selected day came first, and never again. `Handler.onAlarmHandled` - the one place every
+  dismissal path already funnels through (the Stop button, the QR gate, and T-147's auto-close) -
+  now re-arms a still-`enabled` `ManualAlarm` for its next selected day on every dismiss.
+  `ScheduledAlarm`s are deliberately excluded from this (FR-18's domain; re-arming one here would
+  reopen exactly the T-64 class of bug: a second, conflicting scheduling path).
+- **`nextWakeUpTime` (the bedtime-reminder feed, `lib/models/scheduling/next_wake_up.dart`) had to
+  change too:** it hand-rolled its own "today or tomorrow" resolution for manual alarms, which its
+  own doc comment said was correct only because nothing else acted on `repeatOnDays` either. Once
+  arming did, an independent computation here would have let the bedtime reminder recommend sleep
+  for a "tomorrow" wake-up that `repeatOnDays` says will not actually ring. Now calls
+  `nextManualOccurrence` too.
+- **Test:** `test/manual_alarm_repeat_test.dart` (the day-search itself: a single selected weekday,
+  wrapping across a week boundary, today's slot already passed with today selected, and the
+  no-day-selected safety net), `test/handler_manual_alarm_rearm_test.dart` (the re-arm-on-dismiss
+  wiring, via an injected `setManualAlarmEnabled` - the real `alarm` plugin has no channel in
+  `flutter test`), `test/disabled_manual_alarm_test.dart` (unchanged, still green - confirms the
+  extended signature doesn't disturb the existing FR-21 toggle behaviour with every day selected),
+  and a new case in `test/next_wake_up_test.dart` for the bedtime-reminder fix.
+- **Behaviour change worth knowing:** the alarm-creation dialog pre-selects only the current
+  weekday (`screen_alarms.dart`), which most users never touch - a manual alarm created and left
+  alone now silently becomes "repeat weekly on the day it was created", where before it fired once
+  and then sat inert until manually re-armed. This was already what the UI's weekday-picker
+  promised; it had simply never been true until now.
 
 ### T-15 · The gentle-wake ramp has no evidence of any kind — RESOLVED for the doc route (2026-09-08)
 
@@ -547,14 +578,30 @@ that is the basis a decision can be formulated against.
   to an end user - that's T-36, unchanged by this fix.
 - **Requirement:** R9
 
-### T-36 · The app has no third-party licence or notice surface
+### T-36 · The app has no third-party licence or notice surface — FIXED (2026-09-18)
 
-- [ ] Add a licences screen (e.g. `showLicensePage`) reachable from the About page.
-- **Why:** Flutter embeds the dependency notices in the binary, but nothing in the app displays
+- [x] Add a licences screen (e.g. `showLicensePage`) reachable from the About page.
+- **Why:** Flutter embeds the dependency notices in the binary, but nothing in the app displayed
   them, so the notice-retention obligations of the BSD/MIT/Apache dependencies — and GPLv3's own
-  requirement to make the licence available to the user — are not met in the shipped product.
-- **Evidence:** `grep -rn "showLicensePage\|LicensePage\|NOTICES" lib/` → 0 hits.
-- **Done when:** a user can read the licence and third-party notices from inside the app.
+  requirement to make the licence available to the user — were not met in the shipped product.
+- **Evidence (before this fix):** `grep -rn "showLicensePage\|LicensePage\|NOTICES" lib/` → 0 hits.
+- **Fix:** two buttons at the bottom of the About page (`lib/screens/settings/page_aboutpage.dart`):
+  - **"License"** opens a new `PageLicense` (`lib/screens/settings/page_license.dart`) showing the
+    project's own GPLv3 text as plain, selectable text - not Markdown, since a licence's exact
+    indentation and line breaks are part of the document, and a Markdown renderer reflowing it is
+    exactly the corruption this page exists to avoid. It reads the real root `LICENSE` file
+    directly (`pubspec.yaml` now bundles `LICENSE` itself as an asset, not a copy under `assets/`),
+    so there is exactly one copy to ever go out of sync.
+  - **"Third-Party Licenses"** calls Flutter's own `showLicensePage()`, which already collects
+    every dependency's licence text at build time - the fix here was making it reachable at all,
+    not collecting anything new.
+- **Test:** `test/page_aboutpage_licenses_test.dart` and
+  `test/page_aboutpage_third_party_licenses_test.dart`. Two files, not one, for the same reason
+  `qr_scanner_gate_test.dart`/`qr_scanner_close_test.dart` are split: the two cases fail paired in
+  one isolate but pass alone and in every other pairing tried - `LicensePage`'s own progress
+  indicator animates indefinitely while it enumerates every bundled licence, which is also why that
+  test uses explicit `pump()` calls rather than `pumpAndSettle()` (which would wait on it forever).
+- **Done when:** a user can read the licence and third-party notices from inside the app. ✓
 - **Requirement:** R9
 
 ### T-37 · The E2E suite runs on no routine trigger — RESOLVED (2026-09-09)

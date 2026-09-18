@@ -256,9 +256,11 @@ licensing obligations must be met.
   **Outstanding:** GPLv3's Corresponding Source obligation is discharged by making the repository
   public, and that has to actually happen **before the first release to anyone else**
   (`docs/TODO.md` T-34). Until then nothing is conveyed - builds go to the maintainer's own test
-  devices, which is not distribution. Also still open, and real work rather than decisions: no
-  in-app licence/notice surface for dependencies (T-36) and no per-file licence headers (T-48). An
-  automated `license_checker`-style scan remains worth adding as a second line of defence.
+  devices, which is not distribution. **Fixed (2026-09-18):** the app previously had no in-app
+  licence/notice surface at all - the About page now links both the project's own GPLv3 text and
+  Flutter's collected third-party notices (`docs/TODO.md` T-36). Still open, and real work rather
+  than a decision: no per-file licence headers (T-48). An automated `license_checker`-style scan
+  remains worth adding as a second line of defence.
 
 ## R10 - All bundled assets are properly licensed for use
 
