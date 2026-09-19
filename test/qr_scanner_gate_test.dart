@@ -214,7 +214,7 @@ void main() {
     expect(find.text('Stop alarm'), findsNothing,
         reason: 'not offered while the scanner may still be starting');
 
-    await tester.pump(const Duration(seconds: 21));
+    await tester.pump(const Duration(seconds: 11));
     await tester.pumpAndSettle();
 
     expect(find.text('Stop alarm'), findsOneWidget,
@@ -231,7 +231,7 @@ void main() {
 
     scans.add(const ScanResult('wrong'));
     await tester.pump();
-    await tester.pump(const Duration(seconds: 21));
+    await tester.pump(const Duration(seconds: 11));
     await tester.pumpAndSettle();
 
     expect(find.text('Stop alarm'), findsNothing);
@@ -252,7 +252,7 @@ void main() {
     // camera that is "running" but can never see the right code.
     scans.add(const ScanResult('wrong'));
     await tester.pump();
-    await tester.pump(const Duration(seconds: 21));
+    await tester.pump(const Duration(seconds: 11));
     await tester.pumpAndSettle();
     expect(find.text('Stop alarm'), findsNothing,
         reason: 'not yet - the shorter proof-of-life window does not apply '
@@ -260,7 +260,7 @@ void main() {
 
     scans.add(const ScanResult('still wrong'));
     await tester.pump();
-    await tester.pump(const Duration(seconds: 40));
+    await tester.pump(const Duration(seconds: 25));
     await tester.pumpAndSettle();
 
     expect(find.text('Stop alarm'), findsOneWidget,

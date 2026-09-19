@@ -651,18 +651,20 @@ that is the basis a decision can be formulated against.
 - **Real-device report, the emergency-stop bypass itself had a gap:** "wenn ich mit meinem HW
   Killswitch die Kamera deaktiviere kommt kein Notfall-Stopp-Button" (disabling the camera with a
   hardware kill-switch does not bring up the emergency stop button). Root cause: the button's
-  trigger, `_proofOfLifeTimer` (20s), is cancelled by `_noteScannerAlive()` the moment ANY scan
-  attempt runs - success, wrong code, or a plain "no code in this frame" `onScanFailure`. A hardware
-  kill-switch (or a lens physically covered) can leave the camera producing a permanently
+  trigger, `_proofOfLifeTimer` (20s at the time), is cancelled by `_noteScannerAlive()` the moment
+  ANY scan attempt runs - success, wrong code, or a plain "no code in this frame" `onScanFailure`. A
+  hardware kill-switch (or a lens physically covered) can leave the camera producing a permanently
   black/blank feed: frames keep arriving, `ReaderWidget` keeps attempting to decode them, and each
   attempt legitimately reports "no code found" - proof-of-life stays satisfied forever, which is
   indistinguishable, from this screen's side, from "the user just hasn't held the code up yet". The
   escape hatch could therefore be withheld permanently from someone whose camera is physically
   blocked, which is worse than the six already-documented "camera never even starts" failure modes
   this timer was built for - at least those left proof-of-life unsatisfied.
-- **Fix:** a second, independent `_maxScanDurationTimer` (60s) that fires regardless of
+- **Fix:** a second, independent `_maxScanDurationTimer` that fires regardless of
   `_scannerProvedAlive` - "the camera is running" and "the camera can see anything useful" are
   different questions, and only the first one was previously checked.
+- **Tightened further (2026-09-19), at the maintainer's request:** `_proofOfLifeTimeout` 20s → 10s,
+  `_maxTimeWithoutValidScan` 60s → 30s. Both escape hatches now offer themselves noticeably sooner.
 - **Tests:** `qr_scanner_gate_test.dart`'s new case keeps proof-of-life continuously satisfied
   (repeated wrong-code scans) throughout and confirms the button still appears once the longer
   timeout elapses - red before the second timer existed, confirmed by reverting it and re-running.

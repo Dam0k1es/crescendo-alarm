@@ -131,7 +131,7 @@ class _QrScannerState extends State<QrScanner> {
   /// the absence of evidence that scanning works. If nothing has been decoded
   /// after this long, the user gets a way out regardless of what any callback
   /// did or did not report.
-  static const Duration _proofOfLifeTimeout = Duration(seconds: 20);
+  static const Duration _proofOfLifeTimeout = Duration(seconds: 10);
   Timer? _proofOfLifeTimer;
 
   /// A second, longer-running timeout, independent of [_scannerProvedAlive].
@@ -148,7 +148,7 @@ class _QrScannerState extends State<QrScanner> {
   /// running for a long time with no VALID code ever found, regardless of
   /// whether individual scan attempts kept "succeeding" at producing a
   /// (wrong or empty) result.
-  static const Duration _maxTimeWithoutValidScan = Duration(seconds: 60);
+  static const Duration _maxTimeWithoutValidScan = Duration(seconds: 30);
   Timer? _maxScanDurationTimer;
 
   /// Only set when this screen was opened for a specific ringing alarm
