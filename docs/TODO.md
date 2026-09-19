@@ -925,12 +925,14 @@ that is the basis a decision can be formulated against.
       `page_aboutpage_licenses_test.dart`.
 - **Requirement:** R9
 
-### T-143 · The QR gate has never decoded through a real camera — PARTLY FIXED (2026-09-19, from a real-device report)
+### T-143 · The QR gate has never decoded through a real camera — PARTLY FIXED (2026-09-19, from two rounds of real-device reports)
 
 - [x] `cropPercent`/`tryHarder`/`tryInverted` tuned, per the maintainer's own real-device report.
-- [ ] Still open: a device trial confirming the tuned values actually decode at a realistic
-      distance/light level (this fix was reactive to a report, not a recorded trial), and
-      `scanDelay`/`scanDelaySuccess` (see below) are unchanged.
+- [x] `scanDelay` shortened, per a second round of real-device feedback (recognition worked but was
+      slow/inconsistent).
+- [ ] Still open: a device trial recording a decode at a realistic distance/light level with the
+      current, twice-tuned values (both fixes so far were reactive to reports, not a recorded
+      trial).
 - **Why:** the migration to `flutter_zxing` (T-33) changed the decoder, and nothing in any suite
       instantiates `ReaderWidget` or loads the zxing native library - the unit tests inject through
       the seam, and the E2E scenario now skips building the preview because the seam is set. A
@@ -964,20 +966,27 @@ that is the basis a decision can be formulated against.
       `setState`). A pre-existing, unrelated layout bug was hit by the regression test for this: the
       "code set" view's `Column` (QR image + button row) sized purely from screen *width*
       overflowed vertically on a short screen - wrapped in a `SingleChildScrollView` while there.
-- **What to still look at:** `scanDelay` is 1000 ms and `scanDelaySuccess` 500 ms, so the gate
-      attempts roughly **one decode per second** where mobile_scanner decoded at frame rate - for a
-      half-asleep user in a dark bedroom that may still be the difference between a gate that opens
-      and one that does not, and this pass did not touch it, since the report didn't point at it.
+- **Second real-device report (2026-09-19, after the first fix): recognition works, but is slow
+      and not fully reliable.** `scanDelay` - the pause `ReaderWidget` inserts between decode
+      attempts whenever a frame comes back empty - was still at the library's own default (1000ms),
+      so the gate only tried roughly once a second, where mobile_scanner (before the T-33
+      licence-driven swap) decoded at frame rate. Shortened to 150ms: every extra attempt per
+      second is another chance to catch a well-aligned, in-focus frame, which speaks to both halves
+      of the report at once - a slow gate is also a less reliable one when it means giving up
+      before a good frame comes along. `scanDelaySuccess` (the pause after a successful decode,
+      already 500ms) was not the bottleneck reported and stays as it is.
 - **Also check:** that the snooze button at the top of the screen is still hit-testable through the
       scanner's own full-bleed overlay and pinch-zoom detector.
 - **Tests:** `qr_scanner_gate_test.dart`'s existing cases are unaffected (the debug scan stream seam
-      bypasses `ReaderWidget` entirely, so it cannot exercise `cropPercent`/`tryHarder` - a real
-      device trial remains the only way to verify those); `page_deactivation_code_reactivity_test.dart`
-      (red before the `context.watch` fix - mutating `AppState.deactivationCode` directly, not
-      through the screen's own buttons, left the "no code configured" text showing).
+      bypasses `ReaderWidget` entirely, so it cannot exercise `cropPercent`/`tryHarder`/`scanDelay` -
+      a real device trial remains the only way to verify those);
+      `page_deactivation_code_reactivity_test.dart` (red before the `context.watch` fix - mutating
+      `AppState.deactivationCode` directly, not through the screen's own buttons, left the "no code
+      configured" text showing); `qr_scanner_reader_config_test.dart` (source-reading, guards
+      `codeFormat`/`scanDelay` against regressing back to their library defaults, the same
+      "forbid the channel, not the symptom" shape as `no_proprietary_dependencies_test.dart`).
 - **Done when:** a device trial records a decode at a realistic distance and light level with the
-      tuned values, and `scanDelay`/`scanDelaySuccess` are either changed or justified.
-      `docs/device-trial-checklist.md` is the place for the result.
+      now twice-tuned values. `docs/device-trial-checklist.md` is the place for the result.
 - **Requirement:** R4, R13
 
 ### T-144 · The proprietary-dependency guard cannot see the channel the offender used

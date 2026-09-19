@@ -383,10 +383,12 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   automatically, tracked by payload so a genuinely new code is prompted for again but the same one
   is not re-prompted on every rebuild.
 
-- `qr_scanner_code_format_test.dart` is a source-reading test guarding `codeFormat: Format.any` in
-  `qr_scanner.dart` - the scanner now accepts any barcode/2D symbology zxing-cpp supports, not only
-  QR, and this line cannot be exercised through the widget-test seam any more than
-  `cropPercent`/`tryHarder` can (see `docs/TODO.md` T-143), so the source is what's checked.
+- `qr_scanner_reader_config_test.dart` is a source-reading test guarding `ReaderWidget`'s tuned
+  config in `qr_scanner.dart` - `codeFormat: Format.any` (the scanner accepts any barcode/2D
+  symbology zxing-cpp supports, not only QR) and `scanDelay: 150ms` (shortened well below the
+  library's 1000ms default, from a real-device report that recognition was slow/inconsistent) -
+  neither of which can be exercised through the widget-test seam any more than `cropPercent`/
+  `tryHarder` can (see `docs/TODO.md` T-143), so the source is what's checked.
 
 - `page_deactivation_code_reactivity_test.dart` pins down a T-143 fix: `PageDeactivationCode` used
   to read `AppState` with `listen: false`, so it never rebuilt when the *separate* `QrScanner`

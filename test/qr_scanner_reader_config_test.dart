@@ -18,14 +18,26 @@ import 'package:flutter_test/flutter_test.dart';
 // "forbid the channel, not the symptom" reasoning as
 // test/no_proprietary_dependencies_test.dart.
 void main() {
+  final source =
+      File('lib/screens/scan_code/qr_scanner.dart').readAsStringSync();
+
   test('the scanner is configured to accept every symbology, not only QR',
       () {
-    final source =
-        File('lib/screens/scan_code/qr_scanner.dart').readAsStringSync();
-
     expect(source, contains('codeFormat: Format.any'),
         reason: 'ReaderWidget must not be restricted back to '
             'Format.qrCode - R13 requires any pre-existing code, including '
             'ordinary barcodes, to work');
+  });
+
+  // Real-device report (2026-09-19): recognition worked but was slow and
+  // inconsistent. `scanDelay` is the pause ReaderWidget inserts between
+  // decode attempts whenever a frame comes back empty - its own default
+  // (1000ms) meant roughly one attempt per second, where mobile_scanner
+  // (before the T-33 licence-driven swap) decoded at frame rate.
+  test('scanDelay is shortened well below the 1000ms library default', () {
+    expect(source, contains('scanDelay: const Duration(milliseconds: 150)'),
+        reason: 'a 1000ms gap between decode attempts is the difference '
+            'between a gate that opens quickly and one a half-asleep user '
+            'gives up on');
   });
 }

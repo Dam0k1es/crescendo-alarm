@@ -407,6 +407,18 @@ class _QrScannerState extends State<QrScanner> {
                   cropPercent: 0.85,
                   tryHarder: true,
                   tryInverted: true,
+                  // Real-device report (2026-09-19): recognition works but is
+                  // slow/inconsistent. `scanDelay` (default 1000ms) is the
+                  // artificial pause `ReaderWidget` inserts between decode
+                  // attempts whenever a frame comes back empty - so scanning
+                  // only tried roughly once a second, where mobile_scanner
+                  // (T-16, before the T-33 licence-driven swap) decoded at
+                  // frame rate. Shortened to close that gap: every extra
+                  // attempt per second is another chance to catch a
+                  // well-aligned, in-focus frame, which is exactly what
+                  // "slow AND unreliable" together point at - not only a
+                  // speed complaint.
+                  scanDelay: const Duration(milliseconds: 150),
                   scanDelaySuccess: const Duration(milliseconds: 500),
                   onScan: (code) => _handleScan(ScanResult(code.text)),
                   // A failed decode is still proof that frames are arriving
