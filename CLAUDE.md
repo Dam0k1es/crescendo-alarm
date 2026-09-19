@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **474 tests across 70 files**, and CI runs them six times over -
+`flutter test` currently runs **482 tests across 72 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -358,6 +358,12 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   called from `lib/main.dart` on cold start and every resume) instead of only once per process
   lifetime, and the Schedule tab's icon swaps for a spinner while that read is in flight
   (`AppState.isReadingCalendarMutex`).
+
+- T-150: `deactivation_code_description_test.dart` and `page_deactivation_code_description_test.dart`
+  cover the user-entered description that now replaces the deactivation code screen's re-rendered
+  (and therefore unrecognizable) QR image once one exists - a fresh code prompts for one
+  automatically, tracked by payload so a genuinely new code is prompted for again but the same one
+  is not re-prompted on every rebuild.
 
 - `qr_scanner_code_format_test.dart` is a source-reading test guarding `codeFormat: Format.any` in
   `qr_scanner.dart` - the scanner now accepts any barcode/2D symbology zxing-cpp supports, not only

@@ -4,8 +4,17 @@ import 'dart:math';
 class DeactivationCode {
   late final String payload;
 
+  /// A free-text reminder of what to scan, entered by the user themselves -
+  /// not the code's content. A QR code re-rendered from a scanned-in
+  /// payload looks nothing like the physical code that was actually
+  /// scanned (the same text has many equally valid QR encodings, chosen
+  /// independently by whichever encoder produced each one), so showing
+  /// that re-rendered image back to the user doesn't help them remember
+  /// what to scan next time. `null` until the user sets one.
+  String? description;
+
   // Initialize payload in constructor
-  DeactivationCode({String? payload}) {
+  DeactivationCode({String? payload, this.description}) {
     this.payload = payload ?? generateRandomHash();
   }
 
@@ -22,12 +31,16 @@ class DeactivationCode {
   String toJson() {
     return jsonEncode({
       'payload': payload,
+      'description': description,
     });
   }
 
   factory DeactivationCode.fromJson(String jsonString) {
     final data = jsonDecode(jsonString);
     final payload = data['payload'];
-    return DeactivationCode(payload: payload);
+    // Absent for data saved before this field existed - falls back to null
+    // rather than throwing.
+    final description = data['description'] as String?;
+    return DeactivationCode(payload: payload, description: description);
   }
 }

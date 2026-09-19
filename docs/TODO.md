@@ -1241,6 +1241,44 @@ that is the basis a decision can be formulated against.
   (the tap-to-open-sheet interaction and the X mark appearing/disappearing with the toggle).
 - **Requirement:** R2
 
+### T-150 · The deactivation code screen showed a QR image the user couldn't recognize — FIXED (2026-09-19)
+
+- [x] Let the user attach a free-text description to the deactivation code, shown instead of the
+      re-rendered QR image, so they always know what to scan.
+- **Why:** carried forward from real-device use of R13. `PageDeactivationCode` always re-renders a
+      fresh QR image from the stored payload (`QrImageView(data: code.payload, ...)`) - but a QR
+      code is not a fixed picture for a given string: the same text has many equally valid
+      encodings (error-correction level, version/size, mask pattern, encoding mode all vary
+      independently by encoder), so the app's own re-rendered image looks nothing like whatever
+      physical QR code or barcode the user actually scanned. Detection still worked correctly
+      (`isDeactivationCodeValid` compares the decoded *text*, never an image), but the user had no
+      way to tell from the screen what object to go find and scan again.
+- **Fix:** `DeactivationCode` gained an optional `description` field (persisted alongside
+      `payload`, `null` for data saved before this existed - `fromJson` tolerates the missing key).
+      `PageDeactivationCode` prompts for one (`_showDescriptionDialog`) the moment a code with none
+      exists - whether just imported or just generated - scheduled via
+      `WidgetsBinding.addPostFrameCallback` rather than called directly during `build()` (which
+      would try to push a dialog route mid-build). Tracked by the code's own payload
+      (`_promptedForPayload`), not a bare flag, so a genuinely new code (after Remove, or a fresh
+      Import) is prompted for again without re-prompting on every rebuild of the same one. Once a
+      non-empty description exists, it replaces the QR image entirely rather than being shown
+      alongside it (the image conveys nothing useful once something better exists); an "Edit
+      description" button stays available either way. The prompt is skippable (`description` stays
+      `null`, and the QR image is shown as the fallback - still useful for a *generated* code, which
+      the app itself is the sole source of, unlike an imported one).
+- **A caught mistake:** disposing the dialog's `TextEditingController` immediately after
+      `showDialog` returned raced its own closing transition, which was still reading the
+      controller through its `TextField` ("A TextEditingController was used after being disposed").
+      Left undisposed instead - a short-lived dialog's controller going out of scope with it is a
+      negligible cost against a real crash.
+- **Tests:** `deactivation_code_description_test.dart` (default `null`, `toJson`/`fromJson`
+      round-trip, tolerates data saved before the field existed);
+      `page_deactivation_code_description_test.dart` (the prompt appears for a fresh code and
+      saving replaces the QR image; skipping leaves the QR image showing; the same code is not
+      re-prompted on an unrelated rebuild; a genuinely new code is prompted for again; "Edit
+      description" reopens the dialog pre-filled).
+- **Requirement:** R13
+
 ### T-141 · Past scheduled alarms pile up in the list forever — FIXED (2026-09-19)
 
 - [x] Prune scheduled alarms that are safely in the past, without touching FR-18's rule that a past
