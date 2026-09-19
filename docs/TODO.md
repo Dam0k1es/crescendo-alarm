@@ -1553,11 +1553,19 @@ that is the basis a decision can be formulated against.
 - **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x48` (see T-31);
   `lib/screens/schedule/calendar.dart`; `lib/screens/schedule/screen_schedule.dart`'s
   `_showCalendarSelectionSheet`.
+- **Bug found and fixed the same day, via real-device use, not review:** the sheet's list of
+  calendars was a plain, non-scrolling `Column` - a device with several accounts (each contributing
+  its own holiday/birthday calendars) overflowed it ("A RenderFlex overflowed by N pixels on the
+  bottom"), since nothing there could shrink to fit. Fixed by making the sheet `isScrollControlled`
+  and wrapping the calendar list in `Flexible(child: ListView(shrinkWrap: true, ...))`, so the sheet
+  grows up to the full screen height before the list itself starts scrolling.
 - **Tests:** `app_state_calendar_selection_test.dart` (default-selected, deselect/reselect
   round-trip, clearing an override rather than freezing a flag, notifies listeners);
   `screen_schedule_calendar_selection_test.dart` (the corner button opens the sheet with one row
   per calendar; unchecking one updates `AppState` and is still reflected after closing and
-  reopening the sheet; an empty calendar list shows a fallback message instead of an empty sheet).
+  reopening the sheet; an empty calendar list shows a fallback message instead of an empty sheet;
+  twenty calendars at a narrow screen width no longer overflow - red before the
+  `isScrollControlled`/`Flexible`/`ListView` fix, reproducing the real-device report exactly).
 
 ### T-55 · Wrong "already fetched" answer for any day that isn't its own week's start — FIXED (2026-09-18)
 

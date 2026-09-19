@@ -91,4 +91,24 @@ void main() {
 
     expect(find.text('No calendars found on this device.'), findsOneWidget);
   });
+
+  testWidgets(
+      'a device with many calendars does not overflow the sheet',
+      (tester) async {
+    // A real device with several accounts (each with its own holiday/
+    // birthday calendars) can easily have a dozen+ calendars - the sheet's
+    // plain, non-scrolling Column used to overflow rather than scroll.
+    calendars = List.generate(
+      20,
+      (i) => Calendar(id: 'cal-$i', name: 'Calendar number $i', color: 0xFF0000FF),
+    );
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpSchedule(tester);
+
+    await tester.tap(find.byTooltip('Calendars'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
 }

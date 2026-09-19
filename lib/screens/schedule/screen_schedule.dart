@@ -295,45 +295,68 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
   void _showCalendarSelectionSheet() {
     showModalBottomSheet<void>(
       context: context,
+      // A device with many calendars (several accounts, each with its own
+      // holiday/birthday calendars) previously overflowed the bottom sheet -
+      // the plain, non-scrolling Column below has no way to shrink to fit,
+      // and without this the sheet's own default height cap made that worse
+      // by leaving even less room. `isScrollControlled` lets the sheet grow
+      // up to the full screen height before the list inside needs to
+      // scroll at all.
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8.0),
-              child: Text('Calendars', style: TextStyle(fontSize: 18.0)),
-            ),
-            if (calendars.isEmpty)
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text('No calendars found on this device.'),
+                padding: EdgeInsets.symmetric(vertical: 8.0),
+                child: Text('Calendars', style: TextStyle(fontSize: 18.0)),
               ),
-            for (final calendar in calendars)
-              StatefulBuilder(
-                builder: (context, setSheetState) => CheckboxListTile(
-                  title: Text(
-                    // docs/TODO.md T-89: regularly the user's own account
-                    // email address (Google/Exchange) - never logged, but
-                    // fine to show here since it's the user's own device.
-                    calendar.name ?? calendar.id ?? 'Unnamed calendar',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              if (calendars.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('No calendars found on this device.'),
+                )
+              else
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final calendar in calendars)
+                        StatefulBuilder(
+                          builder: (context, setSheetState) =>
+                              CheckboxListTile(
+                            title: Text(
+                              // docs/TODO.md T-89: regularly the user's own
+                              // account email address (Google/Exchange) -
+                              // never logged, but fine to show here since
+                              // it's the user's own device.
+                              calendar.name ?? calendar.id ?? 'Unnamed calendar',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            value: appState.isCalendarSelected(calendar.id!),
+                            onChanged: (value) {
+                              appState.setCalendarSelected(
+                                  calendar.id!, value ?? true);
+                              setSheetState(() {});
+                              // The same trigger _showIgnoreEventSheet uses
+                              // above: a change here feeds hardFloor
+                              // derivation (replan.dart) and must take
+                              // effect immediately, not on the next
+                              // incidental replan.
+                              runCheckpointSafely(appState,
+                                  trigger: CheckpointTrigger.settingsChanged);
+                              unawaited(resyncCalendarData(appState));
+                            },
+                          ),
+                        ),
+                    ],
                   ),
-                  value: appState.isCalendarSelected(calendar.id!),
-                  onChanged: (value) {
-                    appState.setCalendarSelected(calendar.id!, value ?? true);
-                    setSheetState(() {});
-                    // The same trigger _showIgnoreEventSheet uses above: a
-                    // change here feeds hardFloor derivation (replan.dart)
-                    // and must take effect immediately, not on the next
-                    // incidental replan.
-                    runCheckpointSafely(appState,
-                        trigger: CheckpointTrigger.settingsChanged);
-                    unawaited(resyncCalendarData(appState));
-                  },
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
