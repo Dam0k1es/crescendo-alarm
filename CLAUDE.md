@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **487 tests across 73 files**, and CI runs them six times over -
+`flutter test` currently runs **488 tests across 74 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -358,6 +358,11 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   called from `lib/main.dart` on cold start and every resume) instead of only once per process
   lifetime, and the Schedule tab's icon swaps for a spinner while that read is in flight
   (`AppState.isReadingCalendarMutex`).
+
+- `licence_header_test.dart` covers T-48: every `.dart` file under `lib/` now carries a GPLv3
+  copyright/licence header (recommended GPLv3 practice, and expected by F-Droid's inclusion
+  review specifically) - a source-reading test in the same shape as
+  `no_proprietary_dependencies_test.dart`, guarding against a new file being added without it.
 
 - `screen_alarms_weekday_pills_test.dart` covers T-152: a manual alarm's `repeatOnDays` now shows
   as a row of small pills directly on the alarm list, not only inside the edit dialog. Fixing this

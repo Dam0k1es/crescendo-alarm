@@ -298,9 +298,10 @@ licensing obligations must be met.
   Apache-2.0/BSD-3 notices for `flutter_zxing`'s compiled-in native code (zxing-cpp/librscpp, zint)
   were also missing - invisible to Flutter's own licence collector, which only reads package-root
   `LICENSE` files, not CMake-compiled C/C++ - and are now shipped as a hand-assembled asset,
-  reachable from the same About page (`docs/TODO.md` T-142). Still open, and real work rather than
-  a decision: no per-file licence headers (T-48). An automated `license_checker`-style scan remains
-  worth adding as a second line of defence.
+  reachable from the same About page (`docs/TODO.md` T-142). **Fixed (2026-09-19):** every `.dart`
+  source under `lib/` now carries a GPLv3 copyright/licence header, guarded against regressing by
+  `test/licence_header_test.dart` (`docs/TODO.md` T-48). An automated `license_checker`-style scan
+  remains worth adding as a second line of defence for the dependency tree specifically.
 
 ## R10 - All bundled assets are properly licensed for use
 

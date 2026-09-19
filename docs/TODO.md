@@ -1889,13 +1889,24 @@ that is the basis a decision can be formulated against.
   `adjustTime/`'s case also `stdin.readLineSync()`", matching that only one script uses it.
 - **Done when:** each statement in the file is either true or removed.
 
-### T-48 · No source file carries a licence header
+### T-48 · No source file carried a licence header — FIXED (2026-09-19)
 
-- [ ] Decide whether to add per-file GPLv3 notices.
-- **Why:** none of the Dart sources carry a copyright or licence header, so a file copied out of the
-  repository loses any licence trace. This is recommended GPLv3 practice rather than a strict
-  requirement — the point is to make it a recorded decision instead of an oversight.
-- **Done when:** either headers exist, or a tracked note says they were deliberately omitted.
+- [x] Add per-file GPLv3 notices.
+- **Why:** none of the Dart sources carried a copyright or licence header, so a file copied out of
+  the repository lost any licence trace. Recommended GPLv3 practice rather than a strict
+  requirement - and weighs more than "recommended" for an F-Droid submission specifically, whose
+  inclusion review commonly expects clear per-file licensing across the whole tree.
+- **Fix:** the FSF's own short-form notice, naming the actual project rather than the generic
+  `<program>` placeholder, prepended to all 45 `.dart` files under `lib/` (the standard "Copyright
+  (C) 2026 Dam0k1es … This file is part of WakeyWakey … WITHOUT ANY WARRANTY … GNU General Public
+  License … <https://www.gnu.org/licenses/>" text). Applied as a pure mechanical prepend - no
+  reformatting bundled in, even where `dart format` found unrelated, pre-existing line-length drift
+  in a handful of files while checking the result; that drift predates this change and is out of
+  scope for it.
+- **Tests:** `test/licence_header_test.dart` - a source-reading test (the same shape as
+  `test/no_proprietary_dependencies_test.dart`/`test/diag_log_api_test.dart`) asserting every file
+  under `lib/` contains the notice, so a new file added without it, or an existing one stripped
+  during an edit, fails the suite instead of silently regressing.
 - **Requirement:** R9
 
 ### T-54 · No custom Android notification icon
