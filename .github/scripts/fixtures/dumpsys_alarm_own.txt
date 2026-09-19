@@ -1,8 +1,40 @@
-  56 pending alarms: 
-    RTC_WAKEUP #7: Alarm{9c1f2a0 type 0 origWhen 1789117980000 whenElapsed 12279319 com.wakeywakey.wakeywakey}
-      type=RTC_WAKEUP origWhen=2026-09-11 10:13:00.000 window=0 exactAllowReason=policy_permission repeatInterval=0 count=0 flags=0x9
-      operation=PendingIntent{a1b2c3: PendingIntentRecord{d4e5f6 com.wakeywakey.wakeywakey broadcastIntent}}
-      tag=*alarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
-    RTC_WAKEUP #8: Alarm{7e3d1b5 type 0 origWhen 1789204380000 whenElapsed 98679319 u0a161}
-      type=RTC_WAKEUP origWhen=2026-09-12 10:13:00.000 window=0 exactAllowReason=policy_permission repeatInterval=0 count=0 flags=0x9
-  Pending alarms per uid: [1000:13, 1002:1, u0a128:35, u0a161:2]
+    Active uids: [u0a75 u0a76 u0a79 u0a83 u0a122 u0a148 u0a150 u0a155 u0a157 u0a159 u0a162 u0a163 u0a166 u0a173 u0a189 u0a209 u0a224 u0a246 u0a276 u0a310]
+  Last OP_SCHEDULE_EXACT_ALARM: [1000:allow, 2000:default, u0a95:default, u0a105:default, u0a109:default, u0a113:default, u0a118:default, u0a153:default, u0a154:default, u0a157:default, u0a194:allow, u0a224:default, u0a225:default, u0a228:default, u0a229:default, u0a256:default, u0a262:default, u0a282:default, u0a298:default, u0a310:default]
+    RTC_WAKEUP #2: Alarm{d4fdb3b type 0 origWhen 1789852500000 whenElapsed 8814018 com.wakeywakey.wakeywakey}
+      tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+      operation=PendingIntent{a6e8258: PendingIntentRecord{4d47fb1 com.wakeywakey.wakeywakey broadcastIntent}}
+    RTC_WAKEUP #7: Alarm{68d65a5 type 0 origWhen 1789853401000 whenElapsed 9715018 com.wakeywakey.wakeywakey}
+      tag=*walarm*:com.wakeywakey.wakeywakey/me.carda.awesome_notifications.DartScheduledNotificationReceiver
+      operation=PendingIntent{1cabd7a: PendingIntentRecord{f6a092b com.wakeywakey.wakeywakey broadcastIntent}}
+    RTC_WAKEUP #33: Alarm{8989a06 type 0 origWhen 1789884000000 whenElapsed 40314018 com.wakeywakey.wakeywakey}
+      tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+      operation=PendingIntent{e8b98c7: PendingIntentRecord{ae6def4 com.wakeywakey.wakeywakey broadcastIntent}}
+    RTC_WAKEUP #47: Alarm{c4a46fd type 0 origWhen 1789970400000 whenElapsed 126714018 com.wakeywakey.wakeywakey}
+      tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+      operation=PendingIntent{1ef7ff2: PendingIntentRecord{3216643 com.wakeywakey.wakeywakey broadcastIntent}}
+    RTC_WAKEUP #49: Alarm{371a93e type 0 origWhen 1790056800000 whenElapsed 213114018 com.wakeywakey.wakeywakey}
+      tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+      operation=PendingIntent{cea239f: PendingIntentRecord{285ccec com.wakeywakey.wakeywakey broadcastIntent}}
+    RTC_WAKEUP #54: Alarm{eb93df0 type 0 origWhen 1790141400000 whenElapsed 297714018 com.wakeywakey.wakeywakey}
+      tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+      operation=PendingIntent{d5eaf69: PendingIntentRecord{ef8ddee com.wakeywakey.wakeywakey broadcastIntent}}
+    RTC_WAKEUP #55: Alarm{7a9328f type 0 origWhen 1790227800000 whenElapsed 384114018 com.wakeywakey.wakeywakey}
+      tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+      operation=PendingIntent{a0c491c: PendingIntentRecord{d29d925 com.wakeywakey.wakeywakey broadcastIntent}}
+    RTC_WAKEUP #57: Alarm{5c3e2a1 type 0 origWhen 1790314200000 whenElapsed 470514018 com.wakeywakey.wakeywakey}
+      tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+      operation=PendingIntent{cfabcc6: PendingIntentRecord{36ae487 com.wakeywakey.wakeywakey broadcastIntent}}
+    RTC_WAKEUP #58: Alarm{d8e9fb4 type 0 origWhen 1790454780000 whenElapsed 611094018 com.wakeywakey.wakeywakey}
+      tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+      operation=PendingIntent{39b07dd: PendingIntentRecord{755df52 com.wakeywakey.wakeywakey broadcastIntent}}
+  Pending alarms per uid: [1000:13, 1002:1, 1073:3, u0a75:3, u0a79:2, u0a95:2, u0a118:1, u0a153:1, u0a154:1, u0a162:2, u0a194:10, u0a222:5, u0a276:1, u0a282:1, u0a310:9]
+    u0a310:
+          type=RTC_WAKEUP tag=*walarm*:com.wakeywakey.wakeywakey/me.carda.awesome_notifications.DartScheduledNotificationReceiver
+          type=RTC_WAKEUP tag=*walarm*:com.wakeywakey.wakeywakey/me.carda.awesome_notifications.DartScheduledNotificationReceiver
+          type=RTC_WAKEUP tag=*walarm*:com.wakeywakey.wakeywakey/me.carda.awesome_notifications.DartScheduledNotificationReceiver
+          type=RTC_WAKEUP tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+          type=RTC_WAKEUP tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+          type=RTC_WAKEUP tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+          type=RTC_WAKEUP tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+          type=RTC_WAKEUP tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver
+          type=RTC_WAKEUP tag=*walarm*:com.wakeywakey.wakeywakey/com.gdelataillade.alarm.alarm.AlarmReceiver

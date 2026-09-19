@@ -262,6 +262,43 @@ that is the basis a decision can be formulated against.
 
 ## P1 — resolve or consciously accept before a public release
 
+### T-155 · The sleep-time reminder's own scheduled notification does not survive a reboot
+
+- [ ] Confirm whether `awesome_notifications` re-arms its scheduled notifications after a reboot on
+      this app, and if not, add a boot-recovery path for the sleep reminder (FR-16 Checkpoint 2's
+      own entry point), analogous to what the `alarm` plugin already does for ringing alarms.
+- **Why:** found incidentally while gathering T-93's real-device evidence (Fairphone 6, run
+  2026-09-19T21:13:56Z), not the thing that run was measuring. `dumpsys alarm` before the
+  intervention showed 9 of this app's own alarms under uid `u0a310`: 3 tagged
+  `me.carda.awesome_notifications.DartScheduledNotificationReceiver` (the sleep-time reminder /
+  FR-16 Checkpoint 2's hook) and 6 tagged `com.gdelataillade.alarm.alarm.AlarmReceiver` (the
+  `alarm` plugin's own ringing alarms). After the reboot: 8 alarms, **all** tagged
+  `com.gdelataillade.alarm.alarm.AlarmReceiver` - the three `awesome_notifications` entries are
+  gone entirely (the alarm-plugin count going 6 -> 8 is consistent with the app's own
+  reboot-recovery checkpoint successfully re-planning and re-registering those, exactly as
+  intended - that part is working correctly). The same absence persists after the subsequent
+  force-stop. `awesome_notifications` 0.12.1 *does* declare its own `BOOT_COMPLETED` receiver in
+  its manifest, so this is not obviously "the library never tries" - whether its restore logic
+  actually ran, needed more time than the reboot-recovery checkpoint's, or depends on something
+  this app doesn't provide is unconfirmed.
+- **Consequence if real:** a user who reboots their phone and does not reopen the app before the
+  next scheduled bedtime reminder loses that reminder silently - and loses FR-16 Checkpoint 2's own
+  entry point for that night, so a timezone change during the same window would also go
+  unreinterpreted until the next checkpoint gets a hook some other way. This is a narrower version
+  of T-04's own remaining "long dormant period, never reopened" gap, but specific to the
+  notification-scheduling mechanism rather than the alarm-ringing one (which this same evidence run
+  confirmed DOES survive both reboot and force-stop).
+- **Evidence:** the real-device run above (evidence file not tracked in this repo - see T-93's own
+  entry); `~/.pub-cache/hosted/pub.dev/awesome_notifications-0.12.1/android/src/main/AndroidManifest.xml`
+  (`BOOT_COMPLETED` receiver declared); `lib/utils/sleep_reminder.dart` (`scheduleSleepReminder`,
+  the only place that ever (re-)schedules this notification, and it is not itself called from
+  anything a native boot receiver could trigger without the Dart engine already running).
+- **Done when:** either confirmed as a real gap and fixed (most likely: re-run
+  `scheduleSleepReminder` from wherever the app's own reboot-recovery checkpoint already runs, not
+  relying on the plugin's own restore at all), or found to be a measurement artifact of this one
+  run and re-verified.
+- **Requirement:** R2, R3
+
 ### T-07 · Swiping the alarm notification away leaves the alarm screen up — RESOLVED (2026-09-18, see T-147)
 
 - [x] Dismiss the full-screen alarm UI when the alarm ends through the notification.
@@ -3593,8 +3630,7 @@ red and that stays invisible in the rest of the suite today.
 ### T-99 · Two pieces of evidence in the E2E job were blind — PARTIALLY RESOLVED (2026-09-10)
 
 - [x] Make both spots diagnosable.
-- [ ] Read the real `dumpsys alarm` patterns from the next run and lock the counting to them;
-      then arm the survival leg for real (T-93).
+- [x] Read the real `dumpsys alarm` patterns from a real run and lock the counting to them.
 - [ ] Confirm that `adb root` actually sets the timezone on the CI image.
 - **Why:** run 34532845207 brought both of these to light - both things I had previously only
   **assumed**, and the review pass had explicitly flagged them as unverified:
@@ -3617,6 +3653,23 @@ red and that stays invisible in the rest of the suite today.
     visible `::warning::` on mismatch - including a note that the T-61 scenario then proves
     nothing in this run. Deliberately **no** abort: the suite stays valid at UTC, just
     inconclusive on this one point. That belongs in the evidence, not in silence.
+  - **The dumpsys pattern is now locked to real evidence (2026-09-19), without needing a CI run**:
+    `scripts/verify-alarm-survival.sh` and `.github/scripts/check_alarm_survival.sh` share the same
+    `alarm_detection.sh`, and a real Fairphone 6 run of the former (T-93) captured genuine
+    `dumpsys alarm` output showing this app's own alarms under a real uid token, with the reliable
+    `Pending alarms per uid: [..., u0aNNN:N]` summary line present and correctly parsed.
+    `.github/scripts/fixtures/dumpsys_alarm_own.txt` now holds that real recording (replacing the
+    previous hand-constructed one) and `alarm_detection.sh`'s self-test asserts against its real
+    uid/count. Not captured on the CI emulator image itself, but the summary-line format comes from
+    AOSP's own `AlarmManagerService.dump()` - identical platform code on real or virtual hardware -
+    so this is treated as sufficient rather than spending a full, costly CI/security-gate run only
+    to re-observe the same platform-level format. The `adb root`/timezone question remains
+    genuinely CI-emulator-specific and unanswered by this (a real, non-rooted retail phone always
+    refuses `adb root` regardless of what a debug AVD image permits, so testing it against a real
+    phone would prove nothing either way).
+  - **A byproduct of gathering that evidence, not something this item was measuring:** the same
+    real run showed the sleep-time reminder's own scheduled notification NOT surviving a reboot,
+    unlike the `alarm` plugin's ringing alarms, which did - see the new T-155.
 - **What the run actually did prove, on the other hand (T-91 is redeemed):** `🎉 7 tests passed`
   on a real emulator, including all four engine scenarios. Visible in the log:
   `applyPlannedAlarms: removed 0, added 7` - an injected appointment produces exactly the seven

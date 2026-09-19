@@ -8,17 +8,24 @@
   whereupon the script reported an unfounded "FAIL". Every future pattern
   must return **0** against this file.
 
-- **`dumpsys_alarm_own.txt` is CONSTRUCTED, not a recording.** What one of
-  this app's own alarms actually looks like in `dumpsys alarm` has never
-  been observed on this emulator image to this day. The file reproduces
-  the AOSP format and covers both plausible shapes: one line that carries
-  the package name, and one where only the uid token appears. It therefore
-  does **not** prove that detection actually works in reality — it only
-  prevents someone from trivially satisfying the negative test by having
-  the pattern match nothing at all any more.
-
-  Once a run actually shows one of the app's own alarms, that real output
-  belongs here instead, and this paragraph should be struck.
+- **`dumpsys_alarm_own.txt` is a real recording (docs/TODO.md T-99, 2026-09-19).**
+  Taken verbatim (aside from being the `grep`-filtered excerpt
+  `verify-alarm-survival.sh` actually captures, not a full unfiltered dump)
+  from a real Fairphone 6 run of `scripts/verify-alarm-survival.sh`, before
+  any intervention: 9 alarms of this app's own (uid `u0a310`), a mix of the
+  `alarm` plugin's `AlarmReceiver` entries and `awesome_notifications`'
+  `DartScheduledNotificationReceiver` entries, with the reliable
+  `Pending alarms per uid: [..., u0a310:9]` summary line present. This
+  confirmed the summary-line-based counting (path (a) in
+  `alarm_detection.sh`) actually works against genuine device output, not
+  only synthetic fixtures - previously this file was constructed by hand
+  because no real recording of the app's own alarms had ever been captured.
+  It was **not** captured on the CI emulator image specifically (a real
+  phone, not GitHub's hosted AVD) - but the summary-line format comes from
+  AOSP's own `AlarmManagerService.dump()`, identical platform code
+  regardless of real vs. virtual hardware, so this is treated as sufficient
+  evidence for the emulator image too rather than requiring a separate,
+  costly CI run only to re-observe the same platform-level format.
 
 ## uiautomator_*.xml
 

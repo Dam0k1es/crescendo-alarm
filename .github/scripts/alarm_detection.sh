@@ -95,9 +95,9 @@ self_test() {
 
   # 3. An alarm of our own MUST be found - otherwise 1 and 2 could be satisfied
   #    trivially by a pattern that no longer matches anything at all.
-  n=$(count_app_alarms "$pkg" u0a161 "$FIXTURES/dumpsys_alarm_own.txt")
-  if [[ "$n" != "2" ]]; then
-    echo "SELF-TEST FAIL: own alarms: $n instead of 2 (summary line says u0a161:2)." >&2
+  n=$(count_app_alarms "$pkg" u0a310 "$FIXTURES/dumpsys_alarm_own.txt")
+  if [[ "$n" != "9" ]]; then
+    echo "SELF-TEST FAIL: own alarms: $n instead of 9 (summary line says u0a310:9)." >&2
     failed=1
   fi
 
