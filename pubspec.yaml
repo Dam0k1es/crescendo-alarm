@@ -139,6 +139,10 @@ flutter:
     - assets/icons/icon_no_shadow.png
     - assets/sounds/lollipop.mp3
     - assets/text/Privacy.md
+    # docs/TODO.md T-142: flutter_zxing compiles third-party C/C++ into the
+    # app - invisible to Flutter's own licence collector, which only reads
+    # package-root LICENSE files. page_native_notices.dart reads this.
+    - assets/text/NativeCodeNotices.txt
     # docs/TODO.md T-36: the root LICENSE file itself, bundled directly
     # (not copied into assets/) so there is exactly one copy to keep in
     # sync - page_license.dart reads it straight from here.

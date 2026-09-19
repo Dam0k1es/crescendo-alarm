@@ -41,10 +41,13 @@ absorbs without further conditions. That includes the Flutter SDK and first-part
 they arrive with `flutter_zxing`. The two permissions stripped from the manifest both come from
 `camera_android_camerax`, not from `image_picker`; see `docs/TODO.md` T-49.)
 
-`flutter_zxing` additionally compiles four bodies of third-party C/C++ into the app - zxing-cpp and
-librscpp under Apache-2.0, libzueci and libzint under BSD-3. All GPLv3-compatible, so the claim
-above holds for them too; their **notice** obligations are a separate, open matter tracked as
-`docs/TODO.md` T-142.
+`flutter_zxing` additionally compiles third-party C/C++ into the app - zxing-cpp (including its
+bundled "librscpp" Reed-Solomon implementation) under Apache-2.0, and zint under BSD-3. All
+GPLv3-compatible, so the claim above holds for them too. (An earlier pass through this document
+also listed "libzueci" as a fourth, separately-vendored body under BSD-3 - re-checked against
+`flutter_zxing` 3.0.1's actual vendored source for T-142 and found to be a misreading: zint's own
+BSD-3 files reference "zueci-compatible" data tables in a comment, but no separate zueci source
+or build target is vendored at all. Two bodies, not four.)
 
 What this document does **not** claim: that every transitive dependency has been individually
 audited. R8 scopes that out deliberately. The claim is narrower and checkable - no dependency in
@@ -68,9 +71,12 @@ was built from.
 Three further pieces of the same obligation, tracked separately because they are real work rather
 than decisions: the app still has no in-app licence/notice surface for its dependencies
 (`docs/TODO.md` T-36), the per-file licence headers question is open (T-48), and the notices for
-the statically linked native code are missing (T-142). The last one is not covered by the first:
-Flutter's licence collector reads package-root `LICENSE` files and cannot see C++ compiled by
-CMake.
+the statically linked native code (`docs/TODO.md` T-142) - **fixed 2026-09-19**. Flutter's licence
+collector reads package-root `LICENSE` files and cannot see C++ compiled by CMake, so this needed
+its own surface: `assets/text/NativeCodeNotices.txt`, hand-assembled from the vendored source's own
+SPDX headers and licence files, reproducing the full Apache-2.0 text (zxing-cpp/librscpp) and the
+full BSD-3 text with its copyright notice (zint) - reachable from the About page's new "Native Code
+Notices" button, the same pattern T-36 established for this app's own GPLv3 text.
 
 ## Bundled assets
 

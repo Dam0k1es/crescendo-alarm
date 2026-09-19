@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:wakeywakey/screens/settings/page_license.dart';
+import 'package:wakeywakey/screens/settings/page_native_notices.dart';
 
 class PageAboutpage extends StatelessWidget {
   const PageAboutpage({super.key});
@@ -72,6 +73,19 @@ class PageAboutpage extends StatelessWidget {
                     );
                   },
                   child: const Text('Third-Party Licenses'),
+                ),
+                // docs/TODO.md T-142: the QR scanner compiles third-party
+                // C/C++ into the app - invisible to showLicensePage above,
+                // which only ever reads package-root LICENSE files.
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const PageNativeNotices(),
+                      ),
+                    );
+                  },
+                  child: const Text('Native Code Notices'),
                 ),
               ],
             ),

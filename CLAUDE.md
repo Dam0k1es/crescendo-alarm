@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **459 tests across 64 files**, and CI runs them six times over -
+`flutter test` currently runs **460 tests across 65 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -358,6 +358,11 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   called from `lib/main.dart` on cold start and every resume) instead of only once per process
   lifetime, and the Schedule tab's icon swaps for a spinner while that read is in flight
   (`AppState.isReadingCalendarMutex`).
+
+- `page_aboutpage_native_notices_test.dart` covers T-142: the About page's "Native Code Notices"
+  button, added because Flutter's own licence collector (`showLicensePage`) cannot see the
+  third-party C/C++ `flutter_zxing` compiles into the app - kept in its own file for the same
+  isolate-pairing reason as the two other About-page licence tests.
 
 - T-52's three previously-hardcoded options are covered across the files that already own their
   respective areas rather than one new file: `scheduling_v2_test.dart` gained cases for

@@ -893,21 +893,36 @@ that is the basis a decision can be formulated against.
   131 packages, no issues; `trufflehog`: 0 verified/unverified secrets).
 - **Requirement:** R1
 
-### T-142 · The scanner's compiled-in native code has no licence notices
+### T-142 · The scanner's compiled-in native code has no licence notices — FIXED (2026-09-19)
 
-- [ ] Ship the Apache-2.0 and BSD-3 notices for the C/C++ that is statically linked into
-      `libflutter_zxing.so`, or decide and record why not.
-- **Why:** `flutter_zxing` vendors four bodies of third-party native code - zxing-cpp core
-      (Apache-2.0, 260 files), librscpp (Apache-2.0), libzueci (BSD-3) and libzint (BSD-3, 102
-      files). All are GPLv3-compatible, so `docs/licence-position.md`'s compatibility claim holds -
-      but Apache-2.0 §4(a) requires the licence text to travel with the distribution, and BSD-3
-      requires the copyright notices to be retained. The package ships exactly one licence file
-      (zint's), and the APK's `NOTICES` contains flutter_zxing's MIT block and nothing else.
-- **The trap:** T-36 (`showLicensePage`) would **not** fix this. Flutter's licence collector reads
-      package-root `LICENSE` files; C++ compiled by CMake is invisible to it. This needs the
-      notices assembled by hand into an asset.
-- **Done when:** the shipped app carries the Apache-2.0 text and the zint/zueci copyright notices,
-      or `docs/licence-position.md` records a reasoned decision not to.
+- [x] Ship the Apache-2.0 and BSD-3 notices for the C/C++ that is statically linked into
+      `libflutter_zxing.so`.
+- **Why:** `flutter_zxing` vendors third-party native code that is invisible to Flutter's own
+      licence collector - Apache-2.0 §4(a) requires the licence text to travel with the
+      distribution, and BSD-3 requires the copyright notices to be retained. The package ships
+      exactly one licence file (zint's), and the APK's `NOTICES` contains flutter_zxing's own MIT
+      block and nothing else.
+- **Correction found while fixing this:** the original investigation counted **four** vendored
+      bodies, including a separate "libzueci (BSD-3)". Re-checked against `flutter_zxing` 3.0.1's
+      actual vendored source: there is no separate zueci source tree or CMake target anywhere in
+      the package - only a comment in zint's own BSD-3 `eci_sb.h` noting that its generated data
+      tables are "zueci-compatible". It's **two** bodies, not four: zxing-cpp (Apache-2.0,
+      including its bundled "librscpp" Reed-Solomon implementation, `Copyright 2016 ZXing authors` /
+      `Copyright 2017-2026 Axel Waggershauser`) and zint (BSD-3, `Copyright (C) 2009-2025 Robin
+      Stuart <rstuart114@gmail.com>`, full licence text already vendored at
+      `zint/LICENSE`/per-file headers).
+- **The trap (confirmed):** T-36 (`showLicensePage`) does **not** cover this - Flutter's licence
+      collector reads package-root `LICENSE` files; C++ compiled by CMake is invisible to it.
+- **Fix:** `assets/text/NativeCodeNotices.txt` - hand-assembled from the vendored source's own SPDX
+      headers and licence files, reproducing the full Apache-2.0 text and the full BSD-3 text with
+      its copyright notice. Registered in `pubspec.yaml`; readable via a new "Native Code Notices"
+      button on the About page (`page_native_notices.dart`, mirroring `page_license.dart`'s
+      existing pattern for this app's own GPLv3 text - plain text, not Markdown, since a licence
+      text's indentation and line breaks are part of the document).
+- **Tests:** `test/page_aboutpage_native_notices_test.dart` (the button is reachable and the
+      rendered page contains both "Apache License" and the "Robin Stuart" copyright line) - kept in
+      its own file, matching the isolate-pairing precedent already documented in
+      `page_aboutpage_licenses_test.dart`.
 - **Requirement:** R9
 
 ### T-143 · The QR gate has never decoded through a real camera
