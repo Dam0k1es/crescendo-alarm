@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **484 tests across 72 files**, and CI runs them six times over -
+`flutter test` currently runs **487 tests across 73 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -358,6 +358,12 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   called from `lib/main.dart` on cold start and every resume) instead of only once per process
   lifetime, and the Schedule tab's icon swaps for a spinner while that read is in flight
   (`AppState.isReadingCalendarMutex`).
+
+- `screen_alarms_weekday_pills_test.dart` covers T-152: a manual alarm's `repeatOnDays` now shows
+  as a row of small pills directly on the alarm list, not only inside the edit dialog. Fixing this
+  also caught a German-language slip the T-151 hygiene pass had missed - `_getDayLabel` returned
+  German day abbreviations shown directly in the UI, invisible to a grep-based audit because none
+  of them are full German words.
 
 - Repository hygiene pass (2026-09-19): `meeting_data_test.dart` gained cases pinning down a real
   bug the audit found - `Meeting.hashCode` called `jsonEncode(this).hashCode`, relying on a

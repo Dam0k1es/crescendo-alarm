@@ -1336,6 +1336,32 @@ that is the basis a decision can be formulated against.
       running).
 - **Requirement:** R12
 
+### T-152 · A manual alarm's weekly repeat pattern was invisible outside the edit dialog — FIXED (2026-09-19)
+
+- [x] Show which day(s) a manual alarm rings on directly on the alarm list, as a small pill per
+      weekday.
+- **Why:** feature request. `ManualAlarm.repeatOnDays` already existed and was already editable (a
+      row of day-circles in the edit dialog), but nothing on the list itself said which days were
+      actually selected - the only way to find out was to open the edit dialog for each alarm.
+- **Fix:** `lib/screens/alarms/screen_alarms.dart`'s alarm-list tile subtitle now includes a row of
+      seven small `CircleAvatar` pills (`_buildWeekdayPills`) below the alarm's title, one per
+      weekday, filled with the accent colour when `repeatOnDays[day]` is true and a muted surface
+      colour otherwise - read-only, unlike the edit dialog's identical-looking but tappable
+      `_buildDaySelector` circles. Scheduled alarms have no `repeatOnDays` of their own (each is a
+      single calendar-derived day, not a weekly pattern), so they get no pill row.
+- **A pre-existing "everything in English" violation found and fixed along the way, missed by
+      the 2026-09-19 hygiene pass (T-151):** `_getDayLabel` (shared by the new pills and the
+      existing edit-dialog circles) returned German abbreviations shown directly in the UI - "DIE"
+      (Dienstag), "MI" (Mittwoch), "DO" (Donnerstag), "SA" (Samstag), "SO" (Sonntag) - missed by
+      that pass's grep-based audit because none of them are full German words. Now "Mo"/"Tu"/"We"/
+      "Th"/"Fr"/"Sa"/"Su" throughout, both list pills and the edit dialog now show the same,
+      correct English labels. Used two-letter labels rather than a single initial specifically to
+      keep Tuesday/Thursday and Saturday/Sunday visually distinct at a glance.
+- **Tests:** `screen_alarms_weekday_pills_test.dart` - all seven pills render for a manual alarm;
+      an active day's pill uses the accent colour and an inactive day's does not; a scheduled alarm
+      shows no pill row at all.
+- **Requirement:** R12
+
 ### T-141 · Past scheduled alarms pile up in the list forever — FIXED (2026-09-19)
 
 - [x] Prune scheduled alarms that are safely in the past, without touching FR-18's rule that a past

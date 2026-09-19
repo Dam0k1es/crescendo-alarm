@@ -147,13 +147,29 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                     fontSize: 44,
                   ),
                 ),
-                subtitle: Text(
-                  alarms[index].title,
-                  maxLines: 1,
-                  overflow: TextOverflow.fade,
-                  style: const TextStyle(
-                    fontSize: 18,
-                  ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      alarms[index].title,
+                      maxLines: 1,
+                      overflow: TextOverflow.fade,
+                      style: const TextStyle(
+                        fontSize: 18,
+                      ),
+                    ),
+                    // User request: always show which day(s) a manual alarm
+                    // rings on, at a glance, without opening the edit
+                    // dialog. Scheduled alarms have no `repeatOnDays` of
+                    // their own - each is a single calendar-derived day - so
+                    // this is manual-only.
+                    if (alarms[index] case final ManualAlarm manualAlarm)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6.0),
+                        child: _buildWeekdayPills(context, manualAlarm),
+                      ),
+                  ],
                 ),
                 trailing: Switch(
                   value: alarms[index].enabled,
@@ -586,6 +602,43 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
   }
 }
 
+/// User request: a small, read-only pill per weekday on the alarm list
+/// itself, so which day(s) a manual alarm rings on is visible without
+/// opening the edit dialog - the same information [_buildDaySelector]
+/// already lets the user set, just not shown anywhere outside that dialog
+/// before now.
+Widget _buildWeekdayPills(BuildContext context, ManualAlarm alarm) {
+  final accent = context.watch<AppState>().accentColor;
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (final day in DayOfWeek.values)
+        Padding(
+          padding: const EdgeInsets.only(right: 4.0),
+          child: CircleAvatar(
+            radius: 10,
+            backgroundColor: (alarm.repeatOnDays[day] ?? false)
+                ? accent
+                : Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Text(
+              // The full two-letter label, not just its first letter:
+              // Tuesday/Thursday and Saturday/Sunday would otherwise both
+              // read as the same single letter.
+              _getDayLabel(day),
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                color: (alarm.repeatOnDays[day] ?? false)
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
+}
+
 Widget _buildDaySelector(BuildContext context, DayOfWeek day,
     Map<DayOfWeek, bool> repeatOnDays, StateSetter setState) {
   String dayLabel = _getDayLabel(day);
@@ -611,21 +664,26 @@ Widget _buildDaySelector(BuildContext context, DayOfWeek day,
   );
 }
 
+// Repository hygiene pass (2026-09): these were German abbreviations
+// ("DIE"/Dienstag, "MI"/Mittwoch, "DO"/Donnerstag, "SA"/Samstag,
+// "SO"/Sonntag) shown directly in the UI, missed by the earlier audit
+// because none of them are full German words. Now English throughout,
+// matching the project's standing "everything in English" rule.
 String _getDayLabel(DayOfWeek day) {
   switch (day) {
     case DayOfWeek.monday:
-      return "MO";
+      return "Mo";
     case DayOfWeek.tuesday:
-      return "DIE";
+      return "Tu";
     case DayOfWeek.wednesday:
-      return "MI";
+      return "We";
     case DayOfWeek.thursday:
-      return "DO";
+      return "Th";
     case DayOfWeek.friday:
-      return "FR";
+      return "Fr";
     case DayOfWeek.saturday:
-      return "SA";
+      return "Sa";
     case DayOfWeek.sunday:
-      return "SO";
+      return "Su";
   }
 }
