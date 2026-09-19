@@ -710,15 +710,42 @@ that is the basis a decision can be formulated against.
   description.
 - **Requirement:** R4
 
-### T-39 · The QR gate is enforced only in the Flutter UI layer
+### T-39 · The QR gate is enforced only in the Flutter UI layer — FIXED (2026-09-19)
 
-- [ ] Make alarm dismissal depend on validation somewhere the UI cannot bypass.
-- **Why:** the whole gate hangs off one `Alarm.ringing` subscription in the home widget plus a
-  `context.mounted` check. If that widget is not alive when an alarm fires, nothing enforces the
-  scan requirement — the strength of the app's differentiating feature depends on widget lifecycle.
-- **Evidence:** `lib/main.dart:215-225`; `lib/models/alarms/handler.dart:140,154`.
-- **Done when:** the requirement is enforced independently of which widget happens to be mounted,
-  or the limitation is documented as accepted.
+- [x] Make alarm dismissal depend on validation somewhere the UI cannot bypass.
+- **Why:** the whole gate hung off one `Alarm.ringing` subscription in `_MyHomePageState`
+  (`lib/main.dart`) plus a `context.mounted` check. If that one screen widget was not alive when an
+  alarm fired, nothing enforced the scan requirement — the strength of the app's differentiating
+  feature depended on widget lifecycle. It also meant the gate was not wired at all while
+  `SplashScreen` was showing, before the first permission grant.
+- **Evidence (before the fix):** `lib/main.dart:215-225` (the old inline subscription);
+  `lib/models/alarms/handler.dart:140,154`.
+- **Fix:** new `lib/models/alarms/alarm_ring_gate.dart` (`AlarmRingGate`) owns the one
+  `Alarm.ringing` subscription and diffing logic, injectable (`ringingStream`, `buildHandler`) for
+  testing without the real plugin. Ownership moved from `_MyHomePageState` up to `_MyAppState` -
+  `MyApp` is now a `StatefulWidget` holding a `GlobalKey<NavigatorState>` and constructing
+  `AlarmRingGate(navigatorKey)` in its own `initState`/`dispose`. That key is passed to
+  `MaterialApp(navigatorKey: ...)`, so `AlarmRingGate` dispatches through the root Navigator's own
+  context - which lives inside `MaterialApp`'s `Overlay` (required for `Handler` to show the
+  ring/QR overlay) but, unlike any individual screen, is not recreated when `MaterialApp`'s `home:`
+  switches between `SplashScreen` and `MyHomePage`. The gate is therefore now wired for the whole
+  app run rather than for as long as `MyHomePage` specifically stays mounted - and it now also
+  covers the splash-screen window, closing a second, previously undocumented gap.
+  Deliberately **not** a bare process-wide static: `_MyHomePageState`'s own history (see the
+  comment this replaced) already found that exact failure mode once - a static subscription
+  guarded by `??=` kept the first `Handler`/`AppState` pairing alive forever, ignoring every
+  `AppState` created afterwards, which happens routinely across `flutter test`'s separate
+  `pumpWidget` calls sharing one process. Scoping the gate to `_MyAppState`'s own lifecycle (one
+  real app run, or one test's pumped widget tree) avoids reintroducing that bug while still moving
+  ownership up and out of a swappable screen widget.
+- **Tests:** `test/alarm_ring_gate_test.dart` (new) - injects a fake stream and a recording
+  `Handler` subclass (the same subclassing approach as `test/handler_overlay_retry_test.dart`,
+  since `Handler`'s constructor itself needs a `Provider<AppState>` ancestor). Covers: no dispatch
+  before any Navigator context exists (skipped, not crashed); dispatch once a context exists;
+  diffing (a repeated event for a still-ringing alarm is not re-dispatched, two simultaneous alarms
+  are each dispatched exactly once); `stop()` cancels the subscription. `test/widget_test.dart` (the
+  plain `MyApp` smoke test) continues to pass unchanged, confirming the gate does not break the
+  splash-screen path it now also covers.
 - **Requirement:** R4
 
 ### T-40 · No CI check is actually enforceable — BLOCKED ON A MAINTAINER DECISION (2026-09-09)

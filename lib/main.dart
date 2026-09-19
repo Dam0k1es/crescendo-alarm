@@ -17,15 +17,13 @@
 
 import 'dart:async';
 
-import 'package:alarm/alarm.dart';
-import 'package:alarm/utils/alarm_set.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/handler.dart';
+import 'package:wakeywakey/models/alarms/alarm_ring_gate.dart';
 import 'package:wakeywakey/models/alarms/manual_alarm.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
 import 'package:wakeywakey/models/scheduling/day_marker.dart';
@@ -62,14 +60,41 @@ Future<void> main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  // docs/TODO.md T-39: owned by the app's actual root, not by MyHomePage -
+  // see AlarmRingGate's own doc comment for why. MaterialApp's own
+  // navigatorKey (not any individual screen's BuildContext) is what
+  // AlarmRingGate needs: it lives inside the Overlay Handler shows the
+  // ring/QR screen on, but outlives any one screen, including SplashScreen
+  // and MyHomePage being swapped for each other below.
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  late final AlarmRingGate _alarmRingGate;
+
+  @override
+  void initState() {
+    super.initState();
+    _alarmRingGate = AlarmRingGate(_navigatorKey)..start();
+  }
+
+  @override
+  void dispose() {
+    _alarmRingGate.stop();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context, listen: false);
 
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'WakeyWakey',
       theme: ThemeData(
@@ -175,8 +200,6 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   late final AppState _appState;
-  StreamSubscription<AlarmSet>? _subscription;
-  AlarmSet _previousRingingAlarms = AlarmSet.empty();
   late Notifications notifications;
 
   @override
@@ -187,25 +210,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     // Load app state
     _appState = Provider.of<AppState>(context, listen: false);
 
-    // Subscribe to alarm stream. Instance-scoped (not static): a previous
-    // version used a static subscription guarded by `??=`, which meant that
-    // if MyHomePage was ever remounted with a different AppState (confirmed
-    // happening across integration_test's testWidgets, which share one app
-    // process - and a real hot-restart during development would do the same
-    // thing), the *first* Handler/AppState pairing silently kept handling
-    // every alarm forever, ignoring the new one entirely.
-    Handler handler = Handler(context);
-    _subscription = Alarm.ringing.listen((ringingAlarms) {
-      // Alarm.ringing emits the full set of currently-ringing alarms on every
-      // change, not one event per newly-ringing alarm - so diff against the
-      // previous set to call handleAlarm exactly once per alarm.
-      for (final alarm in ringingAlarms.alarms) {
-        if (!_previousRingingAlarms.contains(alarm)) {
-          handler.handleAlarm(alarm);
-        }
-      }
-      _previousRingingAlarms = ringingAlarms;
-    });
+    // docs/TODO.md T-39: the Alarm.ringing subscription used to live here -
+    // it now lives in _MyAppState (AlarmRingGate), owned by the app's root
+    // instead of this one screen widget, so the "guaranteed wake-up" gate no
+    // longer depends on MyHomePage's own mount state.
 
     notifications = Notifications();
 
@@ -325,7 +333,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(_subscription?.cancel());
     super.dispose();
   }
 
