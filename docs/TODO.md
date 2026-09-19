@@ -175,6 +175,10 @@ that is the basis a decision can be formulated against.
   never-reopened variant of the reboot/close/force-stop scenarios is confirmed (or found to fail)
   on a real device, ideally captured by `scripts/verify-alarm-survival.sh`'s evidence trail (T-93)
   rather than only observed by hand.
+- **T-93's evidence trail now exists (2026-09-19)** but does not close this item's remaining gap:
+  that run only checks registration a few seconds after reboot/force-stop, not survival over a long
+  dormant period with the app never reopened - see T-93 for that run's own result and an
+  unexplained force-stop finding worth re-measuring cleanly regardless.
 - **Requirement:** R3
 
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
@@ -3906,7 +3910,7 @@ red and that stays invisible in the rest of the suite today.
     threshold would reward the wrong thing here - trivial getter tests raise it, while frame and
     structural errors are not captured by line coverage at all.
 
-### T-93 · Alarm survival across a reboot is unverified (R3) — EVIDENCE COLLECTION SET UP (2026-09-10)
+### T-93 · Alarm survival across a reboot is unverified (R3) — FIRST REAL MEASUREMENT TAKEN, force-stop result unexplained (2026-09-19)
 
 - [x] A procedure that answers the question without a wait.
 - [x] Actually run the procedure once for real (run 34566962847, 2026-09-11).
@@ -3921,8 +3925,33 @@ red and that stays invisible in the rest of the suite today.
       bug: `tr '>' '>\n'` cannot map one character to two, so all three taps would have landed in
       the middle of the screen and the script would have reported "not measurable" while the app
       was fine.
-- [ ] Open: run the script once with a phone attached and record the result here. **Until then the
-      question remains unanswered** - the script is verified mechanism, not yet a measurement.
+- [x] Run the script once with a phone attached and record the result here.
+- **Real-device result (2026-09-19, Fairphone 6, Android 16, 15198268):** `evidence/alarm-survival-20260919T211356Z/alarm_survival.log`
+  (not tracked in this repo - gitignored, contains the device serial). 9 alarms registered before
+  the intervention; **reboot: PASS** (8 registered afterwards - the -1 is plausibly a replan-driven
+  alarm-id change around the same boundary the run itself created, not a loss, and the counting
+  only distinguishes "≥1" from "0" in the first place). **force-stop: alarms still registered (8)**
+  - this is the *opposite* of what this entry's own "What is already known from the code" section
+    below predicted ("force-stop will come back red, by design"). Checked against the actual
+    `alarm` plugin source
+    (`~/.pub-cache/hosted/pub.dev/alarm-5.12.0/android/.../services/AlarmScheduler.kt:166,172`):
+    it registers with `setExactAndAllowWhileIdle`/`setExact`, not `AlarmManager.setAlarmClock()`
+    (the one documented exemption from force-stop's alarm cancellation) - so by the documented
+    platform contract, these alarms should have been cleared, and were not.
+  - **Caveat that keeps this from being a clean confirmation:** the run's `--apk` argument was a
+    literal, unsubstituted placeholder path, so `adb install` failed and the run silently measured
+    whatever build was *already installed* on the phone from earlier manual testing, not this
+    session's `current.apk`. Unlikely to matter for a platform-level AlarmManager question (nothing
+    in this session's changes touches how alarms are registered), but noted rather than glossed
+    over. One of the three UI taps ("Manual") also could not be located - "Add A New Alarm" and
+    "Save" both succeeded regardless, most likely because the app was already showing the Manual
+    tab from a previous session (`AppState.currentPageIndex` persists), not a real UI regression.
+  - **Not yet re-measured to rule out:** a timing artifact (the script waits only 5s after
+    `force-stop` before counting), a device/Android-16-specific platform behaviour change, or an
+    effect specific to whatever build happened to already be installed. Until a clean re-run (with
+    the actual current build and, ideally, a longer post-force-stop wait) confirms it, treat
+    "alarms survive force-stop on this app" as a promising real observation, not a verified
+    property to build on or advertise.
 - **Root cause known since 2026-09-11, and structural (T-131):** `flutter test` uninstalls the app
   after the run, so Android drops its AlarmManager entries with it - there can be no alarm
   registered at the time of measurement at all. The procedure therefore needs a different way of
