@@ -220,6 +220,17 @@ adb shell appops set "$PACKAGE" SCHEDULE_EXACT_ALARM allow || true
 flutter test integration_test/app_test.dart -d emulator-5554 2>&1 | tee "$EVIDENCE_DIR/test_output.log"
 TEST_EXIT_CODE=${PIPESTATUS[0]}
 
+# docs/TODO.md T-62: does scheduling a title/body-less NotificationContent
+# actually fire onNotificationCreatedMethod, on a real/emulated device?
+# FR-16's own spec text calls this "verified from the package source, high
+# confidence" but recommends a device confirmation before relying on it -
+# there was none until this ran. Deliberately NOT gating on the first runs
+# (no effect on TEST_EXIT_CODE), same reasoning as the alarm-survival leg
+# below: this exact mechanism has never been measured on this emulator
+# image before, and an unverified leg must not block a release.
+flutter test integration_test/silent_notification_test.dart -d emulator-5554 \
+  2>&1 | tee "$EVIDENCE_DIR/silent_notification.log" || true
+
 # docs/TODO.md T-93 / docs/REQUIREMENTS.md R3: does a set alarm survive a
 # reboot? Unverified to this day - and it's the last open question of the
 # "guaranteed wake-up" product promise.

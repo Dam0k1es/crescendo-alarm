@@ -4214,8 +4214,9 @@ red and that stays invisible in the rest of the suite today.
   `Scheduler` without losing alarm functionality. Note T-61 (UTC+0 assumption) becomes
   **user-visible** the moment this lands - it should be fixed first or at the same time.
 
-### T-62 · Unverified: does a silent background notification actually trigger `onNotificationCreatedMethod`?
+### T-62 · Unverified: does a silent background notification actually trigger `onNotificationCreatedMethod`? — TEST WRITTEN, awaiting a real E2E run (2026-09-19)
 
+- [x] Write a device test that can answer the question at all.
 - [ ] Confirm on a real/emulated Android device that scheduling a
       `NotificationContent` with neither `title` nor `body` (Phase 5 step 21,
       `sleepReminderContent(reminderEnabled: false)`) actually fires
@@ -4228,9 +4229,24 @@ red and that stays invisible in the rest of the suite today.
   (`runTimezoneCheckpoint2`'s own logic, `setListeners` being wired with the right callback) is unit
   tested (`test/replan_test.dart`), but the actual OS/plugin behavior triggering the callback for a
   title/body-less notification is unverified.
+- **Test written (2026-09-19):** `integration_test/silent_notification_test.dart` schedules a real
+  title/body-less notification 15 seconds out through the app's own `Notifications.scheduleNotification`
+  (the same production call `scheduleSleepReminder` eventually makes), having first written an
+  unreachable sentinel value (`999999`, not a real UTC offset in minutes) into
+  `lastCheckedUtcOffsetMinutes` - a key `runTimezoneCheckpoint2` unconditionally rewrites on every
+  invocation, regardless of whether a timezone change is found. If that key changes away from the
+  sentinel within the wait window, `onNotificationCreatedMethod` demonstrably ran.
+  Wired into `.github/scripts/run_e2e_tests.sh`, deliberately **not gating** on its first runs (same
+  reasoning as T-93's alarm-survival leg): this exact mechanism has never been measured on the CI
+  emulator image before, and an unverified leg must not block a release.
+  Honest limit: this proves the callback fires for a real scheduled notification on a real device -
+  it does **not** prove FR-16's "including after the app has been backgrounded" clause, since
+  simulating a full OS-level background/kill from inside a widget test isn't practical here. That
+  remains genuinely unverified.
 - **Evidence:** `lib/utils/notifications.dart` (`onNotificationCreatedMethod`, `Notifications.init()`'s
-  `setListeners` call); `docs/scheduling-v2-spec.md` FR-16 "Precondition, still to be built".
-- **Done when:** confirmed on a real/emulated device (or via `integration_test/app_test.dart`, if a
-  reliable way to simulate the scheduled notification firing is found), or downgraded from
-  "recommended" if a more direct source confirms the behavior without needing a live test.
+  `setListeners` call); `docs/scheduling-v2-spec.md` FR-16 "Precondition, still to be built";
+  `integration_test/silent_notification_test.dart`.
+- **Done when:** confirmed on a real/emulated device (the test now exists; its first real run's
+  result is still needed), or downgraded from "recommended" if a more direct source confirms the
+  behavior without needing a live test.
 

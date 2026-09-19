@@ -548,14 +548,25 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   carrying the *local* reading of the planned instant (T-61), tone/volume/gentle-wake reaching the
   plugin (T-84/T-96), and a dismiss leaving the planned week registered (T-64).
   `integration_test/arm_alarm_test.dart` is a one-test prelude for the reboot-survival evidence
-  script (T-93). All seven scenarios **have now run green on a real emulator** (CI run 34532845207,
-  `🎉 7 tests passed`, with `applyPlannedAlarms: removed 0, added 7` in the device log) - that run
-  is what closed T-91, so don't describe the engine as never having been on a device.
-  Still not covered by anything: alarm survival across a reboot or force-stop (T-93 has the
-  procedure, no result yet), audible playback and the gentle-wake ramp (the CI emulator runs with
-  audio disabled), real camera QR decoding, and the real `device_calendar` boundary - every engine
-  scenario injects its events through `fetchEvents`, so the chain that produced T-61 stays
-  untested. `docs/device-trial-checklist.md` is the manual counterpart for exactly those gaps.
+  script run inside *this* CI emulator job (`.github/scripts/check_alarm_survival.sh`, T-93/T-99) -
+  a separate mechanism from `scripts/verify-alarm-survival.sh`'s real-USB-phone measurement
+  (T-93's own entry has that result; this emulator-based leg is still evidence-only, not gating,
+  and its detection patterns are still being locked down against real evidence, T-99).
+  `integration_test/silent_notification_test.dart` (T-62) is likewise a one-test, non-gating leg:
+  it schedules a real title/body-less notification and waits for `onNotificationCreatedMethod` to
+  rewrite a sentinel value, confirming on a real device that FR-16 Checkpoint 2's entry point
+  actually fires at all - previously only "verified from the package source" with no device to
+  check it on.
+  All seven `app_test.dart` scenarios **have now run green on a real emulator** (CI run
+  34532845207, `🎉 7 tests passed`, with `applyPlannedAlarms: removed 0, added 7` in the device
+  log) - that run is what closed T-91, so don't describe the engine as never having been on a
+  device.
+  Still not covered by anything: audible playback and the gentle-wake ramp (the CI emulator runs
+  with audio disabled), and the real `device_calendar` boundary - every engine scenario injects its
+  events through `fetchEvents`, so the chain that produced T-61 stays untested. Real camera QR
+  decoding is separately confirmed (T-143), but on a real device by hand, not through this
+  emulator-based suite (the CI emulator has no real camera to point at a code).
+  `docs/device-trial-checklist.md` is the manual counterpart for exactly those gaps.
 - A real on-device run now happens on every release build - do not describe Android verification as
   "build success plus static analysis only" going forward; that was true before the E2E work below
   and no longer is.
