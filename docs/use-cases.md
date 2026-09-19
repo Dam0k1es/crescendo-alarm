@@ -73,7 +73,11 @@
 - Print Deactivation Code as QR Code (="QR Code") (**partially implemented**: the code is rendered
   and displayed as a QR image on-screen; the "share/print" action is an explicit stub that shows
   "This is a future feature!" and does nothing)
-- Scan QR Code
+- Scan QR Code (**two roles, both implemented**: with a code already stored, a scan validates
+  against it (the "guaranteed wake-up" gate); with none stored yet, a scan **adopts whatever QR
+  code was just scanned as the new deactivation code, verbatim and with no format of its own** -
+  any pre-existing QR code someone already has works, not only one WakeyWakey generated. See
+  `docs/REQUIREMENTS.md` R13.)
 - Optional: Write Deactivation Code to NFC Tag (="Deactivation Tag") - **not implemented**
 - Optional: Read Deactivation Tag - **not implemented**
 

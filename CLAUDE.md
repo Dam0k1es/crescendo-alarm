@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **468 tests across 67 files**, and CI runs them six times over -
+`flutter test` currently runs **472 tests across 68 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -358,6 +358,12 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   called from `lib/main.dart` on cold start and every resume) instead of only once per process
   lifetime, and the Schedule tab's icon swaps for a spinner while that read is in flight
   (`AppState.isReadingCalendarMutex`).
+
+- `docs/REQUIREMENTS.md` R13 ("any pre-existing QR code can be adopted as the deactivation code")
+  is pinned down by two new cases in `qr_scanner_gate_test.dart` (a real-world URL, and a long
+  string with unicode/whitespace/punctuation - not just the short token the existing "first scan
+  is imported" case used) and by `page_deactivation_code_import_hint_test.dart` (the on-screen hint
+  that makes the already-working capability discoverable).
 
 - `app_state_calendar_selection_test.dart` and `screen_schedule_calendar_selection_test.dart` cover
   T-53: a checkable calendar list reachable from a corner button on the Schedule screen filters

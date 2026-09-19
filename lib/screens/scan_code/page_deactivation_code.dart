@@ -105,8 +105,23 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
-                    'Currently no deactivation code configured. Generate or import to activate this feature!',
+                    'Currently no deactivation code configured. Generate a new one, or import to activate this feature!',
                     style: TextStyle(fontSize: 18),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  // docs/REQUIREMENTS.md R13: "Import" isn't limited to a
+                  // code this app generated - any QR code already at hand
+                  // works, verbatim. Without saying so, "Import" reads like
+                  // it only accepts something exported from WakeyWakey
+                  // itself.
+                  Text(
+                    'Import works with any QR code you already have - it '
+                    'does not have to come from this app.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),

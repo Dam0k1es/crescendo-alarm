@@ -94,6 +94,48 @@ void main() {
         reason: 'the screen doubles as the way to teach the app a code');
   });
 
+  group('requirement: any pre-existing QR code can be adopted as the '
+      'deactivation code', () {
+    // The user's own words: without being told otherwise, "I can scan any
+    // QR code I already have lying around and use it as my wake-up gate
+    // code" is the realistic expectation - and it must actually hold for
+    // real-world QR content, not just a short test token like the "first
+    // scan is imported" case above. Two payload shapes, two separate test
+    // cases (not a loop over one `testWidgets`): `AppState` persists
+    // `deactivationCode` through the shared mock `SharedPreferences` store,
+    // so a second `AppState()` built later in the same test would silently
+    // inherit the first payload's already-stored code instead of starting
+    // from `null`.
+    testWidgets('a URL', (tester) async {
+      const payload =
+          'https://example.com/product/some-item?ref=12345&utm_source=poster';
+      final appState = await _pumpScanner(tester);
+      expect(appState.deactivationCode, isNull);
+
+      scans.add(const ScanResult(payload));
+      await tester.pumpAndSettle();
+
+      expect(appState.deactivationCode?.payload, payload,
+          reason: 'the payload must be adopted verbatim, with no format '
+              'assumption of its own - a WakeyWakey-generated code is not '
+              'the only kind of QR code that must work here');
+    });
+
+    testWidgets('a long string with unicode and whitespace', (tester) async {
+      const payload =
+          'Rechnung Nr. 00815 — Betrag: 42,50 € — Fälligkeit 2026-10-01 ✔';
+      final appState = await _pumpScanner(tester);
+      expect(appState.deactivationCode, isNull);
+
+      scans.add(const ScanResult(payload));
+      await tester.pumpAndSettle();
+
+      expect(appState.deactivationCode?.payload, payload,
+          reason: 'the payload must be adopted verbatim, with no format '
+              'assumption of its own');
+    });
+  });
+
   testWidgets('a wrong code does not replace the stored one', (tester) async {
     // The negative case the gate exists for. If a scanned code could overwrite
     // the stored one, the "guaranteed wake-up" would be defeated by printing

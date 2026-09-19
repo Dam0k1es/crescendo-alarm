@@ -325,6 +325,33 @@ manual intervention/override should always remain possible (no fully opaque auto
   changes significantly.
 - **Status:** met, by current maintainer judgment.
 
+## R13 - Any pre-existing QR code can be adopted as the deactivation code
+
+Without being told otherwise, a user's realistic expectation of the "guaranteed wake-up" feature is
+that they can scan an arbitrary QR code they already have - printed on a household object, a poster,
+anything with a QR code already on it - and have the app adopt it as their deactivation code,
+without that code needing to come from WakeyWakey itself or match any particular format.
+
+- **Why a formal requirement, not just an implementation detail:** the mechanism (`QrScanner`'s
+  "no code stored yet -> import whatever was just scanned" branch, `lib/screens/scan_code/
+  qr_scanner.dart`) already existed and already behaved this way before this requirement was
+  written down - found while confirming the maintainer's own expectation of the feature. Writing it
+  down turns "this happens to work" into "this must keep working": `DeactivationCode`'s payload is
+  a plain string with no format of its own (`lib/models/scan_code/deactivation_code.dart`), and
+  nothing in `qr_scanner.dart`'s import branch validates the scanned text against any expected
+  shape - the only two hard requirements are that the payload is a QR code (`ReaderWidget(codeFormat:
+  Format.qrCode)`) and that it is not empty (an empty decode must never become a code nobody can
+  ever reproduce).
+- **Checked by:** `test/qr_scanner_gate_test.dart`'s "with no code stored, the first scan is
+  imported" (a simple token) and its "requirement: any pre-existing QR code can be adopted as the
+  deactivation code" group, added specifically for this requirement - a real-world URL and a long
+  string with unicode/whitespace/punctuation, proving the payload is adopted verbatim with no format
+  assumption of its own, not just the shape of a WakeyWakey-generated code
+  (`DeactivationCode.generateRandomHash`'s base64 output).
+- **Status: met.** `docs/use-cases.md`'s "Scan QR Code" entry is annotated to describe this
+  explicitly, since the bullet alone did not distinguish "scan to validate against a stored code"
+  from "scan to adopt as a new one".
+
 ---
 
 **Summary of open gaps (R1 partial, R3, R4 partial, R7 partial, R9 one condition):** R2 is **no longer** among them - the
