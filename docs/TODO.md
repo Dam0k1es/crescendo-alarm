@@ -636,13 +636,14 @@ that is the basis a decision can be formulated against.
   running (all its `needs:` had passed) and `mobsf-full-scan` passing with the expected accepted
   exceptions applied (see T-11).
 
-### T-38 · The QR gate has unconditional bypasses — one real gap in it found and fixed (2026-09-19), rest still open
+### T-38 · The QR gate has unconditional bypasses — two real gaps found and fixed (2026-09-19), rest still open
 
 - [x] A real-device report found the emergency-stop bypass itself could be permanently withheld:
       fixed.
-- [ ] Still open: decide, document and test the OTHER fail-safe paths that dismiss an alarm without
-      a scan (the handler's own 3-second `Alarm.stopAll()` fallback), and add the honest sentence in
-      the feature description this item originally asked for.
+- [x] The handler's own 3-second fallback gave up after a single failed attempt to show the
+      overlay: now retries, at the maintainer's request.
+- [ ] Still open: an honest sentence about these fail-safes in the feature description itself, and
+      a written rationale beyond the code comments below - the original ask.
 - **Why:** the "guaranteed wake-up" promise has escape hatches: if no overlay can be shown, the
   handler waits three seconds and calls `Alarm.stopAll()`; the scanner also offers an emergency-stop
   button when the camera fails. These are defensible as fail-safes — being locked out by a broken
@@ -668,6 +669,23 @@ that is the basis a decision can be formulated against.
 - **Tests:** `qr_scanner_gate_test.dart`'s new case keeps proof-of-life continuously satisfied
   (repeated wrong-code scans) throughout and confirms the button still appears once the longer
   timeout elapses - red before the second timer existed, confirmed by reverting it and re-running.
+- **A second, related gap the maintainer asked for directly:** the handler-side 3-second fallback
+  (`Handler.handleAlarm`, `lib/models/alarms/handler.dart`) used to try showing the ringing overlay
+  exactly once - a single `context.mounted` failure (the likeliest cause, e.g. the app is still
+  finishing its own startup right as the alarm fires) gave up immediately and fell straight through
+  to `Alarm.stopAll()` after 3 seconds, with no chance for `context.mounted` to flip back to true a
+  moment later. Fixed by retrying: `_showOverlayWithRetries` tries up to `maxOverlayAttempts` (5)
+  times, `overlayRetryDelay` (3s) apart, before the same final 3-second wait and `Alarm.stopAll()`
+  as before - roughly 15 seconds of genuine retrying, matching the maintainer's own numbers,
+  instead of giving up after the very first failure. `Handler` gained an injectable `sleep`
+  function purely for testability (`Future.delayed` would otherwise make a test wait real
+  wall-clock seconds).
+- **Test:** `handler_overlay_retry_test.dart` - a context unmounted right after constructing the
+  `Handler` (so every overlay attempt fails exactly like a real "no longer mounted" case) proves
+  exactly 5 attempts happen, 3 seconds apart (asserted against `Handler.maxOverlayAttempts`/
+  `overlayRetryDelay` directly, not a hardcoded number, so the test can't silently drift from the
+  constants it's meant to guard); a counter-test confirms a context that stays mounted succeeds on
+  the first attempt and never sleeps at all.
 - **Evidence:** `lib/models/alarms/handler.dart:169-176` (the still-undocumented handler-side
   bypass); `lib/screens/scan_code/qr_scanner.dart` (`_proofOfLifeTimer`/`_maxScanDurationTimer`).
 - **Done when:** each bypass has a test, a written rationale, and an honest sentence in the feature

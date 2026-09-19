@@ -50,12 +50,34 @@ class Handler {
   late final AppState _appState;
   final Future<ReplanResult?> Function(AppState appState) _runCheckpoint;
 
+  /// Injectable purely for testability - see
+  /// test/handler_overlay_retry_test.dart, which needs to control the pause
+  /// between retries without a real test waiting on real wall-clock time.
+  final Future<void> Function(Duration duration) _sleep;
+
+  /// docs/TODO.md T-38 (maintainer request): showing the ringing overlay is
+  /// retried this many times, [overlayRetryDelay] apart, before the 3-second
+  /// fallback below gives up and silently stops the alarm. A single failed
+  /// attempt used to give up immediately - but `context.mounted` can flip
+  /// back to true moments later (e.g. the app is still finishing its own
+  /// startup right as the alarm fires), and retrying costs nothing an alarm
+  /// clock's whole purpose doesn't already risk more of by staying silent.
+  @visibleForTesting
+  static const int maxOverlayAttempts = 5;
+
+  /// Also the fallback's own final wait before [Alarm.stopAll] - see
+  /// [handleAlarm]'s doc comment on why the two share one constant.
+  @visibleForTesting
+  static const Duration overlayRetryDelay = Duration(seconds: 3);
+
   /// [runCheckpoint] is injectable (defaults to the real ring checkpoint)
   /// purely for testability - see test/handler_replan_wiring_test.dart's
   /// regression test, which needs full control over when/whether it completes.
   Handler(this._context,
-      {Future<ReplanResult?> Function(AppState)? runCheckpoint})
-      : _runCheckpoint = runCheckpoint ?? _ringCheckpoint {
+      {Future<ReplanResult?> Function(AppState)? runCheckpoint,
+      Future<void> Function(Duration)? sleep})
+      : _runCheckpoint = runCheckpoint ?? _ringCheckpoint,
+        _sleep = sleep ?? Future.delayed {
     _appState = Provider.of<AppState>(_context, listen: false);
   }
 
@@ -106,6 +128,38 @@ class Handler {
     } catch (e) {
       debugPrint("=====handleAlarm: ring checkpoint failed: ${e.runtimeType}");
     }
+  }
+
+  /// Tries [buildOverlay] up to [maxOverlayAttempts] times, [overlayRetryDelay]
+  /// apart, stopping as soon as one succeeds. Returns whether an overlay is
+  /// now showing.
+  ///
+  /// A single failed attempt used to give up immediately and fall straight
+  /// through to the 3-second `Alarm.stopAll()` fallback - but `context.mounted`
+  /// (the most common reason `showFullScreenOverlay` throws here) can flip
+  /// back to true moments later, e.g. the app is still finishing its own
+  /// startup right as the alarm fires. [buildOverlay] is called fresh on each
+  /// attempt rather than built once up front, so a transient failure never
+  /// reuses a widget instance from a moment the tree may have already moved
+  /// on from.
+  Future<bool> _showOverlayWithRetries(Widget Function() buildOverlay) async {
+    for (var attempt = 1; attempt <= maxOverlayAttempts; attempt++) {
+      try {
+        if (!_context.mounted) {
+          throw StateError('Context is no longer mounted');
+        }
+        showFullScreenOverlay(_context, buildOverlay());
+        return true;
+      } catch (e) {
+        debugPrint(
+            "=====handleAlarm: attempt $attempt/$maxOverlayAttempts to show "
+            "the overlay failed: ${e.runtimeType}");
+        if (attempt < maxOverlayAttempts) {
+          await _sleep(overlayRetryDelay);
+        }
+      }
+    }
+    return false;
   }
 
   Future<void> handleAlarm(AlarmSettings event) async {
@@ -180,42 +234,25 @@ class Handler {
             "=====handleAlarm: rememberSnoozeOrigin failed: ${e.runtimeType}");
       }
 
-      // If the deactivation code is not set, show the alarm overlay
-      if (!isDeactivationCodeSet) {
-        debugPrint("=====handleAlarm: _appState.deactivationCode is null");
-        try {
-          if (!_context.mounted) {
-            throw StateError('Context is no longer mounted');
-          }
-          showFullScreenOverlay(_context, ScreenAlarmActive(alarmId: event.id));
-        } catch (e) {
-          debugPrint(
-              "=====handleAlarm: showFullScreenOverlay (ScreenAlarmActive) failed: ${e.runtimeType}");
-          stoppingAlarmPossible = false;
-        }
-      }
-      // If the deactivation code is set, show the QR code scanner
-      else {
-        debugPrint("=====handleAlarm: _appState.deactivationCode is set");
-        try {
-          if (!_context.mounted) {
-            throw StateError('Context is no longer mounted');
-          }
-          showFullScreenOverlay(_context, QrScanner(alarmId: event.id));
-        } catch (e) {
-          debugPrint(
-              "=====handleAlarm: showFullScreenOverlay (QrScanner) failed: ${e.runtimeType}");
-          stoppingAlarmPossible = false;
-        }
-      }
+      // If the deactivation code is not set, show the alarm overlay; if it
+      // is, show the QR code scanner instead.
+      final overlayShown = await _showOverlayWithRetries(
+        () => isDeactivationCodeSet
+            ? QrScanner(alarmId: event.id)
+            : ScreenAlarmActive(alarmId: event.id),
+      );
+      if (!overlayShown) stoppingAlarmPossible = false;
     } catch (e) {
       debugPrint("=====handleAlarm: Error handling alarm: ${e.runtimeType}");
     }
 
-    // If no overlay can be shown, stop all alarms after 3 seconds (to ring in any case)
+    // If the overlay still couldn't be shown after all retries above (or the
+    // stale-alarm stop attempt itself failed), give it one more
+    // overlayRetryDelay of grace, then silently stop everything rather than
+    // leave an alarm ringing forever with nothing on screen to dismiss it.
     if (!stoppingAlarmPossible) {
       try {
-        await Future.delayed(const Duration(seconds: 3));
+        await _sleep(overlayRetryDelay);
         Alarm.stopAll();
       } catch (e) {
         debugPrint("=====handleAlarm: Failed to stop all alarms: ${e.runtimeType}");

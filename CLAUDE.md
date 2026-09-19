@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **490 tests across 74 files**, and CI runs them six times over -
+`flutter test` currently runs **492 tests across 75 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -393,10 +393,20 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
 - T-38's emergency-stop bypass had its own gap: `_proofOfLifeTimer` was cancelled the moment ANY
   scan attempt ran, even a legitimate "no code in this frame" - so a hardware camera kill-switch
   (or a covered lens) producing a permanently black feed could satisfy it forever and withhold the
-  escape hatch from someone whose camera is physically blocked. A second, independent 60s
+  escape hatch from someone whose camera is physically blocked. A second, independent
   `_maxScanDurationTimer` in `qr_scanner.dart` now fires regardless of that flag; the new
   `qr_scanner_gate_test.dart` case keeps proof-of-life continuously satisfied throughout and
-  confirms the button still appears once it elapses.
+  confirms the button still appears once it elapses. Both timers were later tightened at the
+  maintainer's request: `_proofOfLifeTimeout` 20s→10s, `_maxTimeWithoutValidScan` 60s→30s.
+
+- The handler-side 3-second fallback had a related gap the maintainer asked to fix directly: it
+  gave up after a single failed attempt to show the ringing overlay, with no chance for
+  `context.mounted` (the likeliest failure cause) to flip back to true a moment later.
+  `Handler._showOverlayWithRetries` now tries up to `maxOverlayAttempts` (5) times,
+  `overlayRetryDelay` (3s) apart - `handler_overlay_retry_test.dart` unmounts a context right after
+  constructing the `Handler` (so every attempt fails like a real "no longer mounted" case) and
+  asserts exactly 5 attempts happen, using an injectable `sleep` function so the test doesn't wait
+  real wall-clock seconds.
 
 - `page_deactivation_code_reactivity_test.dart` pins down a T-143 fix: `PageDeactivationCode` used
   to read `AppState` with `listen: false`, so it never rebuilt when the *separate* `QrScanner`
