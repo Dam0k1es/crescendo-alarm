@@ -262,11 +262,39 @@ that is the basis a decision can be formulated against.
 
 ## P1 — resolve or consciously accept before a public release
 
-### T-155 · The sleep-time reminder's own scheduled notification does not survive a reboot
+### T-155 · The sleep-time reminder's own scheduled notification does not survive a reboot — LIKELY NOT A BUG, needs one targeted re-check (2026-09-19)
 
 - [ ] Confirm whether `awesome_notifications` re-arms its scheduled notifications after a reboot on
       this app, and if not, add a boot-recovery path for the sleep reminder (FR-16 Checkpoint 2's
       own entry point), analogous to what the `alarm` plugin already does for ringing alarms.
+- **Investigated (2026-09-19):** `awesome_notifications`' native boot-restore path
+  (`RefreshSchedulesReceiver` -> `NotificationScheduler.refreshScheduledNotifications`, source at
+  `github.com/rafaelsetragni/AndroidAwnCore` - not in the pub-cache, since the "core" module ships
+  as a compiled Maven artifact, `me.carda:AndroidAwnCore`, not Dart-package source) is plain native
+  Java with **no Flutter engine/Dart isolate dependency at all**: for every persisted schedule id
+  not already active on `AlarmManager`, it unconditionally re-arms via `schedule(...)` **unless**
+  `notificationModel.schedule.hasNextValidDate()` is false, in which case it deliberately calls
+  `ScheduleManager.removeSchedule` instead - correct cleanup, not a failure.
+  This app's sleep reminder (`sleepReminderContent`/`scheduleSleepReminder`,
+  `lib/utils/sleep_reminder.dart`) is scheduled as a **one-shot** `NotificationCalendar.fromDate`,
+  not a repeating schedule. If that specific date/time had already passed by the moment of the
+  reboot, `hasNextValidDate()` correctly returns false for a one-shot date in the past, and its
+  removal is the *intended* cleanup path, not a restore failure. The real-device run that surfaced
+  this (T-93, 2026-09-19T21:13:56Z) came after many hours of unrelated testing earlier the same
+  session; whether the reminder scheduled at that point was still genuinely in the future at reboot
+  time, or had already legitimately elapsed, cannot be determined from the captured evidence alone.
+  **Downgraded from "confirmed gap" to "likely correct behavior, unconfirmed"** - building a custom
+  native boot-recovery path (a real undertaking: our own `BroadcastReceiver`, a background Dart
+  isolate entry point analogous to `onNotificationCreatedMethod`) is not warranted before a cheap
+  re-check settles which case this actually was.
+- **Needed to close this either way:** schedule a silent notification a couple of hours out (well
+  past any plausible reboot/observation delay) on a real device, reboot, and check `dumpsys alarm`
+  for the `me.carda.awesome_notifications.DartScheduledNotificationReceiver` tag specifically - if
+  it is still there, this item closes as "not a bug, one-shot schedules simply expire as designed
+  once their date passes with the app never reopened to recompute one"; if it is genuinely gone
+  despite a still-future target time, the native restore path itself needs investigating further
+  (an exception `AwesomeBroadcastReceiver.onReceive` swallows silently is the most likely next
+  suspect, since every exception there is caught and only logged internally, never surfaced).
 - **Why:** found incidentally while gathering T-93's real-device evidence (Fairphone 6, run
   2026-09-19T21:13:56Z), not the thing that run was measuring. `dumpsys alarm` before the
   intervention showed 9 of this app's own alarms under uid `u0a310`: 3 tagged
