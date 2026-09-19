@@ -361,6 +361,25 @@ class _QrScannerState extends State<QrScanner> {
                   showGallery: false,
                   showFlashlight: true,
                   showToggleCamera: true,
+                  // Real-device report: most pre-existing QR codes (R13 -
+                  // anything already at hand, not only a code this app itself
+                  // rendered) were not recognized at all. ReaderWidget only
+                  // decodes within a centre crop, and its own default there
+                  // (`cropPercent: 0.5`) is just 50% of the shorter camera
+                  // dimension - a code that isn't small and perfectly
+                  // centred in that box, which is normal for one printed on
+                  // an arbitrary real-world object rather than shown
+                  // close-up on a second device's screen, never reaches the
+                  // decoder at all. Widened to 85%. `tryHarder`/`tryInverted`
+                  // are additional zxing-cpp decode passes for exactly the
+                  // conditions a code "already at hand" is likely to have
+                  // (an angle, a curved surface, light-on-dark colouring)
+                  // that this app's own generated codes never do - off by
+                  // default because they cost time, which R13 makes worth
+                  // spending here.
+                  cropPercent: 0.85,
+                  tryHarder: true,
+                  tryInverted: true,
                   scanDelaySuccess: const Duration(milliseconds: 500),
                   onScan: (code) => _handleScan(ScanResult(code.text)),
                   // A failed decode is still proof that frames are arriving

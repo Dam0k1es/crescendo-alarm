@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **472 tests across 68 files**, and CI runs them six times over -
+`flutter test` currently runs **473 tests across 69 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -358,6 +358,11 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   called from `lib/main.dart` on cold start and every resume) instead of only once per process
   lifetime, and the Schedule tab's icon swaps for a spinner while that read is in flight
   (`AppState.isReadingCalendarMutex`).
+
+- `page_deactivation_code_reactivity_test.dart` pins down a T-143 fix: `PageDeactivationCode` used
+  to read `AppState` with `listen: false`, so it never rebuilt when the *separate* `QrScanner`
+  route mutated `deactivationCode` on a successful import - the import had actually persisted, but
+  the screen underneath kept showing "no code configured" until something unrelated rebuilt it.
 
 - `docs/REQUIREMENTS.md` R13 ("any pre-existing QR code can be adopted as the deactivation code")
   is pinned down by two new cases in `qr_scanner_gate_test.dart` (a real-world URL, and a long

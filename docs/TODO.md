@@ -925,25 +925,58 @@ that is the basis a decision can be formulated against.
       `page_aboutpage_licenses_test.dart`.
 - **Requirement:** R9
 
-### T-143 · The QR gate has never decoded through a real camera
+### T-143 · The QR gate has never decoded through a real camera — PARTLY FIXED (2026-09-19, from a real-device report)
 
-- [ ] Run the scan path on a device and tune what only a device can answer.
+- [x] `cropPercent`/`tryHarder`/`tryInverted` tuned, per the maintainer's own real-device report.
+- [ ] Still open: a device trial confirming the tuned values actually decode at a realistic
+      distance/light level (this fix was reactive to a report, not a recorded trial), and
+      `scanDelay`/`scanDelaySuccess` (see below) are unchanged.
 - **Why:** the migration to `flutter_zxing` (T-33) changed the decoder, and nothing in any suite
       instantiates `ReaderWidget` or loads the zxing native library - the unit tests inject through
       the seam, and the E2E scenario now skips building the preview because the seam is set. A
       `ReaderWidget` that throws on mount would ship green.
-- **What to look at, all defaults that were not chosen deliberately:** `scanDelay` is 1000 ms and
-      `scanDelaySuccess` 500 ms, so the gate attempts roughly **one decode per second** where
-      mobile_scanner decoded at frame rate; `cropPercent` is 0.5, so the code must sit in a centred
-      square of half the shorter frame side; `tryHarder` and `tryInverted` are off. For a
-      half-asleep user in a dark bedroom, each of those is the difference between a gate that opens
-      and one that does not.
+- **Confirmed on a real device (2026-09-19):** the maintainer reported "die allermeisten qr codes
+      werden absolut nicht erkannt" (almost no QR code is recognized at all) - exactly the failure
+      mode this item had predicted from reading the defaults, now observed rather than theorized.
+      `ReaderWidget` only decodes within a centre crop (`cropWidth`/`cropHeight` derived from
+      `cropPercent`), and the pre-fix default (0.5, i.e. 50% of the shorter frame side) is a real
+      constraint on anything not small and perfectly centred - normal for a QR code already printed
+      on some real-world object (R13's whole point) rather than shown close-up on a second device's
+      screen. `tryHarder`/`tryInverted` being off removes decode passes for exactly the conditions
+      such a code is likely to have (an angle, a curved surface, light-on-dark colouring) that this
+      app's own generated codes never do.
+- **Fix:** `lib/screens/scan_code/qr_scanner.dart`'s `ReaderWidget` now sets `cropPercent: 0.85`,
+      `tryHarder: true`, `tryInverted: true`.
+- **A second, independent bug the same report also surfaced:** "einige wenige [Codes] schon, dann
+      terminiert die kamera-sicht (erfolgreich?), aber kein qr code ist angelegt" (a few DO get
+      recognized - the camera view closes as if it worked - but no code ends up configured). Root
+      cause had nothing to do with scanning: `PageDeactivationCode` read `AppState` with
+      `Provider.of<AppState>(context, listen: false)` in `initState`, so it never rebuilt when the
+      *separate* `QrScanner` route (`PageImportQr`) mutated `AppState.deactivationCode` on a
+      successful import - the import had actually succeeded and persisted, but the screen
+      underneath, having subscribed with `listen: false`, had no way to find out and kept showing
+      "no code configured" until something unrelated happened to rebuild it. Fixed by adding
+      `context.watch<AppState>();` to `build()`, the same reactive pattern used elsewhere in the
+      app, so the screen reacts to a change made by any widget, not only its own Generate/Remove
+      buttons (whose `onPressed` handlers had been masking the same gap for themselves with a local
+      `setState`). A pre-existing, unrelated layout bug was hit by the regression test for this: the
+      "code set" view's `Column` (QR image + button row) sized purely from screen *width*
+      overflowed vertically on a short screen - wrapped in a `SingleChildScrollView` while there.
+- **What to still look at:** `scanDelay` is 1000 ms and `scanDelaySuccess` 500 ms, so the gate
+      attempts roughly **one decode per second** where mobile_scanner decoded at frame rate - for a
+      half-asleep user in a dark bedroom that may still be the difference between a gate that opens
+      and one that does not, and this pass did not touch it, since the report didn't point at it.
 - **Also check:** that the snooze button at the top of the screen is still hit-testable through the
       scanner's own full-bleed overlay and pinch-zoom detector.
-- **Done when:** a device trial records a decode at a realistic distance and light level, and the
-      three settings above are either changed or justified. `docs/device-trial-checklist.md` is the
-      place for the result.
-- **Requirement:** R4
+- **Tests:** `qr_scanner_gate_test.dart`'s existing cases are unaffected (the debug scan stream seam
+      bypasses `ReaderWidget` entirely, so it cannot exercise `cropPercent`/`tryHarder` - a real
+      device trial remains the only way to verify those); `page_deactivation_code_reactivity_test.dart`
+      (red before the `context.watch` fix - mutating `AppState.deactivationCode` directly, not
+      through the screen's own buttons, left the "no code configured" text showing).
+- **Done when:** a device trial records a decode at a realistic distance and light level with the
+      tuned values, and `scanDelay`/`scanDelaySuccess` are either changed or justified.
+      `docs/device-trial-checklist.md` is the place for the result.
+- **Requirement:** R4, R13
 
 ### T-144 · The proprietary-dependency guard cannot see the channel the offender used
 

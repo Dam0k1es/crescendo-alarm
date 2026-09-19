@@ -38,6 +38,16 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
 
   @override
   Widget build(BuildContext context) {
+    // Real-device report: after importing a code via the QR scanner
+    // (`PageImportQr`, a separate pushed route/widget), this screen kept
+    // showing "no code configured" until something else happened to rebuild
+    // it - `_appState` was read with `listen: false` in initState, so
+    // AppState.notifyListeners() from that other widget's mutation had no
+    // way to reach this screen; only the Generate/Remove buttons' own local
+    // `setState` calls masked the same gap for themselves. Subscribing here
+    // makes this screen react to a `deactivationCode` change no matter which
+    // widget made it.
+    context.watch<AppState>();
     _displayArea = MediaQuery.of(context).size.width * 0.75;
 
     final generateCodeButton = ElevatedButton.icon(
@@ -142,26 +152,34 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
           ),
 
         // Deactivation Code Set
+        //
+        // The QR image's size is derived from screen WIDTH alone
+        // (`_displayArea`), with no regard for available height - on a wide
+        // but short screen (a small phone, or landscape) that image plus the
+        // button row below it can be taller than the screen, which used to
+        // overflow rather than scroll.
         if (_appState.deactivationCode != null)
           Center(
-            child: SizedBox(
-              width: _displayArea,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _generateQrImageView(_appState.deactivationCode!),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Spacer(),
-                      removeCodeButton,
-                      const Spacer(),
-                      shareCodeButton,
-                      const Spacer(),
-                    ],
-                  ),
-                ],
+            child: SingleChildScrollView(
+              child: SizedBox(
+                width: _displayArea,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _generateQrImageView(_appState.deactivationCode!),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Spacer(),
+                        removeCodeButton,
+                        const Spacer(),
+                        shareCodeButton,
+                        const Spacer(),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
