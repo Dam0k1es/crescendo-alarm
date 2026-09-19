@@ -1521,17 +1521,43 @@ that is the basis a decision can be formulated against.
   (the hour axis is 24h with the flag on, 12h AM/PM with it off);
   `sleep_habits_gap_day_and_per_weekday_test.dart` (both new Sleep Habits controls, end to end).
 
-### T-53 · No way to choose which calendar counts as "the work calendar"
+### T-53 · No way to choose which calendar counts as "the work calendar" — FIXED (2026-09-19)
 
-- [ ] Let the user select which calendar(s) feed the scheduling algorithm.
+- [x] Let the user select which calendar(s) feed the scheduling algorithm.
 - **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31). `use-cases.md` describes
-  "Select Calendar for interconnection" as a use case, but no per-calendar selection UI exists -
-  `grep -rn "workCalendar\|selectedCalendar" lib/` finds nothing, and `calendar.dart`'s
-  `retrieveCalendars()` result is used without a filtering step.
+  "Select Calendar for interconnection" as a use case, but no per-calendar selection UI existed -
+  `grep -rn "workCalendar\|selectedCalendar" lib/` found nothing, and `calendar.dart`'s
+  `retrieveCalendars()` result was used without a filtering step.
+- **Fix, per the maintainer's own spec:** a checkable dropdown list of calendars, reachable from a
+  corner button on the Schedule screen's app bar (`Icons.event_note`, tooltip "Calendars"). Tapping
+  it opens a modal bottom sheet - one `CheckboxListTile` per `device_calendar` `Calendar`, following
+  the exact same `StatefulBuilder`-wrapped-tile shape already established for T-149's
+  "ignore this event" sheet (`_showIgnoreEventSheet`), so the sheet stays open while more than one
+  calendar is toggled rather than closing after the first tap. Toggling one runs the same
+  `CheckpointTrigger.settingsChanged` checkpoint that sheet already uses (a selection change feeds
+  `hardFloor` derivation and must take effect immediately) plus a `resyncCalendarData` call (T-60)
+  so the Schedule display picks it up without waiting for the next natural resync.
+- **AppState:** `deselectedCalendarIds` (persisted `Set<String>` of `Calendar.id`) stores what's
+  explicitly opted **out**, not what's opted in - an empty set (every existing install) means every
+  calendar counts, unchanged from before, and a calendar the device adds later (never seen before,
+  so absent from the set either way) is included by default rather than silently dropped until
+  the user notices and opts it in by hand.
+- **Filter applied in exactly the two places that read the calendar list:** `getCalendarEntries`
+  (feeds the Schedule display's `appState.meetings`) and `fetchMeetingsUncached` (feeds
+  scheduling-v2's `replan()`) both now loop over `calendars.where((c) =>
+  appState.isCalendarSelected(c.id!))` instead of the raw list - the one shared filter both paths
+  read the same module-level `calendars` list through. `fetchMeetingsUncached`'s own diagnostic
+  (`Diag.calendarRead`) was updated to count the *selected* calendars, not every calendar
+  `device_calendar` returned, so a user who deselected everything reads the same as one with no
+  calendars at all instead of masking that state.
 - **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x48` (see T-31);
-  `lib/screens/schedule/calendar.dart`.
-- **Done when:** a calendar-selection UI exists and `scheduleAlarms` only considers entries from the
-  selected calendar(s), covered by a test.
+  `lib/screens/schedule/calendar.dart`; `lib/screens/schedule/screen_schedule.dart`'s
+  `_showCalendarSelectionSheet`.
+- **Tests:** `app_state_calendar_selection_test.dart` (default-selected, deselect/reselect
+  round-trip, clearing an override rather than freezing a flag, notifies listeners);
+  `screen_schedule_calendar_selection_test.dart` (the corner button opens the sheet with one row
+  per calendar; unchecking one updates `AppState` and is still reflected after closing and
+  reopening the sheet; an empty calendar list shows a fallback message instead of an empty sheet).
 
 ### T-55 · Wrong "already fetched" answer for any day that isn't its own week's start — FIXED (2026-09-18)
 

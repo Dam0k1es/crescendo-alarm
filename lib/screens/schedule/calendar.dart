@@ -50,7 +50,14 @@ Future<List<Meeting>> getCalendarEntries(
   debugPrint(
       '======getCalendarEntries: Calendars list has size ${calendars.length}.');
 
-  for (Calendar calendar in calendars) {
+  // docs/TODO.md T-53: a calendar the user deselected must be left out of
+  // the Schedule display exactly like `fetchMeetingsUncached` leaves it out
+  // of scheduling below - both read the same module-level `calendars` list,
+  // so the same filter has to apply to both loops.
+  final selectedCalendars =
+      calendars.where((c) => appState.isCalendarSelected(c.id!)).toList();
+
+  for (Calendar calendar in selectedCalendars) {
     final result =
         await _deviceCalendarPlugin.retrieveEvents(calendar.id, params);
 
@@ -129,7 +136,11 @@ Future<List<Meeting>> fetchMeetingsUncached(
 
   final meetings = <Meeting>[];
   var perCalendarErrors = 0;
-  for (final calendar in calendars) {
+  // docs/TODO.md T-53: same deselection filter as `getCalendarEntries` above
+  // - a calendar the user opted out of must not feed scheduling either.
+  final selectedCalendars =
+      calendars.where((c) => appState.isCalendarSelected(c.id!)).toList();
+  for (final calendar in selectedCalendars) {
     final result = await _deviceCalendarPlugin.retrieveEvents(calendar.id, params);
     for (final error in result.errors) {
       perCalendarErrors++;
@@ -151,12 +162,15 @@ Future<List<Meeting>> fetchMeetingsUncached(
   // deleted every alarm (T-64), and which is the normal case on the CI
   // emulator.
   Diag.calendarRead(
-    outcome: calendars.isEmpty
+    // docs/TODO.md T-53: reflects what actually fed the plan, not what
+    // device_calendar returned - a user who deselected every calendar
+    // should read the same as one with none at all.
+    outcome: selectedCalendars.isEmpty
         ? CalendarOutcome.noCalendars
         : (perCalendarErrors > 0
             ? CalendarOutcome.partialErrors
             : CalendarOutcome.ok),
-    calendarCount: calendars.length,
+    calendarCount: selectedCalendars.length,
     eventCount: meetings.length,
     allDayEventCount: meetings.where((m) => m.isAllDay).length,
     lazyInitTriggered: lazyInit,

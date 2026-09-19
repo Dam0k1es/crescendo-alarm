@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:calendar_view/calendar_view.dart';
@@ -287,6 +288,57 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
     _showIgnoreEventSheet(meetings);
   }
 
+  /// docs/TODO.md T-53: which calendars feed the Schedule display and
+  /// scheduling. Same shape as [_showIgnoreEventSheet] just above -
+  /// `StatefulBuilder`-wrapped `CheckboxListTile`s in a modal sheet, so the
+  /// sheet stays open while the user toggles more than one entry.
+  void _showCalendarSelectionSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              child: Text('Calendars', style: TextStyle(fontSize: 18.0)),
+            ),
+            if (calendars.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text('No calendars found on this device.'),
+              ),
+            for (final calendar in calendars)
+              StatefulBuilder(
+                builder: (context, setSheetState) => CheckboxListTile(
+                  title: Text(
+                    // docs/TODO.md T-89: regularly the user's own account
+                    // email address (Google/Exchange) - never logged, but
+                    // fine to show here since it's the user's own device.
+                    calendar.name ?? calendar.id ?? 'Unnamed calendar',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  value: appState.isCalendarSelected(calendar.id!),
+                  onChanged: (value) {
+                    appState.setCalendarSelected(calendar.id!, value ?? true);
+                    setSheetState(() {});
+                    // The same trigger _showIgnoreEventSheet uses above: a
+                    // change here feeds hardFloor derivation (replan.dart)
+                    // and must take effect immediately, not on the next
+                    // incidental replan.
+                    runCheckpointSafely(appState,
+                        trigger: CheckpointTrigger.settingsChanged);
+                    unawaited(resyncCalendarData(appState));
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showIgnoreEventSheet(List<Meeting> meetings) {
     showModalBottomSheet<void>(
       context: context,
@@ -424,6 +476,13 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
                   child: Text(view.label),
                 ),
             ],
+          ),
+          // docs/TODO.md T-53: a checkable calendar list, reachable from a
+          // corner button in the app bar.
+          IconButton(
+            tooltip: 'Calendars',
+            icon: const Icon(Icons.event_note),
+            onPressed: _showCalendarSelectionSheet,
           ),
         ],
       ),

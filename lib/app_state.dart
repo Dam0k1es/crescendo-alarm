@@ -56,6 +56,16 @@ class AppState extends ChangeNotifier {
   /// `Meeting` value, so a later sync's freshly-constructed `Meeting` for the
   /// same real-world appointment is still recognised.
   Set<String> _ignoredEventIds = <String>{};
+
+  // docs/TODO.md T-53: which `device_calendar` calendars (by `Calendar.id`,
+  // never a name - regularly the user's own email address for a Google/
+  // Exchange account) are left out of both the Schedule display and
+  // scheduling. Stores what's explicitly DESELECTED, not what's selected -
+  // an empty set means every calendar counts, which is every existing
+  // install's current behaviour, and a calendar the device adds later (never
+  // seen before, so absent from this set either way) is included by default
+  // rather than silently dropped until the user notices and opts it in.
+  Set<String> _deselectedCalendarIds = <String>{};
   bool _snoozeEnabled = false;
   Duration _snoozeTime = const Duration(minutes: 5);
   Map<int, DateTime> _snoozeOriginOf = <int, DateTime>{};
@@ -229,6 +239,28 @@ class AppState extends ChangeNotifier {
     }
     _ignoredEventIds = updated;
     _prefs.setStringList('ignoredEventIds', _ignoredEventIds.toList()..sort());
+    notifyListeners();
+  }
+
+  /// docs/TODO.md T-53: the raw set of deselected calendar ids - see
+  /// [_deselectedCalendarIds]'s own doc comment for why absence, not
+  /// presence, is what's persisted.
+  Set<String> get deselectedCalendarIds => _deselectedCalendarIds;
+
+  bool isCalendarSelected(String calendarId) =>
+      !_deselectedCalendarIds.contains(calendarId);
+
+  void setCalendarSelected(String calendarId, bool selected) {
+    if (selected == isCalendarSelected(calendarId)) return;
+    final updated = {..._deselectedCalendarIds};
+    if (selected) {
+      updated.remove(calendarId);
+    } else {
+      updated.add(calendarId);
+    }
+    _deselectedCalendarIds = updated;
+    _prefs.setStringList(
+        'deselectedCalendarIds', _deselectedCalendarIds.toList()..sort());
     notifyListeners();
   }
 
@@ -1321,6 +1353,9 @@ class AppState extends ChangeNotifier {
           (_prefs.getStringList('disabledDays') ?? const <String>[]).toSet();
       _ignoredEventIds =
           (_prefs.getStringList('ignoredEventIds') ?? const <String>[]).toSet();
+      _deselectedCalendarIds = (_prefs.getStringList('deselectedCalendarIds') ??
+              const <String>[])
+          .toSet();
       _snoozeEnabled = _prefs.getBool('snoozeEnabled') ?? _snoozeEnabled;
       final snoozeMinutes = _prefs.getInt('snoozeTimeMinutes');
       if (snoozeMinutes != null) _snoozeTime = Duration(minutes: snoozeMinutes);
