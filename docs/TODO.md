@@ -3938,20 +3938,18 @@ red and that stays invisible in the rest of the suite today.
     it registers with `setExactAndAllowWhileIdle`/`setExact`, not `AlarmManager.setAlarmClock()`
     (the one documented exemption from force-stop's alarm cancellation) - so by the documented
     platform contract, these alarms should have been cleared, and were not.
-  - **Caveat that keeps this from being a clean confirmation:** the run's `--apk` argument was a
-    literal, unsubstituted placeholder path, so `adb install` failed and the run silently measured
-    whatever build was *already installed* on the phone from earlier manual testing, not this
-    session's `current.apk`. Unlikely to matter for a platform-level AlarmManager question (nothing
-    in this session's changes touches how alarms are registered), but noted rather than glossed
-    over. One of the three UI taps ("Manual") also could not be located - "Add A New Alarm" and
-    "Save" both succeeded regardless, most likely because the app was already showing the Manual
-    tab from a previous session (`AppState.currentPageIndex` persists), not a real UI regression.
+  - The run's `--apk` argument printed as a literal, unsubstituted placeholder path in the log, so
+    `adb install` itself failed - but the maintainer confirmed the phone already had the actual
+    current build installed from earlier manual testing (2026-09-19), so the measurement did
+    cover today's code, not a stale one. One of the three UI taps ("Manual") also could not be
+    located - "Add A New Alarm" and "Save" both succeeded regardless, most likely because the app
+    was already showing the Manual tab from a previous session (`AppState.currentPageIndex`
+    persists), not a real UI regression.
   - **Not yet re-measured to rule out:** a timing artifact (the script waits only 5s after
-    `force-stop` before counting), a device/Android-16-specific platform behaviour change, or an
-    effect specific to whatever build happened to already be installed. Until a clean re-run (with
-    the actual current build and, ideally, a longer post-force-stop wait) confirms it, treat
-    "alarms survive force-stop on this app" as a promising real observation, not a verified
-    property to build on or advertise.
+    `force-stop` before counting) or a device/Android-16-specific platform behaviour change. Until
+    a clean re-run (ideally with a longer post-force-stop wait) confirms it, treat "alarms survive
+    force-stop on this app" as a promising real observation on one real device, not yet a verified
+    property to build on or advertise more broadly.
 - **Root cause known since 2026-09-11, and structural (T-131):** `flutter test` uninstalls the app
   after the run, so Android drops its AlarmManager entries with it - there can be no alarm
   registered at the time of measurement at all. The procedure therefore needs a different way of
