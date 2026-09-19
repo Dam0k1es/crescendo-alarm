@@ -205,6 +205,29 @@ camera for QR deactivation).
   The negative half of the QR gate is no longer E2E-only: `test/qr_scanner_gate_test.dart` asserts
   that a wrong code is not accepted, with `Diag.qrGate` as the oracle.
 
+- **Fail-safes, and why "guaranteed" isn't absolute (`docs/TODO.md` T-38):** the QR gate has two
+  deliberate escape hatches, both weighed the same way - trapping someone behind a gate they have
+  no physical way to satisfy is worse than the gate occasionally being bypassable.
+  1. **A camera that produces frames but can never decode one.** A hardware camera kill-switch, a
+     covered lens, or a broken sensor can leave `ReaderWidget` "running" forever while every decode
+     attempt legitimately reports "no code found" - indistinguishable, from this screen's side, from
+     a user who simply hasn't held the code up yet. `_maxScanDurationTimer`
+     (`lib/screens/scan_code/qr_scanner.dart`, 30s) fires regardless of that proof-of-life signal,
+     specifically because it doesn't tell the two cases apart, and offers an explicit
+     "Camera not working - Stop alarm" button once it does. Found on a real device (a maintainer's
+     hardware kill-switch produced exactly this state) after an earlier, narrower timer
+     (`_proofOfLifeTimer`) had already shipped for the six other "camera never even starts" failure
+     modes an earlier review had listed.
+  2. **The app cannot show the ringing/QR overlay at all.** `Handler.handleAlarm`
+     (`lib/models/alarms/handler.dart`) retries showing it `maxOverlayAttempts` (5) times,
+     `overlayRetryDelay` (3s) apart - roughly 15 seconds of genuine retrying, since the likeliest
+     cause (`context.mounted` being momentarily false, e.g. the app still finishing its own startup
+     right as the alarm fires) can resolve itself a moment later - and only then calls
+     `Alarm.stopAll()` rather than leaving an alarm ringing with literally no UI able to stop it.
+  Both are logged (`Diag`) and tested (`test/qr_scanner_gate_test.dart`,
+  `test/handler_overlay_retry_test.dart`) rather than being silent, undocumented escape hatches -
+  the previous state of both this file and `docs/TODO.md` before 2026-09-19.
+
 ## R5 - Quality/stability checks don't degrade the runtime user experience
 
 Static analysis, SCA, and other CI/quality checks must never affect what ships to users - they

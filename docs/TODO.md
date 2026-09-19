@@ -652,14 +652,14 @@ that is the basis a decision can be formulated against.
   running (all its `needs:` had passed) and `mobsf-full-scan` passing with the expected accepted
   exceptions applied (see T-11).
 
-### T-38 · The QR gate has unconditional bypasses — two real gaps found and fixed (2026-09-19), rest still open
+### T-38 · The QR gate has unconditional bypasses — FIXED (2026-09-19)
 
 - [x] A real-device report found the emergency-stop bypass itself could be permanently withheld:
       fixed.
 - [x] The handler's own 3-second fallback gave up after a single failed attempt to show the
       overlay: now retries, at the maintainer's request.
-- [ ] Still open: an honest sentence about these fail-safes in the feature description itself, and
-      a written rationale beyond the code comments below - the original ask.
+- [x] An honest sentence about these fail-safes in the feature description itself, and a written
+      rationale beyond the code comments below - the original ask.
 - **Why:** the "guaranteed wake-up" promise has escape hatches: if no overlay can be shown, the
   handler waits three seconds and calls `Alarm.stopAll()`; the scanner also offers an emergency-stop
   button when the camera fails. These are defensible as fail-safes — being locked out by a broken
@@ -710,6 +710,11 @@ that is the basis a decision can be formulated against.
   and an alarm they otherwise cannot stop, and it should read and hit like it.
 - **Evidence:** `lib/models/alarms/handler.dart:169-176` (the still-undocumented handler-side
   bypass); `lib/screens/scan_code/qr_scanner.dart` (`_proofOfLifeTimer`/`_maxScanDurationTimer`).
+- **Written rationale and honest sentence (2026-09-19):** `README.md`'s "Guaranteed Wake-Up" bullet
+  now says plainly that "guaranteed" isn't absolute and points to the full rationale;
+  `docs/REQUIREMENTS.md` R4 gained a "Fail-safes, and why 'guaranteed' isn't absolute" paragraph
+  covering both bypasses, why each exists, and how each is tested - a place a reader looking for
+  the feature's actual guarantees would find it, rather than only in code comments.
 - **Done when:** each bypass has a test, a written rationale, and an honest sentence in the feature
   description.
 - **Requirement:** R4

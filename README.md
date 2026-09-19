@@ -9,7 +9,7 @@ Welcome to Wakey Wakey, an innovative alarm clock app designed for individuals w
 
 - **Calendar Integration:** Syncs with your mobile calendar to derive intelligent alarm schedules based on your commitments.
 - **Gentle Wake-Up:** Alarm volume increases gradually for a smoother start to your day.
-- **Guaranteed Wake-Up:** Requires scanning a physical QR code to turn off the alarm, ensuring you get out of bed.
+- **Guaranteed Wake-Up:** Requires scanning a physical QR code to turn off the alarm, ensuring you get out of bed. "Guaranteed" isn't absolute: a couple of narrow fail-safes exist so a broken camera can't lock you in with a ringing alarm forever - see `docs/REQUIREMENTS.md` R4 for exactly what they are and why they're there.
 
 ## Technologies Used
 
