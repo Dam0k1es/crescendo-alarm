@@ -183,7 +183,20 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
 
+# image_path is only the fallback used for iOS (which has no adaptive-icon
+# concept and requires a fully opaque icon) and for API <26 devices. Android
+# API 26+ uses the adaptive_icon_* layers below instead: without them,
+# launchers treat image_path as a "legacy" icon and apply their own
+# scale-down-and-backplate compositing, which is what produced a light plate
+# behind the icon in dark mode even though the source PNG is transparent.
+# adaptive_icon_foreground was generated from icon.png's own artwork (already
+# a self-contained circular badge with transparent corners), scaled to fill
+# ~82% of the canvas so it reads at a size closer to other apps' icons
+# instead of the more conservative ~66% "safe zone" - see
+# assets/icons/icon_foreground.png.
 flutter_launcher_icons:
   image_path: "assets/icons/icon.png"
   android: true
   ios: true
+  adaptive_icon_background: "#00000000"
+  adaptive_icon_foreground: "assets/icons/icon_foreground.png"

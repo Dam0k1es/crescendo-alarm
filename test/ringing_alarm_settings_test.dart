@@ -82,6 +82,25 @@ void main() {
     expect(settings.notificationSettings.body, 'Time to go');
   });
 
+  test('shows the app notification icon instead of the OS default', () {
+    // docs/TODO.md T-54: `icon` used to be left unset, so Android fell back
+    // to the launcher icon (or a generic system icon on some versions)
+    // instead of a purpose-made small monochrome icon.
+    final settings = buildRingingAlarmSettings(
+      id: 1,
+      dateTime: DateTime(2026, 3, 10, 7, 30),
+      tone: null,
+      gentlewake: false,
+      volume: 0.5,
+      gentleWakeDuration: const Duration(minutes: 1),
+      title: 'Alarm',
+      body: 'Your alarm is ringing',
+      vibrate: true,
+    );
+
+    expect(settings.notificationSettings.icon, 'ic_notification');
+  });
+
   test('carries the vibrate setting through unchanged', () {
     final vibrating = buildRingingAlarmSettings(
       id: 1,

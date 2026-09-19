@@ -77,7 +77,11 @@ class Notifications {
   Future<void> init() async {
     await Alarm.init();
     await AwesomeNotifications().initialize(
-      null, // icon
+      // docs/TODO.md T-54: was `null`, which falls back to the launcher icon
+      // (or a generic system icon) instead of a purpose-made small
+      // monochrome icon - see
+      // android/app/src/main/res/drawable-*dpi/ic_notification.png.
+      'resource://drawable/ic_notification',
       [
         NotificationChannel(
           channelKey: 'alerts',

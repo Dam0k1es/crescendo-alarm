@@ -1968,16 +1968,94 @@ that is the basis a decision can be formulated against.
   during an edit, fails the suite instead of silently regressing.
 - **Requirement:** R9
 
-### T-54 · No custom Android notification icon
+### T-54 · No custom Android notification icon — FIXED (2026-09-19)
 
-- [ ] Set a proper small icon for the alarm/reminder notifications instead of the default.
+- [x] Set a proper small icon for the alarm/reminder notifications instead of the default.
 - **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31). `Notifications`'s channel
-  setup passes `null` for the icon, so Android falls back to the app's launcher icon (or a generic
+  setup passed `null` for the icon, so Android fell back to the app's launcher icon (or a generic
   system icon, depending on OS version) rather than a purpose-made small monochrome notification
   icon.
 - **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x511` (see T-31);
   `lib/utils/notifications.dart:11`.
+- **Fix:** Android renders a status-bar notification icon purely from its alpha channel, ignoring
+  colour - feeding it the full-colour launcher badge would have rendered as an undifferentiated
+  white blob. `android/app/src/main/res/drawable-*dpi/ic_notification.png` isolates just the black
+  alarm-clock glyph from `assets/icons/icon_no_shadow.png` (the app's most recognisable single
+  mark) and recolours it white on a transparent background, keeping the source's own antialiasing
+  as a soft alpha gradient rather than a hard-edged cutout. Wired into both notification paths:
+  `AwesomeNotifications().initialize()`'s default icon (`lib/utils/notifications.dart`, used by the
+  pre-alarm warnings and the sleep-time reminder) and `NotificationSettings.icon` inside
+  `buildRingingAlarmSettings` (`lib/models/alarms/ringing_alarm_settings.dart`, the alarm-plugin's
+  own ringing notification).
+- **Tests:** `test/ringing_alarm_settings_test.dart` ("shows the app notification icon instead of
+  the OS default").
 - **Done when:** a proper notification icon asset exists and is wired up.
+
+### T-153 · The alarm-ringing notification cannot be removed or its heads-up banner suppressed
+
+- [x] Investigated on maintainer's request; no code change - documenting the platform limit found.
+- **Why:** the maintainer asked for the notification shown while an alarm is ringing to be removed
+  entirely, since the full-screen alarm screen already covers it ("die stört nur"), while keeping
+  the sleep-time reminder untouched and not breaking anything.
+- **Finding:** the ringing notification is not optional UI chrome - it is the notification a
+  foreground service is required to keep visible while it plays audio in the background; Android
+  kills the service (silencing the alarm) if it disappears. It also cannot be made quieter from
+  this app's code: the `alarm` plugin (`~/.pub-cache/hosted/pub.dev/alarm-5.12.0/android/.../
+  NotificationService.kt`) hardcodes `NotificationManager.IMPORTANCE_HIGH` for its
+  `alarm_plugin_channel` in native Kotlin, with no `NotificationSettings` field exposed from Dart to
+  change it - and Android does not let an app lower an existing channel's importance from code once
+  created on a device, only the user can do that from system settings. The heads-up banner the
+  maintainer is actually bothered by only appears when `androidFullScreenIntent: true` (already set)
+  cannot auto-launch the full-screen alarm screen - which is itself intentional Android behaviour:
+  the system shows a heads-up notification instead of forcibly taking over the screen while the
+  user is actively using an unlocked device, precisely to avoid apps hijacking the foreground
+  without warning. Confirmed via `pub.dev`'s changelog that no `alarm` release after 5.12.0 adds a
+  way to control this either.
+  Cosmetic half-measures were considered and rejected: an empty title/body would still show a
+  blank banner (no less intrusive, more likely to look broken) - forking the `alarm` plugin to
+  lower the channel importance was offered as an option but the maintainer chose to accept the
+  platform limitation instead.
+- **Decision (maintainer, 2026-09-19):** keep the ringing notification and its content exactly as
+  is. Sacrificing the persistent notification (and therefore background audio reliability) or the
+  full-screen wake-up guarantee for a cosmetic banner complaint was explicitly rejected as not worth
+  the risk to R3 (alarm survival/reliability).
+- **Evidence:** `lib/models/alarms/ringing_alarm_settings.dart`; `~/.pub-cache/hosted/pub.dev/
+  alarm-5.12.0/android/src/main/kotlin/com/gdelataillade/alarm/services/NotificationService.kt`.
+- **Done when:** closed as "no change wanted", as of this entry.
+
+### T-154 · Launcher icon had no adaptive-icon layers — FIXED (2026-09-19)
+
+- [x] Add proper Android adaptive-icon layers instead of only a legacy flat icon.
+- **Why:** the maintainer reported the icon showing "a light blob in the middle" specifically in
+  dark mode, and looking noticeably smaller on the home screen than icons like Spotify's.
+  `pubspec.yaml`'s `flutter_launcher_icons` config only ever set `image_path`, `android` and `ios` -
+  no `adaptive_icon_background`/`adaptive_icon_foreground` - and
+  `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` (the file that tells API 26+
+  launchers to use an adaptive icon at all) did not exist. Without it, a launcher treats the app's
+  icon as "legacy": it scales the flat PNG down and composites it onto a backplate of its own
+  choosing, since it cannot safely mask an image it doesn't know is transparent outside a defined
+  shape - both source PNGs (`assets/icons/icon.png`, `assets/icons/icon_no_shadow.png`) already had
+  correct alpha transparency and content spanning ~100% of their canvas, so the backplate (visible
+  as a light circle in dark mode, unnoticed in light mode where it blends into a light background)
+  was the launcher's own re-shaping, not a flaw in the artwork.
+- **Fix:** added `adaptive_icon_background: "#00000000"` (fully transparent, per the maintainer's
+  explicit ask for no background plate at all) and `adaptive_icon_foreground:
+  "assets/icons/icon_foreground.png"` to `pubspec.yaml`, then ran `dart run flutter_launcher_icons`.
+  The foreground asset was generated from `icon.png`'s own artwork (the circular badge, tightly
+  cropped to its alpha bounding box) scaled to fill ~87-92% of its canvas - `flutter_launcher_icons`
+  additionally wraps every adaptive-icon foreground in its own hardcoded 16% `<inset>` regardless of
+  how the source image is padded, which would have shrunk the icon back down to roughly the same
+  size as before; that generated `<inset>` was removed by hand from
+  `mipmap-anydpi-v26/ic_launcher.xml` afterwards (see that file's own comment - re-running the
+  generator re-adds it and requires removing it again).
+- **Tests:** `test/launcher_icon_config_test.dart` - source/file-presence checks (no Flutter API
+  reads back what a launcher would actually render for an adaptive icon), guarding the
+  `pubspec.yaml` keys, the transparent background colour, the foreground asset, and the generated
+  `mipmap-anydpi-v26/ic_launcher.xml`.
+- **Evidence:** `pubspec.yaml`; `assets/icons/icon_foreground.png`;
+  `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`.
+- **Done when:** an adaptive icon is configured with a transparent background and a foreground that
+  fills most of its canvas.
 
 ### T-56 · Alarm tones are a static bundled list
 

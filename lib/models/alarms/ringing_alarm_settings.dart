@@ -68,6 +68,14 @@ AlarmSettings buildRingingAlarmSettings({
       title: title,
       body: body,
       androidStopAlarmOnDismiss: false,
+      // docs/TODO.md T-54: without this, Android falls back to the launcher
+      // icon (or a generic system icon) instead of a purpose-made small
+      // monochrome icon - see android/app/src/main/res/drawable-*dpi/
+      // ic_notification.png (a plain white silhouette on a transparent
+      // background, required by Android for the status-bar icon; a full-colour
+      // icon would just render as an undifferentiated white blob, since the
+      // OS builds this icon from the alpha channel only).
+      icon: 'ic_notification',
     ),
     loopAudio: true,
     vibrate: vibrate,

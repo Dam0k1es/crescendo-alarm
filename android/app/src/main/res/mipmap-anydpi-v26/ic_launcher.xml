@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  flutter_launcher_icons always wraps the foreground in its own 16% inset,
+  on top of whatever padding the source image (assets/icons/icon_foreground.png)
+  already has baked in. That double-padding is what made the icon look
+  noticeably smaller than icons like Spotify's, which fill most of their
+  tile: this file's <inset> was removed by hand after the tool generated it,
+  because the safe-zone padding is already baked into
+  assets/icons/icon_foreground.png itself (content covers ~87-92% of the
+  canvas). Re-running `dart run flutter_launcher_icons` regenerates this file
+  from scratch and re-adds the inset - remove it again afterwards.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+  <background android:drawable="@color/ic_launcher_background"/>
+  <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+</adaptive-icon>
