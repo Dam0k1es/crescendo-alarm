@@ -21,7 +21,7 @@ class _PageImportQrState extends State<PageImportQr> {
         backgroundColor: Theme.of(context).colorScheme.surface,
         surfaceTintColor: Theme.of(context).colorScheme.surface,
         title: const Text(
-          'Import QR Code',
+          'Import Code',
           style: TextStyle(
             fontSize: 30,
             fontWeight: FontWeight.bold,

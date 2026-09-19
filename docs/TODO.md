@@ -946,7 +946,9 @@ that is the basis a decision can be formulated against.
       such a code is likely to have (an angle, a curved surface, light-on-dark colouring) that this
       app's own generated codes never do.
 - **Fix:** `lib/screens/scan_code/qr_scanner.dart`'s `ReaderWidget` now sets `cropPercent: 0.85`,
-      `tryHarder: true`, `tryInverted: true`.
+      `tryHarder: true`, `tryInverted: true`. Also widened `codeFormat` from `Format.qrCode` to
+      `Format.any`, at the maintainer's explicit follow-up request - see `docs/REQUIREMENTS.md` R13,
+      now "any pre-existing QR code or barcode".
 - **A second, independent bug the same report also surfaced:** "einige wenige [Codes] schon, dann
       terminiert die kamera-sicht (erfolgreich?), aber kein qr code ist angelegt" (a few DO get
       recognized - the camera view closes as if it worked - but no code ends up configured). Root

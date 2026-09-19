@@ -6,12 +6,13 @@ import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/screens/scan_code/page_deactivation_code.dart';
 
 // docs/REQUIREMENTS.md R13: "Import" already accepted any pre-existing QR
-// code, verbatim - but nothing on screen said so, so it read like it only
-// accepted something WakeyWakey itself had generated and exported. This
-// pins down the hint that makes the existing capability discoverable.
+// code (and, since widening the scanner's codeFormat to Format.any, any
+// barcode too), verbatim - but nothing on screen said so, so it read like
+// it only accepted something WakeyWakey itself had generated and exported.
+// This pins down the hint that makes the existing capability discoverable.
 void main() {
   testWidgets(
-      'the no-code screen explains that Import accepts any pre-existing QR code',
+      'the no-code screen explains that Import accepts any pre-existing QR code or barcode',
       (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final appState = AppState();
@@ -27,7 +28,7 @@ void main() {
 
     expect(
         find.textContaining(
-            'Import works with any QR code you already have'),
+            'Import works with any QR code or barcode you already have'),
         findsOneWidget);
   });
 }

@@ -121,13 +121,13 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
                   ),
                   const SizedBox(height: 8),
                   // docs/REQUIREMENTS.md R13: "Import" isn't limited to a
-                  // code this app generated - any QR code already at hand
-                  // works, verbatim. Without saying so, "Import" reads like
-                  // it only accepts something exported from WakeyWakey
-                  // itself.
+                  // code this app generated, or even to QR codes - any QR
+                  // code or barcode already at hand works, verbatim. Without
+                  // saying so, "Import" reads like it only accepts a QR code
+                  // exported from WakeyWakey itself.
                   Text(
-                    'Import works with any QR code you already have - it '
-                    'does not have to come from this app.',
+                    'Import works with any QR code or barcode you already '
+                    'have - it does not have to come from this app.',
                     style: TextStyle(
                       fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,

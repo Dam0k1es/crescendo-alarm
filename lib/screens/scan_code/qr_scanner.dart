@@ -353,7 +353,17 @@ class _QrScannerState extends State<QrScanner> {
             if (QrScanner.debugScanStreamOverride == null)
               Center(
                 child: ReaderWidget(
-                  codeFormat: Format.qrCode,
+                  // docs/REQUIREMENTS.md R13: "any pre-existing code already
+                  // at hand" is not only QR - a barcode on a household
+                  // object is just as realistic a candidate for a
+                  // deactivation code. `Format.any` is every 1D/2D symbology
+                  // zxing-cpp can decode (linear barcodes - EAN/UPC/Code128/
+                  // Codabar/ITF/GS1 DataBar - plus every 2D format besides
+                  // QR: Aztec, Data Matrix, PDF417, MaxiCode, Micro/
+                  // rectangular Micro QR). `DeactivationCode`'s payload is a
+                  // plain string either way, so nothing downstream of a scan
+                  // needs to know or care which symbology produced it.
+                  codeFormat: Format.any,
                   // docs/TODO.md T-44: the gallery button is off, deliberately.
                   // Decoding a QR code from a stored image would let a user
                   // photograph the code once and defeat the "guaranteed
