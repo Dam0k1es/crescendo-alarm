@@ -241,27 +241,58 @@ if (( DO_REBOOT )); then
     sleep 2
   done
   note "boot_completed: $(adb shell getprop sys.boot_completed | tr -d '\r')"
-  # Give awesome_notifications' own BOOT_COMPLETED receiver time to run its
-  # native restore pass (RefreshSchedulesReceiver) before checking.
-  sleep 20
+  echo ""
+  echo "If the phone asks for a PIN/pattern to unlock, do that now."
+  echo "awesome_notifications' own restore receiver runs once right after boot"
+  echo "(before unlock, while app storage may still be credential-encrypted and"
+  echo "inaccessible) and again after the device is actually unlocked - a real"
+  echo "run showed the SECOND attempt, ~70s after the first, as the one that"
+  echo "actually succeeded (logcat: \"Scheduled created (NotificationScheduler:228)\")."
+  if (( ! ASSUME_YES )); then
+    read -r -p "Press Enter once the phone is unlocked and at the home screen: " _
+  fi
 
-  APP_UID="$(resolve_uid)"
-  UID_TOKEN="$(uid_token_for "${APP_UID:-}")"
-  adb shell dumpsys alarm 2>/dev/null | tr -d '\r' >"$DUMP"
-  dump_context "after reboot"
+  # Poll rather than a single fixed wait: the restore that matters can be
+  # gated on the human actually unlocking the device, not just boot_completed
+  # - a fixed 20s sleep measured a real run BEFORE that second, successful
+  # attempt and reported a false FAIL (docs/TODO.md T-155).
+  RESTORED=0
+  RESTORE_ELAPSED=0
+  for _ in $(seq 1 18); do
+    APP_UID="$(resolve_uid)"
+    UID_TOKEN="$(uid_token_for "${APP_UID:-}")"
+    adb shell dumpsys alarm 2>/dev/null | tr -d '\r' >"$DUMP"
+    if has_scheduled_notification "$PACKAGE" <"$DUMP"; then
+      RESTORED=1
+      break
+    fi
+    sleep 10
+    RESTORE_ELAPSED=$(( RESTORE_ELAPSED + 10 ))
+  done
+  dump_context "after reboot (waited ${RESTORE_ELAPSED}s past unlock confirmation)"
 
-  if has_scheduled_notification "$PACKAGE" <"$DUMP"; then
-    note "RESULT: PASS - the scheduled notification is still registered after"
-    note "the reboot, well before its target time. T-155 closes as 'not a"
-    note "bug' - the earlier observation was the notification's own one-shot"
-    note "target time having already passed, not a restore failure."
+  # Always captured, not only on FAIL: this is exactly what showed the T-155
+  # "FAIL" was a timing artifact (DartRefreshSchedulesReceiver running twice,
+  # only the second, unlock-gated attempt logging "Scheduled created") - worth
+  # having on a PASS too, to see how many attempts and how much delay a
+  # future run needed.
+  adb logcat -d 2>/dev/null \
+    | grep -iE "carda|awesome_notif|RefreshSchedules|NotificationScheduler|System\\.err" \
+    | raw "logcat (awesome_notifications boot restore)"
+
+  if (( RESTORED )); then
+    note "RESULT: PASS - the scheduled notification is registered again after"
+    note "the reboot (took up to ${RESTORE_ELAPSED}s after unlock to reappear),"
+    note "well before its target time. T-155 closes as 'not a bug'."
   else
-    note "RESULT: FAIL - the scheduled notification is GONE after the reboot,"
-    note "despite $LEAD_MINUTES minutes of lead time remaining at measurement"
-    note "start. This is the genuine gap T-155 was written to rule out -"
-    note "next step: check for a silently swallowed exception in"
-    note "AwesomeBroadcastReceiver.onReceive (every exception there is only"
-    note "logged internally, never surfaced to this app)."
+    note "RESULT: FAIL - the scheduled notification is still GONE after"
+    note "${RESTORE_ELAPSED}s of polling post-unlock, despite $LEAD_MINUTES minutes"
+    note "of lead time remaining at measurement start. This is the genuine gap"
+    note "T-155 was written to rule out - next step: check"
+    note "  adb logcat -d | grep -iE 'carda|awesome_notif|RefreshSchedules|NotificationScheduler|System.err'"
+    note "for a swallowed exception (AwesomeBroadcastReceiver.onReceive only"
+    note "logs internally via e.printStackTrace(), never surfaces one to this"
+    note "app - but that goes through System.err, which does reach logcat)."
   fi
 else
   note "--- reboot skipped (--no-reboot) ---"

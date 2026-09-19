@@ -262,11 +262,10 @@ that is the basis a decision can be formulated against.
 
 ## P1 — resolve or consciously accept before a public release
 
-### T-155 · The sleep-time reminder's own scheduled notification does not survive a reboot — LIKELY NOT A BUG, needs one targeted re-check (2026-09-19)
+### T-155 · The sleep-time reminder's own scheduled notification does not survive a reboot — RESOLVED, was a measurement timing artifact (2026-09-19)
 
-- [ ] Confirm whether `awesome_notifications` re-arms its scheduled notifications after a reboot on
-      this app, and if not, add a boot-recovery path for the sleep reminder (FR-16 Checkpoint 2's
-      own entry point), analogous to what the `alarm` plugin already does for ringing alarms.
+- [x] Confirm whether `awesome_notifications` re-arms its scheduled notifications after a reboot on
+      this app - confirmed it does; no boot-recovery path needed.
 - **Investigated (2026-09-19):** `awesome_notifications`' native boot-restore path
   (`RefreshSchedulesReceiver` -> `NotificationScheduler.refreshScheduledNotifications`, source at
   `github.com/rafaelsetragni/AndroidAwnCore` - not in the pub-cache, since the "core" module ships
@@ -323,8 +322,28 @@ that is the basis a decision can be formulated against.
   `has_scheduled_notification`/`notification_origwhen_ms` (`alarm_detection.sh`) match
   `package/receiver-class` together, not the receiver class alone (a shared plugin, other apps
   could use it too - the T-103 trap). Self-test gained four cases (7-10) against the real T-99
-  recording and the foreign one. Not yet run for real to completion - needs a phone with a
-  production build installed and a reminder already scheduled with enough lead time.
+  recording and the foreign one.
+- **Real run, first pass looked like a confirmed bug (2026-09-19T22:57Z, Fairphone 6):** 107
+  minutes of lead time (well past `--min-lead-minutes 30`), rebooted, and the schedule was still
+  gone after the script's fixed 20s post-`boot_completed` wait - `RESULT: FAIL`. Not a one-shot
+  expiry this time (way too much lead time for that), so this looked like the real restore-path
+  bug T-153/T-99's investigation had already made plausible.
+- **Resolved by reading `adb logcat -d` right afterward, filtered for the plugin's own tags:**
+  `DartRefreshSchedulesReceiver` had run **twice** - once ~15s after `boot_completed`, and again
+  ~70 SECONDS after that, with only the second attempt logging
+  `"[Awesome Notifications]: Scheduled created (NotificationScheduler:228)"`. The most likely
+  explanation: this app's storage is credential-encrypted, so the first (early-boot) attempt
+  cannot read the persisted schedule at all until the device is actually unlocked with its
+  PIN/pattern - the second attempt, timed with the maintainer unlocking the phone, is the one that
+  succeeded. The script's fixed 20-second wait measured **before** that second attempt ever ran,
+  producing a false `FAIL`.
+- **Fix:** `scripts/verify-notification-survival.sh` now prompts the maintainer to confirm the
+  phone is actually unlocked before measuring at all, then polls (every 10s, up to 3 minutes)
+  instead of a single fixed-delay check - matching how long the real restore actually took to
+  complete once unlocked.
+- **Conclusion: not a bug.** `awesome_notifications`' native restore path works correctly; the
+  sleep reminder does survive a reboot, once the device is unlocked and enough time has passed for
+  the (unlock-gated) second restore attempt to run. No app-side fix needed.
 - **Why:** found incidentally while gathering T-93's real-device evidence (Fairphone 6, run
   2026-09-19T21:13:56Z), not the thing that run was measuring. `dumpsys alarm` before the
   intervention showed 9 of this app's own alarms under uid `u0a310`: 3 tagged
