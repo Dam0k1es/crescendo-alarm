@@ -2051,9 +2051,16 @@ that is the basis a decision can be formulated against.
   The maintainer then found that first pass too large ("Das Icon ist jetzt viel zu groß") and asked
   for ~60% of it - `assets/icons/icon_foreground.png` was regenerated at ~55% canvas fill
   (0.92 × 0.6) accordingly, with the `<inset>` removed again the same way.
+  Once the size was right, the maintainer reported the background rendering as **black** on their
+  actual home screen rather than the wallpaper showing through - most launchers paint an opaque
+  surface behind an adaptive icon instead of truly compositing it as see-through, so a fully
+  transparent `adaptive_icon_background` does not mean "no background", it means "whatever opaque
+  colour this launcher happens to fall back to". Changed `adaptive_icon_background` to
+  `"#ffffffff"` (opaque white) - the foreground artwork itself still stays transparent outside the
+  badge shape, so only the background plate changed, not the logo.
 - **Tests:** `test/launcher_icon_config_test.dart` - source/file-presence checks (no Flutter API
   reads back what a launcher would actually render for an adaptive icon), guarding the
-  `pubspec.yaml` keys, the transparent background colour, the foreground asset, and the generated
+  `pubspec.yaml` keys, the background colour, the foreground asset, and the generated
   `mipmap-anydpi-v26/ic_launcher.xml`.
 - **Evidence:** `pubspec.yaml`; `assets/icons/icon_foreground.png`;
   `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`.

@@ -191,12 +191,17 @@ flutter:
 # behind the icon in dark mode even though the source PNG is transparent.
 # adaptive_icon_foreground was generated from icon.png's own artwork (already
 # a self-contained circular badge with transparent corners), scaled to fill
-# ~82% of the canvas so it reads at a size closer to other apps' icons
-# instead of the more conservative ~66% "safe zone" - see
-# assets/icons/icon_foreground.png.
+# ~55% of the canvas (60% of an initial ~92% pass the maintainer found too
+# large) so it reads at a size closer to other apps' icons instead of the
+# more conservative ~66% "safe zone" - see assets/icons/icon_foreground.png.
+# adaptive_icon_background was originally fully transparent, but most
+# launchers paint an opaque surface behind an adaptive icon rather than
+# truly compositing it over the wallpaper, which rendered as a black square
+# on the maintainer's home screen - an explicit opaque white fixes that; only
+# the foreground artwork itself stays transparent outside the badge shape.
 flutter_launcher_icons:
   image_path: "assets/icons/icon.png"
   android: true
   ios: true
-  adaptive_icon_background: "#00000000"
+  adaptive_icon_background: "#ffffffff"
   adaptive_icon_foreground: "assets/icons/icon_foreground.png"

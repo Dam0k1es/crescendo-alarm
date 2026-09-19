@@ -9,6 +9,9 @@
   assets/icons/icon_foreground.png itself (content covers ~55% of the
   canvas as of 2026-09-19 - down from an initial ~87-92% that the maintainer
   found too large, scaled to 60% of that per their explicit request).
+  The background is opaque white (@color/ic_launcher_background), not
+  transparent - a transparent one rendered as a black square on the
+  maintainer's actual home screen instead of showing the wallpaper through.
   Re-running `dart run flutter_launcher_icons` regenerates this file from
   scratch and re-adds the inset - remove it again afterwards.
 -->

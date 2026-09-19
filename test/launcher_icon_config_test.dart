@@ -27,15 +27,21 @@ void main() {
             'adaptive icon is configured');
   });
 
-  test('the adaptive icon background is transparent', () {
-    // The user's explicit ask: no background plate at all, only the logo.
+  test('the adaptive icon background is opaque white', () {
+    // A fully transparent background (the original design) rendered as black
+    // on the maintainer's home screen instead of showing the wallpaper
+    // through, since most launchers paint an opaque surface behind an
+    // adaptive icon rather than compositing it as truly see-through. The
+    // maintainer's fix: an explicit opaque white background layer, with only
+    // the foreground artwork itself (assets/icons/icon_foreground.png)
+    // staying transparent outside the badge shape.
     final match =
         RegExp(r'adaptive_icon_background:\s*"?(#[0-9A-Fa-f]{8})"?')
             .firstMatch(pubspec);
     expect(match, isNotNull,
-        reason: 'adaptive_icon_background should be a fully transparent '
-            '8-digit ARGB hex colour, not an opaque colour or an image');
-    expect(match!.group(1)!.toLowerCase(), '#00000000');
+        reason: 'adaptive_icon_background should be an 8-digit ARGB hex '
+            'colour, not an image');
+    expect(match!.group(1)!.toLowerCase(), '#ffffffff');
   });
 
   test('the adaptive icon foreground asset exists and is transparent',
