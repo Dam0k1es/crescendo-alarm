@@ -304,7 +304,20 @@ that is the basis a decision can be formulated against.
   together so a shared plugin's schedule can't be mistaken for another app's) both before and after
   the reboot. `alarm_detection.sh`'s self-test gained two cases (7, 8) against the real recording
   from T-99 and the foreign one, so this detection is checked the same way the alarm-counting one
-  already is. Not yet run for real - needs a phone.
+  already is.
+- **Fixed on first real attempt (2026-09-19): `POST_NOTIFICATIONS` was never granted.** The script
+  used to rely on `flutter test integration_test/x.dart -d device` alone to install the app, and
+  called `adb shell pm grant ... POST_NOTIFICATIONS` before it as a separate step - a real run
+  showed `scheduleNotification: isAllowed: false`, the scheduling call failing before anything
+  reached `AlarmManager`. Root cause: `flutter test` builds and installs its own debug APK
+  regardless of what a prior `pm grant` set up, and that install is a **fresh** one whenever the
+  previously-installed app was signed differently (e.g. a release `current.apk` from earlier
+  testing) - which wipes any permission grant made against the old install before the test body
+  ever runs. Fixed by building the debug APK first and installing it with `adb install -r -g`
+  (grants every manifest-declared permission atomically at install time, the same thing
+  `.github/scripts/run_e2e_tests.sh` already does for the CI emulator leg) - `flutter test`'s own
+  subsequent install of the identical build is then a same-signature update, which does not reset
+  permissions. Not yet run for real to completion - needs a phone.
 - **Why:** found incidentally while gathering T-93's real-device evidence (Fairphone 6, run
   2026-09-19T21:13:56Z), not the thing that run was measuring. `dumpsys alarm` before the
   intervention showed 9 of this app's own alarms under uid `u0a310`: 3 tagged

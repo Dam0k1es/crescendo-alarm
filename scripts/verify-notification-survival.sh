@@ -113,11 +113,25 @@ fi
 export ANDROID_SERIAL="$DEVICE"
 note "device: $DEVICE ($(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r'))"
 
-# SCHEDULE_EXACT_ALARM is a "special" app op; POST_NOTIFICATIONS is a normal
-# dangerous permission granted at install time on most OS versions - neither
-# is forced here, since a real phone previously used for this app should
-# already have both from ordinary use. If scheduling silently fails below,
-# check these first.
+# ---------------------------------------------------------------------------
+# Install with every declared runtime permission pre-granted, THEN run the
+# test - not the other way around.
+#
+# POST_NOTIFICATIONS (API 33+) is a genuine runtime permission, never
+# auto-granted at install: `flutter test integration_test/x.dart -d device`
+# builds and installs its own debug APK regardless of what a separate
+# `adb shell pm grant` beforehand set up, and that install is a fresh one
+# whenever the previously-installed app was signed differently (e.g. a
+# release `current.apk`) - wiping any grant made against the old install
+# before the test ever runs. `adb install -r -g` grants every permission the
+# manifest declares atomically at install time, exactly as
+# `.github/scripts/run_e2e_tests.sh` already does for the CI emulator leg.
+# Building the APK ourselves first, then letting `flutter test` install the
+# SAME build again, means its own install is a same-signature update, not a
+# fresh install - which does not reset permissions on Android.
+note "--- building and installing with all permissions pre-granted ---"
+(cd "$REPO" && flutter build apk --debug) 2>&1 | tee -a "$EVIDENCE_DIR/build.log"
+adb install -r -g "$REPO/build/app/outputs/flutter-apk/app-debug.apk" 2>&1 | raw "adb install -g"
 adb shell appops set "$PACKAGE" SCHEDULE_EXACT_ALARM allow || true
 
 # ---------------------------------------------------------------------------
@@ -134,6 +148,9 @@ SCHEDULE_EXIT_CODE=${PIPESTATUS[0]}
 if (( SCHEDULE_EXIT_CODE != 0 )); then
   note "ABORT: scheduling the test notification failed (exit $SCHEDULE_EXIT_CODE) -"
   note "see $EVIDENCE_DIR/schedule_test.log. Nothing was armed to measure."
+  note "If the log shows 'isAllowed: false' again, POST_NOTIFICATIONS was not"
+  note "actually granted - check with:"
+  note "  adb shell dumpsys package $PACKAGE | grep -A2 POST_NOTIFICATIONS"
   exit 1
 fi
 
