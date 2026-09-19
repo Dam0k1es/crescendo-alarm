@@ -140,7 +140,7 @@ that is the basis a decision can be formulated against.
   `scripts/verify-alarm-survival.sh` (T-93).
 - **Requirement:** R3
 
-### T-04 · Alarm survival across reboot and force-stop is unverified
+### T-04 · Alarm survival across reboot and force-stop — PARTLY VERIFIED on a real device (2026-09-19), one scenario still open
 
 - [x] Fixed the test that claimed to cover persistence. `integration_test/app_test.dart`'s
       scenario 3 now calls `SharedPreferences.resetStatic()` and `reload()` before re-reading, and
@@ -149,9 +149,17 @@ that is the basis a decision can be formulated against.
       green with storage entirely broken. The same hardening went into
       `test/disabled_manual_alarm_test.dart`, where a mutation (dropping the save) proved the
       assertion had been vacuous until the alarm was created **switched on**.
-- [ ] Open: a real restart scenario. The route for it is now
-      `scripts/verify-alarm-survival.sh` (see T-93), not the E2E suite: `flutter test` uninstalls
-      the app at the end, and an uninstalled package has no AlarmManager entries left.
+- [x] Verified on a real device, by the maintainer: an armed alarm fires as expected after a
+      **reboot**, after the app being **closed**, and after a **force-stop** - in every case tried
+      so far, provided the app gets **reopened** at some point before the alarm's due time.
+- [ ] Still open: the same three scenarios (reboot / closed / force-stopped) but over a **long
+      stretch with no app activity at all** - the app never reopened, not even briefly, before the
+      alarm is due. Reopening the app runs `runCheckpointSafely(trigger:
+      CheckpointTrigger.appForeground)` (`main.dart`'s `initState`) and FR-17's stale-checkpoint
+      recovery, which may be doing work that a long idle period never gets - if so, an alarm
+      surviving in the verified cases could still be silently lost in this one. Needs its own real-
+      device run: arm an alarm, force-stop/reboot, then wait out the alarm's due time **without**
+      ever bringing the app back to the foreground, and confirm it still rings.
 - **Why:** for an alarm clock this is the only durability question that matters, and nothing tests
   it. The test named *"a created alarm survives being reloaded from on-device storage"* does not
   touch storage: `SharedPreferences.getInstance()` memoises its instance behind a static
@@ -160,11 +168,13 @@ that is the basis a decision can be formulated against.
 - **Evidence:** `integration_test/app_test.dart:186-198`;
   `shared_preferences-2.5.5/lib/src/shared_preferences_legacy.dart:28,79-96` (memoised),
   `:107,129` (in-memory cache), `:223` (`reload()`, never called anywhere in this repo);
-  `grep -rniE "reboot|force-stop" .github/` returns nothing.
+  `grep -rniE "reboot|force-stop" .github/` returns nothing; the real-device runs above are the
+  maintainer's own manual verification, not yet captured by `scripts/verify-alarm-survival.sh`.
 - **Done when:** the test calls `reload()` (or `resetStatic()`) before re-reading and asserts the
-  alarm's time and id plus its presence in `Alarm.getAlarms()`; and a separate scenario
-  force-stops (ideally reboots) the device and confirms the alarm still fires with the app not in
-  the foreground.
+  alarm's time and id plus its presence in `Alarm.getAlarms()` (done); and the long-idle,
+  never-reopened variant of the reboot/close/force-stop scenarios is confirmed (or found to fail)
+  on a real device, ideally captured by `scripts/verify-alarm-survival.sh`'s evidence trail (T-93)
+  rather than only observed by hand.
 - **Requirement:** R3
 
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
