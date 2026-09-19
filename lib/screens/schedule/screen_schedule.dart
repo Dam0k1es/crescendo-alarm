@@ -602,9 +602,9 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
   try {
     DateTime startOfWeek;
     if (specificDate != null) {
-      startOfWeek = getStartOfWeek(appState, specificDate);
+      startOfWeek = getStartOfWeek(specificDate);
     } else {
-      startOfWeek = getStartOfWeek(appState, appState.visibleDate);
+      startOfWeek = getStartOfWeek(appState.visibleDate);
     }
 
     // Check if current week needs fetching

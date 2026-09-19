@@ -1664,20 +1664,25 @@ that is the basis a decision can be formulated against.
   instead of "never ran on a device". README's "Quality Checks" section now documents the E2E gate
   and the local command to run it.
 
-### T-42 · Six persisted settings are unreachable or unused — MOSTLY RESOLVED (2026-09-10)
+### T-42 · Six persisted settings are unreachable or unused — FIXED (2026-09-20)
 
 - [x] Five of the six removed: `doNotDisturbEnabled`, `turnOffNotifications`, `turnOffCalls`
       (feature never built), `wakeUpSteps` and `rescheduleOnAlarm` (both belonged to the old
       engine and disappeared with it - Phase 6, T-86). `grep -rn` no longer finds them anywhere
       in `lib/`; the one remaining hit for `rescheduleOnAlarm` is a historical comment in
       `handler.dart` explaining what used to be there.
-- [ ] **Remains: `startOfWeekDay`.** And the case is worse than "no UI": its one reader,
-      `getStartOfWeek` (`lib/utils/utils.dart:112-118`), uses the value only as a *condition*,
-      never as a *target* - if the weekday doesn't match, it always computes
-      `subtract(weekday - 1)` back **to Monday** regardless. So the setting only decides WHETHER
-      a correction happens, never WHAT it corrects to. This affects the Schedule screen's calendar
-      preload, not scheduling-v2. Either make the helper compute against the configured day and
-      add a UI for it, or drop the setting outright.
+- [x] **`startOfWeekDay` removed (2026-09-20), at the maintainer's request.** It was worse than "no
+      UI": its one reader, `getStartOfWeek` (`lib/utils/utils.dart`), used the value only as a
+      *condition*, never as a *target* - if the weekday didn't match, it always computed
+      `subtract(weekday - 1)` back **to Monday** regardless, so the setting only decided WHETHER a
+      correction happened, never WHAT it corrected to; `AppState.isCalendarWeekFetched` had the
+      identical dead condition inline. Both now simply always normalize to Monday
+      (`dateTime.subtract(Duration(days: dateTime.weekday - 1))`), which is exactly what the
+      condition always produced anyway - subtracting 0 days is already a no-op when `dateTime` is
+      already Monday, so dropping the condition changes nothing observable. `getStartOfWeek` lost
+      its now-unused `AppState` parameter; call sites in `screen_schedule.dart` and
+      `preloadCalendarData` updated. The field, its getter/setter and its `SharedPreferences` load
+      are gone from `AppState`.
 - **Why:** three are fully dead — `doNotDisturbEnabled`, `turnOffNotifications`, `turnOffCalls` are
   declared and persisted but have zero readers outside `AppState`, for a feature the use cases mark
   as never implemented. Three more are read by logic but have no UI: `wakeUpSteps`, which drives the

@@ -48,7 +48,6 @@ class AppState extends ChangeNotifier {
   // Schedule Screen variables
   String _currentTimeZone = '';
   bool _calendarsInitialized = false;
-  int _startOfWeekDay = 1;
   List<DateTime> _fetchedCalendarWeeks = [];
   List<Meeting> _meetings = [];
   DateTime _visibleDate =
@@ -188,8 +187,6 @@ class AppState extends ChangeNotifier {
   bool get calendarsInitialized => _calendarsInitialized;
 
   bool get firstUpdateOfCalendar => _firstUpdateOfCalendar;
-
-  int get startOfWeekDay => _startOfWeekDay;
 
   bool get darkMode => _darkMode;
 
@@ -693,12 +690,6 @@ class AppState extends ChangeNotifier {
   set firstUpdateOfCalendar(bool value) {
     _firstUpdateOfCalendar = value;
     // Must not persist
-    notifyListeners();
-  }
-
-  set startOfWeekDay(int value) {
-    _startOfWeekDay = value;
-    _prefs.setInt('startOfWeekDay', _startOfWeekDay);
     notifyListeners();
   }
 
@@ -1229,14 +1220,21 @@ class AppState extends ChangeNotifier {
   /// [dateTime] here is typically an arbitrary day within a week (e.g.
   /// "today"). Comparing [dateTime] itself against those start-of-week
   /// entries used to only match on the rare day that happened to already be
-  /// the configured start-of-week day - every other day reported its
-  /// already-preloaded week as not fetched, triggering a redundant fetch that
-  /// duplicated the week's calendar entries. Normalizing [dateTime] to its
-  /// own start of week first makes the comparison apples-to-apples.
+  /// Monday - every other day reported its already-preloaded week as not
+  /// fetched, triggering a redundant fetch that duplicated the week's
+  /// calendar entries. Normalizing [dateTime] to its own start of week first
+  /// makes the comparison apples-to-apples.
+  ///
+  /// docs/TODO.md T-42: the week is always normalized to Monday - there used
+  /// to be a `startOfWeekDay` setting gating this subtraction, but it had no
+  /// UI and, even set, never changed the *target* day the correction landed
+  /// on (always Monday regardless), only whether the correction ran at all -
+  /// a no-op distinction, since `Duration(days: 0)` is already a no-op when
+  /// [dateTime] is already Monday. Removed rather than wired up to a UI
+  /// nobody asked for.
   Future<bool> isCalendarWeekFetched(DateTime dateTime) async {
-    DateTime startOfWeek = dateTime.weekday != _startOfWeekDay
-        ? dateTime.subtract(Duration(days: dateTime.weekday - 1))
-        : dateTime;
+    DateTime startOfWeek =
+        dateTime.subtract(Duration(days: dateTime.weekday - 1));
     DateTime dateOnly =
         DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
 
@@ -1339,8 +1337,6 @@ class AppState extends ChangeNotifier {
       _accentColor =
           Color(_prefs.getInt('accentColor') ?? _accentColor.toARGB32());
       _deactivationCode = _loadDeactivationCode();
-      // Set Monday as the first day of the week by default:
-      _startOfWeekDay = _prefs.getInt('startOfWeekDay') ?? _startOfWeekDay;
       _gapDayCounter = _prefs.getInt('gapDayCounter') ?? _gapDayCounter;
       _lastCheckedUtcOffsetMinutes =
           _prefs.getInt('lastCheckedUtcOffsetMinutes') ??

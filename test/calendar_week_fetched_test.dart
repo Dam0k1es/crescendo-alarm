@@ -26,7 +26,6 @@ void main() {
       () async {
     final appState = AppState();
     await appState.initialized;
-    appState.startOfWeekDay = 1; // Monday
 
     // A Wednesday - deliberately not the start of its own week.
     final midWeekDay = DateTime(2026, 9, 23);
@@ -42,7 +41,6 @@ void main() {
       () async {
     final appState = AppState();
     await appState.initialized;
-    appState.startOfWeekDay = 1; // Monday
 
     final midWeekDay = DateTime(2026, 9, 23);
     final startOfADifferentWeek = DateTime(2026, 9, 14);

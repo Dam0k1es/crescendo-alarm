@@ -141,7 +141,7 @@ Future<void> preloadCalendarData(AppState appState,
   await loadCalendarData(appState, Duration(days: pastDays),
       Duration(days: futureDays), DateTime.now());
 
-  DateTime weekStart = getStartOfWeek(appState, DateTime.now());
+  DateTime weekStart = getStartOfWeek(DateTime.now());
 
   for (int i = 0; i < pastWeeks; i++) {
     DateTime startOfWeek = weekStart.subtract(Duration(days: i * 7));
@@ -174,12 +174,14 @@ void _markWeekFetched(AppState appState, DateTime startOfWeek) {
   }
 }
 
-DateTime getStartOfWeek(AppState appState, DateTime dateTime) {
-  if (dateTime.weekday != appState.startOfWeekDay) {
-    return dateTime.subtract(Duration(days: dateTime.weekday - 1));
-  } else {
-    return dateTime;
-  }
+// docs/TODO.md T-42: always normalizes to Monday - there used to be a
+// `startOfWeekDay` setting gating the subtraction, but it had no UI and,
+// even set, never changed the target day (always Monday), only whether the
+// correction ran at all - a no-op distinction, since subtracting 0 days is
+// already a no-op when [dateTime] is already Monday. Removed rather than
+// wired up to a UI nobody asked for.
+DateTime getStartOfWeek(DateTime dateTime) {
+  return dateTime.subtract(Duration(days: dateTime.weekday - 1));
 }
 
 /// docs/TODO.md T-61 (FR-18's boundary to the alarm plugin): a planned value
