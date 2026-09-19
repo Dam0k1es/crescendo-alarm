@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **448 tests across 61 files**, and CI runs them six times over -
+`flutter test` currently runs **451 tests across 63 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -352,6 +352,12 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   the day it's asked about to its own start of week before comparing against
   `fetchedCalendarWeeks` (which is keyed by week start), or every non-start-of-week query wrongly
   reports an already-preloaded week as unfetched.
+
+- `resync_calendar_data_test.dart` and `schedule_tab_spinner_test.dart` cover T-60: the calendar
+  cache is now force-refreshed on every app open (`lib/utils/utils.dart`'s `resyncCalendarData`,
+  called from `lib/main.dart` on cold start and every resume) instead of only once per process
+  lifetime, and the Schedule tab's icon swaps for a spinner while that read is in flight
+  (`AppState.isReadingCalendarMutex`).
 
 - The scheduling-v2 suite (`scheduling_v2_test.dart`, `scheduling_v2_offset_test.dart`,
   `scheduling_v2_tz_test.dart`, `scheduling_v2_dst_test.dart`, `replan_test.dart`,

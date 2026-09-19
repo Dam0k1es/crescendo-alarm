@@ -95,6 +95,22 @@ void showFullScreenOverlay(BuildContext context, Widget widget) {
   );
 }
 
+/// docs/TODO.md T-60: `preloadCalendarData` alone only ever fetches once per
+/// process lifetime - nothing clears `AppState.meetings` or
+/// `fetchedCalendarWeeks` afterwards, so a calendar edit made after the
+/// initial preload stayed invisible in the Schedule tab until the app was
+/// killed and relaunched. Called instead of [preloadCalendarData] directly
+/// on every app open (`lib/main.dart`, cold start and resume alike): clears
+/// both first, so the fresh fetch replaces the stale state rather than
+/// appending a second copy of it on top.
+Future<void> resyncCalendarData(AppState appState,
+    {int pastWeeks = 2, int futureWeeks = 1}) async {
+  appState.meetings = [];
+  appState.fetchedCalendarWeeks = [];
+  await preloadCalendarData(appState,
+      pastWeeks: pastWeeks, futureWeeks: futureWeeks);
+}
+
 Future<void> preloadCalendarData(AppState appState,
     {int pastWeeks = 1, int futureWeeks = 2}) async {
   try {
@@ -112,16 +128,32 @@ Future<void> preloadCalendarData(AppState appState,
 
   for (int i = 0; i < pastWeeks; i++) {
     DateTime startOfWeek = weekStart.subtract(Duration(days: i * 7));
-    appState.fetchedCalendarWeeks.add(startOfWeek);
+    _markWeekFetched(appState, startOfWeek);
     debugPrint(
         "=====preloadCalendarData: Preloaded the week starting with $startOfWeek");
   }
 
   for (int i = 1; i <= futureWeeks; i++) {
     DateTime startOfWeek = weekStart.add(Duration(days: i * 7));
-    appState.fetchedCalendarWeeks.add(startOfWeek);
+    _markWeekFetched(appState, startOfWeek);
     debugPrint(
         "=====preloadCalendarData: Preloaded the week starting with $startOfWeek");
+  }
+}
+
+/// docs/TODO.md T-60: the loops above used to add unconditionally, so the
+/// current week ended up twice in a single `preloadCalendarData` call - once
+/// here, once already added by `loadCalendarData`'s own
+/// `updateCalendarData(..., specificDate: DateTime.now())` call a few lines
+/// above, whose successful-fetch branch records the same start-of-week date.
+/// Skip a date already present rather than growing the list with duplicates.
+void _markWeekFetched(AppState appState, DateTime startOfWeek) {
+  final alreadyPresent = appState.fetchedCalendarWeeks.any((fetched) =>
+      fetched.year == startOfWeek.year &&
+      fetched.month == startOfWeek.month &&
+      fetched.day == startOfWeek.day);
+  if (!alreadyPresent) {
+    appState.fetchedCalendarWeeks.add(startOfWeek);
   }
 }
 

@@ -1690,29 +1690,42 @@ that is the basis a decision can be formulated against.
 - **Done when:** the refactor is done and existing tests (once T-10 exists) still pass, or this is
   closed as not worth the churn.
 
-### T-60 · Calendar data is cached forever per week, never re-fetched for the app's lifetime
+### T-60 · Calendar data was cached forever per week, never re-fetched for the app's lifetime — FIXED (2026-09-19)
 
-- [ ] Fix `_fetchedCalendarWeeks` (`lib/app_state.dart:28`) to actually reflect whether a week's
-      events were fetched, and/or add a way to force a fresh re-read.
+- [x] Force a fresh re-read on every app open, per the maintainer's explicit instruction, rather
+      than a time-boxed invalidation.
 - **Why:** found while checking scheduling-v2's feasibility (`docs/scheduling-v2-spec.md` FR-11/
-  FR-12). `preloadCalendarData` (`lib/utils/utils.dart:82-109`) marks 2 past + 1 future week as
-  "fetched" in `_fetchedCalendarWeeks` at startup, but only ever actually calls `retrieveEvents` for
-  the single week containing "now" - the other weeks are marked fetched without ever having been
-  fetched. Once a week-start-date is in `_fetchedCalendarWeeks`, `updateCalendarData`
-  (`screen_schedule.dart:257-`) skips fetching it again for as long as the process lives, since
-  nothing anywhere ever clears or reassigns that list. A calendar edit for a day already in this set
-  is silently invisible to the app until the next process restart - this affects the schedule
-  display today (unchanged by the move to calendar_view in T-05: the caching sits in
-  `updateCalendarData`, not in the widget), and would silently break scheduling-v2's FR-11
-  revisability and FR-8's daily replanning if they reused this same path.
-- **Evidence:** `lib/app_state.dart:28` (`_fetchedCalendarWeeks` field, never cleared/reassigned
-  anywhere else in `lib/`); `lib/utils/utils.dart:82-109` (`preloadCalendarData`, marks weeks fetched
-  without fetching them); `lib/screens/schedule/screen_schedule.dart:257-` (`updateCalendarData`,
-  gates every fetch behind `appState.isCalendarWeekFetched`, `app_state.dart:635-656`).
-- **Done when:** either `_fetchedCalendarWeeks` is correctly invalidated (e.g. time-boxed, or
-  cleared on app foreground/a manual refresh), or - for scheduling-v2 specifically - the new
-  scheduling engine is confirmed to bypass this cache entirely and call `retrieveEvents` directly
-  on every replan, never through `updateCalendarData`.
+  FR-12). `preloadCalendarData` (`lib/utils/utils.dart`) marked 2 past + 1 future week as "fetched"
+  in `_fetchedCalendarWeeks` at startup, but only ever actually called `retrieveEvents` for the
+  single week containing "now" - the other weeks were marked fetched without ever having been
+  fetched. Once a week-start-date was in `_fetchedCalendarWeeks`, `updateCalendarData`
+  (`screen_schedule.dart`) skipped fetching it again for as long as the process lived, since
+  nothing anywhere ever cleared or reassigned that list. A calendar edit for a day already in this
+  set was silently invisible to the app until the next process restart.
+- **Fix:** a new `resyncCalendarData` (`lib/utils/utils.dart`) clears `appState.meetings` and
+  `appState.fetchedCalendarWeeks` before calling `preloadCalendarData` again, so the fresh fetch
+  replaces the stale state instead of appending to it. `lib/main.dart` calls it - via a shared
+  `_syncCalendarAndAlarmsOnOpen` - on **every app open**: the cold-start path (`initState`'s
+  post-frame callback) and every resume (`didChangeAppLifecycleState`). Each call is followed by a
+  `CheckpointTrigger.manualSync` checkpoint - the same "reconcile now" the alarm list's own sync
+  button already uses (`screen_alarms.dart`) - deliberately bypassing FR-17's once-a-day lock, so a
+  calendar edit reaches the user's actually-armed alarms on the same open that made it visible in
+  the Schedule tab, not only once a day. This is a deliberate widening beyond FR-17's normal
+  cadence, at the maintainer's explicit request, not an accidental relaxation of that lock.
+- **Also fixed along the way:** `preloadCalendarData`'s own two loops added a week to
+  `fetchedCalendarWeeks` unconditionally, so even a single call double-counted the current week
+  (once from its internal `updateCalendarData` call, once from the loop itself) - now deduplicated
+  via a small `_markWeekFetched` helper, so repeated resyncs don't grow the list without bound.
+- **UI:** while a calendar read is in flight, the Schedule tab in the bottom navigation bar
+  (`lib/main.dart`) shows a small `CircularProgressIndicator` in place of its static
+  `Icons.calendar_month` icon, driven by the existing `AppState.isReadingCalendarMutex` flag
+  (already toggled around every fetch in `updateCalendarData` - previously set but read by nothing).
+- **Evidence:** `lib/utils/utils.dart`'s `resyncCalendarData`/`preloadCalendarData`;
+  `lib/main.dart`'s `_syncCalendarAndAlarmsOnOpen`, `initState`, `didChangeAppLifecycleState`, and
+  the `BottomNavigationBar`'s Schedule item.
+- **Tests:** `test/resync_calendar_data_test.dart` (clears stale state before re-fetching; repeated
+  resyncs don't accumulate duplicate weeks); `test/schedule_tab_spinner_test.dart` (the Schedule
+  tab's icon swaps for a spinner while `isReadingCalendarMutex` is set, and back once it clears).
 
 ### T-61 · scheduling-v2's wall-clock arithmetic assumes `deviceUtcOffset == 0` — RESOLVED
 

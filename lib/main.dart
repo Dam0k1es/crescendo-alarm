@@ -255,8 +255,24 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
       // TODO user configurable preload range - 0x39A
       // Load calendar data after setting timezone
-      await preloadCalendarData(_appState, pastWeeks: 2, futureWeeks: 1);
+      await _syncCalendarAndAlarmsOnOpen();
     });
+  }
+
+  /// docs/TODO.md T-60: called on every app open (here for a cold start, and
+  /// from [didChangeAppLifecycleState] on every resume) - `preloadCalendarData`
+  /// alone only ever fetched once per process lifetime, so a calendar edit
+  /// made afterwards stayed invisible in the Schedule tab until the app was
+  /// killed and relaunched. [resyncCalendarData] clears that stale cache
+  /// before re-fetching; the `manualSync` checkpoint that follows is the same
+  /// "reconcile now" the alarm list's own sync button uses
+  /// (`screen_alarms.dart`) - deliberately bypassing FR-17's once-a-day lock,
+  /// so a calendar edit reaches the user's actually-armed alarms on the same
+  /// open that made it visible in the Schedule tab, not only once a day.
+  Future<void> _syncCalendarAndAlarmsOnOpen() async {
+    await resyncCalendarData(_appState, pastWeeks: 2, futureWeeks: 1);
+    await runCheckpointSafely(_appState,
+        trigger: CheckpointTrigger.manualSync);
   }
 
   /// FR-17 (docs/TODO.md T-68): the checkpoint must also run on a real
@@ -275,6 +291,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       unawaited(runCheckpointSafely(_appState,
           trigger: CheckpointTrigger.appForeground));
+      unawaited(_syncCalendarAndAlarmsOnOpen());
     }
     // docs/TODO.md T-89: persist the event buffer when the app is left. The
     // checkpoint already does this itself at the end of its own sequence;
@@ -328,24 +345,38 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             appState.currentPageIndex = index;
           });
         },
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
+        items: <BottomNavigationBarItem>[
+          const BottomNavigationBarItem(
             icon: Icon(Icons.alarm),
             label: 'Alarms',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month),
+            // docs/TODO.md T-60: the Schedule tab's calendar is being
+            // (re-)fetched on every app open now, not just once per process
+            // lifetime - a small spinner in place of the static icon is the
+            // only visible sign of that I/O, since it can take a moment on a
+            // large calendar.
+            icon: appState.isReadingCalendarMutex
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Padding(
+                      padding: EdgeInsets.all(2.0),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : const Icon(Icons.calendar_month),
             label: 'Schedule',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.qr_code),
             label: 'Scan Code',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.bed),
             label: 'Sleep Habits',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.settings),
             label: 'Settings',
           ),
