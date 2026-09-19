@@ -64,6 +64,22 @@ uid_token_for() {
   fi
 }
 
+# docs/TODO.md T-155: does THIS app have a still-standing awesome_notifications
+# schedule (the sleep-time reminder's own hook) right now? Unlike
+# count_app_alarms above, this asks about one SPECIFIC receiver, not "any
+# alarm at all" - the `alarm` plugin's own AlarmReceiver entries surviving a
+# reboot says nothing about whether awesome_notifications' schedule did too,
+# since the two are unrelated native mechanisms with unrelated failure modes.
+#
+# Matched as "our package name / the receiver class" together, not the
+# receiver class alone - the class belongs to a shared plugin, so a bare
+# substring would risk counting another app's schedule (the exact T-103
+# trap this file exists to avoid repeating).
+has_scheduled_notification() {
+  local package="$1"
+  grep -qF "${package}/me.carda.awesome_notifications.DartScheduledNotificationReceiver"
+}
+
 # ---------------------------------------------------------------------------
 # Self-check against recorded real output.
 #
@@ -121,6 +137,19 @@ self_test() {
   # 6. The uid conversion.
   [[ "$(uid_token_for 10161)" == "u0a161" ]] || { echo "SELF-TEST FAIL: uid_token_for 10161" >&2; failed=1; }
   [[ -z "$(uid_token_for 1000)" ]] || { echo "SELF-TEST FAIL: uid_token_for must not translate system uids" >&2; failed=1; }
+
+  # 7. docs/TODO.md T-155: the real recording has a standing
+  #    awesome_notifications schedule for this app - must be found.
+  if ! has_scheduled_notification "$pkg" <"$FIXTURES/dumpsys_alarm_own.txt"; then
+    echo "SELF-TEST FAIL: has_scheduled_notification found nothing in a recording that has one." >&2
+    failed=1
+  fi
+
+  # 8. The foreign recording must not produce a false positive.
+  if has_scheduled_notification "$pkg" <"$FIXTURES/dumpsys_alarm_foreign.txt"; then
+    echo "SELF-TEST FAIL: has_scheduled_notification matched a recording with none of our alarms." >&2
+    failed=1
+  fi
 
   if (( failed )); then
     echo "SELF-TEST FAIL - the alarm detection is broken; nothing will be measured." >&2

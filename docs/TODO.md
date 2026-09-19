@@ -295,6 +295,16 @@ that is the basis a decision can be formulated against.
   despite a still-future target time, the native restore path itself needs investigating further
   (an exception `AwesomeBroadcastReceiver.onReceive` swallows silently is the most likely next
   suspect, since every exception there is caught and only logged internally, never surfaced).
+- **Re-check script written (2026-09-19):** `scripts/verify-notification-survival.sh` (self-test:
+  `--self-test`, no device needed) schedules a notification 6 hours out via
+  `integration_test/schedule_long_notification_test.dart` (a prelude test, the same shape as
+  `integration_test/arm_alarm_test.dart` for T-93 - it arms and leaves the schedule standing rather
+  than waiting for it), confirms it reached `AlarmManager` before rebooting, then checks
+  `has_scheduled_notification` (new in `alarm_detection.sh`, matching `package/receiver-class`
+  together so a shared plugin's schedule can't be mistaken for another app's) both before and after
+  the reboot. `alarm_detection.sh`'s self-test gained two cases (7, 8) against the real recording
+  from T-99 and the foreign one, so this detection is checked the same way the alarm-counting one
+  already is. Not yet run for real - needs a phone.
 - **Why:** found incidentally while gathering T-93's real-device evidence (Fairphone 6, run
   2026-09-19T21:13:56Z), not the thing that run was measuring. `dumpsys alarm` before the
   intervention showed 9 of this app's own alarms under uid `u0a310`: 3 tagged
