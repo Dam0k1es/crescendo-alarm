@@ -237,6 +237,38 @@ void main() {
     expect(find.text('Stop alarm'), findsNothing);
   });
 
+  testWidgets(
+      'a camera that keeps "working" but never finds a valid code eventually offers a way out',
+      (tester) async {
+    // Real-device report (docs/TODO.md T-38): a hardware camera kill-switch
+    // can leave the camera producing a permanently black/blank feed - frames
+    // arrive, decode attempts run and "fail" normally, so proof-of-life
+    // alone (the test just above) never lets the button appear. This is the
+    // fix: a much longer timeout that fires regardless of scanner activity,
+    // as long as no VALID code has been found.
+    await _pumpScanner(tester, storedCode: DeactivationCode(payload: 'right'));
+
+    // Proof-of-life stays continuously satisfied throughout, exactly like a
+    // camera that is "running" but can never see the right code.
+    scans.add(const ScanResult('wrong'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 21));
+    await tester.pumpAndSettle();
+    expect(find.text('Stop alarm'), findsNothing,
+        reason: 'not yet - the shorter proof-of-life window does not apply '
+            'here, since scans keep "succeeding"');
+
+    scans.add(const ScanResult('still wrong'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 40));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Stop alarm'), findsOneWidget,
+        reason: 'after long enough with no VALID code, the user gets an '
+            'escape hatch regardless of whether individual scan attempts '
+            'kept "succeeding" at finding the wrong thing');
+  });
+
   testWidgets('an empty scan changes nothing', (tester) async {
     // A decode that yields no text must not be treated as an import of "null",
     // which would leave a code nobody can ever reproduce.

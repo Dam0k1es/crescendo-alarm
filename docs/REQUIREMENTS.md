@@ -188,14 +188,14 @@ camera for QR deactivation).
   pass. Not covered: the gentle wake-up volume ramp is never exercised (it defaults to off, and the
   CI emulator runs without audio - `docs/TODO.md` T-15). The QR gate's own gaps have moved on from
   how T-08/T-16 originally described them (both now "PARTIALLY"/"LARGELY RESOLVED" - a negative
-  test exists, and the debug seam no longer ships a real camera preview in release): the current,
-  narrower gap is that `ReaderWidget` itself (the real, native decode path) has still never run
-  in any suite, only through the same debug seam, which is necessarily format/behaviour-agnostic by
-  design (`docs/TODO.md` T-143 - also covers R13's "any code, not only QR" requirement now, and the
-  real-device tuning of `cropPercent`/`tryHarder`/`codeFormat` fixed there; `scanDelay`/
-  `scanDelaySuccess` remain unverified). Neither dismissal test confirms the alarm actually stopped
-  rather than just navigating away (`docs/TODO.md` T-09). The app's declared `CAMERA` permission
-  comes from the
+  test exists, and the debug seam no longer ships a real camera preview in release). **Resolved
+  (2026-09-19, `docs/TODO.md` T-143):** `ReaderWidget` itself (the real, native decode path,
+  previously exercised only through the format/behaviour-agnostic debug seam) has now actually run
+  on a real device across two tuning rounds (`cropPercent`/`tryHarder`/`tryInverted`/`codeFormat`,
+  then `scanDelay`) and been confirmed working by the maintainer - this also covers R13's "any
+  code, not only QR" requirement. The same real-device testing surfaced and fixed a gap in T-38's
+  emergency-stop bypass (a hardware camera kill-switch could leave it permanently withheld - see
+  T-38's own entry). The app's declared `CAMERA` permission comes from the
   camera plugin behind the QR scanner via manifest merging, not from
   `android/app/src/main/AndroidManifest.xml` directly (`docs/TODO.md` T-49). Since the scanner swap
   (T-33) the merged manifest is checked against what the app actually does: `RECORD_AUDIO` and
@@ -371,10 +371,10 @@ match any particular format or symbology.
   output). These exercise the app-logic layer through the debug scan-stream seam, which is
   necessarily format-agnostic (`ScanResult` carries only decoded text, never a symbology) - it
   cannot prove `ReaderWidget` itself actually decodes a barcode, since that seam bypasses
-  `ReaderWidget` entirely. `test/qr_scanner_code_format_test.dart` is a source-reading test
-  guarding the one line that matters instead (`codeFormat: Format.any`), the same "forbid the
-  channel, not the symptom" reasoning as `test/no_proprietary_dependencies_test.dart` - see
-  `docs/TODO.md` T-143 for the device-trial gap this shares with `cropPercent`/`tryHarder`.
+  `ReaderWidget` entirely. `test/qr_scanner_reader_config_test.dart` is a source-reading test
+  guarding the lines that matter instead (`codeFormat: Format.any`, `scanDelay`), the same "forbid
+  the channel, not the symptom" reasoning as `test/no_proprietary_dependencies_test.dart` -
+  `docs/TODO.md` T-143 (now resolved) is where the actual real-device confirmation happened.
 - **Status: met.** `docs/use-cases.md`'s "Scan QR Code" entry is annotated to describe this
   explicitly, since the bullet alone did not distinguish "scan to validate against a stored code"
   from "scan to adopt as a new one", nor that non-QR symbologies now work too.

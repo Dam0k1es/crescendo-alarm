@@ -636,16 +636,38 @@ that is the basis a decision can be formulated against.
   running (all its `needs:` had passed) and `mobsf-full-scan` passing with the expected accepted
   exceptions applied (see T-11).
 
-### T-38 · The QR gate has unconditional bypasses
+### T-38 · The QR gate has unconditional bypasses — one real gap in it found and fixed (2026-09-19), rest still open
 
-- [ ] Decide, document and test the fail-safe paths that dismiss an alarm without a scan.
+- [x] A real-device report found the emergency-stop bypass itself could be permanently withheld:
+      fixed.
+- [ ] Still open: decide, document and test the OTHER fail-safe paths that dismiss an alarm without
+      a scan (the handler's own 3-second `Alarm.stopAll()` fallback), and add the honest sentence in
+      the feature description this item originally asked for.
 - **Why:** the "guaranteed wake-up" promise has escape hatches: if no overlay can be shown, the
   handler waits three seconds and calls `Alarm.stopAll()`; the scanner also offers an emergency-stop
   button when the camera fails. These are defensible as fail-safes — being locked out by a broken
   camera is worse — but they are undocumented, untested, and not mentioned where the feature is
   advertised.
-- **Evidence:** `lib/models/alarms/handler.dart:169-176`;
-  `lib/screens/scan_code/qr_scanner.dart:277-285,310-317`.
+- **Real-device report, the emergency-stop bypass itself had a gap:** "wenn ich mit meinem HW
+  Killswitch die Kamera deaktiviere kommt kein Notfall-Stopp-Button" (disabling the camera with a
+  hardware kill-switch does not bring up the emergency stop button). Root cause: the button's
+  trigger, `_proofOfLifeTimer` (20s), is cancelled by `_noteScannerAlive()` the moment ANY scan
+  attempt runs - success, wrong code, or a plain "no code in this frame" `onScanFailure`. A hardware
+  kill-switch (or a lens physically covered) can leave the camera producing a permanently
+  black/blank feed: frames keep arriving, `ReaderWidget` keeps attempting to decode them, and each
+  attempt legitimately reports "no code found" - proof-of-life stays satisfied forever, which is
+  indistinguishable, from this screen's side, from "the user just hasn't held the code up yet". The
+  escape hatch could therefore be withheld permanently from someone whose camera is physically
+  blocked, which is worse than the six already-documented "camera never even starts" failure modes
+  this timer was built for - at least those left proof-of-life unsatisfied.
+- **Fix:** a second, independent `_maxScanDurationTimer` (60s) that fires regardless of
+  `_scannerProvedAlive` - "the camera is running" and "the camera can see anything useful" are
+  different questions, and only the first one was previously checked.
+- **Tests:** `qr_scanner_gate_test.dart`'s new case keeps proof-of-life continuously satisfied
+  (repeated wrong-code scans) throughout and confirms the button still appears once the longer
+  timeout elapses - red before the second timer existed, confirmed by reverting it and re-running.
+- **Evidence:** `lib/models/alarms/handler.dart:169-176` (the still-undocumented handler-side
+  bypass); `lib/screens/scan_code/qr_scanner.dart` (`_proofOfLifeTimer`/`_maxScanDurationTimer`).
 - **Done when:** each bypass has a test, a written rationale, and an honest sentence in the feature
   description.
 - **Requirement:** R4
@@ -925,14 +947,16 @@ that is the basis a decision can be formulated against.
       `page_aboutpage_licenses_test.dart`.
 - **Requirement:** R9
 
-### T-143 · The QR gate has never decoded through a real camera — PARTLY FIXED (2026-09-19, from two rounds of real-device reports)
+### T-143 · The QR gate has never decoded through a real camera — RESOLVED (2026-09-19, confirmed on a real device)
 
 - [x] `cropPercent`/`tryHarder`/`tryInverted` tuned, per the maintainer's own real-device report.
 - [x] `scanDelay` shortened, per a second round of real-device feedback (recognition worked but was
       slow/inconsistent).
-- [ ] Still open: a device trial recording a decode at a realistic distance/light level with the
-      current, twice-tuned values (both fixes so far were reactive to reports, not a recorded
-      trial).
+- [x] **Confirmed fixed by the maintainer** after the `scanDelay` change: "Sieht deutlich besser
+      aus. Kann man mMn schließen." (looks noticeably better, can be closed) - closing on that
+      real-device confirmation rather than requiring a separately logged
+      `docs/device-trial-checklist.md` entry, since the maintainer's own repeated hands-on testing
+      (~5 trials) across two tuning rounds is the actual evidence this item asked for.
 - **Why:** the migration to `flutter_zxing` (T-33) changed the decoder, and nothing in any suite
       instantiates `ReaderWidget` or loads the zxing native library - the unit tests inject through
       the seam, and the E2E scenario now skips building the preview because the seam is set. A
@@ -986,7 +1010,7 @@ that is the basis a decision can be formulated against.
       `codeFormat`/`scanDelay` against regressing back to their library defaults, the same
       "forbid the channel, not the symptom" shape as `no_proprietary_dependencies_test.dart`).
 - **Done when:** a device trial records a decode at a realistic distance and light level with the
-      now twice-tuned values. `docs/device-trial-checklist.md` is the place for the result.
+      now twice-tuned values - **met**, see the confirmation above.
 - **Requirement:** R4, R13
 
 ### T-144 · The proprietary-dependency guard cannot see the channel the offender used

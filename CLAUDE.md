@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **488 tests across 74 files**, and CI runs them six times over -
+`flutter test` currently runs **490 tests across 74 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -389,6 +389,14 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   library's 1000ms default, from a real-device report that recognition was slow/inconsistent) -
   neither of which can be exercised through the widget-test seam any more than `cropPercent`/
   `tryHarder` can (see `docs/TODO.md` T-143), so the source is what's checked.
+
+- T-38's emergency-stop bypass had its own gap: `_proofOfLifeTimer` was cancelled the moment ANY
+  scan attempt ran, even a legitimate "no code in this frame" - so a hardware camera kill-switch
+  (or a covered lens) producing a permanently black feed could satisfy it forever and withhold the
+  escape hatch from someone whose camera is physically blocked. A second, independent 60s
+  `_maxScanDurationTimer` in `qr_scanner.dart` now fires regardless of that flag; the new
+  `qr_scanner_gate_test.dart` case keeps proof-of-life continuously satisfied throughout and
+  confirms the button still appears once it elapses.
 
 - `page_deactivation_code_reactivity_test.dart` pins down a T-143 fix: `PageDeactivationCode` used
   to read `AppState` with `listen: false`, so it never rebuilt when the *separate* `QrScanner`

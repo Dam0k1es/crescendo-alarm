@@ -134,6 +134,23 @@ class _QrScannerState extends State<QrScanner> {
   static const Duration _proofOfLifeTimeout = Duration(seconds: 20);
   Timer? _proofOfLifeTimer;
 
+  /// A second, longer-running timeout, independent of [_scannerProvedAlive].
+  ///
+  /// Real-device report (docs/TODO.md T-38): a hardware camera kill-switch
+  /// (some devices have one) can leave the camera "running" in every sense
+  /// [_proofOfLifeTimer] can observe - frames keep arriving, decode attempts
+  /// keep running, `onScanFailure` fires normally for each one - while the
+  /// feed itself is permanently black/blank and can never produce a valid
+  /// decode. That is indistinguishable, from this screen's side, from "the
+  /// user just hasn't held the code up yet" - so proof-of-life alone can
+  /// leave the escape hatch withheld forever from someone whose camera is
+  /// physically blocked. This offers it anyway once scanning has been
+  /// running for a long time with no VALID code ever found, regardless of
+  /// whether individual scan attempts kept "succeeding" at producing a
+  /// (wrong or empty) result.
+  static const Duration _maxTimeWithoutValidScan = Duration(seconds: 60);
+  Timer? _maxScanDurationTimer;
+
   /// Only set when this screen was opened for a specific ringing alarm
   /// (`widget.alarmId != null`) - a plain code-import/scan has nothing
   /// ringing to watch. See RingingWatch's doc comment for the bug this
@@ -187,11 +204,23 @@ class _QrScannerState extends State<QrScanner> {
           '- offering the emergency stop');
       setState(() => _cameraFailed = true);
     });
+
+    // Deliberately not cancelled by _noteScannerAlive() - see this timer's
+    // own doc comment for why "the scanner is running" is not the same
+    // question as "the camera can actually see anything".
+    _maxScanDurationTimer = Timer(_maxTimeWithoutValidScan, () {
+      if (!mounted) return;
+      debugPrint(
+          '=====qrScanner: no valid code within ${_maxTimeWithoutValidScan.inSeconds}s '
+          '- offering the emergency stop regardless of scanner activity');
+      setState(() => _cameraFailed = true);
+    });
   }
 
   @override
   void dispose() {
     _proofOfLifeTimer?.cancel();
+    _maxScanDurationTimer?.cancel();
     _ringingWatch?.cancel();
 
     // Stop listening to the injected events, if any. ReaderWidget disposes of
