@@ -94,6 +94,39 @@ void main() {
         reason: 'the screen doubles as the way to teach the app a code');
   });
 
+  testWidgets(
+      'a second scan arriving before the import screen finishes closing '
+      'cannot overwrite the just-imported code', (tester) async {
+    // docs/TODO.md T-08, the second (previously untested) bypass: unlike
+    // isDeactivationCodeValid, the "import if none is set" branch in
+    // qr_scanner.dart mutates AppState directly inside setState, with no
+    // pure function to unit-test in isolation. `Navigator.pop` inside
+    // `_closeView` does not unmount the widget synchronously, so a second
+    // scan event arriving on the same broadcast stream before the pop
+    // completes is still delivered to this same State object. This asserts
+    // the only thing standing between "safe" and "the second scan silently
+    // overwrites the first"'s import: `_appState.deactivationCode == null`
+    // is re-checked on every event, so the second scan lands in the
+    // validation branch instead of the import branch once the first has run.
+    final appState = await _pumpScanner(tester);
+    expect(appState.deactivationCode, isNull);
+
+    // Both added before any pump: dispatched to the same listener in order,
+    // within the same microtask queue, well before `_closeView`'s
+    // `Navigator.pop` has had a frame to actually remove this widget.
+    scans.add(const ScanResult('first-code'));
+    scans.add(const ScanResult('second-code'));
+    await tester.pumpAndSettle();
+
+    expect(appState.deactivationCode?.payload, 'first-code',
+        reason: 'only the first scan may ever be silently adopted as the '
+            'deactivation code - a second one arriving in the same instant '
+            'must not silently replace it');
+    expect(_acceptedScans(), 0,
+        reason: 'the second scan does not match the code that was just '
+            'imported, so it must not be wrongly accepted either');
+  });
+
   group('requirement: any pre-existing QR code can be adopted as the '
       'deactivation code', () {
     // The user's own words: without being told otherwise, "I can scan any

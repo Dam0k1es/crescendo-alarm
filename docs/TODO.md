@@ -273,9 +273,9 @@ that is the basis a decision can be formulated against.
 - **Done when:** the overlay closes on any path that stops the alarm, and the ringing-stream
   handler covers the notification-dismissal case. ✓
 
-### T-08 · The QR deactivation gate has no negative test — PARTIALLY RESOLVED (2026-09-09)
+### T-08 · The QR deactivation gate has no negative test — FIXED (2026-09-19)
 
-- [ ] Cover the remaining bypass: the first scanned code being silently adopted as the deactivation
+- [x] Cover the remaining bypass: the first scanned code being silently adopted as the deactivation
       code when none is set.
 - **Why:** this is the app's differentiating security property, and only the *correct* payload was
   ever injected — deleting the payload comparison entirely would have kept CI green. Also untested:
@@ -290,9 +290,21 @@ that is the basis a decision can be formulated against.
   and a wrong/prefix/null scanned payload). `integration_test/app_test.dart`'s QR scenario now
   injects a wrong payload first and asserts `QrScanner` stays mounted and `Alarm.getAlarms()` is
   still non-empty, before injecting the correct payload.
-- **Still open:** the *other* null-code bypass - `_handleBarcode`'s "import this code if none is
-  set" branch (`qr_scanner.dart:126-133`) - is stateful (mutates `_appState` directly inside
-  `setState`) and was not extracted or tested in this pass.
+- **Resolution of the remaining bypass (2026-09-19):** the "import this code if none is set" branch
+  mutates `_appState` directly inside `setState` and has no pure function to extract the way
+  `isDeactivationCodeValid` was - the concern was never that it behaves wrongly, but that nothing
+  proved it, and a `Navigator.pop`-based close doesn't unmount the widget synchronously. A second
+  scan event arriving on the same broadcast stream before the pop takes effect is still delivered
+  to the same `State` object; the only thing preventing that second event from silently overwriting
+  the just-imported code is that `_appState.deactivationCode == null` is re-checked on every event,
+  so the second scan lands in the validation branch (and is rejected, since it won't match) instead
+  of a second import. `test/qr_scanner_gate_test.dart` now has "a second scan arriving before the
+  import screen finishes closing cannot overwrite the just-imported code", which fires two scans
+  before any `pump()` (so both are dispatched within the same microtask queue, well before the pop
+  has had a frame to remove the widget) and asserts the stored code stays the first one and the
+  second is not wrongly accepted. Passed on the first run - not a bug found, but the exact gap the
+  "was not extracted or tested" note named is now closed with a real regression test instead of
+  staying an informal guarantee.
 - **Requirement:** R4
 
 ### T-09 · The dismissal tests assert navigation, not that the alarm stopped — RESOLVED (2026-09-09)
