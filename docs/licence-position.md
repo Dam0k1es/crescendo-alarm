@@ -1,9 +1,13 @@
 # Licence position
 
-WakeyWakey is distributed under the **GNU GPLv3** (`LICENSE`), with Dam0k1es as the sole copyright
-holder. This document is the tracked decision the requirements R8 and R9 ask for: what the shipped
-dependency set is licensed under, and how the obligations that come with conveying a GPLv3 binary
-are met. It is the acceptance criterion of `docs/TODO.md` T-05, T-33 and T-34.
+WakeyWakey is distributed under the **GNU GPLv3** (`LICENSE`). The project grew out of a university
+project with three original developers; two, Dam0k1es and centron5961, have given explicit consent
+(2026-09-20) both to this GPLv3 licensing and to being named as copyright holders. The third
+original developer's consent is still pending, so no third name is added yet - see `CLAUDE.md`'s
+own licence line for the current, authoritative state of this. This document is the tracked
+decision the requirements R8 and R9 ask for: what the shipped dependency set is licensed under, and
+how the obligations that come with conveying a GPLv3 binary are met. It is the acceptance criterion
+of `docs/TODO.md` T-05, T-33 and T-34.
 
 It is a **statement of the project's position**, written by its maintainer with the help of an
 assistant, not legal advice.
@@ -12,8 +16,9 @@ assistant, not legal advice.
 
 **A dependency whose licence conflicts with GPLv3 gets replaced, not excepted.**
 
-As sole copyright holder, the maintainer could instead grant an additional permission under
-GPLv3 §7 allowing the program to be linked with a named proprietary library - the well-known
+As copyright holders, the maintainer and centron5961 together could instead grant an additional
+permission under GPLv3 §7 allowing the program to be linked with a named proprietary library - the
+well-known
 OpenSSL exception has that shape, it takes a few lines, and it would have kept both dependencies
 below in place. That was considered and deliberately rejected. An exception makes the licence of
 the whole harder to reason about for anyone who receives the binary, and it preserves a dependency

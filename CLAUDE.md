@@ -78,8 +78,11 @@ Consequences to respect when adding an event:
   isolate already talks to it directly - a file logger would depend on plugin-channel availability
   there, which is the failure class T-79 was.
 
-License: GNU GPLv3 (see `LICENSE`). Author/copyright holder: Dam0k1es. Do not add other personal
-names, emails, or locations to tracked files - see "PII policy" below.
+License: GNU GPLv3 (see `LICENSE`). Copyright holders: Dam0k1es, centron5961 - both original
+developers of the project this repository grew from, each having given explicit consent to this
+copyright attribution and to GPLv3 (2026-09-20); a third original developer's consent is still
+pending, so no third name is added yet. Do not add any other personal names, emails, or locations
+to tracked files (including a not-yet-consenting original developer's) - see "PII policy" below.
 
 ## Supported platforms
 
@@ -299,9 +302,9 @@ change either.
 `docs/licence-position.md` is the tracked decision for requirements R8/R9, and two things in it are
 standing rules rather than history:
 
-- **A dependency whose licence conflicts with GPLv3 gets replaced, not excepted.** The maintainer
-  is the sole copyright holder and could grant a GPLv3 §7 linking exception in a few lines; that
-  was considered and rejected. Syncfusion (calendar) and `mobile_scanner` (proprietary Google ML
+- **A dependency whose licence conflicts with GPLv3 gets replaced, not excepted.** The copyright
+  holders could grant a GPLv3 §7 linking exception in a few lines; that was considered and
+  rejected. Syncfusion (calendar) and `mobile_scanner` (proprietary Google ML
   Kit binaries) were replaced by `calendar_view` and `flutter_zxing` accordingly
   (`docs/TODO.md` T-05, T-33). `test/no_proprietary_dependencies_test.dart` enforces this against
   `pubspec.yaml` and every import in `lib/` - adding a name to its list is a licence decision, and

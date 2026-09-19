@@ -107,5 +107,5 @@ Contributions are welcome! Please fork this repository and submit pull requests.
 
 ### License
 
-Copyright (C) 2026 Dam0k1es. Licensed under the GNU General Public License v3.0 - see the
-[LICENSE](LICENSE) file for the full text.
+Copyright (C) 2026 Dam0k1es, centron5961. Licensed under the GNU General Public License v3.0 - see
+the [LICENSE](LICENSE) file for the full text.

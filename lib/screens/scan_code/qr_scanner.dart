@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Dam0k1es
+// Copyright (C) 2026 Dam0k1es, centron5961
 //
 // This file is part of WakeyWakey.
 //

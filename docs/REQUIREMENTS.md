@@ -311,7 +311,7 @@ licensing obligations must be met.
 - **Status: largely met, one condition outstanding.** The concrete conflict is resolved: nothing in
   the shipped set carries a licence that conflicts with GPLv3 any more (see R8). The project's rule
   is recorded there too - a conflicting dependency is replaced, not covered by a GPLv3 §7 linking
-  exception, although as sole copyright holder the maintainer could grant one.
+  exception, although the copyright holders could grant one.
   **Outstanding:** GPLv3's Corresponding Source obligation is discharged by making the repository
   public, and that has to actually happen **before the first release to anyone else**
   (`docs/TODO.md` T-34). Until then nothing is conveyed - builds go to the maintainer's own test

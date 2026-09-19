@@ -262,6 +262,29 @@ that is the basis a decision can be formulated against.
 
 ## P1 — resolve or consciously accept before a public release
 
+### T-156 · Copyright attribution updated to reflect joint authorship — FIXED (2026-09-20)
+
+- [x] Add a second, consenting original developer to every copyright notice in the repository.
+- [ ] Add the third original developer once (if) their consent is given.
+- **Why:** the project grew out of a university project with three original developers, but every
+  copyright notice in the repository named only the current maintainer (Dam0k1es) as sole copyright
+  holder - both `CLAUDE.md`'s licence line and `docs/licence-position.md` said so explicitly. Once
+  more than one person's work is actually reflected in a joint work, attributing copyright to only
+  one of them is inaccurate, independent of whether the licence terms themselves (GPLv3) are being
+  followed correctly.
+- **Fix:** the maintainer confirmed explicit consent from a second original developer, "centron5961",
+  both to GPLv3 licensing and to this copyright attribution (2026-09-20). Added `, centron5961`
+  after `Dam0k1es` in: the header of all 47 `.dart` files carrying the GPLv3 notice (`lib/` and
+  `integration_test/`), the in-app `showLicensePage` legalese
+  (`lib/screens/settings/page_aboutpage.dart`), `README.md`'s License section, `CLAUDE.md`'s licence
+  line, and `docs/licence-position.md`. Also corrected two now-inaccurate "sole copyright holder"
+  claims in living documents (`CLAUDE.md`, `docs/REQUIREMENTS.md` R8) to "the copyright holders" -
+  left historical decision records in this file (T-33, T-35) worded as they were at the time,
+  since those describe what was true when that specific decision was made, not a live claim.
+  The third original developer's consent is still pending - no third name added yet, and none
+  should be until they explicitly consent themselves.
+- **Requirement:** R8, R9
+
 ### T-155 · The sleep-time reminder's own scheduled notification does not survive a reboot — RESOLVED, was a measurement timing artifact (2026-09-19)
 
 - [x] Confirm whether `awesome_notifications` re-arms its scheduled notifications after a reboot on

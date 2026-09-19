@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Dam0k1es
+// Copyright (C) 2026 Dam0k1es, centron5961
 //
 // This file is part of WakeyWakey.
 //
@@ -85,8 +85,8 @@ class PageAboutpage extends StatelessWidget {
                       context: context,
                       applicationName: 'WakeyWakey',
                       applicationLegalese:
-                          'Copyright (C) 2026 Dam0k1es. Licensed under the '
-                          'GNU General Public License v3.0.',
+                          'Copyright (C) 2026 Dam0k1es, centron5961. Licensed '
+                          'under the GNU General Public License v3.0.',
                     );
                   },
                   child: const Text('Third-Party Licenses'),
