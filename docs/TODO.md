@@ -971,13 +971,24 @@ that is the basis a decision can be formulated against.
 - **Done when:** snoozing re-arms the alarm after the configured interval, stops after the
   configured maximum, and both settings persist.
 
-### T-19 · Merge "duration to wake up" and "duration to get ready" into one field
+### T-19 · Merge "duration to wake up" and "duration to get ready" into one field — CLOSED, no longer applicable (2026-09-20)
 
-- [ ] Collapse the two durations into a single value.
-- **Why:** requested; distinguishing them adds no value to the user. Coordinate with T-01, which
-  fixes how they are applied.
-- **Done when:** one field drives the calculation, and existing stored values migrate without
-  producing a wrong alarm time.
+- [x] ~~Collapse the two durations into a single value.~~ Decided against, at the maintainer's
+      request: the two fields are no longer redundant.
+- **Why originally raised:** at the time, both durations were just subtracted from the appointment
+  time with no other distinction, and "the user has to fill in two numbers that do the same thing"
+  was a fair complaint.
+- **Why it no longer applies:** FR-20 (snooze, T-138) gave `durationToWakeUp` its own, disjoint
+  role - it is the snooze budget (`lib/models/alarms/snooze.dart`: "the budget is `wakeUpBudget` -
+  `durationToWakeUp`, the time to become awake"), consumed on its own by
+  `lib/screens/alarms/snooze_button.dart`. `durationToGetReady` kept its original role (time to get
+  ready before leaving) and additionally gained a per-weekday override
+  (`durationToGetReadyByWeekday`) that has no equivalent for `durationToWakeUp` at all. Both are
+  still added together in `scheduling_v2.dart` (`appointment - durationToWakeUp -
+  durationToGetReady`) to compute the wake instant, but they now answer two different questions -
+  merging them would collapse the snooze-budget concept back into an undifferentiated number,
+  losing exactly the distinction FR-20 needed.
+- **Done when:** closed as "no change wanted", as of this entry.
 
 ### T-20 · Add explanatory help buttons to every Sleep-Habits option
 
@@ -1213,7 +1224,7 @@ that is the basis a decision can be formulated against.
       the Android artifacts the build actually resolves.
 - **Requirement:** R8
 
-### T-145 · Opening the Schedule screen no longer triggers a calendar fetch
+### T-145 · Opening the Schedule screen no longer triggers a calendar fetch — DOWNGRADED, mostly superseded (2026-09-20)
 
 - [ ] Fetch on open and on view switch, not only when the user pages.
 - **Why:** `SfCalendar.onViewChanged` fired on initial layout; `calendar_view`'s `onPageChange` is
@@ -1222,12 +1233,25 @@ that is the basis a decision can be formulated against.
       does not. Mostly masked by `preloadCalendarData` at startup - the case that bites is a
       preload that ran before calendar permission was granted: the screen then shows an empty week
       until the user pages away and back.
-- **Also, from the same review:** in month view `onPageChange` delivers the 1st of the month, not a
-      week start, so `appState.fetchedCalendarWeeks` collects entries that are not week keys and
-      the 7-day fetch covers one week of a five-week grid. The short fetch window is inherited, not
-      new; the non-week keys are new.
-- **Done when:** opening the screen fetches the visible range, and month view either hands over a
-      week start or the cache stops assuming one.
+- **Superseded in practice by T-60 (2026-09-20):** `_syncCalendarAndAlarmsOnOpen`
+  (`lib/main.dart`) now runs `resyncCalendarData(appState, pastWeeks: 2, futureWeeks: 1)` on
+  **every** cold start (`initState`) and **every** resume (`didChangeAppLifecycleState`,
+  `AppLifecycleState.resumed`) - not just once at startup, which is what T-145 was originally
+  written against. Since the Schedule screen cannot be opened without the app itself having just
+  been opened or resumed, a broad ±multiple-week resync has already run moments before the user
+  could reach it in the overwhelming majority of real cases - closing the specific gap this item
+  was about for normal use. The one residual case T-60 does not cover: switching to the Schedule
+  **tab** from another tab within an already-foregrounded app session, with no resume in between
+  (in-app tab switches don't trigger `didChangeAppLifecycleState`) - narrow enough, and now
+  low-impact enough given the on-resume resync already covers the common paths, that it is not
+  worth chasing further on its own.
+- **Still genuinely open, but a separate and smaller issue - not fetch timing:** in month view,
+  `onPageChange` delivers the 1st of the month, not a week start, so `appState.fetchedCalendarWeeks`
+  collects entries that are not week keys and the 7-day fetch covers one week of a five-week grid.
+  Kept here rather than closed, since it's a real correctness gap in the month-view cache-key
+  bookkeeping, independent of whether this item's original "fetch on open" concern still applies.
+- **Done when:** month view either hands over a week start, or the cache stops assuming every
+  fetched entry is one.
 - **Requirement:** R2
 
 ### T-146 · Custom alarm tone import — IMPLEMENTED (2026-09-17)
@@ -2244,14 +2268,32 @@ that is the basis a decision can be formulated against.
   `lib/screens/settings/page_alarmtones.dart`.
 - **Done when:** either implemented, or explicitly deprioritised with a reason.
 
-### T-58 · Consider a toast instead of a notification for some feedback
+### T-58 · Consider a toast instead of a notification for some feedback — CLOSED, no change wanted (2026-09-20)
 
-- [ ] Decide where (if anywhere) a toast would be more appropriate than the current notification.
-- **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31) - a UX design question,
-  not a defect, and under-specified (which notification(s) it refers to was never recorded).
-- **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x52` (see T-31).
-- **Done when:** either a specific notification is identified and changed, or this is closed as "no
-  change wanted" with a reason.
+- [x] ~~Decide where (if anywhere) a toast would be more appropriate than the current
+      notification.~~ Decided: nowhere. See below.
+- **Why originally raised:** carried forward from `lib/main.dart`'s old TODO backlog (T-31) - a UX
+  design question, not a defect, and under-specified (which notification(s) it refers to was never
+  recorded).
+- **Resolution:** the app has exactly three system notifications left, and every one of them
+  specifically needs to keep working while the app is backgrounded - the one property a toast/
+  `SnackBar` cannot provide at all (it only exists while that screen's widget tree is alive):
+  1. The FR-6/FR-9/FR-12 pre-alarm warnings (`replan_notifications.dart`) - must reach the user well
+     before an alarm, regardless of whether the app happens to be open at that moment.
+  2. The sleep-time reminder (`sleep_reminder.dart`) - the same reasoning, and its silent variant is
+     also FR-16 Checkpoint 2's only entry point (T-62/T-155).
+  3. The ringing-alarm notification (T-153) - a foreground-service notification Android requires to
+     exist for the service to keep playing audio at all; already investigated and kept as-is.
+  Everything else the app already gives as transient, in-app feedback (settings saved, a code
+  imported, an action confirmed) already uses `SnackBar` throughout the UI
+  (`page_alarmtones.dart`, `page_diagnostics.dart`, `snooze_button.dart`, `screen_active_alarm.dart`,
+  `page_deactivation_code.dart`, `screen_alarms.dart`, `utils.dart`) - the toast-like treatment this
+  item asked about was already the established pattern for that category, just never phrased as
+  "closing T-58" before now. There is no remaining notification left that a toast could replace
+  without breaking the one thing it exists for.
+- **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x52` (see T-31);
+  `grep -rln "Toast\|SnackBar" lib/`.
+- **Done when:** closed as "no change wanted", as of this entry.
 
 ### T-59 · `AppState`'s calendar meetings are not modeled as a proper 1:n map
 
