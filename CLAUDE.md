@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **482 tests across 72 files**, and CI runs them six times over -
+`flutter test` currently runs **484 tests across 72 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -358,6 +358,13 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   called from `lib/main.dart` on cold start and every resume) instead of only once per process
   lifetime, and the Schedule tab's icon swaps for a spinner while that read is in flight
   (`AppState.isReadingCalendarMutex`).
+
+- Repository hygiene pass (2026-09-19): `meeting_data_test.dart` gained cases pinning down a real
+  bug the audit found - `Meeting.hashCode` called `jsonEncode(this).hashCode`, relying on a
+  `toJson()` that had been commented out, so every call threw `JsonUnsupportedObjectError` instead
+  of returning an int. Nothing currently puts a `Meeting` in a `Set` or uses one as a `Map` key, so
+  it went unnoticed, but it violated the basic hashCode contract regardless. Replaced with
+  `Object.hash` over the same fields `==` compares.
 
 - T-150: `deactivation_code_description_test.dart` and `page_deactivation_code_description_test.dart`
   cover the user-entered description that now replaces the deactivation code screen's re-rendered

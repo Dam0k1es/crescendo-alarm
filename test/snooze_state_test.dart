@@ -123,7 +123,7 @@ void main() {
 
     test('postpones by snoozeTime and ends the old wake call', () async {
       final appState = await _fresh();
-      appState.snoozeEnabled = true; // setzt das Budget auf 00:10
+      appState.snoozeEnabled = true; // sets the budget to 00:10
       final ring = DateTime(2026, 9, 14, 6, 0);
 
       final ok = await snooze(appState,

@@ -39,7 +39,6 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
       size: _displayArea,
       backgroundColor: Colors.white,
       semanticsLabel: 'WakeyWakey Deactivation Code',
-      //errorCorrectionLevel: QrErrorCorrectLevel.M,
     );
   }
 
@@ -204,7 +203,6 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
-                  //importQrCodeButton,
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

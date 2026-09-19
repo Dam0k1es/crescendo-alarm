@@ -36,4 +36,24 @@ void main() {
         meetingToCalendarEvent(_meeting(isAllDay: true), ignored: true);
     expect(event.color, Colors.grey);
   });
+
+  // Repository hygiene pass (2026-09): Meeting's toJson() had been commented
+  // out, but hashCode still called jsonEncode(this), which falls back to
+  // calling toJson() when it exists - with the method gone entirely, every
+  // call to hashCode threw JsonUnsupportedObjectError instead of returning
+  // an int, violating the basic hashCode contract (and would crash the
+  // instant a Meeting ever landed in a Set or as a Map key).
+  test('hashCode does not throw', () {
+    expect(() => _meeting().hashCode, returnsNormally);
+  });
+
+  test('hashCode is consistent with == (the same fields determine both)', () {
+    final a = _meeting();
+    final b = _meeting();
+    expect(a, equals(b));
+    expect(a.hashCode, b.hashCode);
+
+    final different = _meeting()..eventName = 'a different title';
+    expect(a.hashCode, isNot(different.hashCode));
+  });
 }

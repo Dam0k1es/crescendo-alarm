@@ -41,7 +41,7 @@ Future<void> onNotificationCreatedMethod(
 @pragma('vm:entry-point')
 Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {}
 
-/// FR-16 "Voraussetzung, noch zu bauen" (docs/scheduling-v2-spec.md): the
+/// FR-16 "prerequisite, still to be built" (docs/scheduling-v2-spec.md): the
 /// sleep-time notification must always be scheduled (Phase 5 step 21) so
 /// Checkpoint 2 has something to hang off of even when the visible reminder
 /// itself is disabled - deciding whether it's visible or not is orthogonal to

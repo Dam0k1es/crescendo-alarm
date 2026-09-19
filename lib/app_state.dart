@@ -344,7 +344,7 @@ class AppState extends ChangeNotifier {
   /// (its safety valve could never trip) and FR-12 never reported for it.
   DateTime? get lastProcessedConcludedDay => _lastProcessedConcludedDay;
 
-  /// Raw `ISO-Datum -> millisecondsSinceEpoch|null` map, deliberately kept in
+  /// Raw `ISO date -> millisecondsSinceEpoch|null` map, deliberately kept in
   /// this exact shape (not e.g. `Map<DateTime, DateTime?>`) because FR-16
   /// Checkpoint 2 reads/writes the same `SharedPreferences` key from a
   /// background isolate with no `AppState`/`Provider` access at all - the
@@ -418,9 +418,15 @@ class AppState extends ChangeNotifier {
   String? get customTonePath => _customTonePath;
 
   // Setter
+  //
+  // Repository hygiene pass (2026-09): this used to also persist the index
+  // via `_prefs.setInt('currentPageIndex', ...)`, but the matching load on
+  // startup was commented out (dead code), so every launch reset to tab 0
+  // regardless - the write was pure unread disk I/O on every tab switch.
+  // Removed rather than restoring the load: always opening on the first tab
+  // is a deliberate, common choice, not an oversight to silently change here.
   set currentPageIndex(int index) {
     _currentPageIndex = index;
-    _prefs.setInt('currentPageIndex', _currentPageIndex);
     notifyListeners();
   }
 
@@ -646,9 +652,6 @@ class AppState extends ChangeNotifier {
   set visibleDate(DateTime value) {
     _visibleDate = value;
     // Must not persist
-    // String dateTimeString = _visibleDate.toIso8601String();
-    // final visibleDataJSON = jsonEncode({'date': dateTimeString});
-    // _prefs.setString('visibleDate', visibleDataJSON);
     notifyListeners();
   }
 
@@ -1061,9 +1064,9 @@ class AppState extends ChangeNotifier {
 
   DateTime? _loadLastReplanDate() => _loadStoredDate('lastReplanDate');
 
-  /// FR-20. Fehlerhafte oder alte Daten fuehren zu einer leeren Karte, nie zu
-  /// einem Startabbruch - dieselbe Haltung wie bei den uebrigen geladenen
-  /// Feldern (docs/TODO.md T-45).
+  /// FR-20. Malformed or old data leads to an empty map, never a startup
+  /// abort - the same posture as the other loaded fields (docs/TODO.md
+  /// T-45).
   Map<int, DateTime> _loadSnoozeOrigins() {
     try {
       final raw = _prefs.getString('snoozeOriginOf');
@@ -1204,16 +1207,6 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // DateTime _loadVisibleDate() {
-  //   final visibleDate = _prefs.getString('visibleDate');
-  //   if (visibleDate == null) {
-  //     return DateTime.now();
-  //   } else {
-  //     final date = DateTime.parse(jsonDecode(visibleDate)['date']);
-  //     return date;
-  //   }
-  // }
-
   /// docs/TODO.md T-55: `fetchedCalendarWeeks` records each preloaded week by
   /// its *start* (see `preloadCalendarData`, `lib/utils/utils.dart`), but
   /// [dateTime] here is typically an arbitrary day within a week (e.g.
@@ -1299,7 +1292,6 @@ class AppState extends ChangeNotifier {
     // Corrupted or incompatible persisted data should fall back to defaults
     // instead of crashing the app on launch.
     try {
-      // _currentPageIndex = _prefs.getInt('currentPageIndex') ?? _currentPageIndex;
       _permissionsGranted =
           _prefs.getBool('permissionsGranted') ?? _permissionsGranted;
       _reminderEnabled = _prefs.getBool('reminderEnabled') ?? _reminderEnabled;

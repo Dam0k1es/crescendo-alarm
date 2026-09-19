@@ -40,26 +40,27 @@ class Meeting {
     }
   }
 
+  // Repository hygiene pass (2026-09): this used to be `jsonEncode(this)
+  // .hashCode`, relying on dart:convert's fallback of calling a `toJson()`
+  // method - which had been commented out below (see git history), so every
+  // call here actually threw `JsonUnsupportedObjectError` instead of
+  // returning an int. Nothing currently puts a `Meeting` in a `Set` or uses
+  // one as a `Map` key, so the break went unnoticed, but it violated the
+  // basic hashCode contract (must never throw; must agree with `==`)
+  // regardless of whether anything exercised it yet. Hashes exactly the
+  // fields `==` above compares.
   @override
-  int get hashCode {
-    return jsonEncode(this).hashCode;
-  }
-
-// TODO: verify correct de/serialization of meeting objects
-// @override
-// String toJson() {
-//   return jsonEncode({
-//     'from': from,
-//     'to': to,
-//     'background': background,
-//     'isAllDay': isAllDay,
-//     'eventName': eventName,
-//     'startTimeZone': startTimeZone,
-//     'endTimeZone': endTimeZone,
-//     'description': description,
-//     'ids': ids,
-//   });
-// }
+  int get hashCode => Object.hash(
+        from,
+        to,
+        background,
+        isAllDay,
+        eventName,
+        startTimeZone,
+        endTimeZone,
+        description,
+        Object.hashAll(ids),
+      );
 }
 
 /// Maps one [Meeting] onto the event object calendar_view draws

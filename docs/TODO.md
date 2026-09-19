@@ -1279,6 +1279,63 @@ that is the basis a decision can be formulated against.
       description" reopens the dialog pre-filled).
 - **Requirement:** R13
 
+### T-151 · Repository hygiene pass — FIXED (2026-09-19)
+
+- [x] Dead code removed, remaining non-English content translated, PII/commit-message/test-vs-
+      requirements audits run.
+- **Why:** routine hygiene sweep across code quality, documentation accuracy, and the "everything in
+      English" / no-PII standing rules.
+- **A real bug found, not just a hygiene item:** `Meeting.hashCode` (`lib/screens/schedule/
+      meeting_data.dart`) called `jsonEncode(this).hashCode`, relying on dart:convert's fallback of
+      calling a `toJson()` method - which had been commented out (along with a `TODO: verify
+      correct de/serialization of meeting objects` that was never separately tracked). With the
+      method gone entirely, every call to `hashCode` threw `JsonUnsupportedObjectError` instead of
+      returning an int, violating the basic hashCode contract (must never throw; must agree with
+      `==`). Nothing currently puts a `Meeting` in a `Set` or uses one as a `Map` key - confirmed by
+      grep across `lib/`/`test/` and by checking `calendar_view`'s own `EventController`/
+      `CalendarEventData` internals, which use their own fields for hashing, never delegating to the
+      generic event payload - so the break went unnoticed in practice, but it was a live landmine
+      regardless. Fixed with `Object.hash` over the exact fields `==` already compares; the dead
+      `toJson()` comment and its now-moot TODO were removed along with it.
+- **Dead code removed:** two other genuinely-unused commented-out blocks in `lib/app_state.dart`
+      (a disabled `_loadVisibleDate()` method, and disabled persistence lines inside the
+      `visibleDate` setter it belonged to - the setter's own "Must not persist" comment stands fine
+      on its own); two stray disabled lines in `lib/screens/scan_code/page_deactivation_code.dart`
+      (`//errorCorrectionLevel: QrErrorCorrectLevel.M`, `//importQrCodeButton`); and
+      `AppState.currentPageIndex`'s setter, which persisted the tab index via `_prefs.setInt` on
+      every tab switch even though the matching load-back line was already commented out - the
+      write was pure unread disk I/O. Removed the write rather than restoring the load: always
+      opening on the first tab is a deliberate, common choice, not an oversight to change here in a
+      hygiene pass. Left `lib/screens/schedule/meeting_data.dart`'s commented-out `meetingToEvent`
+      scaffolding alone - it mirrors `calendar.dart`'s existing, explicitly-labelled "For future
+      development" block, an established pattern in this codebase, not orphaned dead code.
+- **Non-English content translated:** five remaining spots (`app_state.dart` x2, a doc comment and
+      a `ISO-Datum` fragment; `page_appearance.dart`'s spec-quote paraphrase; `notifications.dart`'s
+      `"Voraussetzung, noch zu bauen"`; `test/snooze_state_test.dart`'s trailing comment) - found by
+      a targeted audit for German words across `lib/`/`docs/`, cross-checked against the project's
+      existing "quote then translate" convention for verbatim spec/user citations (several such
+      citations in `docs/TODO.md` were confirmed already compliant and left alone).
+- **PII audit:** no real personal names, emails, or addresses found beyond already-accepted cases
+      (the Privacy Policy's intentional alias contact address; a third-party licence's author email,
+      reproduced because BSD-3 requires retaining it, in the T-142 write-up).
+- **Commit-message audit:** the full `dev` history (110 commits) was reviewed for typos, vague
+      subjects, and embedded secrets - none found. A few commits quote German source material
+      (the maintainer's own words, or the spec document) verbatim in the body, consistent with the
+      same citation convention as the code comments above; not corrected, since rewriting already-
+      pushed history is a destructive operation this project treats with standing caution and none
+      of the messages actually need it.
+- **Documentation corrected:** `docs/REQUIREMENTS.md` R9 didn't yet mention the T-142 native-code-
+      notices fix; R4's QR-gate framing still cited T-08/T-16 by their older, since-superseded
+      wording instead of T-143's current, narrower gap (and didn't cross-reference R13); R3 didn't
+      yet reflect T-04's 2026-09-19 narrowing to specifically the long-idle/never-reopened scenario.
+      All three updated. `docs/TODO.md` T-46's evidence line didn't cite the in-code `0x39A` marker
+      in `lib/main.dart` (a gap in the original T-31 triage's numbering) even though it names the
+      identical still-open concern - cross-referenced.
+- **Tests:** `test/meeting_data_test.dart` gained "hashCode does not throw" and "hashCode is
+      consistent with ==" (red before the `Object.hash` fix, confirmed by reverting it and re-
+      running).
+- **Requirement:** R12
+
 ### T-141 · Past scheduled alarms pile up in the list forever — FIXED (2026-09-19)
 
 - [x] Prune scheduled alarms that are safely in the past, without touching FR-18's rule that a past
@@ -1463,7 +1520,10 @@ that is the basis a decision can be formulated against.
   future week, and `_adjustAlarmTimes` aborts scheduling entirely once 7 alarms needed estimating -
   none of the three is user-changeable. `lib/main.dart`'s old TODO backlog named exactly these three
   as unfinished (`0x49`, `0x392`, `0x395` - see T-31); they were not separately re-tracked because
-  they are this same gap.
+  they are this same gap. The preload range specifically is still marked with its own in-code
+  reminder at `lib/main.dart`'s `_syncCalendarAndAlarmsOnOpen` (`// TODO user configurable preload
+  range - 0x39A`) - that id was missed by the original T-31 triage (it's a gap in the numbered
+  sequence there) but names the identical, still-open concern as this item.
 - **Evidence:** `lib/models/scheduling/scheduling.dart:54` (window), `:169` (`>= 7` threshold);
   `lib/main.dart:242` (preload).
 - **Done when:** the ranges/threshold are either settings or documented as deliberate constants with

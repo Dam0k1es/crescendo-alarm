@@ -102,8 +102,8 @@ class _PageAppearanceState extends State<PageAppearance> {
               key: const Key('darkModeSwitch'),
               value: appState.darkMode,
               // null, not a no-op callback: that's what makes Switch render
-              // itself as disabled/greyed out, per the spec ("die manuelle
-              // Option ausgrauen").
+              // itself as disabled/greyed out, per the spec ("grey out the
+              // manual option").
               onChanged: followingSystem
                   ? null
                   : (value) {

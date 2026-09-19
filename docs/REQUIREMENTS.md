@@ -167,6 +167,12 @@ valve never needs to fire at all).
   the force-stop boundary itself doesn't cover - "the alarm survives force-stop" is impossible by
   design, but "the app recovers as soon as it's opened again" is the real guarantee R3 depends on
   for that path, and it now has real-device evidence rather than only a code-reading inference.
+- **Narrowed further (2026-09-19, `docs/TODO.md` T-04):** the maintainer confirmed on a real device
+  that reboot, closing the app, and a force-stop all still let the alarm ring **provided the app
+  gets reopened at some point before the alarm is due** (which is exactly the FR-17 recovery path
+  above). The one scenario genuinely still unverified, across all three interruptions alike, is a
+  long idle stretch with the app never reopened at all before the alarm's due time - not only the
+  force-stop-specific platform boundary this section already documents.
 
 ## R4 - All alarm-ringing prerequisites are met before an alarm fires
 
@@ -180,10 +186,16 @@ camera for QR deactivation).
   overlays (`integration_test/app_test.dart`).
 - **Status: partially met.** Permissions and overlay display are now exercised on real hardware and
   pass. Not covered: the gentle wake-up volume ramp is never exercised (it defaults to off, and the
-  CI emulator runs without audio - `docs/TODO.md` T-15), the QR gate is tested only with the
-  correct code and only through a debug seam that does not isolate the real camera (`docs/TODO.md`
-  T-08, T-16), and neither dismissal test confirms the alarm actually stopped rather than just
-  navigating away (`docs/TODO.md` T-09). The app's declared `CAMERA` permission comes from the
+  CI emulator runs without audio - `docs/TODO.md` T-15). The QR gate's own gaps have moved on from
+  how T-08/T-16 originally described them (both now "PARTIALLY"/"LARGELY RESOLVED" - a negative
+  test exists, and the debug seam no longer ships a real camera preview in release): the current,
+  narrower gap is that `ReaderWidget` itself (the real, native decode path) has still never run
+  in any suite, only through the same debug seam, which is necessarily format/behaviour-agnostic by
+  design (`docs/TODO.md` T-143 - also covers R13's "any code, not only QR" requirement now, and the
+  real-device tuning of `cropPercent`/`tryHarder`/`codeFormat` fixed there; `scanDelay`/
+  `scanDelaySuccess` remain unverified). Neither dismissal test confirms the alarm actually stopped
+  rather than just navigating away (`docs/TODO.md` T-09). The app's declared `CAMERA` permission
+  comes from the
   camera plugin behind the QR scanner via manifest merging, not from
   `android/app/src/main/AndroidManifest.xml` directly (`docs/TODO.md` T-49). Since the scanner swap
   (T-33) the merged manifest is checked against what the app actually does: `RECORD_AUDIO` and
@@ -282,9 +294,13 @@ licensing obligations must be met.
   (`docs/TODO.md` T-34). Until then nothing is conveyed - builds go to the maintainer's own test
   devices, which is not distribution. **Fixed (2026-09-18):** the app previously had no in-app
   licence/notice surface at all - the About page now links both the project's own GPLv3 text and
-  Flutter's collected third-party notices (`docs/TODO.md` T-36). Still open, and real work rather
-  than a decision: no per-file licence headers (T-48). An automated `license_checker`-style scan
-  remains worth adding as a second line of defence.
+  Flutter's collected third-party notices (`docs/TODO.md` T-36). **Fixed (2026-09-19):** the
+  Apache-2.0/BSD-3 notices for `flutter_zxing`'s compiled-in native code (zxing-cpp/librscpp, zint)
+  were also missing - invisible to Flutter's own licence collector, which only reads package-root
+  `LICENSE` files, not CMake-compiled C/C++ - and are now shipped as a hand-assembled asset,
+  reachable from the same About page (`docs/TODO.md` T-142). Still open, and real work rather than
+  a decision: no per-file licence headers (T-48). An automated `license_checker`-style scan remains
+  worth adding as a second line of defence.
 
 ## R10 - All bundled assets are properly licensed for use
 
