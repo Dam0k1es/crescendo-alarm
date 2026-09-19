@@ -27,7 +27,8 @@ const berlin = Duration(hours: 2);
 
 void main() {
   group('applyGapDayDrift with deviceUtcOffset != 0 (T-61, level 2)', () {
-    test('preferredWakeUpTime is already reached (read locally) -> no drift', () {
+    test('preferredWakeUpTime is already reached (read locally) -> no drift',
+        () {
       // v = 05:00 UTC = 07:00 local in Berlin. preferredWakeUpTime is 07:00
       // local, so it's exactly reached - it must NOT drift. The old code
       // reads 05:00 as digits and drifts 30min toward "07:00".
@@ -82,7 +83,8 @@ void main() {
   });
 
   group('coldStart with deviceUtcOffset != 0 (T-61, level 2)', () {
-    test('preferredWakeUpTime is set as the window day\'s local time of day', () {
+    test('preferredWakeUpTime is set as the window day\'s local time of day',
+        () {
       // Window days are local calendar dates (date markers). preferredWakeUpTime
       // 07:00 local on day 1 -> instant 05:00 UTC on day 1.
       final days = [_utc(0, 0, day: 1), _utc(0, 0, day: 2)];
@@ -132,7 +134,8 @@ void main() {
           endTimeZone: 'Etc/UTC',
         );
 
-    test('the return value is offset-independent (the appointment does not shift)',
+    test(
+        'the return value is offset-independent (the appointment does not shift)',
         () {
       // 23:00 UTC on day 10 = 01:00 local on day 11 (Berlin, +2).
       final event = meetingAt(_utc(23, 0, day: 10));
@@ -183,11 +186,13 @@ void main() {
           endTimeZone: 'Etc/UTC',
         );
 
-    test('same local appointment reading -> same plan, just shifted by the offset',
+    test(
+        'same local appointment reading -> same plan, just shifted by the offset',
         () {
       final window = [1, 2, 3, 4, 5, 6].map((d) => _utc(0, 0, day: d)).toList();
 
-      WeekPlanResult plan(Duration offset, Duration eventShift) => computeWeekPlan(
+      WeekPlanResult plan(Duration offset, Duration eventShift) =>
+          computeWeekPlan(
             window: window,
             lastEffectiveWakeTime: _utc(7, 0, day: 0).subtract(offset),
             // The appointment is shifted so its LOCAL reading is identical in
@@ -195,10 +200,11 @@ void main() {
             allEvents: [meetingAt(_utc(5, 0, day: 6).subtract(eventShift))],
             deviceUtcOffset: offset,
             durationToWakeUp: Duration.zero,
-            durationToGetReady: Duration.zero,
+            durationToGetReadyForDay: (_) => Duration.zero,
             preferredWakeUpTime: const TimeOfDay(hour: 10, minute: 0),
             maxDailyDelta: const Duration(minutes: 30),
             gapDayCounter: 0,
+            scheduleOnGapDays: true,
           );
 
       final atUtc = plan(Duration.zero, Duration.zero);

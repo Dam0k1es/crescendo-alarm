@@ -83,8 +83,8 @@ DateTime _dateTimeLike(
   int microsecond = 0,
 }) {
   return reference.isUtc
-      ? DateTime.utc(reference.year, reference.month, day, hour, minute,
-          second, millisecond, microsecond)
+      ? DateTime.utc(reference.year, reference.month, day, hour, minute, second,
+          millisecond, microsecond)
       : DateTime(reference.year, reference.month, day, hour, minute, second,
           millisecond, microsecond);
 }
@@ -185,7 +185,9 @@ DateTime applyGapDayDrift({
     vLocal.millisecond,
     vLocal.microsecond,
   );
-  if (preferredWakeUpTime == null) return _instantOf(todayLocal, deviceUtcOffset);
+  if (preferredWakeUpTime == null) {
+    return _instantOf(todayLocal, deviceUtcOffset);
+  }
 
   final targetLocal = DateTime.utc(todayLocal.year, todayLocal.month,
       todayLocal.day, preferredWakeUpTime.hour, preferredWakeUpTime.minute);
@@ -235,8 +237,7 @@ DateTime? hardFloor({
   final nonAllDay = dayEvents.where((event) => !event.isAllDay);
   if (nonAllDay.isEmpty) return null;
 
-  final earliest =
-      nonAllDay.reduce((a, b) => a.from.isBefore(b.from) ? a : b);
+  final earliest = nonAllDay.reduce((a, b) => a.from.isBefore(b.from) ? a : b);
   // docs/TODO.md T-61: normalise the frame. `Meeting.from` is what
   // `device_calendar` produced - a `TZDateTime` in the **event's own** zone,
   // whose `.hour`/`.minute` are that zone's digits. Every other value in this
@@ -277,7 +278,8 @@ HardFloorPoint groupTarget({
   required List<HardFloorPoint> points,
   required Duration maxDailyDelta,
 }) {
-  assert(points.isNotEmpty, 'groupTarget needs at least one real hardFloor point');
+  assert(
+      points.isNotEmpty, 'groupTarget needs at least one real hardFloor point');
 
   // FR-5 step 2: a ΔT=0 point (same wall-clock reading as the anchor - real
   // calendar dates necessarily differ, since points are always strictly ahead
@@ -295,8 +297,8 @@ HardFloorPoint groupTarget({
   // cap. A ΔT=0 target yields a flat curve, and a flat curve can perfectly
   // well violate a stricter intermediate point - then t_m has to shrink
   // further, exactly as for any other target.
-  final zeroDeltaIndex = points.indexWhere(
-      (p) => _wallClockDelta(anchor, p.value) == Duration.zero);
+  final zeroDeltaIndex = points
+      .indexWhere((p) => _wallClockDelta(anchor, p.value) == Duration.zero);
   final candidates =
       zeroDeltaIndex == -1 ? points : points.sublist(0, zeroDeltaIndex + 1);
   for (var m = candidates.length; m >= 1; m--) {
@@ -431,7 +433,8 @@ GapOrRunStartResult planGapOrRunStartDay({
   if (!feasible(v)) {
     // Already violated by mere holding: today is day 1 of the run.
     final n = nRest + 1; // FR-7: N = N_F - i + 1, today-relative = nRest + 1.
-    final curve = distribute(anchor: v, target: f, n: n, maxDailyDelta: maxDailyDelta);
+    final curve =
+        distribute(anchor: v, target: f, n: n, maxDailyDelta: maxDailyDelta);
     return GapOrRunStartResult(
       value: curve.valuesByDayOffset[1]!,
       overrunNotificationNeeded: curve.overrunNotificationNeeded,
@@ -444,7 +447,8 @@ GapOrRunStartResult planGapOrRunStartDay({
       maxDailyDelta: maxDailyDelta,
       deviceUtcOffset: deviceUtcOffset);
   if (feasible(drifted)) {
-    return GapOrRunStartResult(value: drifted, overrunNotificationNeeded: false);
+    return GapOrRunStartResult(
+        value: drifted, overrunNotificationNeeded: false);
   }
 
   // Only the full preferredWakeUpTime step violates it: cap at the largest
@@ -514,8 +518,8 @@ Map<DateTime, DateTime?> coldStart({
       day: preferredWakeUpTime == null
           ? null
           : _instantOf(
-              DateTime.utc(day.year, day.month, day.day, preferredWakeUpTime.hour,
-                  preferredWakeUpTime.minute),
+              DateTime.utc(day.year, day.month, day.day,
+                  preferredWakeUpTime.hour, preferredWakeUpTime.minute),
               deviceUtcOffset),
   };
 }
@@ -568,10 +572,22 @@ WeekPlanResult computeWeekPlan({
   required List<Meeting> allEvents,
   required Duration deviceUtcOffset,
   required Duration durationToWakeUp,
-  required Duration durationToGetReady,
+  // docs/TODO.md T-52.3: a callback rather than one `Duration` for the whole
+  // window - "duration to get ready" can differ per weekday (an override the
+  // AppState/UI layer resolves; see `replan.dart`'s call site), and a single
+  // week's window can span every weekday in one call.
+  required Duration Function(DateTime day) durationToGetReadyForDay,
   required TimeOfDay? preferredWakeUpTime,
   required Duration maxDailyDelta,
   required int gapDayCounter,
+  // docs/TODO.md T-52.1: when false, a day with no calendar entry of its own
+  // gets no alarm at all, instead of FR-4's drift/hold. Applied as a mask
+  // over the algorithm's normal output (see the two `return`s below) rather
+  // than folded into the drift math itself, so every existing invariant
+  // (anchor propagation, FR-5/6/7/9) stays exactly as it was for the days
+  // that DO have an appointment - masking cannot change how those are
+  // computed, only whether a day *without* one is allowed to keep a value.
+  required bool scheduleOnGapDays,
 }) {
   final hardFloorByDay = <DateTime, DateTime>{};
   for (final day in window) {
@@ -580,7 +596,7 @@ WeekPlanResult computeWeekPlan({
       allEvents: allEvents,
       deviceUtcOffset: deviceUtcOffset,
       durationToWakeUp: durationToWakeUp,
-      durationToGetReady: durationToGetReady,
+      durationToGetReady: durationToGetReadyForDay(day),
     );
     if (hf != null) hardFloorByDay[day] = hf;
   }
@@ -613,10 +629,12 @@ WeekPlanResult computeWeekPlan({
     final firstRealIndex = window.indexWhere(hardFloorByDay.containsKey);
     if (firstRealIndex == -1) {
       return WeekPlanResult(
-        valuesByDay: coldStart(
-            days: window,
-            preferredWakeUpTime: preferredWakeUpTime,
-            deviceUtcOffset: deviceUtcOffset),
+        valuesByDay: scheduleOnGapDays
+            ? coldStart(
+                days: window,
+                preferredWakeUpTime: preferredWakeUpTime,
+                deviceUtcOffset: deviceUtcOffset)
+            : {for (final day in window) day: null},
         overrunNotificationNeeded: false,
         // FR-9's valve reports from this branch too (docs/TODO.md T-107).
         //
@@ -637,8 +655,8 @@ WeekPlanResult computeWeekPlan({
         // "counter >= 7 -> stopped and notified", namely a set
         // `preferredWakeUpTime`. FR-10 governs only the *values* in this branch
         // ("Without: no alarm planned"), never the notification.
-        safetyValveTriggered:
-            gapDayCounter >= gapDayValveThreshold && preferredWakeUpTime == null,
+        safetyValveTriggered: gapDayCounter >= gapDayValveThreshold &&
+            preferredWakeUpTime == null,
         instantAnchoredDays: const {},
       );
     }
@@ -775,10 +793,18 @@ WeekPlanResult computeWeekPlan({
   }
 
   return WeekPlanResult(
-    valuesByDay: valuesByDay,
+    valuesByDay: scheduleOnGapDays
+        ? valuesByDay
+        : {
+            for (final entry in valuesByDay.entries)
+              entry.key:
+                  hardFloorByDay.containsKey(entry.key) ? entry.value : null,
+          },
     overrunNotificationNeeded: overrunNotificationNeeded,
     safetyValveTriggered: safetyValveTriggered,
-    instantAnchoredDays: instantAnchoredDays,
+    instantAnchoredDays: scheduleOnGapDays
+        ? instantAnchoredDays
+        : instantAnchoredDays.where(hardFloorByDay.containsKey).toSet(),
   );
 }
 

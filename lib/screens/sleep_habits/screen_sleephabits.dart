@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:wakeywakey/app_state.dart';
+import 'package:wakeywakey/models/alarms/manual_alarm.dart' show DayOfWeek;
 import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/utils/sleep_reminder.dart';
-
-// TODO durationToGetReady per weekday - 0x399
 
 class ScreenSleephabits extends StatefulWidget {
   const ScreenSleephabits({super.key});
@@ -16,13 +15,19 @@ class ScreenSleephabits extends StatefulWidget {
 class _ScreenSleephabitsState extends State<ScreenSleephabits> {
   late final AppState _appState;
 
+  // docs/TODO.md T-52.3: purely local UI state - whether to have shown the
+  // section at all is not worth persisting, since a user who never opened it
+  // has no overrides to look at anyway.
+  bool _showGetReadyOverrides = false;
+
   @override
   void initState() {
     super.initState();
     _appState = Provider.of<AppState>(context, listen: false);
   }
 
-  Future<void> _changeDuration(String setting, {TimeOfDay? initialTime}) async {
+  Future<void> _changeDuration(String setting,
+      {TimeOfDay? initialTime, DayOfWeek? forWeekday}) async {
     final TimeOfDay? pickedTime = await showTimePicker(
       context: context,
       initialTime: initialTime ?? const TimeOfDay(hour: 0, minute: 15),
@@ -68,6 +73,11 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           break;
         case 'getReady':
           _appState.durationToGetReady = pickedTime;
+          break;
+        // docs/TODO.md T-52.3: a per-weekday override, distinct from the
+        // global 'getReady' case above.
+        case 'getReadyForDay':
+          _appState.setDurationToGetReadyForWeekday(forWeekday!, pickedTime);
           break;
         case 'reminder':
           _appState.reminderDuration = pickedTime;
@@ -145,7 +155,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                       (value) {
                         if (value) {
                           _appState.preferredWakeUpTime =
-                              _appState.preferredWakeUpTime ?? const TimeOfDay(hour: 7, minute: 0);
+                              _appState.preferredWakeUpTime ??
+                                  const TimeOfDay(hour: 7, minute: 0);
                         } else {
                           _appState.preferredWakeUpTime = null;
                         }
@@ -154,9 +165,24 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                       },
                     ),
                     if (_appState.preferredWakeUpTime != null)
-                      _buildTimePicker("preferredWakeUpTime", _appState.preferredWakeUpTime!,
+                      _buildTimePicker(
+                          "preferredWakeUpTime", _appState.preferredWakeUpTime!,
                           isDuration: false),
                   ],
+                ),
+              ),
+              const SizedBox(height: 16.0),
+              // docs/TODO.md T-52.1: whether a day with no calendar entry of
+              // its own gets an alarm at all (FR-4's drift/hold) or none.
+              _buildTile(
+                child: _buildToggle(
+                  "Schedule an alarm on days without an appointment",
+                  _appState.scheduleOnGapDays,
+                  (value) {
+                    _appState.scheduleOnGapDays = value;
+                    runCheckpointSafely(_appState,
+                        trigger: CheckpointTrigger.settingsChanged);
+                  },
                 ),
               ),
               const SizedBox(height: 16.0),
@@ -223,6 +249,9 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                   children: [
                     _buildLabel("Duration to get ready"),
                     _buildTimePicker("getReady", _appState.durationToGetReady),
+                    const SizedBox(height: 8.0),
+                    _buildGetReadyOverridesToggle(),
+                    if (_showGetReadyOverrides) _buildGetReadyOverrides(),
                   ],
                 ),
               ),
@@ -454,6 +483,104 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
         ),
       ),
     );
+  }
+
+  /// docs/TODO.md T-52.3: a plain text toggle rather than a full tile - this
+  /// section is a secondary, optional refinement of the setting above it,
+  /// not a peer entry of its own.
+  Widget _buildGetReadyOverridesToggle() {
+    return InkWell(
+      onTap: () =>
+          setState(() => _showGetReadyOverrides = !_showGetReadyOverrides),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _showGetReadyOverrides
+                ? "Hide per-weekday overrides"
+                : "Customize per weekday",
+            style: TextStyle(
+              fontSize: 14,
+              color: _appState.accentColor,
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One row per [DayOfWeek]: a switch for whether that day overrides the
+  /// global "duration to get ready" at all, and - only while it does - the
+  /// same time-box picker the global setting itself uses. Absent an
+  /// override, [AppState.durationToGetReadyForWeekday] falls back to the
+  /// global value, which is exactly what the switch being off means here.
+  Widget _buildGetReadyOverrides() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final day in DayOfWeek.values)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 100,
+                  child: Text(_dayLabel(day)),
+                ),
+                Switch(
+                  value: _appState.durationToGetReadyByWeekday.containsKey(day),
+                  onChanged: (value) {
+                    _appState.setDurationToGetReadyForWeekday(
+                        day,
+                        value
+                            ? _appState.durationToGetReadyForWeekday(day)
+                            : null);
+                    runCheckpointSafely(_appState,
+                        trigger: CheckpointTrigger.settingsChanged);
+                  },
+                  activeThumbColor: context
+                      .watch<AppState>()
+                      .accentColor
+                      .withValues(alpha: 0.05),
+                ),
+                if (_appState.durationToGetReadyByWeekday.containsKey(day))
+                  GestureDetector(
+                    onTap: () => _changeDuration('getReadyForDay',
+                        initialTime:
+                            _appState.durationToGetReadyForWeekday(day),
+                        forWeekday: day),
+                    child: Text(
+                      '${_appState.durationToGetReadyForWeekday(day).hour.toString().padLeft(2, '0')}:'
+                      '${_appState.durationToGetReadyForWeekday(day).minute.toString().padLeft(2, '0')} h',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _dayLabel(DayOfWeek day) {
+    switch (day) {
+      case DayOfWeek.monday:
+        return 'Monday';
+      case DayOfWeek.tuesday:
+        return 'Tuesday';
+      case DayOfWeek.wednesday:
+        return 'Wednesday';
+      case DayOfWeek.thursday:
+        return 'Thursday';
+      case DayOfWeek.friday:
+        return 'Friday';
+      case DayOfWeek.saturday:
+        return 'Saturday';
+      case DayOfWeek.sunday:
+        return 'Sunday';
+    }
   }
 
   /// A heading for a group of entries. Without it, the grouping would be

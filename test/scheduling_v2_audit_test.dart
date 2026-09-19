@@ -104,7 +104,8 @@ void main() {
     });
   });
 
-  group('FR-6: the overrun notification must not be skipped even at N=1 (T-105)',
+  group(
+      'FR-6: the overrun notification must not be skipped even at N=1 (T-105)',
       () {
     // FR-6, the reporting duty:
     //
@@ -138,10 +139,11 @@ void main() {
         allEvents: [_meetingAt(_utc(1, 0, day: 1))],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       // The value itself is FR-compliant: FR-2's upper bound forces 01:00,
@@ -161,10 +163,11 @@ void main() {
         allEvents: [_meetingAt(_utc(6, 40, day: 1))],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       expect(result.valuesByDay[window[0]], _utc(6, 40, day: 1));
@@ -181,17 +184,19 @@ void main() {
         allEvents: [_meetingAt(_utc(6, 30, day: 1))],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       expect(result.overrunNotificationNeeded, isFalse);
     });
   });
 
-  group('FR-9: the valve keeps reporting as long as its condition holds (T-107)',
+  group(
+      'FR-9: the valve keeps reporting as long as its condition holds (T-107)',
       () {
     // FR-9:
     //
@@ -217,17 +222,19 @@ void main() {
         allEvents: const [],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 7,
+        scheduleOnGapDays: true,
       );
 
       expect(result.safetyValveTriggered, isTrue);
       expect(result.valuesByDay.values.every((v) => v == null), isTrue);
     });
 
-    test('the same with preferredWakeUpTime set does not report (FR-9\'s exception)',
+    test(
+        'the same with preferredWakeUpTime set does not report (FR-9\'s exception)',
         () {
       final window = List.generate(7, (i) => _utc(0, 0, day: 1 + i));
 
@@ -237,15 +244,17 @@ void main() {
         allEvents: const [],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 42,
+        scheduleOnGapDays: true,
       );
 
       expect(result.safetyValveTriggered, isFalse);
       expect(result.valuesByDay.values.every((v) => v != null), isTrue,
-          reason: 'FR-9\'s exception: with preferredWakeUpTime, advancement continues');
+          reason:
+              'FR-9\'s exception: with preferredWakeUpTime, advancement continues');
     });
 
     test('no anchor, below the threshold, does not report', () {
@@ -261,10 +270,11 @@ void main() {
         allEvents: const [],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 6,
+        scheduleOnGapDays: true,
       );
 
       expect(result.safetyValveTriggered, isFalse);
@@ -281,10 +291,11 @@ void main() {
         allEvents: const [],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 7,
+        scheduleOnGapDays: true,
       );
 
       expect(result.safetyValveTriggered, isTrue);
@@ -424,7 +435,8 @@ void main() {
     // The test also establishes that a value's date and its day key CAN
     // diverge - the precondition for any decision on T-120.
 
-    test('an appointment at 00:30 with 30min lead each -> wake value the day before',
+    test(
+        'an appointment at 00:30 with 30min lead each -> wake value the day before',
         () {
       final result = hardFloor(
         day: DateTime.utc(2026, 3, 12),
@@ -439,7 +451,8 @@ void main() {
     });
   });
 
-  group('FR-9: the valve never wipes out a day that has something to do (T-118c)',
+  group(
+      'FR-9: the valve never wipes out a day that has something to do (T-118c)',
       () {
     // FR-9's "stopped" concerns ADVANCEMENT. Together with FR-2 ("never
     // later ... a later value means missing a real appointment") and
@@ -465,10 +478,11 @@ void main() {
         allEvents: [_meetingAt(_utc(8, 0, day: 11))],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 60),
         gapDayCounter: 42,
+        scheduleOnGapDays: true,
       );
 
       expect(result.valuesByDay[window[0]], isNotNull,
@@ -491,15 +505,17 @@ void main() {
         allEvents: [_meetingAt(_utc(6, 0, day: 15))],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 60),
         gapDayCounter: 42,
+        scheduleOnGapDays: true,
       );
 
       for (var i = 0; i < window.length; i++) {
         expect(result.valuesByDay[window[i]], isNotNull,
-            reason: 'a run toward the appointment on the last window day is under way');
+            reason:
+                'a run toward the appointment on the last window day is under way');
       }
     });
 
@@ -513,10 +529,11 @@ void main() {
         allEvents: const [],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 60),
         gapDayCounter: 42,
+        scheduleOnGapDays: true,
       );
 
       expect(result.safetyValveTriggered, isTrue);
@@ -550,10 +567,11 @@ void main() {
         ],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 60),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       expect(result.valuesByDay[window[0]], _utc(8, 0, day: 11),
@@ -575,8 +593,7 @@ void main() {
     // parameter (FR-2 "Testability"). The matrix and the unit test thus
     // cover different things and don't substitute for each other.
 
-    test('Lord Howe: a half-hour transition, same digits in the new zone',
-        () {
+    test('Lord Howe: a half-hour transition, same digits in the new zone', () {
       // +11:00 -> +10:30. The value reads as 07:00 on Apr 5 under +11; what's
       // sought is the instant that gives the same digits under +10:30.
       final result = reinterpretForNewOffset(
@@ -610,7 +627,8 @@ void main() {
         deviceUtcOffset: const Duration(hours: 12, minutes: 45),
       );
 
-      expect(result[DateTime.utc(2026, 4, 5)], DateTime.utc(2026, 4, 4, 11, 30));
+      expect(
+          result[DateTime.utc(2026, 4, 5)], DateTime.utc(2026, 4, 4, 11, 30));
     });
   });
 
@@ -645,10 +663,11 @@ void main() {
         allEvents: events,
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       for (final day in window) {
@@ -703,10 +722,11 @@ void main() {
         ],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       // FR-4: 06:45 -> 07:00 is a step of 15min, within the bound, and
@@ -734,10 +754,11 @@ void main() {
         allEvents: [_meetingAt(_utc(11, 0, day: 15))],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       for (final day in window) {
@@ -759,10 +780,11 @@ void main() {
         allEvents: [_meetingAt(_utc(5, 0, day: 15))],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       expect(result.valuesByDay[window[0]], _utc(6, 30, day: 12));
@@ -801,16 +823,19 @@ void main() {
         ],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       expect(result.valuesByDay[window[0]], _utc(6, 15, day: 14),
-          reason: 'FR-2: the appointment caps the value - that part is correct');
+          reason:
+              'FR-2: the appointment caps the value - that part is correct');
       expect(result.overrunNotificationNeeded, isTrue,
-          reason: '45 minutes against an allowed 30 - FR-6 requires the report');
+          reason:
+              '45 minutes against an allowed 30 - FR-6 requires the report');
     });
 
     test('a cap within the bound does not report', () {
@@ -826,10 +851,11 @@ void main() {
         ],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       expect(result.valuesByDay[window[0]], _utc(6, 15, day: 14));

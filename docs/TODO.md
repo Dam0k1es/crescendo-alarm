@@ -1453,18 +1453,58 @@ that is the basis a decision can be formulated against.
 - **Evidence (before this fix):** `lib/main.dart:106-108`; `lib/app_state.dart`'s `darkMode`
   getter/setter.
 
-### T-52 · Several scheduling/sleep-habit options are hardcoded, not user-configurable
+### T-52 · Several scheduling/sleep-habit options were hardcoded, not user-configurable — FIXED (2026-09-19)
 
-- [ ] Add settings for: scheduling (or not) on days without calendar entries, 24h-vs-AM/PM display,
-      and a per-weekday "duration to get ready".
+- [x] T-52.1: a toggle for scheduling (or not) on days without a calendar entry.
+- [x] T-52.2: 24h-vs-AM/PM display, adapted to the phone's own setting.
+- [x] T-52.3: a per-weekday override for "duration to get ready".
 - **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31), the parts of it not
-  already covered by T-42/T-43/T-46. Today: a day with no calendar entries always gets the 23:59
-  placeholder-or-estimate treatment (see T-02) with no way to opt out per day; times are always
-  displayed in one fixed format; and "duration to get ready" is a single global value with no
+  already covered by T-42/T-43/T-46. A day with no calendar entries always got FR-4's drift/hold
+  treatment with no way to opt out; times were always displayed in one fixed format regardless of
+  the device's own setting; and "duration to get ready" was a single global value with no
   per-weekday override, unlike `repeatOnDays` which is at least per-weekday (T-14).
-- **Evidence:** `lib/main.dart`'s pre-triage TODO block, items `0x393`, `0x398`, `0x399` (see T-31).
-- **Done when:** each option is either implemented (with a test) or explicitly dropped with a
-  written reason.
+- **Evidence (before the fix):** `lib/main.dart`'s pre-triage TODO block, items `0x393`, `0x398`,
+  `0x399` (see T-31).
+- **T-52.1 fix:** `computeWeekPlan` (`lib/models/scheduling/scheduling_v2.dart`) gained a required
+  `scheduleOnGapDays` flag, applied as a **mask over its own output** rather than folded into the
+  drift math itself - every day without a real `hardFloor` (i.e. no calendar entry of its own) is
+  nulled out in the two `return` points when the flag is off, and every day that DOES have one is
+  completely unaffected, byte-for-byte the same as before. Chosen deliberately over threading the
+  flag through the drift/distribute/gap-or-run-start functions themselves: those are the most
+  heavily spec-reviewed part of the app (FR-4/5/6/7/9/10, the "OPEN SPEC DECISION" items T-112-122),
+  and a masking pass cannot change how a real appointment day is computed, only whether a day
+  without one is allowed to keep a value at all - the smallest change that could deliver the
+  feature without touching that core's carefully-audited invariants (anchor propagation across the
+  window, FR-9's counter, the safety valve). `AppState.scheduleOnGapDays` (persisted, default
+  `true` - the only behaviour that existed before) is the new Settings > Sleep Habits toggle
+  ("Schedule an alarm on days without an appointment"), wired into `replan.dart`'s
+  `computeWeekPlan` call.
+- **T-52.2 fix:** the Schedule screen's hour-axis label (`screen_schedule.dart`'s `_timeLineMark`)
+  used to hardcode `DateFormat('HH:mm')` regardless of the device's own setting. Now reads
+  `MediaQuery.of(context).alwaysUse24HourFormat` - the same source `showTimePicker` itself already
+  defaults to - and formats as `'h:mm a'` when the device is not set to 24-hour time, matching the
+  actual phone setting instead of a second, independent decision.
+- **T-52.3 fix:** `MyAlarm`'s scheduling input `durationToGetReady` became a resolvable-per-day
+  value. `computeWeekPlan`'s `durationToGetReady: Duration` parameter became
+  `durationToGetReadyForDay: Duration Function(DateTime day)`, since a single 7-day window can
+  legitimately span every weekday in one call - its only use site (feeding `hardFloor` once per
+  window day) made this a strictly localized change, not a rework of the distribution math.
+  `AppState.durationToGetReadyByWeekday` (persisted) holds only the days that have been explicitly
+  overridden - absent from the map means "follow the global `durationToGetReady` value", so an
+  empty map (every existing install) behaves exactly as before; a day's own value is exposed via
+  `durationToGetReadyForWeekday(day)`, which `replan.dart` calls per window day.
+  Settings > Sleep Habits gained a collapsible "Customize per weekday" section under the existing
+  "Duration to get ready" control, one switch + time picker per day, following the same
+  optional-override shape already established (a day's override, once cleared, reverts to
+  following the global value rather than freezing at whatever it last was).
+- **Tests:** `scheduling_v2_test.dart` (a per-window-day `durationToGetReadyForDay` callback
+  produces two different hardFloors for the same appointment time; `scheduleOnGapDays=false` masks
+  every day without an appointment, both the cold-start-with-no-anchor-anywhere path and the
+  main-loop drift path, while leaving a real appointment day completely untouched);
+  `app_state_scheduling_v2_test.dart` (both new fields' persistence round-trip, and the
+  weekday-override resolver's fallback/override/clear behaviour); `screen_schedule_test.dart`
+  (the hour axis is 24h with the flag on, 12h AM/PM with it off);
+  `sleep_habits_gap_day_and_per_weekday_test.dart` (both new Sleep Habits controls, end to end).
 
 ### T-53 · No way to choose which calendar counts as "the work calendar"
 

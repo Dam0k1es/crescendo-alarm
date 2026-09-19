@@ -60,6 +60,19 @@ class AppState extends ChangeNotifier {
   Duration _snoozeTime = const Duration(minutes: 5);
   Map<int, DateTime> _snoozeOriginOf = <int, DateTime>{};
   TimeOfDay _durationToGetReady = const TimeOfDay(hour: 1, minute: 0);
+  // docs/TODO.md T-52.3: absent from this map means "use the global
+  // _durationToGetReady value for that day" - so an empty map (the default,
+  // matching every existing install) behaves exactly as before. A day gets
+  // its own value only once the user explicitly overrides it.
+  Map<DayOfWeek, TimeOfDay> _durationToGetReadyByWeekday =
+      <DayOfWeek, TimeOfDay>{};
+
+  // docs/TODO.md T-52.1: FR-4's drift/hold behaviour on a day with no
+  // calendar entry of its own is the only thing scheduling-v2 ever did on
+  // such a day - `true` here reproduces exactly that (every existing
+  // install's current behaviour); `false` opts out and leaves those days
+  // with no alarm planned at all.
+  bool _scheduleOnGapDays = true;
 
   bool _reminderEnabled = false;
   TimeOfDay _reminderDuration = const TimeOfDay(hour: 0, minute: 30);
@@ -250,8 +263,20 @@ class AppState extends ChangeNotifier {
       jsonEncode(_snoozeOriginOf
           .map((id, at) => MapEntry('$id', at.millisecondsSinceEpoch))));
 
-  // TODO durationToGetReady per Weekday - 0x399
   TimeOfDay get durationToGetReady => _durationToGetReady;
+
+  // docs/TODO.md T-52.3: a read-only view of the overrides - the alarm
+  // editor/replan side should always resolve through
+  // [durationToGetReadyForWeekday], never read this map directly, or a day
+  // without an override would wrongly look unset instead of falling back to
+  // the global value.
+  Map<DayOfWeek, TimeOfDay> get durationToGetReadyByWeekday =>
+      Map.unmodifiable(_durationToGetReadyByWeekday);
+
+  TimeOfDay durationToGetReadyForWeekday(DayOfWeek day) =>
+      _durationToGetReadyByWeekday[day] ?? _durationToGetReady;
+
+  bool get scheduleOnGapDays => _scheduleOnGapDays;
 
   TimeOfDay get reminderDuration => _reminderDuration;
 
@@ -534,6 +559,30 @@ class AppState extends ChangeNotifier {
     _durationToGetReady = value;
     _prefs.setString('durationToGetReady',
         '${_durationToGetReady.hour}:${_durationToGetReady.minute}');
+    notifyListeners();
+  }
+
+  /// docs/TODO.md T-52.3: sets (or, with `value == null`, clears) this one
+  /// day's override. Clearing rather than setting it back to the global
+  /// value keeps the day following the global setting if that is changed
+  /// again later, instead of freezing it at whatever the global value
+  /// happened to be at the time.
+  void setDurationToGetReadyForWeekday(DayOfWeek day, TimeOfDay? value) {
+    if (value == null) {
+      _durationToGetReadyByWeekday.remove(day);
+    } else {
+      _durationToGetReadyByWeekday[day] = value;
+    }
+    _prefs.setString(
+        'durationToGetReadyByWeekday',
+        jsonEncode(_durationToGetReadyByWeekday
+            .map((day, time) => MapEntry(day.toString(), '${time.hour}:${time.minute}'))));
+    notifyListeners();
+  }
+
+  set scheduleOnGapDays(bool value) {
+    _scheduleOnGapDays = value;
+    _prefs.setBool('scheduleOnGapDays', _scheduleOnGapDays);
     notifyListeners();
   }
 
@@ -1096,6 +1145,21 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Map<DayOfWeek, TimeOfDay>? _loadDurationToGetReadyByWeekday() {
+    try {
+      final data = _prefs.getString('durationToGetReadyByWeekday');
+      if (data == null) return null;
+      final decoded = jsonDecode(data) as Map<String, dynamic>;
+      return decoded.map((dayName, time) => MapEntry(
+          DayOfWeek.values.firstWhere((d) => d.toString() == dayName),
+          timeOfDayFromString(time as String)));
+    } catch (e) {
+      debugPrint(
+          "=====_loadDurationToGetReadyByWeekday: Error loading durationToGetReadyByWeekday: ${e.runtimeType}");
+      return null;
+    }
+  }
+
   TimeOfDay? _loadReminderDuration() {
     try {
       final data = _prefs.getString('reminderDuration');
@@ -1216,6 +1280,10 @@ class AppState extends ChangeNotifier {
       _sleepGoal = _loadSleepGoal() ?? _sleepGoal;
       _durationToWakeUp = _loadDurationToWakeUp() ?? _durationToWakeUp;
       _durationToGetReady = _loadDurationToGetReady() ?? _durationToGetReady;
+      _durationToGetReadyByWeekday = _loadDurationToGetReadyByWeekday() ??
+          _durationToGetReadyByWeekday;
+      _scheduleOnGapDays =
+          _prefs.getBool('scheduleOnGapDays') ?? _scheduleOnGapDays;
       _reminderDuration = _loadReminderDuration() ?? _reminderDuration;
       _scheduledAlarms = _loadScheduledAlarms() ?? _scheduledAlarms;
       _manualAlarms = _loadManualAlarms() ?? _manualAlarms;

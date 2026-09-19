@@ -321,7 +321,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **451 tests across 63 files**, and CI runs them six times over -
+`flutter test` currently runs **459 tests across 64 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -358,6 +358,15 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   called from `lib/main.dart` on cold start and every resume) instead of only once per process
   lifetime, and the Schedule tab's icon swaps for a spinner while that read is in flight
   (`AppState.isReadingCalendarMutex`).
+
+- T-52's three previously-hardcoded options are covered across the files that already own their
+  respective areas rather than one new file: `scheduling_v2_test.dart` gained cases for
+  `durationToGetReadyForDay` (T-52.3, a per-window-day callback) and `scheduleOnGapDays` (T-52.1, a
+  masking pass over `computeWeekPlan`'s output); `app_state_scheduling_v2_test.dart` covers both
+  new `AppState` fields' persistence; `screen_schedule_test.dart` covers the hour axis following
+  `MediaQuery.alwaysUse24HourFormat` (T-52.2) instead of a hardcoded format; and
+  `sleep_habits_gap_day_and_per_weekday_test.dart` covers the two new Sleep Habits controls
+  end to end.
 
 - The scheduling-v2 suite (`scheduling_v2_test.dart`, `scheduling_v2_offset_test.dart`,
   `scheduling_v2_tz_test.dart`, `scheduling_v2_dst_test.dart`, `replan_test.dart`,

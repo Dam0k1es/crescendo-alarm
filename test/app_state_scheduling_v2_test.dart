@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakeywakey/app_state.dart';
+import 'package:wakeywakey/models/alarms/manual_alarm.dart' show DayOfWeek;
 
 // Phase 0, step 2 (docs/scheduling-v2-spec.md, "Implementation order"):
 // persistence round-trip for the four new scheduling-v2 fields (FR-3),
@@ -149,6 +150,57 @@ void main() {
       // unchecked. Hence the same bound as for maxDailyDelta.
       second.gentleWakeUpDuration = Duration.zero;
       expect(second.gentleWakeUpDuration, const Duration(minutes: 1));
+    });
+
+    // docs/TODO.md T-52.3: durationToGetReady used to be one single global
+    // value with no per-weekday override.
+    test('durationToGetReadyForWeekday - falls back to the global value until overridden, round-trips', () async {
+      SharedPreferences.setMockInitialValues({});
+      final first = AppState();
+      await first.initialized;
+      first.durationToGetReady = const TimeOfDay(hour: 0, minute: 30);
+
+      // No override yet - every day falls back to the global value.
+      for (final day in DayOfWeek.values) {
+        expect(first.durationToGetReadyForWeekday(day),
+            const TimeOfDay(hour: 0, minute: 30));
+      }
+
+      first.setDurationToGetReadyForWeekday(
+          DayOfWeek.monday, const TimeOfDay(hour: 1, minute: 15));
+
+      expect(first.durationToGetReadyForWeekday(DayOfWeek.monday),
+          const TimeOfDay(hour: 1, minute: 15));
+      // Every other day is unaffected.
+      expect(first.durationToGetReadyForWeekday(DayOfWeek.tuesday),
+          const TimeOfDay(hour: 0, minute: 30));
+
+      final second = AppState();
+      await second.initialized;
+      expect(second.durationToGetReadyForWeekday(DayOfWeek.monday),
+          const TimeOfDay(hour: 1, minute: 15));
+      expect(second.durationToGetReadyForWeekday(DayOfWeek.tuesday),
+          const TimeOfDay(hour: 0, minute: 30));
+
+      // Clearing the override (value: null) reverts to following the global
+      // value, rather than freezing Monday at whatever it was.
+      second.setDurationToGetReadyForWeekday(DayOfWeek.monday, null);
+      expect(second.durationToGetReadyForWeekday(DayOfWeek.monday),
+          const TimeOfDay(hour: 0, minute: 30));
+    });
+
+    // docs/TODO.md T-52.1: there used to be no way to opt out of FR-4's
+    // drift/hold on days with no calendar entry - it was the only behaviour.
+    test('scheduleOnGapDays - defaults to true (the previous, only behaviour), round-trips', () async {
+      SharedPreferences.setMockInitialValues({});
+      final first = AppState();
+      await first.initialized;
+      expect(first.scheduleOnGapDays, isTrue);
+
+      first.scheduleOnGapDays = false;
+      final second = AppState();
+      await second.initialized;
+      expect(second.scheduleOnGapDays, isFalse);
     });
 
     test('maxDailyDelta (FR-3) - the system minimum of 15 minutes is enforced', () async {

@@ -25,7 +25,8 @@ const cest = Duration(hours: 2);
 void main() {
   setUpAll(tzdata.initializeTimeZones);
 
-  test('T-76: the curve uses the real calendar day distance across the transition',
+  test(
+      'T-76: the curve uses the real calendar day distance across the transition',
       () {
     final berlin = tz.getLocation('Europe/Berlin');
     // Window 2026-03-28 .. 2026-04-03; the transition falls on 2026-03-29.
@@ -54,10 +55,11 @@ void main() {
       allEvents: [event],
       deviceUtcOffset: cest,
       durationToWakeUp: const Duration(minutes: 30),
-      durationToGetReady: const Duration(hours: 2),
+      durationToGetReadyForDay: (_) => const Duration(hours: 2),
       preferredWakeUpTime: null,
       maxDailyDelta: const Duration(minutes: 20),
       gapDayCounter: 0,
+      scheduleOnGapDays: true,
     );
 
     // From the anchor (Mar 27) to the target (Apr 3) is 7 calendar days.
@@ -81,8 +83,7 @@ void main() {
     expect(window.map(isoDate).toSet().length, 7);
   });
 
-  test('T-76: a cold start across the transition anchors on the right day',
-      () {
+  test('T-76: a cold start across the transition anchors on the right day', () {
     final berlin = tz.getLocation('Europe/Berlin');
     final window =
         List.generate(7, (i) => tz.TZDateTime(berlin, 2026, 3, 28 + i));
@@ -106,10 +107,11 @@ void main() {
       allEvents: [at(31, 6, 0), at(2, 6, 0)],
       deviceUtcOffset: cest,
       durationToWakeUp: const Duration(minutes: 30),
-      durationToGetReady: Duration.zero,
+      durationToGetReadyForDay: (_) => Duration.zero,
       preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
       maxDailyDelta: const Duration(minutes: 30),
       gapDayCounter: 0,
+      scheduleOnGapDays: true,
     );
 
     // The anchor day (Mar 31) carries its own hardFloor and is

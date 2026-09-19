@@ -96,7 +96,8 @@ void main() {
     // applyGapDayDrift()'s doc comment. Values are explicit UTC instants and
     // the device offset is explicitly 0 (T-61/Option B) - behaviour at a
     // non-zero offset is covered by test/scheduling_v2_offset_test.dart.
-    test('no preferredWakeUpTime -> holds (time of day unchanged, date +1)', () {
+    test('no preferredWakeUpTime -> holds (time of day unchanged, date +1)',
+        () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
         preferredWakeUpTime: null,
@@ -136,7 +137,9 @@ void main() {
       expect(result, _utc(7, 15, day: 2));
     });
 
-    test('preferredWakeUpTime already reached -> time of day unchanged, date +1', () {
+    test(
+        'preferredWakeUpTime already reached -> time of day unchanged, date +1',
+        () {
       final result = applyGapDayDrift(
         v: _utc(7, 0),
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
@@ -196,7 +199,9 @@ void main() {
       expect(result, isNull);
     });
 
-    test('appointment\'s own time zone: day assignment follows the device time zone', () {
+    test(
+        'appointment\'s own time zone: day assignment follows the device time zone',
+        () {
       // Tom, device on Europe/Berlin (CET, +1h). Appointment
       // startTimeZone=Asia/Tokyo, start 03:00 JST on "day 2" = already
       // correctly converted to 18:00 UTC the day before ("day 1") - this
@@ -245,8 +250,10 @@ void main() {
     });
 
     test('an intermediate point would be violated - the run must shrink', () {
-      final t1 = HardFloorPoint(dayOffset: 3, value: _t(6, 0, day: 4)); // Wednesday, strict
-      final t2 = HardFloorPoint(dayOffset: 5, value: _t(8, 0, day: 6)); // Friday, looser
+      final t1 = HardFloorPoint(
+          dayOffset: 3, value: _t(6, 0, day: 4)); // Wednesday, strict
+      final t2 = HardFloorPoint(
+          dayOffset: 5, value: _t(8, 0, day: 6)); // Friday, looser
 
       final result = groupTarget(
         anchor: _t(9, 0, day: 1),
@@ -314,7 +321,9 @@ void main() {
       expect(tuesday.overrunNotificationNeeded, isFalse);
     });
 
-    test('two hardFloor points, FR-5 target ≠ next point: Monday starts immediately', () {
+    test(
+        'two hardFloor points, FR-5 target ≠ next point: Monday starts immediately',
+        () {
       const maxDailyDelta = Duration(minutes: 30);
       // v (Sunday, anchor) is day 1; the values must lie on v.day + dayOffset
       // so that groupTarget's intermediate-point check compares real dates
@@ -355,7 +364,8 @@ void main() {
       );
     });
 
-    test('rolling across several days - 6 appointment-free days before today', () {
+    test('rolling across several days - 6 appointment-free days before today',
+        () {
       var counter = 0;
       for (var i = 0; i < 6; i++) {
         counter = updateGapDayCounter(
@@ -368,7 +378,9 @@ void main() {
   });
 
   group('coldStart (FR-10)', () {
-    test('days 1-5 appointment-free, no preferredWakeUpTime -> no alarm planned', () {
+    test(
+        'days 1-5 appointment-free, no preferredWakeUpTime -> no alarm planned',
+        () {
       final days = [
         _utc(0, 0, day: 1),
         _utc(0, 0, day: 2),
@@ -378,7 +390,9 @@ void main() {
       ];
 
       final result = coldStart(
-          days: days, preferredWakeUpTime: null, deviceUtcOffset: Duration.zero);
+          days: days,
+          preferredWakeUpTime: null,
+          deviceUtcOffset: Duration.zero);
 
       expect(result.length, 5);
       expect(result.values.every((v) => v == null), isTrue);
@@ -401,7 +415,9 @@ void main() {
   group('computeWeekPlan (FR-8)', () {
     DateTime day(int n) => _utc(0, 0, day: n);
 
-    test('cold start: days 1-5 appointment-free, day 6 hardFloor=05:30, no preferredWakeUpTime', () {
+    test(
+        'cold start: days 1-5 appointment-free, day 6 hardFloor=05:30, no preferredWakeUpTime',
+        () {
       final window = [1, 2, 3, 4, 5, 6].map(day).toList();
       final events = [_meetingAt(_utc(5, 30, day: 6))];
 
@@ -411,10 +427,11 @@ void main() {
         allEvents: events,
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       for (var d = 1; d <= 5; d++) {
@@ -425,8 +442,105 @@ void main() {
       expect(result.safetyValveTriggered, isFalse);
     });
 
-    test('one hardFloor point at the end of the window - the whole week worked '
-        'through (regression test: Friday was wrong before the N_remaining<=1 fix)', () {
+    test(
+        'docs/TODO.md T-52.3: durationToGetReadyForDay lets different days in '
+        'the same window use a different lead time', () {
+      final window = [1, 2, 3].map(day).toList();
+      final events = [
+        _meetingAt(_utc(8, 0, day: 1)),
+        _meetingAt(_utc(8, 0, day: 2)),
+      ];
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: null,
+        allEvents: events,
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        // Day 1 gets a 30-minute lead time, day 2 a full hour - so the same
+        // 08:00 appointment produces two different hardFloors.
+        durationToGetReadyForDay: (d) =>
+            d.day == 1 ? const Duration(minutes: 30) : const Duration(hours: 1),
+        preferredWakeUpTime: null,
+        maxDailyDelta: const Duration(hours: 2),
+        gapDayCounter: 0,
+        scheduleOnGapDays: true,
+      );
+
+      expect(result.valuesByDay[day(1)], _utc(7, 30, day: 1));
+      expect(result.valuesByDay[day(2)], _utc(7, 0, day: 2));
+    });
+
+    test(
+        'docs/TODO.md T-52.1: scheduleOnGapDays=false masks every day without '
+        'its own appointment, cold start (no anchor anywhere)', () {
+      final window = [1, 2, 3].map(day).toList();
+
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: null,
+        allEvents: const [],
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
+        maxDailyDelta: const Duration(minutes: 30),
+        gapDayCounter: 0,
+        scheduleOnGapDays: false,
+      );
+
+      for (final d in window) {
+        expect(result.valuesByDay[d], isNull);
+      }
+    });
+
+    test(
+        'docs/TODO.md T-52.1: scheduleOnGapDays=false masks drifted gap days '
+        'but leaves real appointment days untouched', () {
+      final window = [1, 2, 3].map(day).toList();
+      // Day 3 has a real appointment; days 1-2 would otherwise drift toward
+      // preferredWakeUpTime.
+      final events = [_meetingAt(_utc(6, 0, day: 3))];
+
+      final withGapDays = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(7, 0, day: 0),
+        allEvents: events,
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
+        preferredWakeUpTime: const TimeOfDay(hour: 8, minute: 0),
+        maxDailyDelta: const Duration(hours: 2),
+        gapDayCounter: 0,
+        scheduleOnGapDays: true,
+      );
+      // Sanity check: with the toggle on, days 1-2 drift and are not null.
+      expect(withGapDays.valuesByDay[day(1)], isNotNull);
+      expect(withGapDays.valuesByDay[day(2)], isNotNull);
+      expect(withGapDays.valuesByDay[day(3)], _utc(6, 0, day: 3));
+
+      final withoutGapDays = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(7, 0, day: 0),
+        allEvents: events,
+        deviceUtcOffset: Duration.zero,
+        durationToWakeUp: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
+        preferredWakeUpTime: const TimeOfDay(hour: 8, minute: 0),
+        maxDailyDelta: const Duration(hours: 2),
+        gapDayCounter: 0,
+        scheduleOnGapDays: false,
+      );
+      expect(withoutGapDays.valuesByDay[day(1)], isNull);
+      expect(withoutGapDays.valuesByDay[day(2)], isNull);
+      // The real appointment day is completely unaffected by the toggle.
+      expect(withoutGapDays.valuesByDay[day(3)], _utc(6, 0, day: 3));
+    });
+
+    test(
+        'one hardFloor point at the end of the window - the whole week worked '
+        'through (regression test: Friday was wrong before the N_remaining<=1 fix)',
+        () {
       final window = [1, 2, 3, 4, 5, 6].map(day).toList(); // Mon..Sat
       final events = [_meetingAt(_utc(5, 0, day: 6))]; // Sat, F=05:00
 
@@ -436,10 +550,11 @@ void main() {
         allEvents: events,
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 10, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       // Monday (i=1, N_F=6, N_remaining=5): holding satisfies 24min<=30min,
@@ -454,12 +569,14 @@ void main() {
       expect(result.valuesByDay[day(3)], _utc(6, 30, day: 3)); // Wed
       expect(result.valuesByDay[day(4)], _utc(6, 0, day: 4)); // Thu
       expect(result.valuesByDay[day(5)], _utc(5, 30, day: 5)); // Fri
-      expect(result.valuesByDay[day(6)], _utc(5, 0, day: 6)); // Sat, its own hardFloor
+      expect(result.valuesByDay[day(6)],
+          _utc(5, 0, day: 6)); // Sat, its own hardFloor
       expect(result.overrunNotificationNeeded, isFalse);
       expect(result.safetyValveTriggered, isFalse);
     });
 
-    test('two hardFloor points: a loose intermediate appointment is smoothly '
+    test(
+        'two hardFloor points: a loose intermediate appointment is smoothly '
         'undercut, not reset to its own hardFloor', () {
       final window = [1, 2, 3, 4].map(day).toList(); // Mon..Thu
       final events = [
@@ -473,10 +590,11 @@ void main() {
         allEvents: events,
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 90),
         gapDayCounter: 0,
+        scheduleOnGapDays: true,
       );
 
       // FR-5 (hypothetical, A=Sun 09:00): t_m=Thu 03:00 (strict), N_F=4
@@ -491,7 +609,8 @@ void main() {
       // Wed: its own hardFloor would be 08:00, but the curve (04:30)
       // undercuts it without violating it - the curve wins, no reset to 08:00.
       expect(result.valuesByDay[day(3)], _utc(4, 30, day: 3));
-      expect(result.valuesByDay[day(4)], _utc(3, 0, day: 4)); // Thu, its own hardFloor
+      expect(result.valuesByDay[day(4)],
+          _utc(3, 0, day: 4)); // Thu, its own hardFloor
       expect(result.overrunNotificationNeeded, isFalse);
       expect(result.safetyValveTriggered, isFalse);
 
@@ -519,10 +638,11 @@ void main() {
         allEvents: const [],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 7,
+        scheduleOnGapDays: true,
       );
 
       expect(result.valuesByDay.values.every((v) => v == null), isTrue);
@@ -535,7 +655,8 @@ void main() {
     // preferredWakeUpTime), so there is nothing to protect against - and
     // firing here would be a one-way street: without alarms there is no
     // more ring checkpoint that could ever reset the counter.
-    test('the safety valve does NOT fire when a preferredWakeUpTime is set', () {
+    test('the safety valve does NOT fire when a preferredWakeUpTime is set',
+        () {
       final window = [1, 2, 3].map(day).toList();
 
       final result = computeWeekPlan(
@@ -544,10 +665,11 @@ void main() {
         allEvents: const [],
         deviceUtcOffset: Duration.zero,
         durationToWakeUp: Duration.zero,
-        durationToGetReady: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
         gapDayCounter: 42, // far past the threshold
+        scheduleOnGapDays: true,
       );
 
       expect(result.safetyValveTriggered, isFalse);
@@ -566,7 +688,9 @@ void main() {
   // Phase 0. Both test cases are verbatim the spec's own "Test:" bullets
   // under FR-16.
   group('reinterpretForNewOffset (FR-16)', () {
-    test('location change: 09:00 in zone A (+1) stays 09:00, now in zone B (+9)', () {
+    test(
+        'location change: 09:00 in zone A (+1) stays 09:00, now in zone B (+9)',
+        () {
       // 09:00 local under +1 = 08:00 UTC.
       final result = reinterpretForNewOffset(
         value: _utc(8, 0),
@@ -578,7 +702,8 @@ void main() {
       expect(result, _utc(0, 0));
     });
 
-    test('daylight saving: 07:00 under CET (+1) stays 07:00 under CEST (+2)', () {
+    test('daylight saving: 07:00 under CET (+1) stays 07:00 under CEST (+2)',
+        () {
       // 07:00 local under +1 = 06:00 UTC.
       final result = reinterpretForNewOffset(
         value: _utc(6, 0),

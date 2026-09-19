@@ -213,20 +213,33 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
   /// wrong for most of this app's users. `DayView` offers no string-only hook,
   /// so the whole mark is built here - which also lets the label take its
   /// colour from the theme like every other calendar surface.
-  Widget _timeLineMark(DateTime date) => Transform.translate(
-        offset: const Offset(0, -7.5),
-        child: Padding(
-          padding: const EdgeInsets.only(right: 7),
-          child: Text(
-            DateFormat('HH:mm').format(date),
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+  ///
+  /// docs/TODO.md T-52.2: this used to hardcode 'HH:mm' (24h) regardless of
+  /// the device's own setting - wrong for exactly the users
+  /// [MediaQuery.alwaysUse24HourFormat] is false for.
+  /// `MediaQuery.of(context).alwaysUse24HourFormat` is Flutter's own reading
+  /// of that setting (populated from the platform's `is24HourFormat` on
+  /// Android) - the same source `showTimePicker` itself defaults to, so this
+  /// follows the identical rule as every other time display already in the
+  /// app rather than introducing a second, independent format decision.
+  Widget _timeLineMark(DateTime date) {
+    final format =
+        MediaQuery.of(context).alwaysUse24HourFormat ? 'HH:mm' : 'h:mm a';
+    return Transform.translate(
+      offset: const Offset(0, -7.5),
+      child: Padding(
+        padding: const EdgeInsets.only(right: 7),
+        child: Text(
+          DateFormat(format).format(date),
+          textAlign: TextAlign.right,
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
-      );
+      ),
+    );
+  }
 
   /// New feature (user request): draws the same tile calendar_view always
   /// has (`DefaultEventTile` - the grey background from `meetingToCalendarEvent`

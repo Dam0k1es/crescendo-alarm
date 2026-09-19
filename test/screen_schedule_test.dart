@@ -15,7 +15,8 @@ import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 // swap that leaves the app showing a red error box would otherwise only be
 // noticed on a device.
 
-Future<AppState> _pumpSchedule(WidgetTester tester) async {
+Future<AppState> _pumpSchedule(WidgetTester tester,
+    {bool alwaysUse24HourFormat = true}) async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   final appState = AppState();
   await appState.initialized;
@@ -23,7 +24,13 @@ Future<AppState> _pumpSchedule(WidgetTester tester) async {
   await tester.pumpWidget(
     ChangeNotifierProvider<AppState>.value(
       value: appState,
-      child: const MaterialApp(home: ScreenSchedule()),
+      // docs/TODO.md T-52.2: the hour axis follows this MediaQuery flag now,
+      // not a hardcoded format - defaulted to true here so every other test
+      // in this file keeps seeing the 24h axis it was written against.
+      child: MediaQuery(
+        data: MediaQueryData(alwaysUse24HourFormat: alwaysUse24HourFormat),
+        child: const MaterialApp(home: ScreenSchedule()),
+      ),
     ),
   );
   await tester.pump();
@@ -122,16 +129,30 @@ void main() {
         appState.accentColor);
   });
 
-  testWidgets('the hour axis is 24-hour, not AM/PM', (tester) async {
+  testWidgets(
+      'the hour axis is 24-hour when the device is set to 24-hour format',
+      (tester) async {
     // SfCalendar was configured with `timeFormat: 'HH:mm'`; calendar_view's
     // default mark reads "1 PM". An independent review found the setting had
     // been dropped in the migration - immediately visible, and wrong for most
     // of this app's users.
-    await _pumpSchedule(tester);
+    await _pumpSchedule(tester, alwaysUse24HourFormat: true);
     await tester.pumpAndSettle();
 
     expect(find.text('13:00'), findsWidgets);
     expect(find.textContaining('PM'), findsNothing);
+  });
+
+  testWidgets(
+      'docs/TODO.md T-52.2: the hour axis is 12-hour AM/PM when the device is not',
+      (tester) async {
+    // The axis used to hardcode 'HH:mm' regardless of the device's own
+    // setting - wrong for exactly the users this covers.
+    await _pumpSchedule(tester, alwaysUse24HourFormat: false);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('PM'), findsWidgets);
+    expect(find.text('13:00'), findsNothing);
   });
 
   testWidgets('paging does not tear the calendar down', (tester) async {

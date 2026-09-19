@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakeywakey/app_state.dart';
+import 'package:wakeywakey/models/alarms/manual_alarm.dart' show DayOfWeek;
 import 'package:wakeywakey/models/scheduling/apply_alarms.dart';
 import 'package:wakeywakey/models/scheduling/day_marker.dart';
 import 'package:wakeywakey/models/scheduling/scheduling_v2.dart';
@@ -146,7 +147,10 @@ Future<ReplanResult> replan(
       .toList();
 
   final durationToWakeUp = durationFromTimeOfDay(appState.durationToWakeUp);
-  final durationToGetReady = durationFromTimeOfDay(appState.durationToGetReady);
+  // docs/TODO.md T-52.3: resolved per day rather than once for the whole
+  // window - a user override for one weekday must not leak onto any other.
+  Duration durationToGetReadyForDay(DateTime day) => durationFromTimeOfDay(
+      appState.durationToGetReadyForWeekday(DayOfWeek.values[day.weekday - 1]));
 
   var possiblyMissedAppointment = false;
   var daysProcessed = 0;
@@ -170,7 +174,7 @@ Future<ReplanResult> replan(
         allEvents: allEvents,
         deviceUtcOffset: offset,
         durationToWakeUp: durationToWakeUp,
-        durationToGetReady: durationToGetReady,
+        durationToGetReady: durationToGetReadyForDay(day),
       );
       appState.gapDayCounter = updateGapDayCounter(
         previousCounter: appState.gapDayCounter,
@@ -220,10 +224,11 @@ Future<ReplanResult> replan(
     allEvents: allEvents,
     deviceUtcOffset: offset,
     durationToWakeUp: durationToWakeUp,
-    durationToGetReady: durationToGetReady,
+    durationToGetReadyForDay: durationToGetReadyForDay,
     preferredWakeUpTime: appState.preferredWakeUpTime,
     maxDailyDelta: appState.maxDailyDelta,
     gapDayCounter: appState.gapDayCounter,
+    scheduleOnGapDays: appState.scheduleOnGapDays,
   );
 
   // Merged, not replaced - and the retention below is **load-bearing**, not
@@ -302,10 +307,15 @@ Future<ReplanResult> replan(
   // docs/TODO.md T-140: the INPUTS without which the logged plan cannot be
   // recomputed. Always written - durations are not times of day; the
   // preferredWakeUpTime depends on whether it's set and is -1 otherwise.
+  // T-52.3: this one value is now only the global default - a per-weekday
+  // override (see AppState.durationToGetReadyForWeekday) can make a specific
+  // planned day's real input differ from what's logged here. Recording a
+  // full per-day breakdown isn't worth the added surface on a PII-free log
+  // whose whole point is staying simple to audit.
   Diag.planInputs(
     maxDailyDeltaMinutes: appState.maxDailyDelta.inMinutes,
     wakeUpMinutes: durationToWakeUp.inMinutes,
-    getReadyMinutes: durationToGetReady.inMinutes,
+    getReadyMinutes: durationFromTimeOfDay(appState.durationToGetReady).inMinutes,
     preferredWakeUpMinuteOfDay: appState.preferredWakeUpTime == null
         ? -1
         : appState.preferredWakeUpTime!.hour * 60 + appState.preferredWakeUpTime!.minute,
