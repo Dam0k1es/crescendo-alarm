@@ -2042,12 +2042,15 @@ that is the basis a decision can be formulated against.
   explicit ask for no background plate at all) and `adaptive_icon_foreground:
   "assets/icons/icon_foreground.png"` to `pubspec.yaml`, then ran `dart run flutter_launcher_icons`.
   The foreground asset was generated from `icon.png`'s own artwork (the circular badge, tightly
-  cropped to its alpha bounding box) scaled to fill ~87-92% of its canvas - `flutter_launcher_icons`
-  additionally wraps every adaptive-icon foreground in its own hardcoded 16% `<inset>` regardless of
-  how the source image is padded, which would have shrunk the icon back down to roughly the same
-  size as before; that generated `<inset>` was removed by hand from
+  cropped to its alpha bounding box), initially scaled to fill ~87-92% of its canvas -
+  `flutter_launcher_icons` additionally wraps every adaptive-icon foreground in its own hardcoded
+  16% `<inset>` regardless of how the source image is padded, which would have shrunk the icon back
+  down to roughly the same size as before; that generated `<inset>` was removed by hand from
   `mipmap-anydpi-v26/ic_launcher.xml` afterwards (see that file's own comment - re-running the
   generator re-adds it and requires removing it again).
+  The maintainer then found that first pass too large ("Das Icon ist jetzt viel zu groß") and asked
+  for ~60% of it - `assets/icons/icon_foreground.png` was regenerated at ~55% canvas fill
+  (0.92 × 0.6) accordingly, with the `<inset>` removed again the same way.
 - **Tests:** `test/launcher_icon_config_test.dart` - source/file-presence checks (no Flutter API
   reads back what a launcher would actually render for an adaptive icon), guarding the
   `pubspec.yaml` keys, the transparent background colour, the foreground asset, and the generated
