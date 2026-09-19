@@ -489,23 +489,25 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
   /// section is a secondary, optional refinement of the setting above it,
   /// not a peer entry of its own.
   Widget _buildGetReadyOverridesToggle() {
-    return InkWell(
-      onTap: () =>
-          setState(() => _showGetReadyOverrides = !_showGetReadyOverrides),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            _showGetReadyOverrides
-                ? "Hide per-weekday overrides"
-                : "Customize per weekday",
-            style: TextStyle(
-              fontSize: 14,
-              color: _appState.accentColor,
-              decoration: TextDecoration.underline,
+    return Center(
+      child: InkWell(
+        onTap: () =>
+            setState(() => _showGetReadyOverrides = !_showGetReadyOverrides),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _showGetReadyOverrides
+                  ? "Hide per-weekday overrides"
+                  : "Customize per weekday",
+              style: TextStyle(
+                fontSize: 14,
+                color: _appState.accentColor,
+                decoration: TextDecoration.underline,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
