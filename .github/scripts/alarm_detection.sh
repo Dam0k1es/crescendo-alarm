@@ -80,6 +80,25 @@ has_scheduled_notification() {
   grep -qF "${package}/me.carda.awesome_notifications.DartScheduledNotificationReceiver"
 }
 
+# docs/TODO.md T-155: the epoch-millis `origWhen` of the SPECIFIC Alarm{}
+# entry that carries this app's awesome_notifications schedule - not just
+# "does one exist" (has_scheduled_notification above), so a caller can check
+# how much lead time it has before treating its disappearance after a reboot
+# as a genuine finding rather than the schedule's own correct, one-shot
+# expiry. Requires gawk (`match(s, re, arr)`).
+notification_origwhen_ms() {
+  local package="$1"
+  gawk -v pkg="$package" '
+    /Alarm\{/ {
+      if (match($0, /origWhen ([0-9]+)/, m)) last_origwhen = m[1]
+    }
+    index($0, pkg "/me.carda.awesome_notifications.DartScheduledNotificationReceiver") {
+      print last_origwhen
+      exit
+    }
+  '
+}
+
 # ---------------------------------------------------------------------------
 # Self-check against recorded real output.
 #
@@ -148,6 +167,23 @@ self_test() {
   # 8. The foreign recording must not produce a false positive.
   if has_scheduled_notification "$pkg" <"$FIXTURES/dumpsys_alarm_foreign.txt"; then
     echo "SELF-TEST FAIL: has_scheduled_notification matched a recording with none of our alarms." >&2
+    failed=1
+  fi
+
+  # 9. docs/TODO.md T-155: origWhen must come from the RIGHT Alarm{} entry -
+  #    the real recording has several, only one tagged as the notification
+  #    schedule.
+  n=$(notification_origwhen_ms "$pkg" <"$FIXTURES/dumpsys_alarm_own.txt")
+  if [[ "$n" != "1789853401000" ]]; then
+    echo "SELF-TEST FAIL: notification_origwhen_ms: got '$n', expected 1789853401000." >&2
+    failed=1
+  fi
+
+  # 10. No match in a recording with none of our alarms must yield nothing,
+  #     not a stale value from some earlier, unrelated Alarm{} line.
+  n=$(notification_origwhen_ms "$pkg" <"$FIXTURES/dumpsys_alarm_foreign.txt")
+  if [[ -n "$n" ]]; then
+    echo "SELF-TEST FAIL: notification_origwhen_ms found '$n' in a foreign recording." >&2
     failed=1
   fi
 

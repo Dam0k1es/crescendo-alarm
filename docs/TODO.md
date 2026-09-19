@@ -295,29 +295,36 @@ that is the basis a decision can be formulated against.
   despite a still-future target time, the native restore path itself needs investigating further
   (an exception `AwesomeBroadcastReceiver.onReceive` swallows silently is the most likely next
   suspect, since every exception there is caught and only logged internally, never surfaced).
-- **Re-check script written (2026-09-19):** `scripts/verify-notification-survival.sh` (self-test:
-  `--self-test`, no device needed) schedules a notification 6 hours out via
-  `integration_test/schedule_long_notification_test.dart` (a prelude test, the same shape as
-  `integration_test/arm_alarm_test.dart` for T-93 - it arms and leaves the schedule standing rather
-  than waiting for it), confirms it reached `AlarmManager` before rebooting, then checks
-  `has_scheduled_notification` (new in `alarm_detection.sh`, matching `package/receiver-class`
-  together so a shared plugin's schedule can't be mistaken for another app's) both before and after
-  the reboot. `alarm_detection.sh`'s self-test gained two cases (7, 8) against the real recording
-  from T-99 and the foreign one, so this detection is checked the same way the alarm-counting one
-  already is.
-- **Fixed on first real attempt (2026-09-19): `POST_NOTIFICATIONS` was never granted.** The script
-  used to rely on `flutter test integration_test/x.dart -d device` alone to install the app, and
-  called `adb shell pm grant ... POST_NOTIFICATIONS` before it as a separate step - a real run
-  showed `scheduleNotification: isAllowed: false`, the scheduling call failing before anything
-  reached `AlarmManager`. Root cause: `flutter test` builds and installs its own debug APK
-  regardless of what a prior `pm grant` set up, and that install is a **fresh** one whenever the
-  previously-installed app was signed differently (e.g. a release `current.apk` from earlier
-  testing) - which wipes any permission grant made against the old install before the test body
-  ever runs. Fixed by building the debug APK first and installing it with `adb install -r -g`
-  (grants every manifest-declared permission atomically at install time, the same thing
-  `.github/scripts/run_e2e_tests.sh` already does for the CI emulator leg) - `flutter test`'s own
-  subsequent install of the identical build is then a same-signature update, which does not reset
-  permissions. Not yet run for real to completion - needs a phone.
+- **Re-check script, redesigned twice (2026-09-19):** `scripts/verify-notification-survival.sh`
+  (self-test: `--self-test`, no device needed).
+  - **First version:** used `flutter test integration_test/x.dart -d device` to schedule a
+    notification 6 hours out through a prelude test, the same shape as
+    `integration_test/arm_alarm_test.dart` for T-93. A real run hit
+    `scheduleNotification: isAllowed: false` - `POST_NOTIFICATIONS` was never actually granted,
+    because `flutter test` installs its own debug APK regardless of an earlier `adb shell pm
+    grant`, and that install is a **fresh** one whenever the previously-installed app was signed
+    differently (e.g. the maintainer's real production `current.apk`) - wiping the grant, and the
+    app's data, before the test body ever ran.
+  - **Second version:** fixed the permission race with `adb install -r -g` (grants every
+    manifest-declared permission atomically at install time, as `.github/scripts/run_e2e_tests.sh`
+    already does for the CI emulator leg) - but this still meant installing a debug build over the
+    maintainer's production one, which the maintainer then explicitly ruled out entirely: *"Ich
+    will in der Zukunft auf meinem Gerät keine dev version mehr. Nur noch gegen prod. Will keine
+    Daten verlieren. Tests müssen das zwingend akzeptieren und sonst nicht ausgeführt werden."*
+  - **Current version: fully read-only, no build/install/schedule step at all.** Checks
+    `dumpsys package`'s `DEBUGGABLE` flag and **refuses to run** if the installed app is a debug
+    build; reads whatever the production app already scheduled from ordinary use (nothing is
+    created here - the sleep reminder schedules itself on the app's own next checkpoint); parses
+    the specific schedule's `origWhen` epoch (`notification_origwhen_ms`, new in
+    `alarm_detection.sh`) against the **device's own clock** to compute real lead time, and
+    **refuses to run** if that lead time is below `--min-lead-minutes` (default 30) - the same
+    ambiguity a too-short lead time caused for the original observation, now checked instead of
+    assumed. Only if both preconditions hold does it proceed to the reboot.
+  `has_scheduled_notification`/`notification_origwhen_ms` (`alarm_detection.sh`) match
+  `package/receiver-class` together, not the receiver class alone (a shared plugin, other apps
+  could use it too - the T-103 trap). Self-test gained four cases (7-10) against the real T-99
+  recording and the foreign one. Not yet run for real to completion - needs a phone with a
+  production build installed and a reminder already scheduled with enough lead time.
 - **Why:** found incidentally while gathering T-93's real-device evidence (Fairphone 6, run
   2026-09-19T21:13:56Z), not the thing that run was measuring. `dumpsys alarm` before the
   intervention showed 9 of this app's own alarms under uid `u0a310`: 3 tagged

@@ -18,20 +18,33 @@
 # a bug) as with "the restore genuinely failed" (a real bug) - the captured
 # evidence could not tell those apart.
 #
-# This script settles it: schedule a notification hours out (so it is
-# unambiguously still in the future at measurement time), reboot, and check
-# whether it is still registered.
+# docs/TODO.md's standing "ignore data loss during the test phase" policy is
+# about persisted-data SCHEMA changes, not about this: the maintainer's
+# explicit, standing instruction for real-device scripts is that their own
+# phone runs production only, never a debug/dev build, and no test may
+# replace, rebuild or reinstall anything on it under any circumstance - a
+# script that cannot satisfy its precondition against whatever is already
+# installed MUST refuse to run, not fall back to installing something else.
+#
+# This script therefore does NOT build, install or schedule anything. It
+# reads whatever is ALREADY scheduled by the production app installed on the
+# phone from ordinary use (the sleep reminder gets (re-)scheduled on every
+# app-foreground/settings-change checkpoint - see
+# lib/models/scheduling/checkpoint.dart), checks it is comfortably far
+# enough in the future to survive a reboot without expiring naturally in the
+# meantime (this app's sleep reminder is a ONE-SHOT schedule, and a one-shot
+# schedule that has already passed is correctly cleaned up on boot - not a
+# bug, and not what this script is trying to measure - see the long comment
+# above), then reboots and checks whether it is still there.
+#
+# If nothing is currently scheduled with enough lead time - reminders
+# disabled, or the next one is too close - this refuses to run rather than
+# creating one. Re-run once a real reminder with more lead time exists
+# (nothing to do here: it schedules itself on the app's own next checkpoint).
 #
 # Why a real phone, not CI: same reasoning as T-93/verify-alarm-survival.sh -
 # `flutter test` uninstalls the app afterwards (T-131), and this project's
 # dev VM cannot run an emulator reliably (T-94).
-#
-# Unlike verify-alarm-survival.sh, this does not need a pre-built --apk or
-# any UI automation: `flutter test integration_test/... -d <device>` builds,
-# installs and runs the arming step itself, and scheduling a notification is
-# a plain Dart call, not something that needs to go through app screens.
-# Needs a Flutter-capable checkout on this machine (not just an APK), with
-# `flutter pub get` already run.
 #
 # The detection itself is NOT in this file, for the same reason as
 # verify-alarm-survival.sh: it lives in `.github/scripts/alarm_detection.sh`,
@@ -41,8 +54,11 @@
 # Usage:
 #   scripts/verify-notification-survival.sh --self-test     # no device needed
 #   scripts/verify-notification-survival.sh [--no-reboot] [--yes] [-d <serial>]
+#     [--min-lead-minutes N]   # default 30 - refuses to run below this
 #
-# Exit codes: 0 = ran (see the verdict in the report), 1 = could not measure.
+# Exit codes: 0 = ran (see the verdict in the report), 1 = could not measure
+# (including: precondition not met - a debug build installed, or nothing
+# scheduled far enough out).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,6 +73,7 @@ DO_REBOOT=1
 ASSUME_YES=0
 SELF_TEST_ONLY=0
 DEVICE=""
+MIN_LEAD_MINUTES=30
 
 while (( $# )); do
   case "$1" in
@@ -65,6 +82,7 @@ while (( $# )); do
     --yes|-y) ASSUME_YES=1; shift ;;
     --package) PACKAGE="${2:?--package needs a name}"; shift 2 ;;
     -d|--device) DEVICE="${2:?-d needs a device serial}"; shift 2 ;;
+    --min-lead-minutes) MIN_LEAD_MINUTES="${2:?--min-lead-minutes needs a number}"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -85,6 +103,7 @@ raw()  { { echo "--- $1 ---"; cat; } >>"$OUT" 2>&1; }
 note "=== notification-schedule survival on a real device ($(date -u +%Y-%m-%dT%H:%M:%SZ)) ==="
 note "package: $PACKAGE"
 note "evidence: $EVIDENCE_DIR"
+note "mode: READ-ONLY - nothing is built, installed, scheduled or otherwise changed on the device"
 
 # The instrument proves itself before it measures anything (T-103).
 if ! self_test >>"$OUT" 2>&1; then
@@ -114,46 +133,34 @@ export ANDROID_SERIAL="$DEVICE"
 note "device: $DEVICE ($(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r'))"
 
 # ---------------------------------------------------------------------------
-# Install with every declared runtime permission pre-granted, THEN run the
-# test - not the other way around.
-#
-# POST_NOTIFICATIONS (API 33+) is a genuine runtime permission, never
-# auto-granted at install: `flutter test integration_test/x.dart -d device`
-# builds and installs its own debug APK regardless of what a separate
-# `adb shell pm grant` beforehand set up, and that install is a fresh one
-# whenever the previously-installed app was signed differently (e.g. a
-# release `current.apk`) - wiping any grant made against the old install
-# before the test ever runs. `adb install -r -g` grants every permission the
-# manifest declares atomically at install time, exactly as
-# `.github/scripts/run_e2e_tests.sh` already does for the CI emulator leg.
-# Building the APK ourselves first, then letting `flutter test` install the
-# SAME build again, means its own install is a same-signature update, not a
-# fresh install - which does not reset permissions on Android.
-note "--- building and installing with all permissions pre-granted ---"
-(cd "$REPO" && flutter build apk --debug) 2>&1 | tee -a "$EVIDENCE_DIR/build.log"
-adb install -r -g "$REPO/build/app/outputs/flutter-apk/app-debug.apk" 2>&1 | raw "adb install -g"
-adb shell appops set "$PACKAGE" SCHEDULE_EXACT_ALARM allow || true
-
+# Precondition 1: the installed app must be a production build, never a
+# debug one - checked, not assumed. `android:debuggable` (set automatically
+# by every `flutter build apk --debug`, never by a release build) shows up
+# in `dumpsys package`'s own flags line.
 # ---------------------------------------------------------------------------
-# Arm: schedule a notification several hours out, through the app's own
-# code (not through the UI - scheduling is a plain Dart call, nothing here
-# depends on which screen is showing).
-# ---------------------------------------------------------------------------
-note "--- scheduling a notification 6 hours out ---"
-(
-  cd "$REPO" \
-    && flutter test integration_test/schedule_long_notification_test.dart -d "$DEVICE"
-) 2>&1 | tee -a "$EVIDENCE_DIR/schedule_test.log"
-SCHEDULE_EXIT_CODE=${PIPESTATUS[0]}
-if (( SCHEDULE_EXIT_CODE != 0 )); then
-  note "ABORT: scheduling the test notification failed (exit $SCHEDULE_EXIT_CODE) -"
-  note "see $EVIDENCE_DIR/schedule_test.log. Nothing was armed to measure."
-  note "If the log shows 'isAllowed: false' again, POST_NOTIFICATIONS was not"
-  note "actually granted - check with:"
-  note "  adb shell dumpsys package $PACKAGE | grep -A2 POST_NOTIFICATIONS"
+if ! adb shell pm path "$PACKAGE" 2>/dev/null | grep -q "package:"; then
+  note "ABORT: $PACKAGE is not installed at all. This script never installs"
+  note "anything - install the real production build by hand first."
   exit 1
 fi
 
+PKG_DUMP="$(adb shell dumpsys package "$PACKAGE" 2>/dev/null | tr -d '\r')"
+printf '%s\n' "$PKG_DUMP" | raw "dumpsys package (flags)"
+if printf '%s\n' "$PKG_DUMP" | grep -qE 'flags=\[[^]]*\bDEBUGGABLE\b'; then
+  note ""
+  note "ABORT: the installed app is a DEBUG build (DEBUGGABLE flag set)."
+  note "This script refuses to run against anything but the real production"
+  note "install - per the maintainer's standing instruction, no test may ever"
+  note "replace it with a dev/debug build. Install the production APK by hand"
+  note "and re-run."
+  exit 1
+fi
+note "precondition: installed build is production (not debuggable)"
+
+# ---------------------------------------------------------------------------
+# Precondition 2: something must already be scheduled, with enough lead time
+# to unambiguously still be in the future after a reboot - not created here.
+# ---------------------------------------------------------------------------
 resolve_uid() {
   local raw_line uid
   raw_line=$(adb shell pm list packages -U 2>&1 | tr -d '\r' | grep -F "$PACKAGE" | head -5)
@@ -181,16 +188,42 @@ dump_context() {
 
 adb shell dumpsys alarm 2>/dev/null | tr -d '\r' >"$DUMP"
 dump_context "before"
-if has_scheduled_notification "$PACKAGE" <"$DUMP"; then
-  note "confirmed: the scheduled notification reached AlarmManager"
-else
+
+if ! has_scheduled_notification "$PACKAGE" <"$DUMP"; then
   note ""
-  note "RESULT: not measurable - the notification was reported as scheduled,"
-  note "but does not appear in AlarmManager. This is a measurement gap, NOT a"
-  note "finding: check POST_NOTIFICATIONS/SCHEDULE_EXACT_ALARM are granted and"
-  note "re-run."
+  note "ABORT: no awesome_notifications schedule found for $PACKAGE right now -"
+  note "nothing to measure, and this script does not create one. The sleep"
+  note "reminder schedules itself on the app's own next checkpoint (opening"
+  note "the app, or a settings change) - make sure it is enabled with a"
+  note "bedtime far enough out, then re-run."
   exit 1
 fi
+
+ORIGWHEN_MS="$(notification_origwhen_ms "$PACKAGE" <"$DUMP")"
+if [[ -z "$ORIGWHEN_MS" ]]; then
+  note ""
+  note "ABORT: the schedule was found but its target time could not be parsed -"
+  note "see the raw excerpt in $OUT. Not measurable without knowing the lead"
+  note "time."
+  exit 1
+fi
+
+# Device clock, not the host's - avoids any host/device clock-skew confound.
+DEVICE_NOW_MS="$(adb shell date +%s%3N | tr -d '\r')"
+LEAD_MINUTES=$(( (ORIGWHEN_MS - DEVICE_NOW_MS) / 60000 ))
+note "scheduled notification target: $LEAD_MINUTES minutes from now (device clock)"
+
+if (( LEAD_MINUTES < MIN_LEAD_MINUTES )); then
+  note ""
+  note "ABORT: only $LEAD_MINUTES minute(s) of lead time (need >= $MIN_LEAD_MINUTES) -"
+  note "too close to call a disappearance after reboot a restore failure rather"
+  note "than the schedule simply having reached its own, correct, one-shot"
+  note "expiry in the meantime. Not measurable right now; re-run once the next"
+  note "scheduled reminder is further out (or pass --min-lead-minutes lower,"
+  note "at the cost of that ambiguity)."
+  exit 1
+fi
+note "precondition: lead time is sufficient"
 
 if (( DO_REBOOT )); then
   if (( ! ASSUME_YES )); then
@@ -219,13 +252,13 @@ if (( DO_REBOOT )); then
 
   if has_scheduled_notification "$PACKAGE" <"$DUMP"; then
     note "RESULT: PASS - the scheduled notification is still registered after"
-    note "the reboot. T-155 closes as 'not a bug' - the earlier observation"
-    note "was the notification's own one-shot target time having already"
-    note "passed, not a restore failure."
+    note "the reboot, well before its target time. T-155 closes as 'not a"
+    note "bug' - the earlier observation was the notification's own one-shot"
+    note "target time having already passed, not a restore failure."
   else
     note "RESULT: FAIL - the scheduled notification is GONE after the reboot,"
-    note "despite its target time (6 hours out) still being well in the"
-    note "future. This is the genuine gap T-155 was written to rule out -"
+    note "despite $LEAD_MINUTES minutes of lead time remaining at measurement"
+    note "start. This is the genuine gap T-155 was written to rule out -"
     note "next step: check for a silently swallowed exception in"
     note "AwesomeBroadcastReceiver.onReceive (every exception there is only"
     note "logged internally, never surfaced to this app)."
