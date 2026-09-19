@@ -686,6 +686,12 @@ that is the basis a decision can be formulated against.
   `overlayRetryDelay` directly, not a hardcoded number, so the test can't silently drift from the
   constants it's meant to guard); a counter-test confirms a context that stays mounted succeeds on
   the first attempt and never sleeps at all.
+- **Also renamed and enlarged, at the maintainer's request:** the emergency-stop button's label was
+  a generic "Stop alarm" - the same wording a "just give up" button would use, with nothing telling
+  the user *why* they're seeing it. Now "Camera not working - Stop alarm" with a matching
+  `Icons.videocam_off` icon (was `Icons.notifications_off`, which reads as "mute", not "camera
+  broken"), and bigger (larger padding and text) - this is the one control standing between someone
+  and an alarm they otherwise cannot stop, and it should read and hit like it.
 - **Evidence:** `lib/models/alarms/handler.dart:169-176` (the still-undocumented handler-side
   bypass); `lib/screens/scan_code/qr_scanner.dart` (`_proofOfLifeTimer`/`_maxScanDurationTimer`).
 - **Done when:** each bypass has a test, a written rationale, and an honest sentence in the feature

@@ -211,13 +211,13 @@ void main() {
     // alarm.
     await _pumpScanner(tester, storedCode: DeactivationCode(payload: 'right'));
 
-    expect(find.text('Stop alarm'), findsNothing,
+    expect(find.text('Camera not working - Stop alarm'), findsNothing,
         reason: 'not offered while the scanner may still be starting');
 
     await tester.pump(const Duration(seconds: 11));
     await tester.pumpAndSettle();
 
-    expect(find.text('Stop alarm'), findsOneWidget,
+    expect(find.text('Camera not working - Stop alarm'), findsOneWidget,
         reason: 'nothing has been decoded, so the user gets an escape hatch '
             'whatever the camera callbacks claimed');
   });
@@ -234,7 +234,7 @@ void main() {
     await tester.pump(const Duration(seconds: 11));
     await tester.pumpAndSettle();
 
-    expect(find.text('Stop alarm'), findsNothing);
+    expect(find.text('Camera not working - Stop alarm'), findsNothing);
   });
 
   testWidgets(
@@ -254,7 +254,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 11));
     await tester.pumpAndSettle();
-    expect(find.text('Stop alarm'), findsNothing,
+    expect(find.text('Camera not working - Stop alarm'), findsNothing,
         reason: 'not yet - the shorter proof-of-life window does not apply '
             'here, since scans keep "succeeding"');
 
@@ -263,7 +263,7 @@ void main() {
     await tester.pump(const Duration(seconds: 25));
     await tester.pumpAndSettle();
 
-    expect(find.text('Stop alarm'), findsOneWidget,
+    expect(find.text('Camera not working - Stop alarm'), findsOneWidget,
         reason: 'after long enough with no VALID code, the user gets an '
             'escape hatch regardless of whether individual scan attempts '
             'kept "succeeding" at finding the wrong thing');

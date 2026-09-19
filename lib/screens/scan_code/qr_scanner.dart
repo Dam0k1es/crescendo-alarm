@@ -353,16 +353,26 @@ class _QrScannerState extends State<QrScanner> {
 
     // Shown instead of the (hidden-by-design) exit button only when the
     // camera itself is unusable (permission revoked, hardware busy, unsupported
-    // device, ...): without this, a "guaranteed wake-up" alarm whose QR
-    // scanner can never initialize would leave the user stuck on a
-    // PopScope(canPop: false) screen with no scanner and no way out.
+    // device, a hardware camera kill-switch, ...): without this, a
+    // "guaranteed wake-up" alarm whose QR scanner can never initialize would
+    // leave the user stuck on a PopScope(canPop: false) screen with no
+    // scanner and no way out.
+    //
+    // User request: named for what actually triggers it (the camera, not
+    // some generic "give up" state) and sized up - this is the one control
+    // standing between someone and an alarm they otherwise cannot stop, so
+    // it should read and hit like it.
     final emergencyStopButton = ElevatedButton.icon(
       onPressed: _emergencyStopAndClose,
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+        textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      ),
       label: Text(
-        'Stop alarm',
+        'Camera not working - Stop alarm',
         style: TextStyle(color: _appState.accentColor),
       ),
-      icon: Icon(Icons.notifications_off, color: _appState.accentColor),
+      icon: Icon(Icons.videocam_off, size: 28, color: _appState.accentColor),
     );
 
     return PopScope(
