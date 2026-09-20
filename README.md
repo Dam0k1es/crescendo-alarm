@@ -5,6 +5,8 @@
 
 Welcome to Wakey Wakey, an innovative alarm clock app designed for individuals with irregular sleep patterns. Whether you work shifts, travel frequently, or simply have trouble waking up, Wakey Wakey has features tailored to your needs.
 
+<img src="assets/screenshots/alarms.png" alt="The Alarms screen, Scheduled tab, showing a week of calendar-derived wake-up times" width="240">
+
 ## Features
 
 - **Calendar Integration:** Syncs with your mobile calendar to derive intelligent alarm schedules based on your commitments.
@@ -43,10 +45,27 @@ Ensure you have the following installed:
    flutter pub get
    ```
 
-3. *Run the app*
+3. *Run the app for local development* (hot reload, attaches to a connected
+   device or emulator)
    ```sh
    flutter run
    ```
+
+### Installing onto a device via adb
+
+To flash a build without a full dev loop (e.g. a signed release APK, or the
+latest `dev` build for testing):
+
+```sh
+flutter build apk --release   # or --debug for a local, unsigned build
+adb install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+`-r` reinstalls over an existing install (keeps app data); drop it for a
+clean install. A real production build additionally needs
+`android/key.properties` pointing at a signing key - see `CLAUDE.md`'s
+"Current APK" section for how release builds are normally produced and
+verified (`apksigner verify`) instead.
 
 ### Usage
 
@@ -75,21 +94,6 @@ is produced. The unit tests run six times per push, once per timezone, because t
 class in the scheduling engine is only visible away from UTC. See [`CLAUDE.md`](CLAUDE.md) for
 exactly which checks run where, how to run them locally, and the current, honest testing status - and [`docs/TODO.md`](docs/TODO.md) for the known
 gaps in that coverage.
-
-### Open items
-
-All known gaps are tracked as prioritised TODOs in [`docs/TODO.md`](docs/TODO.md) - device
-feedback and audit findings in one list, with evidence and an acceptance criterion per item.
-
-The ones that currently block a production push: the per-alarm enable switch does not stop an
-alarm; alarm survival across a reboot or force-stop is unverified; and a direct dependency is not
-open source (a GPLv3 conflict).
-
-Items that used to be on this list and are done: the Sleep-Habits durations, the discarded
-calendar-derived days and the missing background rescheduling were all symptoms of the old
-scheduling engine, which has been replaced (see "Alarm scheduling" above) - and the signed release
-APK is no longer built without a quality gate: both the branch and the tag path now require the
-tests, the security scan and the emulator E2E suite to pass first.
 
 ### Project Documentation
 
