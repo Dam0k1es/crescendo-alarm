@@ -19,6 +19,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -133,6 +135,13 @@ class SplashScreenState extends State<SplashScreen>
   late final AppState _appState;
   late final AnimationController _controller;
 
+  /// docs/TODO.md T-41: the privacy policy used to be reachable only through
+  /// Settings - a first-run user only got there AFTER this screen had
+  /// already requested permissions, transparency after consent instead of
+  /// before it. This screen now shows the policy first and defers
+  /// [_requestPermissions] until the user acknowledges it.
+  bool _privacyAcknowledged = false;
+
   @override
   void initState() {
     super.initState();
@@ -141,15 +150,19 @@ class SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 3000),
     )..repeat();
-    _requestPermissions().then((bool granted) {
-      _appState.permissionsGranted = granted;
-    });
   }
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onPrivacyAcknowledged() {
+    setState(() => _privacyAcknowledged = true);
+    _requestPermissions().then((bool granted) {
+      _appState.permissionsGranted = granted;
+    });
   }
 
   Future<bool> _requestPermissions() async {
@@ -164,6 +177,50 @@ class SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (!_privacyAcknowledged) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Before you continue'),
+          automaticallyImplyLeading: false,
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: FutureBuilder<String>(
+                  // docs/TODO.md T-36's About page loads the identical file
+                  // the same way - not shared as a helper across the two,
+                  // since main.dart pulling in a settings-screen file for a
+                  // one-line `rootBundle.loadString` call would be a stranger
+                  // dependency than duplicating it.
+                  future: rootBundle.loadString('assets/text/Privacy.md'),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      return Markdown(data: snapshot.data!, selectable: true);
+                    } else if (snapshot.hasError) {
+                      return Center(child: Text('Error: ${snapshot.error}'));
+                    } else {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _onPrivacyAcknowledged,
+                    child: const Text('Continue'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Center(
         child: Column(

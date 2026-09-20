@@ -948,14 +948,29 @@ that is the basis a decision can be formulated against.
   plainly that enforcement is by maintainer discipline.
 - **Requirement:** R1
 
-### T-41 · Permissions are requested before the privacy policy is reachable
+### T-41 · Permissions are requested before the privacy policy is reachable — FIXED (2026-09-20)
 
-- [ ] Present the data-handling information before or alongside the first permission prompt.
-- **Why:** calendar, camera, exact-alarm and notification permissions are all requested from the
-  splash screen at first launch, while the privacy policy is only reachable later through Settings.
-  For a project claiming GDPR alignment, the transparency step comes after the consent step.
-- **Evidence:** `lib/main.dart:136-153` (splash-screen permission flow);
-  `assets/text/Privacy.md` reachable only via the About page.
+- [x] Present the data-handling information before or alongside the first permission prompt.
+- **Why:** calendar, camera, exact-alarm and notification permissions used to all be requested from
+  the splash screen at first launch, while the privacy policy was only reachable later through
+  Settings. For a project claiming GDPR alignment, the transparency step came after the consent
+  step.
+- **Narrower after T-157 (2026-09-20):** camera and calendar are no longer requested on the splash
+  screen at all - they moved to the point of actual need (opening the QR scanner, opening the
+  Schedule tab / pressing "Sync Alarms"). The splash screen now only requests exact-alarm and
+  notification access, so this item's remaining scope is smaller than originally written, but the
+  same ordering problem still applied to those two.
+- **Fix:** `SplashScreenState` (`lib/main.dart`) now shows `assets/text/Privacy.md` (the same file
+  and `Markdown` widget the About page already used) as its own first screen, with a "Continue"
+  button, and defers `_requestPermissions()` until that button is pressed
+  (`_onPrivacyAcknowledged`). Nothing is requested before the user has at least been shown what the
+  app collects.
+- **Tests:** `test/privacy_before_permissions_test.dart` (new) - the policy is shown and
+  `AppState.permissionsGranted` stays false until "Continue" is pressed, at which point it becomes
+  true (the oracle is `AppState`, not the transient "Checking permissions..." frame - on the test
+  host platform the whole permission flow is a no-op that resolves within the same pump as the tap,
+  too fast to reliably observe the intermediate frame). `test/widget_test.dart` updated for the new
+  first screen.
 - **Done when:** a first-run user can read what is collected before granting anything.
 - **Requirement:** R7, R11
 
