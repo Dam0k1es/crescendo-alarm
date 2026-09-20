@@ -278,27 +278,40 @@ that is the basis a decision can be formulated against.
   snooze is not covered by this mirror (`AppState.refreshDirectBootFallback`'s own doc comment says
   so explicitly). Also: what fires is a generic siren, not the user's actual alarm - by design,
   since the real one needs credential-encrypted settings that don't exist pre-unlock.
+  **Fourth real-device report, same day: vibration and sound both worked, but unlocking and letting
+  the real ring pipeline take over did not stop the fallback siren** - both ran at once. Nothing had
+  ever told `DirectBootFallbackService` to stop except its own notification's dedicated "Stop"
+  action; tapping the fallback notification's main body, tapping the *real* alarm's own full-screen
+  intent, or just opening the app normally all reached `MainActivity` without going through that
+  action at all. Fixed in `MainActivity.kt`: `onCreate` and `onNewIntent` (needed separately because
+  `launchMode="singleTop"` routes an already-running instance through the latter, not the former)
+  now unconditionally call `stopService(Intent(this, DirectBootFallbackService::class.java))` -
+  a harmless no-op if no fallback was ever armed. The reasoning: the app actually running at all
+  means the device has been unlocked and the real ring pipeline (or the user) can take over,
+  regardless of how this activity was reached.
 - **Confirmed by an actual release build (2026-09-20):** the merged manifest carries all three
   components with `android:directBootAware="true"` (the service also with
   `foregroundServiceType="mediaPlayback"`); a real `flutter build apk --release` compiles the Kotlin
-  cleanly, across all three revisions of this fallback so far. **NOT yet confirmed on a real device
-  that BOTH vibration and sound now work together across an actual reboot-while-locked cycle** -
-  unlike everything else this project verifies on hardware before calling it done, that verification
-  could not happen in this environment (no device attached here). Needs the same real-device test
-  that found the previous two gaps: reboot with the device staying locked, and confirm both the
-  vibration and an audible, looping sound run together until stopped or the ten-minute cap, and that
-  tapping the notification opens the app.
+  cleanly, across all four revisions of this fallback so far. **NOT yet confirmed on a real device
+  that the fallback correctly hands off to the real alarm without overlap, across an actual
+  reboot-while-locked cycle** - unlike everything else this project verifies on hardware before
+  calling it done, that verification could not happen in this environment (no device attached here).
+  Needs the same real-device test that found the previous three gaps: reboot with the device staying
+  locked, confirm vibration and an audible, looping sound run together, and confirm that unlocking
+  and letting the real alarm take over silences the fallback completely rather than both overlapping.
 - **Evidence:** the maintainer's own four-scenario real-device test (2026-09-20); a second same-day
   real-device report that the first fallback version's single chime/vibration was insufficient; a
-  third same-day real-device report that continuous vibration then shipped with no sound at all;
-  `alarm-5.12.0/android/src/main/AndroidManifest.xml` (`BootReceiver`'s intent-filter, no
+  third same-day real-device report that continuous vibration then shipped with no sound at all; a
+  fourth same-day real-device report that the fallback then kept running after the real alarm took
+  over; `alarm-5.12.0/android/src/main/AndroidManifest.xml` (`BootReceiver`'s intent-filter, no
   `directBootAware`); `alarm-5.12.0/.../services/AlarmStorage.kt` (a normal, `Context`-scoped
   `DataStore`, ruling out patching the plugin's own storage as the fix); `android/app/src/main/
   AndroidManifest.xml` (all three components, confirmed via the merged manifest);
   `awesome_notifications-0.12.1/android/src/main/AndroidManifest.xml:23-24` (listens for both boot
   actions, but for its own scheduling receiver, not the ringing path).
-- **Done when:** the maintainer confirms the fallback fires correctly on a real device across a
-  reboot-while-locked cycle. Until then this stays "mitigated, not verified" rather than "fixed".
+- **Done when:** the maintainer confirms the fallback fires correctly, audibly, and hands off
+  cleanly to the real alarm on a real device across a reboot-while-locked cycle. Until then this
+  stays "mitigated, not verified" rather than "fixed".
 - **Requirement:** R3
 
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
