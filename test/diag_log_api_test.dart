@@ -41,9 +41,17 @@ void main() {
   group('structural PII-freedom', () {
     test('no public method takes a String', () {
       // Collects the facade's parameter lists and looks for String types.
+      // Matches both static and instance methods, and generic return types
+      // (e.g. `Future<void>`) - not just `static void name(...)`, which
+      // would silently miss any method that isn't shaped exactly like
+      // today's. The return-type token must start with a letter/underscore
+      // so it can't accidentally match the ">" of a preceding "=>" spanning
+      // onto the next line.
       final offenders = <String>[];
-      for (final match
-          in RegExp(r'static\s+\w+\s+(\w+)\(([^)]*)\)').allMatches(_publicApi())) {
+      for (final match in RegExp(
+              r'^\s*(?:static\s+)?[A-Za-z_]\w*(?:<[^>]*>)?\??\s+(\w+)\s*\(([^)]*)\)',
+              multiLine: true)
+          .allMatches(_publicApi())) {
         final name = match.group(1)!;
         final params = match.group(2)!;
         if (RegExp(r'\bString\b').hasMatch(params)) {
@@ -113,8 +121,12 @@ void main() {
         };
 
         final offenders = <String>[];
-        for (final match
-            in RegExp(r'required\s+int\s+(\w+)').allMatches(_publicApi())) {
+        // Matches `int`, `int?` (nullable) and `List<int>`/`Set<int>`
+        // (collections) - not only a bare `required int name`, which a
+        // future clock-shaped parameter could otherwise slip past in
+        // either of those shapes.
+        for (final match in RegExp(r'required\s+(?:int\??|List<int>|Set<int>)\s+(\w+)')
+            .allMatches(_publicApi())) {
           final name = match.group(1)!;
           if (allowed.contains(name)) continue;
           // "MinuteOfDay"/"HourOfDay" explicitly included as well:

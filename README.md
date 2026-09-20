@@ -93,8 +93,8 @@ tests, the security scan and the emulator E2E suite to pass first.
 
 ### Project Documentation
 
-See `docs/` for personas, use cases, technology choices and a UML diagram, plus the two documents
-that matter most:
+See `docs/` for personas, use cases and technology choices, plus the two documents that matter
+most:
 
 - [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) - the essential requirements that must be met (or
   have their current status honestly stated) before any push to `master`.

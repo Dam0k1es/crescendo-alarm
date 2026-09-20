@@ -90,4 +90,11 @@
 - About 
   - About this app (Versioning, Build number)
   - Privacy Policy
+- Diagnostics (**not in the original plan** - added later: a local, PII-free event log for
+  troubleshooting, exportable via the clipboard, with its own switch for including clock times.
+  See `CLAUDE.md`, "Diagnostics log".)
+- Licence (**not in the original plan** - the project's own GPLv3 text and Flutter's collected
+  third-party notices, added for `docs/REQUIREMENTS.md` R9's in-app notice obligation)
+- Native Code Notices (**not in the original plan** - the Apache-2.0/BSD-3 notices for
+  `flutter_zxing`'s compiled-in native code, which Flutter's own licence collector cannot see)
 

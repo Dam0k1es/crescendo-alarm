@@ -2183,29 +2183,39 @@ that is the basis a decision can be formulated against.
 - `flutter analyze`/`flutter test` unaffected by the sound swap (confirmed).
 - **Requirement:** R10
 
-### T-30 · Annotate or retire the planning artifacts — PARTIALLY RESOLVED (2026-09-08)
+### T-30 · Annotate or retire the planning artifacts — RESOLVED (2026-09-20)
 
 - [x] ~~Annotate the risk graphic~~ - **replaced** rather than annotated: `docs/risk.png` has been
       a real threat model since 2026-09-10, generated from `docs/threat-model.svg` (see T-101).
-- [ ] Annotate the UML diagram (or retire it) - this is still outstanding.
+- [x] Annotate the UML diagram (or retire it) - **retired**: `docs/UML_WakeyWakey.drawio` was
+      deleted (2026-09-20). It modelled the original planning-phase design (including the removed
+      old scheduling engine and never-built NFC deactivation) with no annotation of its own, and a
+      `.drawio` binary can't be annotated inline the way the markdown planning docs were. Rather
+      than hand-edit a diagram file to describe a codebase it never matched, the decision is to
+      redraw it from scratch once there is a drawio-integration workflow in place (tracked
+      separately, not yet scheduled) - until then, `docs/TODO.md` and `CLAUDE.md`'s architecture
+      tables are the accurate structural description of the app.
 - **Why:** the descriptive documents miss the app in both directions: the README's three headline
   features understate the shipped surface, while `personas.md`, the UML diagram and `risk.png`
   still model features and classes that were never built and carry no annotation saying so.
   `use-cases.md` stated that everything unmarked shipped, which was not the case.
-- **Resolution so far:** `use-cases.md` annotated inline (the "Disable alarm" switch is a no-op;
+- **Resolution:** `use-cases.md` annotated inline (the "Disable alarm" switch is a no-op;
   "Manage/Disable Deactivation Codes" only has Generate/Remove for a single code, no separate
   disable; "Print as QR Code" is only partially implemented - the code renders on-screen, but
-  share/print is an explicit "future feature" stub) and its blanket top-note corrected to
-  acknowledge shipped-but-broken items as a third category, tracked in `docs/TODO.md` rather than
-  as planning gaps. `personas.md` given its own annotation note plus a specific correction to Tom's
-  jetlag/timezone claim (the app only reads the device's current timezone; there is no dedicated
-  jetlag-adjustment feature). `choice-of-technologies.md` annotated on its iOS cross-platform claim
-  (unverified - iOS has never been built or run).
-- **Still open:** `risk.png` (a diagram modelling a since-abandoned NFC deactivation component) and
-  `UML_WakeyWakey.drawio` are images/diagrams and were not annotated in place; `CLAUDE.md`'s
-  "Project documentation" section now points at this TODO instead, but that is a pointer, not an
-  annotation on the artifacts themselves.
+  share/print is an explicit "future feature" stub; the Settings inventory extended to list
+  Diagnostics, Licence and Native Code Notices alongside Appearance/Tone/About) and its blanket
+  top-note corrected to acknowledge shipped-but-broken items as a third category, tracked in
+  `docs/TODO.md` rather than as planning gaps. `personas.md` given its own annotation note plus a
+  specific correction to Tom's jetlag/timezone claim (the app only reads the device's current
+  timezone; there is no dedicated jetlag-adjustment feature). `choice-of-technologies.md` annotated
+  on its iOS cross-platform claim (unverified - iOS has never been built or run) and on Flutter's
+  own description now naming the actual replaced dependencies (Syncfusion, `mobile_scanner`) it
+  previously didn't mention. `risk.png` remains a diagram (not annotatable inline) but is now a
+  real, current threat model rather than a stale planning artifact - see T-101 - so it needed no
+  further action here.
 - **Done when:** each planning document either matches the code or says plainly where it does not.
+  Met: the UML diagram, the one artifact that could be neither corrected nor meaningfully
+  annotated, is retired rather than left stale.
 
 ### T-31 · Triage the `main.dart` TODO backlog — RESOLVED (2026-09-09)
 

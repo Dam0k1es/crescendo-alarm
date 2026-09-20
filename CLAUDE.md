@@ -64,10 +64,15 @@ Consequences to respect when adding an event:
     not ship their sleep pattern without having said so. The export header says which of the two
     modes produced it.
   - When adding an event: the source-reading guard in `test/diag_log_api_test.dart` still rejects
-    any `int` parameter whose name looks like a clock value, and the two allowed names are listed
-    there explicitly. Do not widen that list without a switch and a reason - and note that
-    `...MinuteOfDay` had to be added to the pattern, because a `...OfDay` suffix slipped past the
-    original rule unnoticed.
+    any `int` parameter whose name looks like a clock value, and the allowed names are listed there
+    explicitly - six as of T-140, not the original two (`plannedMinuteOfDay`,
+    `earliestEventMinuteOfDay`): `preferredWakeUpMinuteOfDay`, `maxDailyDeltaMinutes`,
+    `wakeUpMinutes` and `getReadyMinutes` were added for `Diag.planInputs`, which logs those four
+    durations **unconditionally** (outside the `diagnosticsIncludeClockTimes` switch, unlike the
+    first two) because they are configuration values, not clock readings - a duration reveals
+    nothing about when someone sleeps. Do not widen the list further without the same kind of
+    reason, and note that `...MinuteOfDay` had to be added to the pattern, because a `...OfDay`
+    suffix slipped past the original rule unnoticed.
 - **Exceptions go in as `runtimeType`** through an identity table to an int; `toString()` is never
   called on a `Type` (R8 obfuscation is then irrelevant).
 - **The background isolate has its own ring buffer.** FR-16's Checkpoint 2 runs in a separate
@@ -186,6 +191,14 @@ Four workflows under `.github/workflows/`:
   T-148) - AndroidX, media3, the camera plugin's own transitive deps.
 - **`release.yml`** is triggered by a `v*.*.*` tag or `workflow_dispatch` and gates its signed
   build on **both** `e2e-tests` and `security-gate`.
+- **`ci.yml`'s `mobsf-full-scan` job** (`needs: build-android-release`) runs a full MobSF Docker
+  scan against the built signed APK - a second, independent scanner from `security-gate.yml`'s
+  `mobsfscan` (a static source-pattern scanner; MobSF here scans the compiled binary). It is
+  gating, filtered through the same `.github/security-exceptions.json`, and on an un-accepted HIGH
+  it additionally **deletes the uploaded `app-production-apk` artifact** so a red run leaves
+  nothing downloadable (`docs/TODO.md` T-11, `docs/REQUIREMENTS.md` R1) - release-revoking
+  behaviour worth knowing about before assuming an artifact exists just because the run went green
+  up to that point.
 - **`.github/dependabot.yml`** (`docs/TODO.md` T-148) opens weekly update PRs for `pub`, `gradle`,
   and `github-actions` - all three against `dev`, never `master`, per "Work goes on `dev`" above.
 
@@ -325,7 +338,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **492 tests across 75 files**, and CI runs them six times over -
+`flutter test` currently runs **501 tests across 80 files**, and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -606,13 +619,18 @@ production push), `licence-position.md` (the tracked GPLv3 decision for R8/R9 - 
 position" above), `TODO.md` (every known open task, prioritised, with evidence and an acceptance
 criterion - the living record of what's actually wrong or missing, as opposed to the two frozen
 snapshots above), `device-trial-checklist.md` (the manual counterpart to the E2E suite, with a
-result field per line), `scheduling-v2-spec.md` (FR-1 … FR-21), plus `personas.md`,
-`use-cases.md`, `choice-of-technologies.md` and a UML diagram (`UML_WakeyWakey.drawio`) from the
-original project planning. Those three markdown documents predate the finished app and have been
-annotated inline where they describe features that were planned but never implemented (e.g.
-NFC-tag deactivation, Do Not Disturb) or claims that no longer hold - don't assume everything in
-them shipped as described. The UML diagram carries no such annotation; cross-check it against
-`docs/TODO.md` (T-30) before trusting what it models.
+result field per line), `scheduling-v2-spec.md` (FR-1 … FR-21), plus `personas.md`, `use-cases.md`
+and `choice-of-technologies.md` from the original project planning. Those three markdown documents
+predate the finished app and have been annotated inline where they describe features that were
+planned but never implemented (e.g. NFC-tag deactivation, Do Not Disturb) or claims that no longer
+hold - don't assume everything in them shipped as described.
+
+**There is currently no UML diagram.** `UML_WakeyWakey.drawio` modelled the original
+planning-phase design (including the removed old scheduling engine) with no way to annotate a
+`.drawio` binary the way the markdown planning docs were annotated, so it was retired rather than
+left stale (`docs/TODO.md` T-30, 2026-09-20). It will be redrawn from the current architecture once
+a drawio-integration workflow exists to keep it in sync going forward - until then, this file's own
+architecture tables and `docs/TODO.md` are the accurate structural description of the app.
 
 **`docs/risk.png` is generated, not hand-drawn.** It used to be a planning-phase risk graphic
 modelling features that were never built; since 2026-09-10 it is a real threat model

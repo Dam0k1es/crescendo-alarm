@@ -104,8 +104,10 @@ valve never needs to fire at all).
 
 - **Checked by:** an automated E2E test now exercises alarm creation, firing and persistence on a
   real Android emulator (`integration_test/app_test.dart`, gating `.github/workflows/release.yml`).
-  It does not reboot the emulator or force-stop the app, and its persistence check currently reads
-  an in-process cache rather than a genuine storage round-trip (see `docs/TODO.md` T-04).
+  It does not reboot the emulator or force-stop the app. Its persistence check used to only re-read
+  an in-process cache rather than a genuine storage round-trip - fixed (`docs/TODO.md` T-04): it now
+  calls `SharedPreferences.resetStatic()`/`reload()` first and asserts the alarm's id and time plus
+  its presence in `Alarm.getAlarms()`.
 - **Real-device evidence (2026-09-18): a reboot, without opening the app afterward, still let a
   scheduled alarm ring.** This is the first actual observation of the reboot leg described below
   ("already derivable from the code") rather than a code-reading inference - the `alarm` plugin's
@@ -183,7 +185,13 @@ camera for QR deactivation).
 - **Checked by:** manual security/code review of `lib/models/alarms/handler.dart`,
   `lib/utils/permissions.dart`, and the `alarm`/`awesome_notifications` plugin integration, plus an
   automated E2E test on a real Android emulator covering permission grants and both dismissal
-  overlays (`integration_test/app_test.dart`).
+  overlays (`integration_test/app_test.dart`). **Since 2026-09-20 (`docs/TODO.md` T-157):**
+  camera and calendar permissions are no longer requested upfront in a batch on first launch -
+  camera is requested lazily from `QrScanner.initState` (both the initial-scan and
+  deactivate-alarm paths) and calendar lazily on first Schedule-tab visit or a manual reload, via
+  the same `requestCameraPermission`/`requestCalendarPermission` seams in `permissions.dart`. The
+  requirement itself is unaffected - the permission is still obtained before the path that needs
+  it runs, just closer to that point instead of at app start.
 - **Status: partially met.** Permissions and overlay display are now exercised on real hardware and
   pass. Not covered: the gentle wake-up volume ramp is never exercised (it defaults to off, and the
   CI emulator runs without audio - `docs/TODO.md` T-15). The QR gate's own gaps have moved on from

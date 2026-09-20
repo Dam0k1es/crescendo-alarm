@@ -3,6 +3,11 @@
 > Note (2026-09): this document reflects the original technology planning. The
 > line marked "not used" below was an early consideration that didn't make it
 > into the shipped app - see `CLAUDE.md` for what's actually in use today.
+> This document also doesn't mention two later, licence-driven swaps that
+> happened after the original planning: `syncfusion_flutter_calendar`
+> (replaced by `calendar_view`, MIT) and `mobile_scanner` (replaced by
+> `flutter_zxing`, MIT) - both non-GPLv3-compatible dependencies. See
+> `docs/licence-position.md` and `docs/TODO.md` T-05/T-33 for why.
 
 # Flutter (Frontend)
 - Flutter is used to develop the app's frontend.
