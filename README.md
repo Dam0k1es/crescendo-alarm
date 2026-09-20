@@ -5,7 +5,9 @@
 
 Welcome to Wakey Wakey, an innovative alarm clock app designed for individuals with irregular sleep patterns. Whether you work shifts, travel frequently, or simply have trouble waking up, Wakey Wakey has features tailored to your needs.
 
-<img src="assets/screenshots/alarms.png" alt="The Alarms screen, Scheduled tab, showing a week of calendar-derived wake-up times" width="240">
+<p align="center">
+  <img src="assets/screenshots/alarms.png" alt="The Alarms screen, Scheduled tab, showing a week of calendar-derived wake-up times" width="240">
+</p>
 
 ## Features
 
