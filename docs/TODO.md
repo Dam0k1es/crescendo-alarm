@@ -260,6 +260,19 @@ that is the basis a decision can be formulated against.
     Tapping the notification (or the Stop action, or the ten-minute cap) tears everything down and,
     for the tap case, opens `MainActivity` normally; once the user has unlocked to get there, the
     app's own FR-17 recovery takes over for real.
+  **Third real-device report, same day: vibration ran continuously, but no sound played at all.**
+  The likely cause: `RingtoneManager`'s URI can point at a *custom* alarm sound the user picked in
+  system settings, which - unlike a built-in system sound - may live on storage that isn't
+  mounted/decryptable yet this early in the boot sequence, so `MediaPlayer.setDataSource`/`prepare`
+  failed silently into the existing catch block. Fixed with a three-layer fallback in
+  `startLoopingSound()`: try the device's actual chosen alarm sound, then its generic default, and
+  only then fall back to a tone synthesized in code via `ToneGenerator` (`AudioManager.STREAM_ALARM`,
+  looped by re-triggering `startTone` every 1.5s) - which needs no file or URI at all, so it cannot
+  hit this failure mode and is the one sound primitive here actually guaranteed to be
+  Direct-Boot-safe. If even the device's own default alarm sound can silently fail to resolve this
+  early, the earlier assumption that `RingtoneManager` alone was "Direct-Boot-safe" (this entry's own
+  first version) was too optimistic - noted here so the same mistake isn't repeated for some other
+  primitive later.
   **Known, deliberate limitation, not an oversight:** a snoozed alarm's postponed instant isn't part
   of `pendingDayValues`/`manualAlarms`, so `nextWakeUpTime` can't see it - a reboot during an active
   snooze is not covered by this mirror (`AppState.refreshDirectBootFallback`'s own doc comment says
@@ -268,17 +281,18 @@ that is the basis a decision can be formulated against.
 - **Confirmed by an actual release build (2026-09-20):** the merged manifest carries all three
   components with `android:directBootAware="true"` (the service also with
   `foregroundServiceType="mediaPlayback"`); a real `flutter build apk --release` compiles the Kotlin
-  cleanly, both before and after the receiver-to-service revision above. **NOT yet confirmed on a
-  real device across an actual reboot-while-locked cycle** - unlike everything else this project
-  verifies on hardware before calling it done, that verification could not happen in this
-  environment (no device attached here). Needs the same real-device test as the one that found this
-  bug and its first, insufficient fix: reboot with the device staying locked, and confirm the siren
-  actually loops (not a single chime) until stopped or the ten-minute cap, and that tapping the
-  notification opens the app.
-- **Evidence:** the maintainer's own four-scenario real-device test (2026-09-20), and a second,
-  same-day real-device report that the first fallback version's single chime/vibration was
-  insufficient; `alarm-5.12.0/android/src/main/AndroidManifest.xml` (`BootReceiver`'s intent-filter,
-  no `directBootAware`); `alarm-5.12.0/.../services/AlarmStorage.kt` (a normal, `Context`-scoped
+  cleanly, across all three revisions of this fallback so far. **NOT yet confirmed on a real device
+  that BOTH vibration and sound now work together across an actual reboot-while-locked cycle** -
+  unlike everything else this project verifies on hardware before calling it done, that verification
+  could not happen in this environment (no device attached here). Needs the same real-device test
+  that found the previous two gaps: reboot with the device staying locked, and confirm both the
+  vibration and an audible, looping sound run together until stopped or the ten-minute cap, and that
+  tapping the notification opens the app.
+- **Evidence:** the maintainer's own four-scenario real-device test (2026-09-20); a second same-day
+  real-device report that the first fallback version's single chime/vibration was insufficient; a
+  third same-day real-device report that continuous vibration then shipped with no sound at all;
+  `alarm-5.12.0/android/src/main/AndroidManifest.xml` (`BootReceiver`'s intent-filter, no
+  `directBootAware`); `alarm-5.12.0/.../services/AlarmStorage.kt` (a normal, `Context`-scoped
   `DataStore`, ruling out patching the plugin's own storage as the fix); `android/app/src/main/
   AndroidManifest.xml` (all three components, confirmed via the merged manifest);
   `awesome_notifications-0.12.1/android/src/main/AndroidManifest.xml:23-24` (listens for both boot

@@ -26,8 +26,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.media.ToneGenerator
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -75,6 +78,8 @@ class DirectBootFallbackService : Service() {
     }
 
     private var mediaPlayer: MediaPlayer? = null
+    private var toneGenerator: ToneGenerator? = null
+    private var toneLoopRunnable: Runnable? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val handler = Handler(Looper.getMainLooper())
     private val stopRunnable = Runnable { stopSelf() }
@@ -116,6 +121,7 @@ class DirectBootFallbackService : Service() {
             it.release()
         }
         mediaPlayer = null
+        stopToneGeneratorLoop()
 
         stopVibration()
 
@@ -143,11 +149,35 @@ class DirectBootFallbackService : Service() {
         }
     }
 
+    /**
+     * Tries the device's actual chosen alarm sound first, then its generic
+     * default, and only falls back to a synthesized tone if both fail.
+     *
+     * Found necessary by real-device testing: vibration worked continuously
+     * but no sound played at all pre-unlock. The likely cause is that
+     * `RingtoneManager`'s URI can point at a *custom* alarm sound the user
+     * picked in system settings, which - unlike a built-in system sound -
+     * may live on storage that isn't mounted/decryptable yet at this point
+     * in the boot sequence, so `MediaPlayer.setDataSource`/`prepare` fails
+     * silently into the catch block below. [ToneGenerator] needs no file or
+     * URI at all - it synthesizes its tone in code - so it cannot hit that
+     * failure mode and is the one primitive here actually guaranteed to be
+     * Direct-Boot-safe.
+     */
     private fun startLoopingSound() {
-        val alarmSound =
-            RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-        try {
+        if (tryPlayUri(RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM))) {
+            return
+        }
+        if (tryPlayUri(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))) {
+            return
+        }
+        Log.w(TAG, "No ringtone URI could be played; falling back to a synthesized tone.")
+        startToneGeneratorLoop()
+    }
+
+    private fun tryPlayUri(uri: Uri?): Boolean {
+        if (uri == null) return false
+        return try {
             mediaPlayer = MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
@@ -155,14 +185,44 @@ class DirectBootFallbackService : Service() {
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build()
                 )
-                setDataSource(this@DirectBootFallbackService, alarmSound)
+                setDataSource(this@DirectBootFallbackService, uri)
                 isLooping = true
                 prepare()
                 start()
             }
+            true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to play the direct-boot fallback sound.", e)
+            Log.e(TAG, "Failed to play $uri for the direct-boot fallback.", e)
+            mediaPlayer?.release()
+            mediaPlayer = null
+            false
         }
+    }
+
+    private fun startToneGeneratorLoop() {
+        val generator = try {
+            ToneGenerator(AudioManager.STREAM_ALARM, ToneGenerator.MAX_VOLUME)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create a ToneGenerator for the direct-boot fallback.", e)
+            return
+        }
+        toneGenerator = generator
+
+        val runnable = object : Runnable {
+            override fun run() {
+                generator.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 1_000)
+                handler.postDelayed(this, 1_500)
+            }
+        }
+        toneLoopRunnable = runnable
+        handler.post(runnable)
+    }
+
+    private fun stopToneGeneratorLoop() {
+        toneLoopRunnable?.let { handler.removeCallbacks(it) }
+        toneLoopRunnable = null
+        toneGenerator?.release()
+        toneGenerator = null
     }
 
     private fun startVibration() {
