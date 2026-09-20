@@ -22,8 +22,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioManager
@@ -51,7 +53,10 @@ import android.util.Log
  * actually wake anyone. A genuine foreground service is what real alarm
  * apps use for exactly this reason, and it is what loops the sound and
  * vibration here for real, until [ACTION_STOP] is sent (the notification's
- * own Stop action) or [MAX_RING_MILLIS] elapses.
+ * own Stop action), `ACTION_USER_PRESENT` fires (the device was unlocked -
+ * see [userPresentReceiver]'s own doc comment for why this, not
+ * `MainActivity`'s lifecycle, is the reliable stop signal), or
+ * [MAX_RING_MILLIS] elapses.
  *
  * Deliberately built only from Direct-Boot-safe primitives - the system's
  * own default alarm ringtone (`RingtoneManager`, not a bundled or
@@ -83,6 +88,26 @@ class DirectBootFallbackService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private val handler = Handler(Looper.getMainLooper())
     private val stopRunnable = Runnable { stopSelf() }
+    private var userPresentReceiverRegistered = false
+
+    // docs/TODO.md T-158: a real-device test found that stopping this from
+    // MainActivity's onCreate/onNewIntent (relying on the real alarm's own
+    // full-screen intent, or the user tapping this fallback's notification,
+    // to actually launch/resume the activity) did not reliably happen -
+    // both kept ringing together regardless. ACTION_USER_PRESENT is the
+    // system's own, unconditional signal that the keyguard was just
+    // dismissed - it fires whether or not any activity ever launches - so
+    // this is the actually-reliable way to know the fallback's one job
+    // (getting someone to unlock the device) is done. Can only be received
+    // by a dynamically registered receiver (implicit broadcasts like this
+    // one aren't delivered to manifest-declared receivers since Android
+    // 3.1), which is exactly what a running foreground service can do.
+    private val userPresentReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            Log.i(TAG, "Device unlocked (ACTION_USER_PRESENT); stopping the direct-boot fallback.")
+            stopSelf()
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -101,6 +126,7 @@ class DirectBootFallbackService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
+        registerUserPresentReceiver()
         acquireWakeLock()
         startLoopingSound()
         startVibration()
@@ -111,6 +137,7 @@ class DirectBootFallbackService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(stopRunnable)
+        unregisterUserPresentReceiver()
 
         mediaPlayer?.let {
             try {
@@ -132,6 +159,25 @@ class DirectBootFallbackService : Service() {
             .cancel(NOTIFICATION_ID)
 
         super.onDestroy()
+    }
+
+    private fun registerUserPresentReceiver() {
+        try {
+            registerReceiver(userPresentReceiver, IntentFilter(Intent.ACTION_USER_PRESENT))
+            userPresentReceiverRegistered = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register the ACTION_USER_PRESENT receiver.", e)
+        }
+    }
+
+    private fun unregisterUserPresentReceiver() {
+        if (!userPresentReceiverRegistered) return
+        try {
+            unregisterReceiver(userPresentReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to unregister the ACTION_USER_PRESENT receiver.", e)
+        }
+        userPresentReceiverRegistered = false
     }
 
     private fun acquireWakeLock() {
