@@ -27,7 +27,21 @@
          see `custom_tone.dart` - which every app can already read without
          any permission), and had no runtime request anywhere in the Dart
          code either. It sat unused since the very first commit; found and
-         removed while adding that import feature. -->
+         removed while adding that import feature.
+
+         ACCESS_NETWORK_STATE comes from `media3-common` and Google's
+         `transport-runtime`/`transport-backend-cct` libraries, pulled in
+         transitively by `awesome_notifications` (media-style notification
+         support and its own internal event-transport plumbing) - not
+         declared by any Flutter plugin's own manifest, only found by
+         grepping the merged native dependency tree. This app makes zero
+         network calls anywhere in `lib/` (see `CLAUDE.md`'s first line);
+         nothing here ever queries connectivity state, so there is nothing
+         for those libraries' own network-awareness to do. Removing it also
+         removes the one loose end left after `INTERNET` itself was already
+         gone (T-33's ML Kit removal took that one with it) - an offline
+         alarm clock declaring "can check network state" invited exactly
+         the "why does it need this" question this file exists to answer. -->
     <!-- The QR gate is optional: a user who never sets a deactivation code
          never needs a camera. The camera plugin behind the scanner declares
          `android.hardware.camera.any` WITHOUT `android:required`, which
@@ -43,6 +57,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
 
     <application
         android:name="${applicationName}"

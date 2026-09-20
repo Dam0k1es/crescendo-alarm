@@ -654,20 +654,28 @@ that is the basis a decision can be formulated against.
   and then sat inert until manually re-armed. This was already what the UI's weekday-picker
   promised; it had simply never been true until now.
 
-### T-15 · The gentle-wake ramp has no evidence of any kind — RESOLVED for the doc route (2026-09-08)
+### T-15 · The gentle-wake ramp has no evidence of any kind — RESOLVED (2026-09-20, real-device evidence)
 
-- [x] State plainly that it is unverified (the alternative to actually exercising the fade path).
+- [x] State plainly that it is unverified (the alternative to actually exercising the fade path) -
+      superseded by the entry below.
+- [x] **Manually validated on a real device (2026-09-20) by the maintainer:** the gentle-wake volume
+      ramp (`VolumeSettings.fade`) was exercised directly, confirming the fade path actually runs and
+      audibly ramps rather than jumping straight to full volume. This is real-device evidence, not an
+      automated E2E scenario - the CI emulator still runs with audio disabled, so this remains outside
+      what CI itself can catch a regression in.
 - **Why:** a headline feature and half of R4. Gentle wake defaults to off, so no test enables it and
-  the `VolumeSettings.fade` branch is never executed; the CI emulator also runs without audio. The
-  audio-focus log does show the app taking alarm-usage audio focus, which is genuine but says
+  the `VolumeSettings.fade` branch is never executed in CI; the CI emulator also runs without audio.
+  The audio-focus log does show the app taking alarm-usage audio focus, which is genuine but says
   nothing about a gradual ramp.
 - **Evidence:** `lib/app_state.dart:44` (`_gentleWakeUpEnabled = false`), `:485-489` (fade vs.
   fixed), `lib/screens/alarms/screen_alarms.dart:263` (dialog default);
   `grep -niE "gentle|fade|volume" integration_test/app_test.dart` → nothing; emulator started with
-  `-noaudio`; 3 of 249 audio-focus polls show `usage=USAGE_ALARM`.
-- **Resolution:** `docs/REQUIREMENTS.md` R4 now states plainly that the ramp is never exercised and
-  only the fixed-volume path is covered. Adding an actual E2E scenario for the fade path (the other
-  half of this TODO's "done when") remains open and is a code change, out of scope for this pass.
+  `-noaudio`; 3 of 249 audio-focus polls show `usage=USAGE_ALARM`; maintainer's own real-device
+  observation above.
+- **Resolution:** `docs/REQUIREMENTS.md` R4 updated to record the real-device confirmation. An
+  automated E2E scenario for the fade path (the CI-side half of this item's "done when") remains
+  open, since the emulator still runs without audio - that is a CI/infrastructure gap, not a
+  behavioural unknown any more.
 - **Requirement:** R4
 
 ### T-16 · The QR test seam does not isolate the camera, and ships in release builds — LARGELY RESOLVED (2026-09-17)
@@ -1004,19 +1012,23 @@ that is the basis a decision can be formulated against.
       comparison has to be `aapt2 dump badging` or the merged manifest itself.
 - [ ] Still open: the full "name every permission and say why" table, and a traffic capture during
       an E2E run.
-- [ ] **`ACCESS_NETWORK_STATE` traced (2026-09-18), removal deliberately held pending device
-      tests.** `aapt2 dump permissions` plus Gradle's
-      `android/app/build/outputs/logs/manifest-merger-blame-*-report.txt` on the built APK trace it
-      to `androidx.media3:media3-common:1.9.0`, a transitive dependency of the `alarm` plugin (its
-      audio playback stack) - not to anything network-related in this app's own code, consistent
-      with `INTERNET` already being gone. It could plausibly be opted out the same way
-      `READ_EXTERNAL_STORAGE`/`RECORD_AUDIO`/`WRITE_EXTERNAL_STORAGE` were above
-      (`tools:node="remove"`), but unlike those three, no confirmation yet exists that alarm
-      playback keeps working with it removed - `media3` uses `ConnectivityManager` internally for
-      things a removed permission could plausibly break silently (e.g. its own network-state-aware
-      codepaths, even if this app never plays networked audio). Left in place until a real-device
-      test confirms alarm playback (tone selection, gentle-wake ramp, custom tones) is unaffected
-      without it - do not remove based on the trace alone.
+- [x] **`ACCESS_NETWORK_STATE` removed (2026-09-20), pending its own real-device confirmation.**
+      Traced (2026-09-18) via `aapt2 dump permissions` plus Gradle's
+      `android/app/build/outputs/logs/manifest-merger-blame-*-report.txt` to two transitive
+      sources, not one: `androidx.media3:media3-common:1.9.0` (the `alarm` plugin's audio playback
+      stack) **and** Google's `transport-runtime`/`transport-backend-cct` (pulled in by
+      `awesome_notifications`, its own internal event-transport plumbing, not this app's calendar
+      sync) - not to anything network-related in this app's own code, consistent with `INTERNET`
+      already being gone. Removed with `tools:node="remove"`, the same pattern as
+      `READ_EXTERNAL_STORAGE`/`RECORD_AUDIO`/`WRITE_EXTERNAL_STORAGE` above; confirmed absent from
+      a real release build's merged manifest and `aapt2 dump permissions` output. **Still open,
+      and the reason this line isn't fully closed:** the caution this entry originally raised - that
+      `media3` uses `ConnectivityManager` internally, so a removed permission could plausibly break
+      an audio codepath silently even though this app never plays networked audio - has not yet
+      been checked against a real device with this specific build. Tone selection, the gentle-wake
+      ramp and custom tones all need to be exercised on the current `current.apk` before this is
+      considered closed; if any of them regress, restore the permission and drop the `tools:node`
+      line rather than chasing the cause blind.
 - **Why:** R7 asserted "no user data leaves the device — met" on the basis of a check scoped to
   Dart source in `lib/`, but the shipped APK declares `INTERNET` and `ACCESS_NETWORK_STATE`, pulled
   in through plugin manifest merging. That does not prove data leaves the device, and the offline

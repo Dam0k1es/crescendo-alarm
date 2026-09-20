@@ -193,8 +193,11 @@ camera for QR deactivation).
   requirement itself is unaffected - the permission is still obtained before the path that needs
   it runs, just closer to that point instead of at app start.
 - **Status: partially met.** Permissions and overlay display are now exercised on real hardware and
-  pass. Not covered: the gentle wake-up volume ramp is never exercised (it defaults to off, and the
-  CI emulator runs without audio - `docs/TODO.md` T-15). The QR gate's own gaps have moved on from
+  pass. **Resolved (2026-09-20, `docs/TODO.md` T-15):** the gentle wake-up volume ramp
+  (`VolumeSettings.fade`) has been manually validated on a real device by the maintainer - the fade
+  path runs and audibly ramps rather than jumping to full volume. This is real-device evidence, not
+  an automated one: the CI emulator still runs without audio, so a regression here still would not
+  be caught by CI - only by re-checking on a device. The QR gate's own gaps have moved on from
   how T-08/T-16 originally described them (both now "PARTIALLY"/"LARGELY RESOLVED" - a negative
   test exists, and the debug seam no longer ships a real camera preview in release). **Resolved
   (2026-09-19, `docs/TODO.md` T-143):** `ReaderWidget` itself (the real, native decode path,
@@ -286,10 +289,18 @@ No user data leaves the device. The app must be GDPR-compliant.
   with the proprietary ML Kit stack, and replacing that scanner for licence reasons (T-33) removed
   it as a side effect - verified by comparing `aapt2 dump permissions` on the APKs before and
   after. An app that claims to be fully offline and holds the INTERNET permission is a
-  contradiction a reader can see; that one is resolved. `ACCESS_NETWORK_STATE` remains, and a
-  network capture during an E2E run is still what would close this requirement properly. GDPR compliance otherwise follows straightforwardly from "no data ever
-  leaves the device," but this hasn't been reviewed by anyone with actual legal expertise - treat
-  "met" here as a technical assessment, not legal sign-off.
+  contradiction a reader can see; that one is resolved. **`ACCESS_NETWORK_STATE` is now also
+  removed (2026-09-20, `docs/TODO.md` T-49)** - traced to `media3-common` (the `alarm` plugin's
+  audio stack) and `awesome_notifications`' transitive transport libraries, neither used by
+  anything network-related in this app, and stripped with `tools:node="remove"` the same way
+  `RECORD_AUDIO`/`WRITE_EXTERNAL_STORAGE`/`READ_EXTERNAL_STORAGE` already were. Confirmed absent
+  from a real release build's manifest; **not yet confirmed that removing it leaves tone/gentle-wake/
+  custom-tone playback unaffected on a real device** - `media3` uses `ConnectivityManager`
+  internally, so this is a real, if small, risk rather than a formality. A network capture during
+  an E2E run remains the other piece that would close this requirement fully. GDPR compliance
+  otherwise follows straightforwardly from "no data ever leaves the device," but this hasn't been
+  reviewed by anyone with actual legal expertise - treat "met" here as a technical assessment, not
+  legal sign-off.
 
 ## R8 - All dependencies are open-source and trustworthy
 
@@ -416,8 +427,12 @@ match any particular format or symbology.
 scheduling-v2 rebuild (2026-09) replaced the old engine wholesale and is covered by unit tests; see
 R2 above for the one remaining caveat, which is really R3. R3 and part of R4 are no longer explained
 by "no build has ever run on a device or emulator" - that build now happens on every release and has
-surfaced what's actually still missing: no reboot/force-stop survival test (R3), and no coverage of
-audio/the gentle-wake ramp or a camera-isolated QR test (R4). R1 is only partial now because two
+surfaced what's actually still missing: no reboot/force-stop survival test over a long, never-
+reopened stretch (R3, `docs/TODO.md` T-04), and R4 is now only partial because of the QR gate's own
+`debugScanStreamOverride` seam remaining a plain mutable static rather than an injected dependency
+(`docs/TODO.md` T-16) - the gentle-wake ramp (T-15) and the real camera decode path (T-143) have
+both since been confirmed on real hardware, so this isn't the "audio and camera both unverified"
+gap it used to be. R1 is only partial now because two
 findings are *accepted* rather than fixed, each with a dated rationale in
 `.github/security-exceptions.json` - not because a check is missing or non-gating; every tool in
 the gate can fail the run, on the branch path and the tag path alike. R8 and R9 were a separate licensing conflict (Syncfusion and Google/ML Kit
