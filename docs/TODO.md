@@ -181,7 +181,7 @@ that is the basis a decision can be formulated against.
   unexplained force-stop finding worth re-measuring cleanly regardless.
 - **Requirement:** R3
 
-### T-158 · A reboot while the device stays locked can silence the alarm entirely — MITIGATED (2026-09-20), NOT YET VERIFIED ON A DEVICE
+### T-158 · A reboot while the device stays locked can silence the alarm entirely — RESOLVED (2026-09-20), confirmed on a real device
 
 - [x] Found on a real device during T-49's ACCESS_NETWORK_STATE-removal testing: of four scenarios
       tried (open app; backgrounded + locked; reboot with the app closed and the device locked;
@@ -298,31 +298,28 @@ that is the basis a decision can be formulated against.
   dynamically in `onStartCommand` and unregistering in `onDestroy` is the standard pattern. The
   `MainActivity` stop calls stay in place too, as a harmless extra safety net, but
   `ACTION_USER_PRESENT` is now the reliable path.
-- **Confirmed by an actual release build (2026-09-20):** the merged manifest carries all three
-  components with `android:directBootAware="true"` (the service also with
-  `foregroundServiceType="mediaPlayback"`); a real `flutter build apk --release` compiles the Kotlin
-  cleanly, across all five revisions of this fallback so far. **NOT yet confirmed on a real device
-  that unlocking now actually silences the fallback via `ACTION_USER_PRESENT`, across an actual
-  reboot-while-locked cycle** - unlike everything else this project verifies on hardware before
-  calling it done, that verification could not happen in this environment (no device attached here).
-  Needs the same real-device test that found the previous four gaps: reboot with the device staying
-  locked, confirm vibration and an audible, looping sound run together, and confirm that unlocking
-  the device - regardless of what happens with the real alarm or the app afterward - silences the
-  fallback immediately.
-- **Evidence:** the maintainer's own four-scenario real-device test (2026-09-20); a second same-day
-  real-device report that the first fallback version's single chime/vibration was insufficient; a
-  third same-day real-device report that continuous vibration then shipped with no sound at all; a
-  fourth same-day real-device report that the fallback then kept running after the real alarm took
-  over; a fifth same-day real-device report that the `MainActivity`-lifecycle fix for the fourth
-  report changed nothing; `alarm-5.12.0/android/src/main/AndroidManifest.xml` (`BootReceiver`'s
-  intent-filter, no `directBootAware`); `alarm-5.12.0/.../services/AlarmStorage.kt` (a normal,
-  `Context`-scoped `DataStore`, ruling out patching the plugin's own storage as the fix);
-  `android/app/src/main/AndroidManifest.xml` (all three components, confirmed via the merged
-  manifest); `awesome_notifications-0.12.1/android/src/main/AndroidManifest.xml:23-24` (listens for
-  both boot actions, but for its own scheduling receiver, not the ringing path).
+- [x] **Confirmed working end-to-end on a real device (2026-09-20).** After five same-day revisions,
+  each fixing a gap the previous one's real-device test exposed, the maintainer confirmed: a reboot
+  with the device staying locked now produces continuous vibration and an audible, looping sound,
+  and unlocking the device silences the fallback immediately via `ACTION_USER_PRESENT` - "jetzt tut
+  alles" (now everything works). The merged manifest carries all three components with
+  `android:directBootAware="true"` (the service also with `foregroundServiceType="mediaPlayback"`),
+  and a real `flutter build apk --release` compiled the Kotlin cleanly at every revision.
+- **Evidence:** the maintainer's own four-scenario real-device test (2026-09-20) that found the
+  original bug; a second same-day real-device report that the first fallback version's single
+  chime/vibration was insufficient; a third same-day real-device report that continuous vibration
+  then shipped with no sound at all; a fourth same-day real-device report that the fallback then kept
+  running after the real alarm took over; a fifth same-day real-device report that the
+  `MainActivity`-lifecycle fix for the fourth report changed nothing; a sixth, confirming report that
+  the `ACTION_USER_PRESENT` fix resolved it completely; `alarm-5.12.0/android/src/main/
+  AndroidManifest.xml` (`BootReceiver`'s intent-filter, no `directBootAware`);
+  `alarm-5.12.0/.../services/AlarmStorage.kt` (a normal, `Context`-scoped `DataStore`, ruling out
+  patching the plugin's own storage as the fix); `android/app/src/main/AndroidManifest.xml` (all
+  three components, confirmed via the merged manifest); `awesome_notifications-0.12.1/android/src/
+  main/AndroidManifest.xml:23-24` (listens for both boot actions, but for its own scheduling
+  receiver, not the ringing path).
 - **Done when:** the maintainer confirms the fallback fires correctly, audibly, and is silenced by
-  unlocking the device on a real device across a reboot-while-locked cycle. Until then this stays
-  "mitigated, not verified" rather than "fixed".
+  unlocking the device on a real device across a reboot-while-locked cycle. **Met (2026-09-20).**
 - **Requirement:** R3
 
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
