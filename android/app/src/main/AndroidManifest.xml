@@ -94,6 +94,33 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- docs/TODO.md T-158: neither this app nor the `alarm` plugin is
+             direct-boot-aware, so a reboot followed by the device staying
+             locked withholds BOOT_COMPLETED (and with it, the plugin's own
+             re-arm) entirely until the first unlock - the alarm does not
+             ring at all until then. These two receivers are the Direct-Boot
+             fallback: DirectBootReceiver gets LOCKED_BOOT_COMPLETED
+             immediately (unlike BOOT_COMPLETED, which the OS withholds
+             from non-direct-boot-aware apps the same way) and arms
+             DirectBootFallbackAlarmReceiver, a Direct-Boot-safe siren, for
+             the instant lib/utils/direct_boot_mirror.dart last mirrored.
+             Neither receiver can read the app's real alarm/settings data -
+             see DirectBootFallback.kt's own doc comment for why. -->
+        <receiver
+            android:name=".DirectBootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".DirectBootFallbackAlarmReceiver"
+            android:enabled="true"
+            android:exported="false"
+            android:directBootAware="true" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility?hl=en and

@@ -115,17 +115,21 @@ valve never needs to fire at all).
   Not yet captured with the scripted `dumpsys alarm` procedure (`check_alarm_survival.sh`) or
   logged with device/APK details in `docs/device-trial-checklist.md`'s table format - see the
   Findings entry there for now.
-- **Status: partially met - one known, unfixed failure mode as of 2026-09-20.** Every scenario
-  where the app is reopened, or the device stays unlocked, has been observed working on a real
-  device: a UI swipe-away, a reboot with no app interaction (device left unlocked), and a
-  force-stop followed by reopening the app (FR-17's recovery). Two scenarios now confirmed to
-  *not* work, for two different reasons: `am force-stop` with the app never reopened again is
-  Android's own platform boundary, not something this app can fix, and is documented as such
-  rather than counted against this requirement; a **reboot followed by the device staying locked**
-  (never unlocked, `docs/TODO.md` T-158) is not a platform boundary - it is this app's own missing
-  Direct-Boot support, has a real ordinary-use trigger (an overnight OTA reboot), and is counted
-  against this requirement until fixed or explicitly accepted the way the force-stop boundary was.
-  What's left besides T-158 itself: the scripted `dumpsys alarm` procedure
+- **Status: partially met - one known failure mode, mitigated but not yet device-verified, as of
+  2026-09-20.** Every scenario where the app is reopened, or the device stays unlocked, has been
+  observed working on a real device: a UI swipe-away, a reboot with no app interaction (device left
+  unlocked), and a force-stop followed by reopening the app (FR-17's recovery). Two scenarios now
+  confirmed to *not* fully work, for two different reasons: `am force-stop` with the app never
+  reopened again is Android's own platform boundary, not something this app can fix, and is
+  documented as such rather than counted against this requirement; a **reboot followed by the
+  device staying locked** (never unlocked, `docs/TODO.md` T-158) is not a platform boundary - it was
+  this app's own missing Direct-Boot support, has a real ordinary-use trigger (an overnight OTA
+  reboot), and has since been given a Direct-Boot-aware fallback siren (native, self-contained, does
+  not touch the real ring pipeline or the user's actual tone/volume settings). That fallback compiles
+  into a real release build with both receivers correctly `directBootAware`, but has **not yet been
+  exercised on a real device across an actual reboot-while-locked cycle** - it stays counted against
+  this requirement until that confirmation happens. What's left besides that confirmation: the
+  scripted `dumpsys alarm` procedure
   (`check_alarm_survival.sh`) has still never actually been run and logged via
   `docs/device-trial-checklist.md`'s table template, and the E2E suite still doesn't exercise
   reboot or force-stop at all (structurally can't, for the reasons `docs/TODO.md` T-93/T-131
@@ -186,9 +190,15 @@ valve never needs to fire at all).
   `AlarmManager` entries after a reboot) listens only for `BOOT_COMPLETED`, which Android withholds
   entirely from non-direct-boot-aware apps until the device's first unlock after that boot - not
   merely delays. This is a genuine, ordinary-use failure mode (an overnight OTA reboot with the
-  phone left locked on a nightstand), unlike the `am force-stop` boundary below, and is not yet
-  fixed - see T-158 for why a fix is a real design decision (device-protected storage), not a
-  one-line change.
+  phone left locked on a nightstand), unlike the `am force-stop` boundary below.
+- **Mitigated (2026-09-20, `docs/TODO.md` T-158):** a Direct-Boot-aware fallback siren now arms
+  itself even while the device stays locked - a native, self-contained path that never touches the
+  real ring pipeline (custom tone, gentle-wake ramp, QR gate) or any credential-encrypted storage,
+  since none of that is reachable before the device's first unlock. It's confirmed to compile and
+  land correctly in a real release build (`directBootAware="true"` on both receivers, verified via
+  the merged manifest), but **has not been exercised on a real device across an actual
+  reboot-while-locked cycle** - this is a mitigation pending its own real-device confirmation, not a
+  closed gap.
 
 ## R4 - All alarm-ringing prerequisites are met before an alarm fires
 

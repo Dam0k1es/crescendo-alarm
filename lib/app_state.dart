@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with WakeyWakey. If not, see <https://www.gnu.org/licenses/>.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -30,8 +31,10 @@ import 'package:wakeywakey/models/alarms/myalarm.dart';
 import 'package:wakeywakey/models/alarms/ringing_alarm_settings.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
+import 'package:wakeywakey/models/scheduling/next_wake_up.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
 import 'package:wakeywakey/utils/diag/diag_log.dart';
+import 'package:wakeywakey/utils/direct_boot_mirror.dart' as direct_boot_mirror;
 import 'package:wakeywakey/utils/utils.dart';
 
 class AppState extends ChangeNotifier {
@@ -985,6 +988,7 @@ class AppState extends ChangeNotifier {
 
     // Set the alarm
     await Alarm.set(alarmSettings: alarmSettings);
+    refreshDirectBootFallback();
   }
 
   /// FR-20: arms the **postponed** wake call as a plain platform alarm.
@@ -1016,6 +1020,39 @@ class AppState extends ChangeNotifier {
 
   Future<void> _stopAlarm(int id) async {
     await Alarm.stop(id);
+    refreshDirectBootFallback();
+  }
+
+  /// docs/TODO.md T-158: recomputes the next moment a real alarm is
+  /// expected to ring - the same instant [nextWakeUpTime] already computes
+  /// for the bedtime reminder (T-66) - and mirrors it into Android's
+  /// device-protected storage via [direct_boot_mirror.mirrorDirectBootFallback].
+  ///
+  /// Called after every successful [_setAlarm]/[_stopAlarm], which together
+  /// are the one place every real arm/cancel already goes through (manual
+  /// alarm create/edit/toggle, and scheduling-v2's own sync via
+  /// `applyPlannedAlarms`'s `addAlarm`/`removeAlarm`) - so this stays
+  /// current without a second, easy-to-miss call site at every UI or
+  /// scheduling entry point. Also called once after loading persisted state
+  /// at app start, so upgrading from a version that predates this mirror
+  /// populates it immediately rather than waiting for the next alarm change.
+  ///
+  /// Deliberately NOT called from [setSnoozeAlarm]: a snoozed instant isn't
+  /// part of [pendingDayValues] or [manualAlarms], so [nextWakeUpTime]
+  /// cannot see it - a reboot during an active snooze is not covered by
+  /// this mirror. Narrow, not silent: this is a known gap, not an oversight
+  /// (see docs/TODO.md T-158).
+  ///
+  /// [now] is injectable purely for testability, the same as elsewhere in
+  /// this file - fire-and-forget (not awaited by callers) since a failed or
+  /// slow mirror must never block a real arm/cancel.
+  void refreshDirectBootFallback({DateTime Function()? now}) {
+    final nowFn = now ?? DateTime.now;
+    unawaited(direct_boot_mirror.mirrorDirectBootFallback(nextWakeUpTime(
+      pendingDayValues: _pendingDayValues,
+      manualAlarms: _manualAlarms,
+      now: nowFn(),
+    )));
   }
 
   void _saveScheduledAlarms() {
@@ -1377,5 +1414,10 @@ class AppState extends ChangeNotifier {
       debugPrint("=====_loadFromPreferences: Error loading preferences: ${e.runtimeType}");
     }
     notifyListeners();
+    // docs/TODO.md T-158: populates the direct-boot fallback mirror on every
+    // cold start too, not only on the next alarm change - otherwise an
+    // install that upgrades from a version predating this mirror would have
+    // nothing armed for it until the user happens to touch an alarm.
+    refreshDirectBootFallback();
   }
 }

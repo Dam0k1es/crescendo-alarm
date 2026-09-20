@@ -181,7 +181,7 @@ that is the basis a decision can be formulated against.
   unexplained force-stop finding worth re-measuring cleanly regardless.
 - **Requirement:** R3
 
-### T-158 · A reboot while the device stays locked can silence the alarm entirely — FOUND (2026-09-20), root cause identified, fix not yet decided
+### T-158 · A reboot while the device stays locked can silence the alarm entirely — MITIGATED (2026-09-20), NOT YET VERIFIED ON A DEVICE
 
 - [x] Found on a real device during T-49's ACCESS_NETWORK_STATE-removal testing: of four scenarios
       tried (open app; backgrounded + locked; reboot with the app closed and the device locked;
@@ -213,21 +213,58 @@ that is the basis a decision can be formulated against.
   user that anything went wrong. This may well be the actual mechanism behind R3/T-04's still-open
   "long dormant period, app never reopened" scenario, which had no explanation until now beyond
   "structurally can't be tested in CI" (T-93/T-131).
-- **Not yet fixed, and why it isn't a small change:** the standard fix is making the relevant
-  receiver(s) `directBootAware` and listening for `LOCKED_BOOT_COMPLETED` too, but that receiver
-  can then only read `Context.createDeviceProtectedStorageContext()` (device-encrypted) storage,
-  not the normal `SharedPreferences` this app and the `alarm` plugin both use today - which would
-  mean either moving the minimal data needed to re-arm an alarm into device-protected storage (a
-  real migration, and outside this app's own code for the `alarm` plugin's half of it), or waiting
-  for/contributing that upstream. Worth a real design decision before starting, not a quick patch.
+- [x] **Mitigated (2026-09-20) with a fallback siren, deliberately not a full fix.** Patching the
+  third-party `alarm` plugin's own storage/receiver was ruled out as too invasive and fragile to
+  depend on undocumented internals of a library this project doesn't own (its `AlarmStorage` uses a
+  normal, `Context`-scoped `DataStore` - credential-encrypted like everything else, so it wouldn't
+  even help). Instead, this app's own module gained a self-contained, Direct-Boot-safe fallback path
+  that never touches the real ring pipeline or any credential-encrypted storage:
+  - `lib/utils/direct_boot_mirror.dart` - an injectable seam (same shape as `fetchEvents`/`now`)
+    that mirrors the next expected wake-up instant to the native side over a
+    `MethodChannel('com.wakeywakey.wakeywakey/direct_boot')`.
+  - `AppState.refreshDirectBootFallback()` - computes that instant with the same `nextWakeUpTime`
+    (T-66) the bedtime reminder already uses, and calls the mirror. Wired into `_setAlarm`/
+    `_stopAlarm` - the one place every real arm/cancel already goes through (manual create/edit/
+    toggle, and scheduling-v2's own sync via `applyPlannedAlarms`) - and once after loading
+    persisted state at app start, so an app upgrading from a version predating this mirror gets it
+    populated immediately rather than waiting for the next alarm change. Unit-tested in
+    `test/app_state_direct_boot_fallback_test.dart` (the computation and the seam call - not the
+    platform channel itself, which has no implementation in `flutter test`, the same as the rest of
+    the `alarm` plugin boundary).
+  - `android/app/src/main/kotlin/com/wakeywakey/wakeywakey/DirectBootFallback.kt` - the
+    device-protected-storage-backed `SharedPreferences` file both the channel handler
+    (`MainActivity.configureFlutterEngine`) and the two receivers below read/write; readable before
+    the first unlock, unlike the app's and the `alarm` plugin's normal storage.
+  - `DirectBootReceiver.kt` - `directBootAware="true"`, listens for `LOCKED_BOOT_COMPLETED`
+    (delivered immediately, unlike `BOOT_COMPLETED`). Reads the mirrored due time and arms a plain
+    `AlarmManager.setExactAndAllowWhileIdle` targeting the receiver below - firing immediately
+    instead of being dropped if the due time has already passed by the time this finally runs.
+  - `DirectBootFallbackAlarmReceiver.kt` - also `directBootAware`. Vibrates and posts a
+    high-priority, full-screen-intent notification using only Direct-Boot-safe primitives: the
+    system's own default **alarm** ringtone (`RingtoneManager`), not the user's actual tone or
+    volume, since neither is reachable before unlock. Tapping it opens `MainActivity` normally;
+    once the user has unlocked to get there, the app's own FR-17 recovery takes over for real.
+  **Known, deliberate limitation, not an oversight:** a snoozed alarm's postponed instant isn't part
+  of `pendingDayValues`/`manualAlarms`, so `nextWakeUpTime` can't see it - a reboot during an active
+  snooze is not covered by this mirror (`AppState.refreshDirectBootFallback`'s own doc comment says
+  so explicitly). Also: what fires is a generic siren, not the user's actual alarm - by design,
+  since the real one needs credential-encrypted settings that don't exist pre-unlock.
+- **Confirmed by an actual release build (2026-09-20):** the merged manifest carries both receivers
+  with `android:directBootAware="true"`; a real `flutter build apk --release` compiles the Kotlin
+  cleanly. **NOT yet confirmed on a real device across an actual reboot-while-locked cycle** - unlike
+  everything else this project verifies on hardware before calling it done, that verification could
+  not happen in this environment (no device attached here). Needs the same real-device test as the
+  one that found this bug: reboot with the device staying locked, and confirm the fallback siren
+  fires at roughly the right time and the notification opens the app on tap.
 - **Evidence:** the maintainer's own four-scenario real-device test (2026-09-20);
   `alarm-5.12.0/android/src/main/AndroidManifest.xml` (`BootReceiver`'s intent-filter, no
-  `directBootAware`); `android/app/src/main/AndroidManifest.xml` (no `directBootAware` either);
+  `directBootAware`); `alarm-5.12.0/.../services/AlarmStorage.kt` (a normal, `Context`-scoped
+  `DataStore`, ruling out patching the plugin's own storage as the fix); `android/app/src/main/
+  AndroidManifest.xml` (the two new receivers, confirmed via the merged manifest);
   `awesome_notifications-0.12.1/android/src/main/AndroidManifest.xml:23-24` (listens for both boot
   actions, but for its own scheduling receiver, not the ringing path).
-- **Done when:** either a fix ships and the same reboot-while-locked scenario is re-tested and
-  rings on time, or the maintainer accepts this as a known, documented boundary the way the
-  `force-stop` one already is.
+- **Done when:** the maintainer confirms the fallback fires correctly on a real device across a
+  reboot-while-locked cycle. Until then this stays "mitigated, not verified" rather than "fixed".
 - **Requirement:** R3
 
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
