@@ -95,6 +95,20 @@ Future<AppState> pumpFreshApp(WidgetTester tester) async {
     ),
   );
 
+  // docs/TODO.md T-41: cleared prefs means the privacy policy is the first
+  // screen shown now, before anything is requested - this suite predates
+  // that change and used to go straight to the permission check. Not
+  // pumpAndSettle (see test/widget_test.dart's own comment): the splash
+  // screen's rotation AnimationController repeats forever while it's
+  // mounted, so "no more frames scheduled" never becomes true here.
+  await tester.pump();
+  await tester.pump();
+  final continueButton = find.text('Continue');
+  if (continueButton.evaluate().isNotEmpty) {
+    await tester.tap(continueButton);
+    await tester.pump();
+  }
+
   // Permissions were pre-granted via adb before the test run, so the splash
   // screen's permission check resolves quickly - just wait for MyHomePage.
   await pumpUntilFound(tester, find.byType(MyHomePage),

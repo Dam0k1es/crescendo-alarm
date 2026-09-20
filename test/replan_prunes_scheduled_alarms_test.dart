@@ -13,8 +13,20 @@ import 'package:wakeywakey/models/scheduling/replan.dart';
 DateTime _utc(int hour, int minute, {int day = 10}) =>
     DateTime.utc(2026, 3, day, hour, minute);
 
+// Built as DateTime.utc, not the local DateTime(...) constructor: this
+// suite's `now`/`deviceUtcOffset: Duration.zero` only ever pretend the
+// DOMAIN layer is at UTC+0 - planAlarmSync's own frame-safe `_toMinute`
+// still converts a genuinely local DateTime via the real OS timezone
+// (`.toUtc()`), which on this dev machine (UTC+0) happened to be a no-op
+// but is not on every CI leg. Found via CI's America/St_Johns (UTC-3:30)
+// leg: the local constructor shifted this fixture's alarm by 3.5 hours,
+// enough to flip it from "already past" to "still ahead", which made
+// planAlarmSync's safety-critical "never remove a possibly-ringing alarm"
+// check treat it as removable - exactly the frame-confusion bug class
+// CLAUDE.md warns about, just in a test fixture rather than production
+// code (a real device's own local clock has no such cross-frame mismatch).
 ScheduledAlarm _alarmOn(DateTime day, {int id = 1}) => ScheduledAlarm(
-      time: DateTime(day.year, day.month, day.day, 7, 30),
+      time: DateTime.utc(day.year, day.month, day.day, 7, 30),
       enabled: true,
       gentlewake: false,
       tone: 'assets/sounds/lollipop.mp3',

@@ -322,6 +322,55 @@ that is the basis a decision can be formulated against.
   unlocking the device on a real device across a reboot-while-locked cycle. **Met (2026-09-20).**
 - **Requirement:** R3
 
+### T-159 · The first CI run since the repository went public failed twice, for real reasons — RESOLVED (2026-09-20)
+
+- [x] The repository went public today (2026-09-20, GPLv3's Corresponding Source obligation, T-34) -
+      the first time `master`'s CI has actually been able to run in a while, rather than failing in
+      seconds on the billing block described in `CLAUDE.md`'s "Branches and where work happens". It
+      ran for real and found two genuine, pre-existing problems that a blocked CI had simply never
+      had the chance to catch.
+- [x] **`test/replan_prunes_scheduled_alarms_test.dart` failed only on the `America/St_Johns`
+      (UTC-3:30) leg of the timezone matrix.** Root cause: its `_alarmOn` helper built
+      `ScheduledAlarm.time` with the local `DateTime(...)` constructor instead of `DateTime.utc(...)`,
+      while the test's `now`/`deviceUtcOffset: Duration.zero` only ever pretend the *domain layer* is
+      at UTC+0 - `planAlarmSync`'s own frame-safe `_toMinute()` still converts a genuinely local
+      `DateTime` via the real OS timezone (`.toUtc()`), which happened to be a no-op on this dev
+      machine (UTC+0) but is not on every CI leg. At `America/St_Johns`, that shifted the fixture's
+      alarm by 3.5 hours - enough to flip it from "already past" to "still ahead", which made
+      `planAlarmSync`'s safety-critical "never remove a possibly-ringing alarm" check treat it as
+      removable. This is exactly the frame-confusion bug class `CLAUDE.md` warns about, just landing
+      in a test fixture rather than production code (a real device's own local clock has no such
+      cross-frame mismatch - `_toMinute`'s use of the real OS timezone is correct there). Fixed by
+      building the fixture with `DateTime.utc(...)`; reproduced locally with `TZ=America/St_Johns
+      flutter test test/replan_prunes_scheduled_alarms_test.dart` before the fix and confirmed green
+      after, across `America/St_Johns`, `UTC` and `Asia/Tokyo`.
+- [x] **All seven `integration_test/app_test.dart` scenarios failed**, each timing out waiting for
+      `MyHomePage` to appear. Root cause: T-41 (this same session, earlier) made the privacy policy
+      the first screen shown on a clean install, requiring a "Continue" tap before anything else -
+      `pumpFreshApp`'s helper (which clears prefs to simulate a clean install) was never updated for
+      that and still expected `MyHomePage` to appear directly. This suite had not actually run since
+      T-41 landed, for the same reason as above (CI was blocked). Fixed by taping the same
+      not-`pumpAndSettle` pattern `test/widget_test.dart`/`test/privacy_before_permissions_test.dart`
+      already use (the splash screen's rotation `AnimationController` never lets "no more frames
+      scheduled" become true) into `pumpFreshApp` itself, tapping "Continue" when present before
+      waiting for `MyHomePage`. **Not verified on a real emulator run** - this suite needs a device/
+      emulator this environment doesn't have; the fix mirrors an already-verified pattern exactly,
+      but the next `master` CI run is what actually confirms it.
+- **Separately noted, not fixed (already deliberately non-gating):** `integration_test/
+  silent_notification_test.dart` (T-62) failed with `scheduleNotification` returning `-1`
+  ("isAllowed: false") - the *first* time this leg has ever actually run, for the same CI-was-blocked
+  reason. `.github/scripts/run_e2e_tests.sh` already runs it with `|| true` specifically because "this
+  exact mechanism has never been measured on this emulator image before, and an unverified leg must
+  not block a release" - so it correctly had no effect on the job's exit code. Worth a real look
+  later (is a notification permission missing from the emulator pre-grant step, or did the T-41
+  privacy screen shift something here too), but out of scope for getting `master` green again.
+- **Evidence:** run 35511187573 (`gh run view 35511187573 --repo Dam0k1es/wakeywakey`); the
+  `America/St_Johns` leg's failure output; the E2E job's "Timed out ... waiting for ... MyHomePage"
+  stack traces across all seven `app_test.dart` scenarios.
+- **Done when:** the next `master` push's CI run is green (or fails only on the already-known,
+  deliberately non-gating legs). Not yet re-verified - that is the next `master` push after this fix.
+- **Requirement:** R2 (the timezone-matrix fixture bug), R3/R4 (the E2E suite's own coverage)
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
