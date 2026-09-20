@@ -99,14 +99,18 @@
              direct-boot-aware, so a reboot followed by the device staying
              locked withholds BOOT_COMPLETED (and with it, the plugin's own
              re-arm) entirely until the first unlock - the alarm does not
-             ring at all until then. These two receivers are the Direct-Boot
-             fallback: DirectBootReceiver gets LOCKED_BOOT_COMPLETED
-             immediately (unlike BOOT_COMPLETED, which the OS withholds
-             from non-direct-boot-aware apps the same way) and arms
-             DirectBootFallbackAlarmReceiver, a Direct-Boot-safe siren, for
-             the instant lib/utils/direct_boot_mirror.dart last mirrored.
-             Neither receiver can read the app's real alarm/settings data -
-             see DirectBootFallback.kt's own doc comment for why. -->
+             ring at all until then. This is the Direct-Boot fallback:
+             DirectBootReceiver gets LOCKED_BOOT_COMPLETED immediately
+             (unlike BOOT_COMPLETED, which the OS withholds from
+             non-direct-boot-aware apps the same way) and arms
+             DirectBootFallbackAlarmReceiver for the instant
+             lib/utils/direct_boot_mirror.dart last mirrored, which in turn
+             starts DirectBootFallbackService - a real foreground service,
+             not just a one-shot notification, because a BroadcastReceiver
+             alone cannot loop a sound and vibration for long enough to
+             actually wake anyone (found via real-device testing). None of
+             these three can read the app's real alarm/settings data - see
+             DirectBootFallback.kt's own doc comment for why. -->
         <receiver
             android:name=".DirectBootReceiver"
             android:enabled="true"
@@ -121,6 +125,12 @@
             android:enabled="true"
             android:exported="false"
             android:directBootAware="true" />
+        <service
+            android:name=".DirectBootFallbackService"
+            android:enabled="true"
+            android:exported="false"
+            android:directBootAware="true"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility?hl=en and

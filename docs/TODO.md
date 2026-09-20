@@ -237,30 +237,50 @@ that is the basis a decision can be formulated against.
     the first unlock, unlike the app's and the `alarm` plugin's normal storage.
   - `DirectBootReceiver.kt` - `directBootAware="true"`, listens for `LOCKED_BOOT_COMPLETED`
     (delivered immediately, unlike `BOOT_COMPLETED`). Reads the mirrored due time and arms a plain
-    `AlarmManager.setExactAndAllowWhileIdle` targeting the receiver below - firing immediately
-    instead of being dropped if the due time has already passed by the time this finally runs.
-  - `DirectBootFallbackAlarmReceiver.kt` - also `directBootAware`. Vibrates and posts a
-    high-priority, full-screen-intent notification using only Direct-Boot-safe primitives: the
-    system's own default **alarm** ringtone (`RingtoneManager`), not the user's actual tone or
-    volume, since neither is reachable before unlock. Tapping it opens `MainActivity` normally;
-    once the user has unlocked to get there, the app's own FR-17 recovery takes over for real.
+    `AlarmManager.setExactAndAllowWhileIdle` targeting `DirectBootFallbackAlarmReceiver` - firing
+    immediately instead of being dropped if the due time has already passed by the time this
+    finally runs.
+  - `DirectBootFallbackAlarmReceiver.kt` - also `directBootAware`, and deliberately does almost
+    nothing itself: it only starts `DirectBootFallbackService` and clears the mirrored due time.
+    **A first version (2026-09-20, same day) tried to vibrate and post the notification directly
+    from `onReceive` - the maintainer's own real-device test caught this as insufficient within
+    hours: a single notification chime and one short vibration, then silence while the device stayed
+    locked.** A `BroadcastReceiver.onReceive` runs on the main thread for only a few seconds before
+    Android may reclaim it, nowhere near long enough to actually wake anyone - real alarm apps use a
+    foreground service for exactly this reason.
+  - `DirectBootFallbackService.kt` (added the same day, replacing the receiver's own vibrate/notify
+    code) - also `directBootAware`, `foregroundServiceType="mediaPlayback"`. A genuine foreground
+    service: loops the system's own default **alarm** ringtone via `MediaPlayer.isLooping = true`
+    (not the user's actual tone or volume, since neither is reachable before unlock), vibrates on a
+    repeating pattern (`VibrationEffect.createWaveform(pattern, 0)`, repeat index `0` rather than
+    `-1`), holds a partial wake lock, and shows an ongoing, undismissable, full-screen-intent
+    notification with its own "Stop" action. Capped at ten minutes (`MAX_RING_MILLIS`) as a safety
+    net, since nothing here can tell whether anyone is actually present to dismiss it and an
+    uncapped foreground service plus wake lock running forever on a bug would be its own hazard.
+    Tapping the notification (or the Stop action, or the ten-minute cap) tears everything down and,
+    for the tap case, opens `MainActivity` normally; once the user has unlocked to get there, the
+    app's own FR-17 recovery takes over for real.
   **Known, deliberate limitation, not an oversight:** a snoozed alarm's postponed instant isn't part
   of `pendingDayValues`/`manualAlarms`, so `nextWakeUpTime` can't see it - a reboot during an active
   snooze is not covered by this mirror (`AppState.refreshDirectBootFallback`'s own doc comment says
   so explicitly). Also: what fires is a generic siren, not the user's actual alarm - by design,
   since the real one needs credential-encrypted settings that don't exist pre-unlock.
-- **Confirmed by an actual release build (2026-09-20):** the merged manifest carries both receivers
-  with `android:directBootAware="true"`; a real `flutter build apk --release` compiles the Kotlin
-  cleanly. **NOT yet confirmed on a real device across an actual reboot-while-locked cycle** - unlike
-  everything else this project verifies on hardware before calling it done, that verification could
-  not happen in this environment (no device attached here). Needs the same real-device test as the
-  one that found this bug: reboot with the device staying locked, and confirm the fallback siren
-  fires at roughly the right time and the notification opens the app on tap.
-- **Evidence:** the maintainer's own four-scenario real-device test (2026-09-20);
-  `alarm-5.12.0/android/src/main/AndroidManifest.xml` (`BootReceiver`'s intent-filter, no
-  `directBootAware`); `alarm-5.12.0/.../services/AlarmStorage.kt` (a normal, `Context`-scoped
+- **Confirmed by an actual release build (2026-09-20):** the merged manifest carries all three
+  components with `android:directBootAware="true"` (the service also with
+  `foregroundServiceType="mediaPlayback"`); a real `flutter build apk --release` compiles the Kotlin
+  cleanly, both before and after the receiver-to-service revision above. **NOT yet confirmed on a
+  real device across an actual reboot-while-locked cycle** - unlike everything else this project
+  verifies on hardware before calling it done, that verification could not happen in this
+  environment (no device attached here). Needs the same real-device test as the one that found this
+  bug and its first, insufficient fix: reboot with the device staying locked, and confirm the siren
+  actually loops (not a single chime) until stopped or the ten-minute cap, and that tapping the
+  notification opens the app.
+- **Evidence:** the maintainer's own four-scenario real-device test (2026-09-20), and a second,
+  same-day real-device report that the first fallback version's single chime/vibration was
+  insufficient; `alarm-5.12.0/android/src/main/AndroidManifest.xml` (`BootReceiver`'s intent-filter,
+  no `directBootAware`); `alarm-5.12.0/.../services/AlarmStorage.kt` (a normal, `Context`-scoped
   `DataStore`, ruling out patching the plugin's own storage as the fix); `android/app/src/main/
-  AndroidManifest.xml` (the two new receivers, confirmed via the merged manifest);
+  AndroidManifest.xml` (all three components, confirmed via the merged manifest);
   `awesome_notifications-0.12.1/android/src/main/AndroidManifest.xml:23-24` (listens for both boot
   actions, but for its own scheduling receiver, not the ringing path).
 - **Done when:** the maintainer confirms the fallback fires correctly on a real device across a
