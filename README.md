@@ -115,3 +115,7 @@ Contributions are welcome! Please fork this repository and submit pull requests.
 
 Copyright (C) 2026 Dam0k1es, centron5961. Licensed under the GNU General Public License v3.0 - see
 the [LICENSE](LICENSE) file for the full text.
+
+---
+
+If you find this project useful, [buymeacoffee.com/dam0k1es](https://buymeacoffee.com/dam0k1es).
