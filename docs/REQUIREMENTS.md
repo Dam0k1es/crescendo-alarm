@@ -115,18 +115,22 @@ valve never needs to fire at all).
   Not yet captured with the scripted `dumpsys alarm` procedure (`check_alarm_survival.sh`) or
   logged with device/APK details in `docs/device-trial-checklist.md`'s table format - see the
   Findings entry there for now.
-- **Status: met in substance on real hardware; formal/automated evidence still the gap.** As of
-  2026-09-18, every scenario R3 actually promises has been observed working on a real device: a UI
-  swipe-away, a reboot with no app interaction, and a force-stop followed by reopening the app
-  (FR-17's recovery). The one scenario that fails - a force-stop with the app never reopened again
-  - is Android's own platform boundary, not something this app can fix, and is documented as such
-  rather than counted against this requirement. What's left is making that evidence durable and
-  automatic rather than four one-off manual observations: the scripted `dumpsys alarm` procedure
+- **Status: partially met - one known, unfixed failure mode as of 2026-09-20.** Every scenario
+  where the app is reopened, or the device stays unlocked, has been observed working on a real
+  device: a UI swipe-away, a reboot with no app interaction (device left unlocked), and a
+  force-stop followed by reopening the app (FR-17's recovery). Two scenarios now confirmed to
+  *not* work, for two different reasons: `am force-stop` with the app never reopened again is
+  Android's own platform boundary, not something this app can fix, and is documented as such
+  rather than counted against this requirement; a **reboot followed by the device staying locked**
+  (never unlocked, `docs/TODO.md` T-158) is not a platform boundary - it is this app's own missing
+  Direct-Boot support, has a real ordinary-use trigger (an overnight OTA reboot), and is counted
+  against this requirement until fixed or explicitly accepted the way the force-stop boundary was.
+  What's left besides T-158 itself: the scripted `dumpsys alarm` procedure
   (`check_alarm_survival.sh`) has still never actually been run and logged via
   `docs/device-trial-checklist.md`'s table template, and the E2E suite still doesn't exercise
   reboot or force-stop at all (structurally can't, for the reasons `docs/TODO.md` T-93/T-131
-  record). A missed alarm is a total failure of the app's core purpose, so closing that
-  automation gap remains worth doing even though the manual evidence is now good.
+  record). A missed alarm is a total failure of the app's core purpose, so closing both gaps
+  remains worth doing.
   **Fixed (2026-09-18):** a `SharedPreferences` load failure could block app startup entirely
   instead of degrading to defaults - see `docs/TODO.md` T-45. (The per-alarm enable/disable switch
   not cancelling the underlying OS alarm, `docs/TODO.md` T-03, was already resolved on 2026-09-16 -
@@ -175,6 +179,16 @@ valve never needs to fire at all).
   above). The one scenario genuinely still unverified, across all three interruptions alike, is a
   long idle stretch with the app never reopened at all before the alarm's due time - not only the
   force-stop-specific platform boundary this section already documents.
+- **That scenario is now confirmed to fail, with a known cause (2026-09-20, `docs/TODO.md`
+  T-158):** a reboot followed by the device staying locked - never unlocked even once - does not
+  ring the alarm at all until the device is unlocked. Root cause: neither this app nor the `alarm`
+  plugin is `directBootAware`, and the plugin's `BootReceiver` (which re-registers the
+  `AlarmManager` entries after a reboot) listens only for `BOOT_COMPLETED`, which Android withholds
+  entirely from non-direct-boot-aware apps until the device's first unlock after that boot - not
+  merely delays. This is a genuine, ordinary-use failure mode (an overnight OTA reboot with the
+  phone left locked on a nightstand), unlike the `am force-stop` boundary below, and is not yet
+  fixed - see T-158 for why a fix is a real design decision (device-protected storage), not a
+  one-line change.
 
 ## R4 - All alarm-ringing prerequisites are met before an alarm fires
 

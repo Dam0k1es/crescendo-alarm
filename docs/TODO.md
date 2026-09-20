@@ -181,6 +181,55 @@ that is the basis a decision can be formulated against.
   unexplained force-stop finding worth re-measuring cleanly regardless.
 - **Requirement:** R3
 
+### T-158 · A reboot while the device stays locked can silence the alarm entirely — FOUND (2026-09-20), root cause identified, fix not yet decided
+
+- [x] Found on a real device during T-49's ACCESS_NETWORK_STATE-removal testing: of four scenarios
+      tried (open app; backgrounded + locked; reboot with the app closed and the device locked;
+      reboot with the app open and the device unlocked), the third did not ring at its scheduled
+      time. It rang only after the device was unlocked, roughly two minutes after the alarm's due
+      time.
+- [x] **Root cause identified, not just observed.** Neither this app's own
+      `AndroidManifest.xml` nor the `alarm` plugin's declares `android:directBootAware="true"`, and
+      `alarm`'s `BootReceiver` - the component that re-registers the app's `AlarmManager` entries
+      after a reboot - listens only for `android.intent.action.BOOT_COMPLETED`, not
+      `LOCKED_BOOT_COMPLETED` (confirmed by reading
+      `alarm-5.12.0/android/src/main/AndroidManifest.xml` directly; `awesome_notifications` does
+      listen for both, but that is its own notification-scheduling receiver, not the one that
+      re-arms the actual ringing alarm). On Android's file-based encryption, a non-direct-boot-aware
+      app's `BOOT_COMPLETED` is not merely delayed but **withheld by the OS entirely** until the
+      user unlocks the device for the first time after that boot - before that, the app's normal
+      (credential-encrypted) storage, including the `SharedPreferences` both this app and the
+      `alarm` plugin use to persist scheduled alarms, isn't even decryptable yet. So `BootReceiver`
+      cannot run, and the old alarm is not re-registered with `AlarmManager` at all - not "delayed",
+      genuinely absent - until that first unlock. The observed ~2-minute lag was very likely just
+      the gap between the alarm's due time and the moment the device happened to be unlocked in
+      that test, not a fixed system delay: once `BOOT_COMPLETED` is finally delivered, the overdue
+      alarm is re-armed and fires almost immediately.
+- **Why this matters more than it might look:** this is a real, ordinary-use failure mode for an
+  alarm clock, not an edge case like `am force-stop` (R3's already-documented, unfixable platform
+  boundary). A phone that reboots overnight for an OTA update or after a crash, and is never
+  touched again before the alarm's due time because it's sitting locked on a nightstand, would
+  **not ring at all** - a silent total failure of the app's core purpose, with no indication to the
+  user that anything went wrong. This may well be the actual mechanism behind R3/T-04's still-open
+  "long dormant period, app never reopened" scenario, which had no explanation until now beyond
+  "structurally can't be tested in CI" (T-93/T-131).
+- **Not yet fixed, and why it isn't a small change:** the standard fix is making the relevant
+  receiver(s) `directBootAware` and listening for `LOCKED_BOOT_COMPLETED` too, but that receiver
+  can then only read `Context.createDeviceProtectedStorageContext()` (device-encrypted) storage,
+  not the normal `SharedPreferences` this app and the `alarm` plugin both use today - which would
+  mean either moving the minimal data needed to re-arm an alarm into device-protected storage (a
+  real migration, and outside this app's own code for the `alarm` plugin's half of it), or waiting
+  for/contributing that upstream. Worth a real design decision before starting, not a quick patch.
+- **Evidence:** the maintainer's own four-scenario real-device test (2026-09-20);
+  `alarm-5.12.0/android/src/main/AndroidManifest.xml` (`BootReceiver`'s intent-filter, no
+  `directBootAware`); `android/app/src/main/AndroidManifest.xml` (no `directBootAware` either);
+  `awesome_notifications-0.12.1/android/src/main/AndroidManifest.xml:23-24` (listens for both boot
+  actions, but for its own scheduling receiver, not the ringing path).
+- **Done when:** either a fix ships and the same reboot-while-locked scenario is re-tested and
+  rings on time, or the maintainer accepts this as a known, documented boundary the way the
+  `force-stop` one already is.
+- **Requirement:** R3
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
@@ -1012,8 +1061,8 @@ that is the basis a decision can be formulated against.
       comparison has to be `aapt2 dump badging` or the merged manifest itself.
 - [ ] Still open: the full "name every permission and say why" table, and a traffic capture during
       an E2E run.
-- [x] **`ACCESS_NETWORK_STATE` removed (2026-09-20), pending its own real-device confirmation.**
-      Traced (2026-09-18) via `aapt2 dump permissions` plus Gradle's
+- [x] **`ACCESS_NETWORK_STATE` removed and now confirmed safe (2026-09-20).** Traced (2026-09-18)
+      via `aapt2 dump permissions` plus Gradle's
       `android/app/build/outputs/logs/manifest-merger-blame-*-report.txt` to two transitive
       sources, not one: `androidx.media3:media3-common:1.9.0` (the `alarm` plugin's audio playback
       stack) **and** Google's `transport-runtime`/`transport-backend-cct` (pulled in by
@@ -1021,14 +1070,13 @@ that is the basis a decision can be formulated against.
       sync) - not to anything network-related in this app's own code, consistent with `INTERNET`
       already being gone. Removed with `tools:node="remove"`, the same pattern as
       `READ_EXTERNAL_STORAGE`/`RECORD_AUDIO`/`WRITE_EXTERNAL_STORAGE` above; confirmed absent from
-      a real release build's merged manifest and `aapt2 dump permissions` output. **Still open,
-      and the reason this line isn't fully closed:** the caution this entry originally raised - that
-      `media3` uses `ConnectivityManager` internally, so a removed permission could plausibly break
-      an audio codepath silently even though this app never plays networked audio - has not yet
-      been checked against a real device with this specific build. Tone selection, the gentle-wake
-      ramp and custom tones all need to be exercised on the current `current.apk` before this is
-      considered closed; if any of them regress, restore the permission and drop the `tools:node`
-      line rather than chasing the cause blind.
+      a real release build's merged manifest and `aapt2 dump permissions` output. The caution this
+      entry originally raised - that `media3` uses `ConnectivityManager` internally, so removing the
+      permission could plausibly break an audio codepath silently - is now closed: the maintainer
+      ran tone selection, the gentle-wake ramp and a custom tone across four real-device scenarios
+      (open app, backgrounded+locked, and two reboot scenarios) on this exact build, and audio
+      played correctly in every one. One of those four scenarios surfaced an unrelated, more
+      significant finding - see T-158.
 - **Why:** R7 asserted "no user data leaves the device — met" on the basis of a check scoped to
   Dart source in `lib/`, but the shipped APK declares `INTERNET` and `ACCESS_NETWORK_STATE`, pulled
   in through plugin manifest merging. That does not prove data leaves the device, and the offline
