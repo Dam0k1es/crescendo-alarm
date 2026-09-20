@@ -1247,9 +1247,9 @@ that is the basis a decision can be formulated against.
       the Android artifacts the build actually resolves.
 - **Requirement:** R8
 
-### T-145 · Opening the Schedule screen no longer triggers a calendar fetch — DOWNGRADED, mostly superseded (2026-09-20)
+### T-145 · Opening the Schedule screen no longer triggers a calendar fetch — FIXED (2026-09-20)
 
-- [ ] Fetch on open and on view switch, not only when the user pages.
+- [x] Fetch on open and on view switch, not only when the user pages.
 - **Why:** `SfCalendar.onViewChanged` fired on initial layout; `calendar_view`'s `onPageChange` is
       wired to `PageView.onPageChanged`, which does not fire for the first page (T-05). Switching
       view through the menu and the Today button do trigger a fetch now, but opening the screen
@@ -1268,13 +1268,41 @@ that is the basis a decision can be formulated against.
   (in-app tab switches don't trigger `didChangeAppLifecycleState`) - narrow enough, and now
   low-impact enough given the on-resume resync already covers the common paths, that it is not
   worth chasing further on its own.
-- **Still genuinely open, but a separate and smaller issue - not fetch timing:** in month view,
-  `onPageChange` delivers the 1st of the month, not a week start, so `appState.fetchedCalendarWeeks`
-  collects entries that are not week keys and the 7-day fetch covers one week of a five-week grid.
-  Kept here rather than closed, since it's a real correctness gap in the month-view cache-key
-  bookkeeping, independent of whether this item's original "fetch on open" concern still applies.
-- **Done when:** month view either hands over a week start, or the cache stops assuming every
-  fetched entry is one.
+- **The remaining month-view issue, fixed (2026-09-20):** `onPageChange` was shared across
+  week/day/month views and always called `updateCalendarData` with a fixed 7-day window - correct
+  for week/day, wrong for month view, whose grid (`calendar_view`'s `MonthView`) is a fixed 6-week
+  (42-day) span starting from the Monday of the week containing the 1st
+  (`datesOfMonths`/`_height = _cellHeight * 6`, checked against the package source). Paging into
+  month view therefore only ever fetched (and marked as fetched) the single week containing day 1
+  - the other ~5 weeks of the visible grid were silently left unfetched. `getStartOfWeek` already
+  normalizes any date to that Monday correctly (so the specific "collects non-week keys" framing in
+  the original write-up wasn't quite right - the real gap was the fetch *window*, not the recorded
+  *key*), but `updateCalendarData` only ever recorded one `fetchedCalendarWeeks` entry regardless of
+  how wide a range it was asked to cover.
+  Fix: a new `_onMonthPageChange` (month view's `monthViewBuilders.onPageChange`, separate from
+  `_onPageChange`, which week/day views keep using unchanged) requests
+  `updateCalendarData(appState, const Duration(days: 42))`; `updateCalendarData` now records every
+  week its fetch window actually spans (a loop from `startOfWeek - backwards` to
+  `startOfWeek + timeToFetch`, one entry per 7 days) instead of only `startOfWeek` - for the
+  existing 7-day callers this is still exactly one entry, unchanged.
+- **A real, pre-existing async bug found while testing the above fix:** `updateCalendarData` was
+  declared `async` but returned bare `void`, not `Future<void>` - so `loadCalendarData`'s own
+  `await updateCalendarData(...)` was a no-op that could never actually wait for it, and
+  `preloadCalendarData`'s follow-up `markWeekFetched` loop could run before `updateCalendarData`'s
+  own fetch-and-record work had finished. Invisible before now because both sides usually finished
+  "fast enough" by luck against test fakes; the wider 42-day loop above took just long enough to
+  reliably lose that race, producing a different `fetchedCalendarWeeks` count on every run
+  (`test/resync_calendar_data_test.dart`'s repeated-resync test caught this immediately - failed
+  non-deterministically with 3 entries instead of the expected, dynamically-computed count).
+  Fixed by giving `updateCalendarData` its true `Future<void>` return type and awaiting it inside
+  `loadCalendarData`.
+  Also promoted `_markWeekFetched` (`lib/utils/utils.dart`) to a public `markWeekFetched` and
+  reused it inside `updateCalendarData`'s new loop, instead of a second, non-deduplicating copy of
+  the same "skip if this week is already recorded" check `preloadCalendarData` already had.
+- **Tests:** `test/month_view_calendar_fetch_test.dart` (new) - a wide fetch window marks every
+  week it covers, not just the first. `test/resync_calendar_data_test.dart`'s existing repeated-
+  resync test is what caught the async race (it went from reliably red to reliably green once
+  `updateCalendarData` was properly awaited - no test changes needed there beyond that fix).
 - **Requirement:** R2
 
 ### T-146 · Custom alarm tone import — IMPLEMENTED (2026-09-17)

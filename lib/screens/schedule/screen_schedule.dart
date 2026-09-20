@@ -104,11 +104,13 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
     _displayDate = appState.visibleDate;
   }
 
-  /// Called when the calendar has paged to another week/day/month.
+  /// Called when the week or day view has paged.
   ///
   /// The date arrives as the first day of the new page - the same thing
   /// SfCalendar's `visibleDates.first` used to deliver, so the downstream
-  /// fetching logic is unchanged.
+  /// fetching logic is unchanged. A week is 7 days, so a 7-day fetch window
+  /// is correct here - see [_onMonthPageChange] for why month view needs a
+  /// different one.
   void _onPageChange(DateTime date, int page) {
     // After the frame, exactly as before: updateCalendarData writes to AppState
     // and would otherwise notify listeners during a build.
@@ -122,6 +124,32 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
       } catch (e) {
         debugPrint(
             "=====onCalendarViewChanged: Error updating the calendar data: ${e.runtimeType}");
+      }
+    });
+  }
+
+  /// docs/TODO.md T-145: month view has paged. `date` arrives as the 1st of
+  /// the new month (calendar_view's `MonthView._onPageChange` builds it via
+  /// `DateTime(year, month)`, which defaults `day` to 1), but the grid it
+  /// actually renders spans a fixed 6 weeks / 42 days starting from the
+  /// Monday of the week containing that 1st (calendar_view's own
+  /// `datesOfMonths`, `startDay: WeekDays.monday` by default - matching this
+  /// app's own `getStartOfWeek`). Reusing [_onPageChange]'s 7-day window here
+  /// only ever fetched (and marked as fetched) the single week containing
+  /// day 1 - the other ~5 weeks of the visible grid were silently left
+  /// unfetched, so most of a month view page could be missing calendar data
+  /// with nothing ever noticing or retrying.
+  void _onMonthPageChange(DateTime date, int page) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        debugPrint(
+            "=====onCalendarViewChanged (month): Visible month is $date");
+        _displayDate = date;
+        appState.visibleDate = date;
+        updateCalendarData(appState, const Duration(days: 42));
+      } catch (e) {
+        debugPrint(
+            "=====onCalendarViewChanged (month): Error updating the calendar data: ${e.runtimeType}");
       }
     });
   }
@@ -477,7 +505,8 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
           // different treatment here anyway. The grey colour from
           // meetingToCalendarEvent still shows in month view regardless -
           // only the tap-to-toggle interaction is unavailable there.
-          monthViewBuilders: MonthViewBuilders(onPageChange: _onPageChange),
+          monthViewBuilders:
+              MonthViewBuilders(onPageChange: _onMonthPageChange),
         );
     }
   }
@@ -559,9 +588,9 @@ Future<void> loadCalendarData(AppState appState, Duration timeToFetch,
   try {
     debugPrint("=====loadCalendarData: Updating calendar data");
     if (specificDate == null) {
-      updateCalendarData(appState, timeToFetch, backwards);
+      await updateCalendarData(appState, timeToFetch, backwards);
     } else {
-      updateCalendarData(appState, timeToFetch, backwards, specificDate);
+      await updateCalendarData(appState, timeToFetch, backwards, specificDate);
     }
   } catch (e) {
     debugPrint(
@@ -584,7 +613,18 @@ void _syncEventsFromAppState(AppState appState) {
 }
 
 // Update the calendar data source with the current appointments
-void updateCalendarData(AppState appState, Duration timeToFetch,
+//
+// docs/TODO.md T-145: was declared `async` but returned bare `void`, so
+// `loadCalendarData`'s own `await` of this call was a no-op - it fired this
+// function's work and moved on without waiting for it, racing
+// `preloadCalendarData`'s own follow-up `markWeekFetched` loop against
+// whatever this function had or hadn't finished recording yet. Usually
+// invisible (both sides finish "fast enough" against fakes/mocks), but a
+// widened fetch window here (T-145's month-view fix, or T-145's own test)
+// took a little longer and reliably lost the race, corrupting
+// `fetchedCalendarWeeks`'s count non-deterministically between runs.
+// `Future<void>` lets every caller that actually needs to wait do so.
+Future<void> updateCalendarData(AppState appState, Duration timeToFetch,
     [Duration backwards = const Duration(days: 0),
     DateTime? specificDate]) async {
   debugPrint("=====updateCalendarData");
@@ -641,7 +681,20 @@ void updateCalendarData(AppState appState, Duration timeToFetch,
       // docs/TODO.md T-55: recorded by the start of the week, matching
       // `preloadCalendarData`'s convention - `isCalendarWeekFetched` compares
       // against that, not against an arbitrary day within the week.
-      appState.fetchedCalendarWeeks.add(startOfWeek);
+      //
+      // docs/TODO.md T-145: a caller can ask for more than one week at once
+      // (month view's fetch spans the whole visible 6-week/42-day grid, not
+      // just the week containing day 1) - mark every week the fetched range
+      // actually covers, not only [startOfWeek] itself. For the 7-day case
+      // every other caller still uses, this is exactly one entry, unchanged.
+      // `markWeekFetched` (not a raw `.add`), the same dedup-aware helper
+      // `preloadCalendarData` uses - otherwise a week this loop covers that
+      // some other path already recorded ends up in the list twice.
+      for (DateTime week = startOfWeek.subtract(backwards);
+          week.isBefore(startOfWeek.add(timeToFetch));
+          week = week.add(const Duration(days: 7))) {
+        markWeekFetched(appState, week);
+      }
 
       // If the calendar has been initialized and fetched, set the first update flag to false
       if (appState.meetings.isNotEmpty) {

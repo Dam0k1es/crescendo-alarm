@@ -145,14 +145,14 @@ Future<void> preloadCalendarData(AppState appState,
 
   for (int i = 0; i < pastWeeks; i++) {
     DateTime startOfWeek = weekStart.subtract(Duration(days: i * 7));
-    _markWeekFetched(appState, startOfWeek);
+    markWeekFetched(appState, startOfWeek);
     debugPrint(
         "=====preloadCalendarData: Preloaded the week starting with $startOfWeek");
   }
 
   for (int i = 1; i <= futureWeeks; i++) {
     DateTime startOfWeek = weekStart.add(Duration(days: i * 7));
-    _markWeekFetched(appState, startOfWeek);
+    markWeekFetched(appState, startOfWeek);
     debugPrint(
         "=====preloadCalendarData: Preloaded the week starting with $startOfWeek");
   }
@@ -164,7 +164,12 @@ Future<void> preloadCalendarData(AppState appState,
 /// `updateCalendarData(..., specificDate: DateTime.now())` call a few lines
 /// above, whose successful-fetch branch records the same start-of-week date.
 /// Skip a date already present rather than growing the list with duplicates.
-void _markWeekFetched(AppState appState, DateTime startOfWeek) {
+///
+/// docs/TODO.md T-145: public (not `_`-prefixed) so `updateCalendarData`
+/// (`screen_schedule.dart`, a separate library) can reuse the same
+/// dedup-aware add for its own multi-week fetches, instead of a second,
+/// un-deduped copy of this exact check.
+void markWeekFetched(AppState appState, DateTime startOfWeek) {
   final alreadyPresent = appState.fetchedCalendarWeeks.any((fetched) =>
       fetched.year == startOfWeek.year &&
       fetched.month == startOfWeek.month &&
