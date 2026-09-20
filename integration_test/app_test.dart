@@ -279,8 +279,15 @@ void main() {
       expect(find.byType(ScreenAlarmActive), findsNothing);
       expect(find.byType(ScreenAlarms), findsOneWidget);
       // Not just "the screen went away" - the alarm itself must actually
-      // have stopped (docs/TODO.md T-09).
-      expect(await Alarm.getAlarms(), isEmpty);
+      // have stopped (docs/TODO.md T-09). Not `isEmpty`: the "add alarm"
+      // dialog defaults `repeatOnDays` to today (docs/TODO.md T-14), so
+      // `Handler.onAlarmHandled` legitimately re-arms it for next week on
+      // dismiss - a real, intended re-arm for the FUTURE is fine; an entry
+      // stuck at (or before) the time that just rang is not.
+      expect((await Alarm.getAlarms()).every((a) => a.dateTime.isAfter(DateTime.now())),
+          isTrue,
+          reason: 'no alarm may remain armed at or before the time it just '
+              'rang - a repeat re-arm for a future occurrence is fine');
     },
     timeout: const Timeout(Duration(minutes: 3)),
   );
@@ -335,8 +342,12 @@ void main() {
       expect(find.byType(QrScanner), findsNothing);
       expect(find.byType(ScreenAlarms), findsOneWidget);
       // Not just "the screen went away" - the alarm itself must actually
-      // have stopped (docs/TODO.md T-09).
-      expect(await Alarm.getAlarms(), isEmpty);
+      // have stopped (docs/TODO.md T-09). Not `isEmpty` - see the same-shaped
+      // assertion in the default-overlay scenario above for why.
+      expect((await Alarm.getAlarms()).every((a) => a.dateTime.isAfter(DateTime.now())),
+          isTrue,
+          reason: 'no alarm may remain armed at or before the time it just '
+              'rang - a repeat re-arm for a future occurrence is fine');
     },
     timeout: const Timeout(Duration(minutes: 3)),
   );
