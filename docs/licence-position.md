@@ -1,13 +1,14 @@
 # Licence position
 
 WakeyWakey is distributed under the **GNU GPLv3** (`LICENSE`). The project grew out of a university
-project with three original developers; two, Dam0k1es and centron5961, have given explicit consent
-(2026-09-20) both to this GPLv3 licensing and to being named as copyright holders. The third
-original developer's consent is still pending, so no third name is added yet - see `CLAUDE.md`'s
-own licence line for the current, authoritative state of this. This document is the tracked
-decision the requirements R8 and R9 ask for: what the shipped dependency set is licensed under, and
-how the obligations that come with conveying a GPLv3 binary are met. It is the acceptance criterion
-of `docs/TODO.md` T-05, T-33 and T-34.
+project with three original developers. All three have now given explicit consent (2026-09-20) to
+this GPLv3 licensing; two, Dam0k1es and centron5961, also consented to being named as copyright
+holders. The third consented to the licence only, not to being named - a deliberate choice by that
+developer, not an open item - so no third name is added anywhere in this repository. See
+`CLAUDE.md`'s own licence line for the current, authoritative state of this. This document is the
+tracked decision the requirements R8 and R9 ask for: what the shipped dependency set is licensed
+under, and how the obligations that come with conveying a GPLv3 binary are met. It is the
+acceptance criterion of `docs/TODO.md` T-05, T-33 and T-34.
 
 It is a **statement of the project's position**, written by its maintainer with the help of an
 assistant, not legal advice.

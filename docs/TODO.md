@@ -301,7 +301,8 @@ that is the basis a decision can be formulated against.
 ### T-156 · Copyright attribution updated to reflect joint authorship — FIXED (2026-09-20)
 
 - [x] Add a second, consenting original developer to every copyright notice in the repository.
-- [ ] Add the third original developer once (if) their consent is given.
+- [x] Record the third original developer's consent - to the licence, explicitly not to being
+      named. Closed, not pending: their answer is final, not an open item waiting on a reply.
 - **Why:** the project grew out of a university project with three original developers, but every
   copyright notice in the repository named only the current maintainer (Dam0k1es) as sole copyright
   holder - both `CLAUDE.md`'s licence line and `docs/licence-position.md` said so explicitly. Once
@@ -317,8 +318,11 @@ that is the basis a decision can be formulated against.
   claims in living documents (`CLAUDE.md`, `docs/REQUIREMENTS.md` R8) to "the copyright holders" -
   left historical decision records in this file (T-33, T-35) worded as they were at the time,
   since those describe what was true when that specific decision was made, not a live claim.
-  The third original developer's consent is still pending - no third name added yet, and none
-  should be until they explicitly consent themselves.
+- **The third original developer has since consented too (2026-09-20), explicitly to the licence
+  only, not to being named as a copyright holder.** This is that developer's own deliberate choice,
+  not a gap to close later - no third name is added anywhere in the repository, and none should be.
+  `CLAUDE.md`'s licence line and `docs/licence-position.md` both now say so explicitly, so a future
+  reader doesn't mistake the missing third name for an oversight or a still-open item.
 - **Requirement:** R8, R9
 
 ### T-155 · The sleep-time reminder's own scheduled notification does not survive a reboot — RESOLVED, was a measurement timing artifact (2026-09-19)

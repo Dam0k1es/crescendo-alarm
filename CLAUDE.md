@@ -78,11 +78,12 @@ Consequences to respect when adding an event:
   isolate already talks to it directly - a file logger would depend on plugin-channel availability
   there, which is the failure class T-79 was.
 
-License: GNU GPLv3 (see `LICENSE`). Copyright holders: Dam0k1es, centron5961 - both original
-developers of the project this repository grew from, each having given explicit consent to this
-copyright attribution and to GPLv3 (2026-09-20); a third original developer's consent is still
-pending, so no third name is added yet. Do not add any other personal names, emails, or locations
-to tracked files (including a not-yet-consenting original developer's) - see "PII policy" below.
+License: GNU GPLv3 (see `LICENSE`). Copyright holders named in tracked files: Dam0k1es, centron5961
+- two of the three original developers of the project this repository grew from. All three have
+now given explicit consent to GPLv3 (2026-09-20); the third's consent is to the licence only, not
+to being named, so no third name is added anywhere - this is a deliberate choice by that developer,
+not a pending item. Do not add any other personal names, emails, or locations to tracked files -
+see "PII policy" below.
 
 ## Supported platforms
 
