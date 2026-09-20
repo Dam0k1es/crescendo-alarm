@@ -367,9 +367,48 @@ that is the basis a decision can be formulated against.
 - **Evidence:** run 35511187573 (`gh run view 35511187573 --repo Dam0k1es/wakeywakey`); the
   `America/St_Johns` leg's failure output; the E2E job's "Timed out ... waiting for ... MyHomePage"
   stack traces across all seven `app_test.dart` scenarios.
+- [x] **Confirmed green (run 35513763937, 2026-09-20):** every leg passed except
+      `silent_notification_test.dart` (T-62), which is the already-known, deliberately non-gating
+      failure - correctly had no effect on the job's outcome. `Build Android (production)` and
+      `MobSF (full static scan of production APK)` both ran (previously skipped, since they need the
+      legs above) and both passed.
 - **Done when:** the next `master` push's CI run is green (or fails only on the already-known,
-  deliberately non-gating legs). Not yet re-verified - that is the next `master` push after this fix.
+  deliberately non-gating legs). **Met.**
 - **Requirement:** R2 (the timezone-matrix fixture bug), R3/R4 (the E2E suite's own coverage)
+
+### T-160 · MobSF flags `DirectBootReceiver` as an unprotected exported component — FOUND (2026-09-20), not yet triaged
+
+- [x] Found while reading run 35513763937 (the first fully green `master` run since the repository
+      went public): MobSF's full scan of the production APK now reports 15 WARNING-level findings,
+      one more than `docs/REQUIREMENTS.md` R1 currently documents (14). The new one:
+      `Broadcast Receiver (com.wakeywakey.wakeywakey.DirectBootReceiver) is not Protected.
+      [android:exported=true]` - a direct, expected consequence of T-158's fix, not a regression
+      introduced by anything else: `DirectBootReceiver` has to be `exported="true"` for the OS to
+      deliver `LOCKED_BOOT_COMPLETED` to it at all (an unexported receiver never gets *any*
+      broadcast), so this specific warning was unavoidable the moment T-158 shipped.
+- **Why this isn't necessarily a real problem, but needs a real look rather than a shrug:**
+      `DirectBootReceiver` accepts no data from the `Intent` other than its action string - it reads
+      only the due time already mirrored into its own device-protected `SharedPreferences`
+      (`DirectBootFallback.getDueAt`), so there is no obvious injection surface a malicious app could
+      exploit by sending it a forged `LOCKED_BOOT_COMPLETED` broadcast early. That reasoning has not
+      been independently checked the way the two already-accepted findings in
+      `.github/security-exceptions.json` were, though - it's this session's own assessment, not a
+      reviewed one.
+- **Not fixed, not accepted, not exempted - deliberately left open:** the standard fix for "exported
+  receiver, no explicit protection" is either restricting it with a signature-level permission (adds
+  complexity for a receiver whose only real sender is the OS itself) or accepting the finding with a
+  dated rationale in `.github/security-exceptions.json`, the same pattern the two existing accepted
+  findings already use. Neither decision has been made here - this entry only records that the
+  finding exists and needs a decision, per this session's instruction to document without acting.
+- **Evidence:** run 35513763937, job `MobSF (full static scan of production APK)`
+      (`gh api /repos/Dam0k1es/wakeywakey/actions/jobs/106089892754/logs`); `android/app/src/main/
+      AndroidManifest.xml` (`DirectBootReceiver`'s `android:exported="true"`, required for
+      `LOCKED_BOOT_COMPLETED` delivery); `docs/REQUIREMENTS.md` R1 (still says 14 WARNING findings,
+      now stale by one).
+- **Done when:** either accepted into `.github/security-exceptions.json` with a dated rationale (the
+  established pattern), or actually restricted, and `docs/REQUIREMENTS.md` R1's WARNING count
+  updated either way.
+- **Requirement:** R1
 
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
