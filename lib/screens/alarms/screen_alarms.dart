@@ -26,6 +26,7 @@ import 'package:wakeywakey/models/alarms/myalarm.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
 import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/models/scheduling/day_marker.dart';
+import 'package:wakeywakey/utils/permissions.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
 class ScreenAlarms extends StatefulWidget {
@@ -300,8 +301,15 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
               // The explicit user action "reconcile now" - deliberately
               // bypasses FR-17's daily lock (Phase 6, T-64: the old
               // Scheduler used to run here).
-              onPressed: () => runCheckpointSafely(_appState,
-                  trigger: CheckpointTrigger.manualSync),
+              //
+              // Maintainer request (2026-09-20): this is one of the two
+              // moments calendar access is actually requested (the other is
+              // opening the Schedule tab) - a sync is meaningless without it.
+              onPressed: () {
+                unawaited(requestCalendarPermission());
+                runCheckpointSafely(_appState,
+                    trigger: CheckpointTrigger.manualSync);
+              },
               child: Icon(Icons.sync,
                   color: context.watch<AppState>().accentColor),
             ),

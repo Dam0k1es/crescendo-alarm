@@ -30,6 +30,7 @@ import 'package:wakeywakey/models/alarms/ringing_watch.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
 import 'package:wakeywakey/models/scan_code/deactivation_stop.dart';
 import 'package:wakeywakey/models/scan_code/scan_result.dart';
+import 'package:wakeywakey/utils/permissions.dart';
 
 /// Pure comparison at the heart of the "guaranteed wake-up" gate: does the
 /// scanned payload match the stored deactivation code? Extracted out of
@@ -174,6 +175,12 @@ class _QrScannerState extends State<QrScanner> {
     debugPrint("=====initState: Creating new QRScannerState");
     super.initState();
     _appState = Provider.of<AppState>(context, listen: false);
+
+    // Maintainer request (2026-09-20): camera access is requested here,
+    // lazily, rather than upfront on the splash screen - this is the one
+    // screen that shares both flows that ever need it (the initial
+    // code-import screen and the alarm-deactivation gate).
+    unawaited(requestCameraPermission());
 
     if (widget.alarmId case final int ringingId) {
       _ringingWatch = RingingWatch(

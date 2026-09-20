@@ -30,6 +30,7 @@ import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/utils/utils.dart';
 import 'package:wakeywakey/utils/diag/diag_log.dart';
+import 'package:wakeywakey/utils/permissions.dart';
 
 part 'calendar.dart';
 
@@ -102,6 +103,12 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
     super.initState();
     appState = Provider.of<AppState>(context, listen: false);
     _displayDate = appState.visibleDate;
+
+    // Maintainer request (2026-09-20): calendar access is requested here,
+    // lazily, when the user actually opens this tab - not upfront on the
+    // splash screen alongside permissions every alarm needs regardless of
+    // whether calendar-derived scheduling is ever used.
+    unawaited(requestCalendarPermission());
   }
 
   /// Called when the week or day view has paged.

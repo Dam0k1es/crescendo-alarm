@@ -262,6 +262,42 @@ that is the basis a decision can be formulated against.
 
 ## P1 — resolve or consciously accept before a public release
 
+### T-157 · Camera and calendar permissions were requested unconditionally at first launch — FIXED (2026-09-20)
+
+- [x] Request camera access only when the QR scanner actually opens.
+- [x] Request calendar access only when the Schedule tab opens or "Sync Alarms" is pressed.
+- [x] Leave exact-alarm/notification permissions requested upfront (unchanged).
+- **Why:** `PermissionsManager.requestPermissions` (called once from the splash screen) used to
+  request all four permissions - exact-alarm, camera, calendar, notifications - unconditionally at
+  first launch, regardless of whether the user ever scans a code or opens the Schedule tab. A user
+  who never uses the guaranteed-wake-up feature or calendar-derived scheduling was still asked to
+  grant camera and calendar access before doing anything at all - the opposite of "ask for a
+  permission at the point its need becomes obvious", which the maintainer asked for directly.
+- **Fix:** `lib/utils/permissions.dart` gained two top-level, mutable function variables,
+  `requestCameraPermission`/`requestCalendarPermission` (the same injectable-seam shape as
+  `Handler`'s `runCheckpoint`/`sleep`), each guarded the same way `requestPermissions` already was
+  (`Platform.isAndroid || Platform.isIOS`, a no-op under `flutter test`). `requestPermissions`
+  itself no longer calls `checkCameraPermission`/`checkCalendarPermission` - only
+  `checkScheduleExactAlarmPermission`/`checkAwesomeNotificationPermission` remain there, since an
+  alarm clock needs those the moment it can schedule anything, not lazily.
+  - `QrScanner.initState` (`lib/screens/scan_code/qr_scanner.dart`) now calls
+    `requestCameraPermission()` - the one widget shared by both the initial code-import flow
+    (`PageImportQr`) and the alarm-deactivation flow (`Handler.handleAlarm`), so one call site
+    covers both.
+  - `_ScreenScheduleState.initState` (`lib/screens/schedule/screen_schedule.dart`) calls
+    `requestCalendarPermission()` when the Schedule tab is built.
+  - The "Sync Alarms" `FloatingActionButton` (`lib/screens/alarms/screen_alarms.dart`) calls
+    `requestCalendarPermission()` before running its checkpoint - a sync is meaningless without
+    calendar access, so this is the second, explicit moment it's needed.
+- **Tests:** `test/lazy_permissions_test.dart` (new) - overrides each seam with a fake and confirms
+  it fires exactly when the corresponding screen/button is used, and that opening the alarms screen
+  by itself does **not** request calendar access.
+- **Interacts with T-41:** with camera/calendar permissions no longer requested on the splash
+  screen at all, T-41's original framing ("show the privacy policy before or alongside the first
+  permission prompt") needs revisiting against what the splash screen still actually requests
+  (exact-alarm, notifications) - see T-41's own entry.
+- **Requirement:** R7, R11
+
 ### T-156 · Copyright attribution updated to reflect joint authorship — FIXED (2026-09-20)
 
 - [x] Add a second, consenting original developer to every copyright notice in the repository.

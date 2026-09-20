@@ -22,12 +22,51 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+/// Maintainer request (2026-09-20): camera and calendar access should be
+/// requested only when actually needed, not unconditionally at first launch
+/// alongside the exact-alarm/notification permissions every alarm needs
+/// regardless of which features get used. [QrScanner] (both the initial
+/// code-import flow and the alarm-deactivation flow share it) and the
+/// Schedule tab/"Sync Alarms" button call these directly instead of going
+/// through [PermissionsManager.requestPermissions].
+///
+/// Top-level, mutable function variables - the same shape as this project's
+/// other injectable seams (e.g. `Handler`'s `runCheckpoint`/`sleep`) - rather
+/// than a constructor parameter, because production code
+/// (`Handler.handleAlarm`) constructs `QrScanner()` directly with no natural
+/// place to thread one through, and because the Schedule tab's and the
+/// alarms screen's "Sync Alarms" button both need the exact same
+/// calendar-permission request, not two independent copies of it. Real
+/// production code calls these directly; only the "...Default" functions
+/// below are test-only, kept so a test that overrides the mutable variable
+/// can restore it afterwards.
+Future<void> requestCameraPermissionDefault() async {
+  if (Platform.isAndroid || Platform.isIOS) {
+    await PermissionsManager().checkCameraPermission();
+  }
+}
+
+Future<void> Function() requestCameraPermission = requestCameraPermissionDefault;
+
+Future<void> requestCalendarPermissionDefault() async {
+  if (Platform.isAndroid || Platform.isIOS) {
+    await PermissionsManager().checkCalendarPermission();
+  }
+}
+
+Future<void> Function() requestCalendarPermission =
+    requestCalendarPermissionDefault;
+
 class PermissionsManager {
+  /// docs/TODO.md T-41-adjacent (maintainer request, 2026-09-20): camera and
+  /// calendar access moved out of this upfront batch - see
+  /// [requestCameraPermission]/[requestCalendarPermission] above. Exact-alarm
+  /// and notification permissions stay here: an alarm clock needs both from
+  /// the moment it can schedule anything, not lazily once some other screen
+  /// happens to be opened.
   Future<void> requestPermissions(BuildContext context) async {
     if (Platform.isAndroid || Platform.isIOS) {
       await checkScheduleExactAlarmPermission();
-      await checkCameraPermission();
-      await checkCalendarPermission();
       // await checkNotificationPermission();
       await checkAwesomeNotificationPermission();
     }
