@@ -28,17 +28,24 @@ Medium/informational findings don't block a release but must be recorded and rev
   jobs checks the native dependency tree (a CycloneDX SBOM of the `releaseRuntimeClasspath`
   configuration) that the original `--lockfile=pubspec.lock` pass never saw at all - it found and
   fixed one real HIGH (`gson:2.8.8`, forced to the patched `2.8.9`) the same day it was added.
+  **Confirmed live, not just by construction (2026-09-20, `docs/TODO.md` T-06):** a throwaway branch
+  with a deliberately broken `flutter analyze` was dispatched through `ci.yml` directly - every
+  timezone leg failed as expected, and `security-gate`, `e2e-tests` and both Android build jobs all
+  came back **skipped**, never run at all. The `needs:` chain holds transitively, not only at the
+  one job (`build-android-release`) this was originally checked against.
 - **Status: partially met.** All gating tools are currently green against the recorded exceptions.
   The two findings that are *accepted* rather than fixed, and therefore carry a dated rationale in
   `.github/security-exceptions.json`: `mobsfscan`'s one ERROR (`android_task_hijacking2`, a
   StrandHogg-style task-hijacking pattern), and MobSF's one HIGH ("app installable on unpatched
-  Android 7.0", i.e. `minSdk=24`) alongside 14 WARNING-level findings. The rationale for
-  both - the same text as in that file: the `mobsfscan` finding is a
-  known tool limitation - it flags a task-affinity/launch-mode pattern generically, without the
+  Android 7.0", i.e. `minSdk=24`) alongside 15 WARNING-level findings (2026-09-20: one more than
+  before - `DirectBootReceiver`'s exported-and-unprotected status, an expected consequence of
+  `docs/TODO.md` T-158 not yet triaged one way or the other, see `docs/TODO.md` T-160). The
+  rationale for the two accepted findings - the same text as in that file: the `mobsfscan` finding
+  is a known tool limitation - it flags a task-affinity/launch-mode pattern generically, without the
   runtime context to distinguish it from this app's actual configuration. The MobSF HIGH restates
   the project's own deliberate `minSdk=24` choice (see `CLAUDE.md`'s toolchain table) and is
   accepted, not fixed, because lowering `minSdk` further is not currently planned. Update this
-  paragraph if either acceptance is revisited.
+  paragraph if either acceptance is revisited, or once T-160 is triaged.
 
 ## R2 - Reliable calendar-derived alarm scheduling
 
