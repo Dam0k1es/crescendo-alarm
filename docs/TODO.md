@@ -435,9 +435,9 @@ that is the basis a decision can be formulated against.
   R8/R9 are corrected to match reality.
 - **Requirement:** R8, R9
 
-### T-06 · The signed release APK is built and published with no quality gate — PARTIALLY RESOLVED (2026-09-09)
+### T-06 · The signed release APK is built and published with no quality gate — RESOLVED (2026-09-20)
 
-- [ ] Demonstrate, with a real deliberately-failing check, that the release build actually stops.
+- [x] Demonstrate, with a real deliberately-failing check, that the release build actually stops.
 - **Why:** in `ci.yml` the release-build job declared no `needs:`, so it ran regardless of whether
   analyze, tests, SCA, secret scanning or SAST failed; `release.yml` ran no SCA/secret/SAST job at
   all. A red run still produced a downloadable, signed, signature-verified APK that the README
@@ -456,7 +456,16 @@ that is the basis a decision can be formulated against.
   waited for, and only ran after, all four `needs:` had passed - see T-37's verification note).
   MobSF itself (needs the built APK, so it structurally cannot gate the build that produces it) now
   actively revokes the artifact after the fact instead of just marking the run red - see T-11.
-- **Still open:** the "deliberately failing check" demonstration itself.
+- [x] **Demonstrated live (2026-09-20, run 35515989816).** A throwaway branch (`t-06-demo`, never
+  merged, pushed and deleted the same session) got one deliberately invalid Dart file added, then
+  `ci.yml` was dispatched against it directly via `gh workflow run ci.yml --ref t-06-demo` -
+  `workflow_dispatch` rather than a real push, so the demonstration touches no tracked history on
+  `dev`/`master`. Result: all six `Analyze & Test` timezone legs failed, exactly as expected, and -
+  more than the original ask - not just `build-android-release` but `security-gate`, `e2e-tests`,
+  `Build Android (development)` **and** `Build Android (production)` all show as **skipped**, never
+  run at all. The gate holds transitively, not only at the one job this item originally worried
+  about. The branch and the run itself were deleted afterward, so nothing about this demonstration
+  is left in the repository's real history.
 - **Requirement:** R1
 
 ### T-32 · The background rescheduling R2 requires does not exist — RESOLVED (2026-09-10, formally dropped and replaced)
