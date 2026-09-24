@@ -444,6 +444,12 @@ working contact method.
   `ACCESS_NETWORK_STATE` from the manifest entirely. Both fixed in `assets/text/Privacy.md`. The
   `WRITE_CALENDAR` permission remains declared but unused (known since T-17); T-161 records why
   removing it is not a safe same-session fix.
+- **Decided, not left open (2026-09-24, `docs/TODO.md` T-161):** `WRITE_CALENDAR` stays declared,
+  accepted as the necessary cost of `permission_handler`'s only available "read calendar" request
+  shape on Android. That acceptance is backed by `test/no_calendar_write_test.dart`, which forbids
+  every `device_calendar` write method from being called anywhere in `lib/` - not merely a manifest
+  comment asserting the app is read-only, but a structural guard that fails if that ever stops being
+  true.
 
 ## R12 - The project is human-readable and quickly understandable
 

@@ -475,11 +475,22 @@ that is the basis a decision can be formulated against.
   there is no read-only Android constant). Removing the manifest declaration while still calling
   `calendarFullAccess` would leave the runtime request asking for a permission the manifest no
   longer declares - undefined/likely-broken behaviour that needs a real device to verify safely, not
-  a same-session doc-review fix. Left open for whoever next touches `permissions.dart` to pick a
-  real fix (switch to a permission_handler version/API that exposes calendar-read-only on Android,
-  if one exists, or accept `WRITE_CALENDAR` as the necessary cost of the only available "read
-  calendar" request shape and document that explicitly in `docs/licence-position.md`/R11 instead of
-  leaving it looking like an oversight).
+  a same-session doc-review fix.
+- **Decided (maintainer, 2026-09-24): accepted, not fixed.** `WRITE_CALENDAR` stays declared as the
+  necessary cost of `permission_handler`'s only available "read calendar" request shape on Android,
+  per the reasoning above - a real fix would mean switching `permission_handler` versions/APIs or
+  forking the read/write split, neither of which is planned. Accepting a declared-but-unused
+  permission is only defensible for as long as the code genuinely never exercises the write half of
+  what it grants, so that claim is no longer just asserted: `test/no_calendar_write_test.dart` (new)
+  forbids every `device_calendar` write method (`createOrUpdateEvent`, `deleteEvent`,
+  `deleteEventInstance`, `createCalendar`, `deleteCalendar` - the package's full write surface) from
+  being called anywhere in `lib/`, the same "forbid the channel, not the symptom" shape as
+  `test/no_proprietary_dependencies_test.dart`/`test/diag_log_api_test.dart`. Confirmed red against
+  the real codebase before being accepted: temporarily un-commenting the one existing (dead)
+  `createOrUpdateEvent` call in `lib/screens/schedule/calendar.dart:204` made the test fail exactly
+  as intended, then the file was restored unchanged. `docs/licence-position.md`/R11 should cite this
+  test, not just the manifest comment, as what backs the "read-only in practice" claim going
+  forward.
 - **Requirement:** R3, R9, R11
 
 ### T-162 · A re-entrant `Diag.init()` corrupts the diagnostics log mid-session — FIXED (2026-09-24)
