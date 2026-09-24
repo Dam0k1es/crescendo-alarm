@@ -22,12 +22,13 @@ import 'package:wakeywakey/utils/diag/diag_log.dart';
 DateTime _utc(int hour, int minute, {int day = 10}) =>
     DateTime.utc(2026, 3, day, hour, minute);
 
-Meeting _meetingAt(DateTime from) => Meeting(
+Meeting _meetingAt(DateTime from, {String? id}) => Meeting(
       from: from,
       to: from.add(const Duration(hours: 1)),
       isAllDay: false,
       startTimeZone: 'Etc/UTC',
       endTimeZone: 'Etc/UTC',
+      ids: id == null ? const [] : [id],
     );
 
 Future<AppState> _freshAppState() async {
@@ -666,6 +667,41 @@ void main() {
           isEmpty,
           reason: 'an all-day event has no meaningful minute-of-day and '
               'never sets the hard floor - it must not be logged as one');
+    });
+
+    test(
+        'an ignored event produces no dayEventTime record, even though a '
+        "sibling event on the same day does (independent audit's own T-163 "
+        'gap: this is the same non-all-day filter the "an all-day event '
+        'produces no dayEventTime record" case above already covers, but '
+        'for the ignored-event path, which is filtered upstream once - see '
+        "replan.dart's own comment right above the Diag.dayEventTime call)",
+        () async {
+      final appState = await _freshAppState();
+      final ringDay = _utc(0, 0, day: 10);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
+      final ignoredEvent = _meetingAt(_utc(9, 0, day: 12), id: 'evt-ignored');
+      appState.setEventIgnored(ignoredEvent, true);
+
+      await replan(
+        appState,
+        now: () => ringDay,
+        deviceUtcOffset: Duration.zero,
+        fetchEvents: (start, end) async => [
+          ignoredEvent,
+          _meetingAt(_utc(14, 30, day: 12), id: 'evt-kept'),
+        ],
+      );
+
+      final events =
+          Diag.records.where((r) => r.event == DiagEvent.dayEventTime).toList();
+      expect(events, hasLength(1),
+          reason: 'the ignored event must not be logged - only its '
+              'non-ignored sibling');
+      expect(
+          events.single.fields[DiagField.eventStartMinuteOfDay], 14 * 60 + 30,
+          reason: 'the one record present must be the kept event, not the '
+              'ignored one');
     });
 
     test('nothing is logged when the switch is off (default)', () async {

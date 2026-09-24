@@ -778,6 +778,49 @@ that is the basis a decision can be formulated against.
   already needed for the same reason.
 - **Requirement:** none directly - a naming/consistency request, not a defect.
 
+### T-168 · Four test-coverage gaps found by a three-way independent review — CLOSED (2026-09-24)
+
+- [x] Maintainer request: before promoting to `master`, independently re-check (a) every test
+  touched since the last `master` commit against the requirements it claims to satisfy, (b) every
+  doc touched in that range against the actual code, and (c) a fresh, context-free read of the
+  repository as an outside visitor would experience it. Run as three parallel, genuinely
+  independent review agents (none of them the agent that wrote the code under review), covering
+  commit range `bb6f0817..14cff5d` (22 commits).
+- **Doc-accuracy findings, fixed as documentation-only changes** (`bcd18d4`): `CLAUDE.md`'s test
+  count had gone stale again (two commits in the same range each added a test file without
+  updating it - the exact failure mode this section exists to avoid); `docs/security-assessment-
+  2026-09.md`'s Confidentiality section claimed the report needed to stay confidential "until
+  public release", which was already false when written (the repository has been public and v1.0.0
+  released since 2026-09-20, four days earlier) - corrected in place, not silently rewritten, since
+  the original claim had already shipped to a public branch; and Philipp's stated mandate ("one
+  finding, not a whole-project sweep") was reconciled with how the persona was actually used to
+  produce that same assessment - a maintainer-commissioned exception, not an out-of-mandate use.
+- **Test-coverage findings, all four closed test-first** (red confirmed via a deliberately
+  injected regression, then reverted, for each - not just written and assumed to matter):
+  1. `scripts/check_proprietary_native_deps.py` (T-144) was the one verdict-producing script in
+     the project without a self-test of its own kind, unlike `.github/scripts/alarm_detection.sh`.
+     Added `--self-test` (synthetic BOM components covering every `FORBIDDEN` entry, plus the
+     precision cases proving this is a (group, name-prefix) match and not a whole-group ban);
+     confirmed it catches a broken prefix check (`startswith` → `endswith`) that the previous,
+     self-test-less script would have shipped silently. Wired into `ci.yml`'s UTC leg alongside
+     the alarm-survival self-test - no SBOM/Android build needed, so it belongs in the fast lane.
+  2. T-163's diagnostics-log group never tested that an ignored event (T-149) stays excluded from
+     `Diag.dayEventTime` - the code already filters it correctly (once, upstream, before
+     `eventsForDay`/`hardFloor` ever see it), but nothing proved that. New case in
+     `test/replan_test.dart` confirmed red against the filter removed.
+  3. T-56's orphaned-tone fallback (`test/screen_alarms_orphaned_tone_test.dart`) only ever
+     exercised a pre-T-56 dead custom-tone path, never the case of a *bundled* tone's asset path
+     being removed from the list entirely (low real-world risk today - T-167's rename only touched
+     display strings, not paths - but the gap was real). New case added, confirmed red with the
+     fallback disabled.
+  4. T-160's accepted-risk rationale for `DirectBootReceiver` ("reads no Intent data beyond the
+     action string") had no regression guard, unlike its sibling fix T-165. New source-reading
+     test `test/direct_boot_receiver_no_intent_data_test.dart` (same shape as
+     `test/alarm_receiver_not_exported_test.dart`) forbids every `Intent.get*Extra`/`.data`/
+     `.extras` call in `onReceive`'s body while confirming `.action` is still read; confirmed red
+     against an injected `getStringExtra` call.
+- **Requirement:** none directly - a test/documentation-quality pass, not a defect fix.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`

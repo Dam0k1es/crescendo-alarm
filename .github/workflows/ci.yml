@@ -82,6 +82,15 @@ jobs:
       - name: Alarm-survival detection self-test
         if: matrix.tz == 'UTC'
         run: bash .github/scripts/check_alarm_survival.sh --self-test
+      # Same reasoning as the alarm-survival self-test above: this script
+      # produces a verdict (forbidden native dependency found / not found),
+      # so its detection logic must prove itself before being trusted - an
+      # independent audit found it was the one verdict-producing script in
+      # the project without this (docs/TODO.md T-144). No SBOM/Android build
+      # needed, so it belongs in the fast lane.
+      - name: Proprietary native dependency detection self-test
+        if: matrix.tz == 'UTC'
+        run: python3 scripts/check_proprietary_native_deps.py --self-test
       - name: Analyze
         # Frame-independent, hence only in the UTC leg - running it six
         # times would be waste with no additional signal.

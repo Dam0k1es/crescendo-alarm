@@ -63,4 +63,53 @@ void main() {
         reason: 'saving with the orphaned value never re-selected should '
             'persist the fallback, not the dead path');
   });
+
+  testWidgets(
+      'editing an alarm whose stored tone used to be a bundled tone, now '
+      'removed from the list, does not crash the dropdown either',
+      (tester) async {
+    // Independent-review finding: the case above only exercises an orphaned
+    // `custom_tones/...`-shaped path. `validTonePaths` in screen_alarms.dart
+    // is built fresh from the CURRENT `bundledTones` list every time this
+    // dialog opens, so a bundled tone dropped from that list in some future
+    // change would orphan any alarm still pointing at its old asset path -
+    // the exact same fallback code path, but never previously exercised with
+    // an `assets/sounds/...`-shaped value.
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final appState = AppState();
+    await appState.initialized;
+
+    final alarm = ManualAlarm(
+      time: const TimeOfDay(hour: 7, minute: 0),
+      tone: 'assets/sounds/a_tone_retired_in_a_later_release.mp3',
+      id: 2,
+    );
+    appState.manualAlarms.add(alarm);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: const MaterialApp(home: ScreenAlarms()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Manual'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(ListTile));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull,
+        reason: 'the dropdown must fall back to a valid tone for a '
+            'retired bundled tone path too, not only a retired custom one');
+    expect(find.text('Edit Alarm'), findsOneWidget);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final saved = appState.manualAlarms.single;
+    expect(saved.tone, 'assets/sounds/annoying_alarm.mp3',
+        reason: 'the fallback must persist here too, not the retired path');
+  });
 }

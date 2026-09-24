@@ -13,6 +13,18 @@ second check against the same file rather than resolving the dependency
 tree a second time.
 
 Usage: python3 scripts/check_proprietary_native_deps.py <bom.json>
+       python3 scripts/check_proprietary_native_deps.py --self-test
+
+`--self-test` needs no SBOM file and no network access - it checks `_offense()`
+against synthetic components covering every `FORBIDDEN` entry, plus the
+precision cases that make this a (group, name-prefix) match rather than a
+whole-group ban. Added because an independent audit found this was the one
+verdict-producing script in the project without a self-test of its own kind
+(docs/TODO.md T-144) - unlike `.github/scripts/alarm_detection.sh`'s
+`self_test()`, which this mirrors: a future typo in `FORBIDDEN` or a broken
+`_offense()` prefix check would otherwise stay green until an actual
+forbidden artifact reappeared, which is exactly the case this guard exists
+to catch pre-merge.
 """
 import json
 import sys
@@ -78,5 +90,69 @@ def main(bom_path: str) -> int:
     return 0
 
 
+def self_test() -> int:
+    failed = False
+
+    def check(label: str, group: str, name: str, expect_offense: bool) -> None:
+        nonlocal failed
+        got = _offense(group, name)
+        if expect_offense and got is None:
+            print(f"SELF-TEST FAIL: {label}: expected an offense, got none "
+                  f"for {group}:{name}")
+            failed = True
+        elif not expect_offense and got is not None:
+            print(f"SELF-TEST FAIL: {label}: expected no offense for "
+                  f"{group}:{name}, got {got!r}")
+            failed = True
+
+    # Each FORBIDDEN entry must actually fire - not just exist in the list.
+    check("ML Kit (any name)", "com.google.mlkit", "vision-common", True)
+    check("ML Kit (blank name)", "com.google.mlkit", "", True)
+    check("unbundled ML Kit", "com.google.android.gms",
+          "play-services-mlkit-barcode-scanning", True)
+    check("Syncfusion (any name)", "com.syncfusion", "flutter_syncfusion",
+          True)
+
+    # Precision cases: this is (group, name-prefix), not a whole-group ban -
+    # these must NOT fire, or the check would be too broad to ship.
+    check("gms group, unrelated artifact", "com.google.android.gms",
+          "play-services-maps", False)
+    check("gms group, near-miss prefix", "com.google.android.gms",
+          "play-services-ml", False)
+    check("unrelated group entirely", "com.example.totally.fine", "thing",
+          False)
+    check("empty bom", "", "", False)
+
+    # main() itself: a clean synthetic BOM must exit 0, one containing a
+    # real offender must exit 1 - proves the wiring from component dicts
+    # through to the process exit code, not just `_offense()` in isolation.
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump({"components": [{"group": "com.example", "name": "fine"}]}, f)
+        clean_path = f.name
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump({"components": [
+            {"group": "com.example", "name": "fine"},
+            {"group": "com.syncfusion", "name": "flutter_syncfusion"},
+        ]}, f)
+        offending_path = f.name
+
+    if main(clean_path) != 0:
+        print("SELF-TEST FAIL: main() flagged a clean synthetic BOM")
+        failed = True
+    if main(offending_path) != 1:
+        print("SELF-TEST FAIL: main() did not flag a BOM containing "
+              "com.syncfusion")
+        failed = True
+
+    if failed:
+        print("SELF-TEST: FAILED")
+        return 1
+    print("SELF-TEST: all cases passed.")
+    return 0
+
+
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--self-test":
+        sys.exit(self_test())
     sys.exit(main(sys.argv[1]))
