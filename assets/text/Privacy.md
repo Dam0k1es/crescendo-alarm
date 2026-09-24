@@ -72,6 +72,6 @@ any updates.
 ## Contact
 
 If you have any questions about this Privacy Policy, please contact us at
-dam0kes@member.fsf.org.\
+dam0k1es@member.fsf.org.\
 \
 Last updated: 2026-09-24
