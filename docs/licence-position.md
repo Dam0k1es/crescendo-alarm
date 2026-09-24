@@ -69,10 +69,10 @@ obligation directly, without the alternative's bookkeeping - a written offer und
 the maintainer to fulfil requests for three years and would need a contact address, which sits
 badly with this project's policy of keeping real personal details out of tracked files.
 
-Until then, nothing is conveyed to third parties: builds go to the maintainer's own test devices
-only, which is not distribution. The condition to be met **before the first release to anyone
-else** is therefore simply that the repository is public, and the release then points at the tag it
-was built from.
+**Met (2026-09-20, `docs/TODO.md` T-34):** the repository is public, and `v1.0.0` was published as a
+GitHub Release the same day - a signed, `apksigner`-verified production APK (the real production
+key, not the debug key), built from the tagged commit. Before that, nothing had been conveyed to
+third parties: builds went only to the maintainer's own test devices, which is not distribution.
 
 Three further pieces of the same obligation, tracked separately because they are real work rather
 than decisions: the app still has no in-app licence/notice surface for its dependencies

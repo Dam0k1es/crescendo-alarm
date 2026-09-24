@@ -992,21 +992,24 @@ that is the basis a decision can be formulated against.
   not just Syncfusion.
 - **Requirement:** R8, R9
 
-### T-34 · GPLv3 source-offer obligations are unaddressed for the distributed APK — DECIDED (2026-09-17), one condition open
+### T-34 · GPLv3 source-offer obligations are unaddressed for the distributed APK — RESOLVED (2026-09-20)
 
 - [x] Decided: **the repository becomes public at the first public release**, rather than attaching
       a written §6(b) offer to each release. An offer would bind the maintainer to fulfil requests
       for three years and would need a contact address, which sits badly with this project's policy
       of keeping real personal details out of tracked files. Written down in
       `docs/licence-position.md`.
-- [ ] Open, and it is a condition rather than a task: the repository has to actually be public
-      **before the APK reaches anyone else**. Until then nothing is conveyed - builds go to the
-      maintainer's own test devices, which is not distribution.
+- [x] **Met (2026-09-20):** the repository was made public, confirmed via
+      `gh repo view Dam0k1es/wakeywakey --json visibility` -> `"PUBLIC"`. `v1.0.0` was published as a
+      GitHub Release the same day (the signed, verified production APK from CI run 35513763937,
+      `apksigner verify` confirming the real production key, not the debug key) - the first actual
+      conveyance of a GPLv3 binary, and the Corresponding Source obligation was already discharged
+      by the time it happened.
 - **Why:** the release workflow attaches a signed APK to a GitHub Release while the repository is
   private, and nothing publishes or offers the corresponding source. Conveying a GPLv3 binary
   carries that obligation; right now there is no mechanism and no written position.
 - **Done when:** either the repository is public at release time, or the release carries a written
-  source offer that someone could actually act on.
+  source offer that someone could actually act on. **Met.**
 - **Requirement:** R9
 
 ### T-35 · The LICENSE header breaks licence detection and strips the copyright from the build — PARTIALLY RESOLVED (2026-09-08)
@@ -1291,12 +1294,23 @@ that is the basis a decision can be formulated against.
 
 ## P2 — real work, does not block a release
 
-### T-18 · Add a snooze button with configurable limits
+### T-18 · Add a snooze button with configurable limits — CLOSED, superseded by T-138 (2026-09-24)
 
-- [ ] Implement snooze, plus Sleep-Habits settings for maximum snooze count and interval.
+- [x] Implement snooze, plus Sleep-Habits settings for maximum snooze count and interval.
 - **Why:** requested feature; the ringing UI currently offers only stop.
 - **Done when:** snoozing re-arms the alarm after the configured interval, stops after the
-  configured maximum, and both settings persist.
+  configured maximum, and both settings persist. **All three met, via a different mechanism than
+  originally asked for:** T-138 (FR-20, written and implemented separately, before this item was
+  revisited) gives snooze a configurable interval (`snoozeTime`, in Sleep Habits) and re-arms the
+  alarm after it (`SnoozeButton`/`snoozeRingingAlarm`) - both settings persist. What it does **not**
+  do is a plain snooze *count* limit; instead it bounds snoozing by a time *budget*
+  (`durationToWakeUp`, "the time to become awake"): `SnoozeButton` only renders while
+  `canSnooze()` says budget remains, and disappears once it's spent - functionally the same
+  guarantee ("stops after a configured maximum") this item asked for, deliberately implemented as a
+  budget rather than a raw count because a count alone can't guarantee the user is out the door on
+  time regardless of the interval chosen (see T-138 and T-19, which explains why
+  `durationToWakeUp` was given this specific role).
+- **Requirement:** R2, R3, R4
 
 ### T-19 · Merge "duration to wake up" and "duration to get ready" into one field — CLOSED, no longer applicable (2026-09-20)
 

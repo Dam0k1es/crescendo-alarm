@@ -357,14 +357,14 @@ licensing obligations must be met.
 - **Checked by:** not automated; manually reviewed and written down in
   `docs/licence-position.md`, with the dependency half guarded by
   `test/no_proprietary_dependencies_test.dart`.
-- **Status: largely met, one condition outstanding.** The concrete conflict is resolved: nothing in
+- **Status: met (2026-09-20).** The concrete conflict is resolved: nothing in
   the shipped set carries a licence that conflicts with GPLv3 any more (see R8). The project's rule
   is recorded there too - a conflicting dependency is replaced, not covered by a GPLv3 §7 linking
   exception, although the copyright holders could grant one.
-  **Outstanding:** GPLv3's Corresponding Source obligation is discharged by making the repository
-  public, and that has to actually happen **before the first release to anyone else**
-  (`docs/TODO.md` T-34). Until then nothing is conveyed - builds go to the maintainer's own test
-  devices, which is not distribution. **Fixed (2026-09-18):** the app previously had no in-app
+  **Fixed (2026-09-20, `docs/TODO.md` T-34):** GPLv3's Corresponding Source obligation is discharged
+  by making the repository public, and that has now actually happened - confirmed public, and
+  `v1.0.0` published as a GitHub Release with a signed, `apksigner`-verified production APK the
+  same day. **Fixed (2026-09-18):** the app previously had no in-app
   licence/notice surface at all - the About page now links both the project's own GPLv3 text and
   Flutter's collected third-party notices (`docs/TODO.md` T-36). **Fixed (2026-09-19):** the
   Apache-2.0/BSD-3 notices for `flutter_zxing`'s compiled-in native code (zxing-cpp/librscpp, zint)
@@ -453,7 +453,7 @@ match any particular format or symbology.
 
 ---
 
-**Summary of open gaps (R1 partial, R3, R4 partial, R7 partial, R9 one condition):** R2 is **no longer** among them - the
+**Summary of open gaps (R1 partial, R3, R4 partial, R7 partial):** R2 is **no longer** among them - the
 scheduling-v2 rebuild (2026-09) replaced the old engine wholesale and is covered by unit tests; see
 R2 above for the one remaining caveat, which is really R3. R3 and part of R4 are no longer explained
 by "no build has ever run on a device or emulator" - that build now happens on every release and has
@@ -468,7 +468,8 @@ findings are *accepted* rather than fixed, each with a dated rationale in
 the gate can fail the run, on the branch path and the tag path alike. R8 and R9 were a separate licensing conflict (Syncfusion and Google/ML Kit
 are not open-source, and GPLv3 obligations for the distributed APK were unaddressed). That is
 resolved as of 2026-09-17: both dependencies were replaced rather than covered by a licence
-exception, and `docs/licence-position.md` records the decision. One condition remains rather than a
-task - the repository has to be public before the APK reaches anyone else. R10 remains a separate, still-open documentation gap (asset provenance). See
+exception, and `docs/licence-position.md` records the decision. R9's one remaining condition -
+the repository has to be public before the APK reaches anyone else - is met as of 2026-09-20
+(`docs/TODO.md` T-34): the repository is public and `v1.0.0` has been released. R10 remains a separate, still-open documentation gap (asset provenance). See
 `docs/TODO.md` for the full, prioritised, evidence-backed list every one of these gaps is now
 tracked under.
