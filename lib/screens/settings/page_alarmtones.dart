@@ -23,6 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:wakeywakey/app_state.dart';
+import 'package:wakeywakey/models/alarms/bundled_tones.dart';
 import 'package:wakeywakey/models/alarms/custom_tone.dart';
 import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/utils/utils.dart';
@@ -179,22 +180,13 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              _buildToggle(context, 'Annoying Alarm',
-                  'assets/sounds/annoying_alarm.mp3'),
-              const SizedBox(height: 16.0),
-              _buildToggle(context, 'LolliPop', 'assets/sounds/lollipop.mp3'),
-              const SizedBox(height: 16.0),
-              _buildToggle(context, 'Old Telephone',
-                  'assets/sounds/old_telephone_ring.mp3'),
-              const SizedBox(height: 16.0),
-              _buildToggle(context, 'Wake UP', 'assets/sounds/wake_up.mp3'),
-              const SizedBox(height: 16.0),
-              _buildToggle(
-                  context, 'WakeyWakey', 'assets/sounds/wakeywakey.mp3'),
-              const SizedBox(height: 16.0),
-              _buildToggle(
-                  context, 'WakeyWakey 2', 'assets/sounds/wakeywakey2.mp3'),
-              const SizedBox(height: 16.0),
+              // docs/TODO.md T-167: shared with screen_alarms.dart's add/edit
+              // dialog dropdown via bundled_tones.dart, so the two screens'
+              // tone names/paths can't quietly drift apart.
+              for (final (name, path) in bundledTones) ...[
+                _buildToggle(context, name, path),
+                const SizedBox(height: 16.0),
+              ],
               _buildCustomToneSection(context),
               const SizedBox(height: 32.0),
               _buildVolumeSlider(context),

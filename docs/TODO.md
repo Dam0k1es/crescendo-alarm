@@ -696,12 +696,14 @@ that is the basis a decision can be formulated against.
   `tools:replace`, so a future manifest edit can't silently drop it. Confirmed against `git show` on
   the pre-fix commit that this test would have failed against the original manifest (the component
   name did not appear in it at all).
-- **Not yet done:** an on-device ring-to-dismiss cycle after this change, per
-  `docs/device-trial-checklist.md`'s own practice for native-layer changes - this fix was produced
-  and verified without a connected device (build/manifest-merger evidence only). Given the app never
-  exposes a Stop/Snooze notification action to begin with (see above), there is nothing native-UI-side
-  this change could plausibly break, but a real ring is still the standard this project holds
-  every other native-layer change to.
+- **Partly confirmed on a real device (2026-09-24, maintainer):** Snooze was tested after this
+  change and works. Stop specifically was not separately reported - given the app never exposes a
+  Stop/Snooze notification action to begin with (see above), there was nothing native-UI-side this
+  change could plausibly break for either, and Snooze exercises the same
+  `AlarmService`/`AlarmReceiver` code path Stop does, so this is meaningful, if not
+  exhaustive, real-device evidence. `docs/device-trial-checklist.md`'s own practice for
+  native-layer changes calls for a full ring-to-dismiss cycle; treat Stop itself as still
+  informally rather than formally confirmed.
 - **Full writeup, including the corrected exploitation-path analysis, PoC-level evidence, and every
   other finding from the same assessment:** `docs/security-assessment-2026-09.md`.
 - **Requirement:** none directly (no formal requirement currently covers third-party native-plugin
@@ -739,6 +741,42 @@ that is the basis a decision can be formulated against.
   "the minimum hint stays with Max. daily shift" test (which asserted the *old*, now-removed inline
   widget) was removed rather than left to bit-rot into a permanent failure.
 - **Requirement:** none directly - a UI-consolidation request, not a defect.
+
+### T-167 · Bundled alarm-tone names didn't all describe the sound — FIXED (2026-09-24)
+
+- [x] Maintainer feedback: "die bisherigen Töne sind meiner Meinung nach nicht alle sinnvoll
+  benannt. vor allem wakey wakey und wakey wakey 2 passen gar nicht" - two of the six bundled tones
+  were named after the app itself, not the sound, and one other ("LolliPop") didn't describe its
+  sound either.
+- **Grounded in the actual source, not guessed:** `assets/sounds/CREDITS.md` already records each
+  file's real Mixkit title (kept from the T-29 audio swap, when the file names but not their
+  content changed). The new display names are drawn from those:
+
+  | File | Mixkit title | Old name | New name |
+  |---|---|---|---|
+  | `annoying_alarm.mp3` | Classic alarm | Annoying Alarm | *(unchanged - already sensible)* |
+  | `lollipop.mp3` | Game notification wave alarm | LolliPop | Playful Chime |
+  | `old_telephone_ring.mp3` | Vintage warning alarm | Old Telephone | *(unchanged)* |
+  | `wake_up.mp3` | Alarm clock beep | Wake UP | Wake Up *(capitalisation only)* |
+  | `wakeywakey.mp3` | Rooster crowing in the morning | WakeyWakey | Rooster Crow |
+  | `wakeywakey2.mp3` | Critical alarm | WakeyWakey 2 | Critical Alarm |
+
+  File names/paths are unchanged - only the six display strings.
+- **Found and fixed a real duplication while touching this:** the six name/path pairs were
+  hardcoded independently in two places - `screen_alarms.dart`'s `_bundledTones` (the add/edit
+  dialog's dropdown, extracted for exactly this drift risk when T-56 shipped) and
+  `page_alarmtones.dart`'s six separate `_buildToggle(...)` calls, which T-56 never updated to
+  match. Renaming in only one would have left the two screens disagreeing. Consolidated into a new
+  `lib/models/alarms/bundled_tones.dart` (public `bundledTones`), imported by both - the same "a
+  second copy is a second chance to drift apart" reasoning this project already applies to
+  `alarm_detection.sh`/`ui_tap.sh` and the no-proprietary-dependency/diagnostics-log guards.
+- **Tests:** `test/bundled_tones_test.dart` (new) - a plain check that the list itself no longer
+  names a tone after the app and has no duplicate names, plus a widget test per screen (Settings >
+  Alarm Tones, and the manual-alarm dialog's tone dropdown) confirming every current name actually
+  renders and neither old "WakeyWakey" name does. The dropdown case needed `tester.ensureVisible()`
+  before opening it - the add-alarm dialog scrolls, the same fix this project's other dialog tests
+  already needed for the same reason.
+- **Requirement:** none directly - a naming/consistency request, not a defect.
 
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
@@ -3101,6 +3139,11 @@ that is the basis a decision can be formulated against.
     `defaultCustomToneName(pickedPath)`, before the import actually happens.
   - `screen_alarms.dart`'s manual-alarm tone dropdown now offers every entry in
     `AppState.customTones`, not a single conditional item.
+- **Follow-up (2026-09-24, T-167):** the six *bundled* tones' names/paths were still hardcoded
+  independently in `page_alarmtones.dart`, never updated to share `screen_alarms.dart`'s own
+  `_bundledTones` list this feature had already extracted - consolidated into one shared
+  `lib/models/alarms/bundled_tones.dart`, and two of the six names (which described neither sound
+  nor use) were renamed at the same time.
 - **Test-writing note, not a product bug:** the new widget test
   (`test/page_alarmtones_custom_tones_test.dart`) hung indefinitely the first time it combined real
   `dart:io` calls (creating a temp directory, writing a file) with `testWidgets` - real async file

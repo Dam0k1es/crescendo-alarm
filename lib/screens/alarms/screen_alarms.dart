@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:wakeywakey/app_state.dart';
+import 'package:wakeywakey/models/alarms/bundled_tones.dart';
 import 'package:wakeywakey/models/alarms/manual_alarm.dart';
 import 'package:wakeywakey/models/alarms/myalarm.dart';
 import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
@@ -28,19 +29,6 @@ import 'package:wakeywakey/models/scheduling/checkpoint.dart';
 import 'package:wakeywakey/models/scheduling/day_marker.dart';
 import 'package:wakeywakey/utils/permissions.dart';
 import 'package:wakeywakey/utils/utils.dart';
-
-/// The six bundled tones, always offered regardless of what's been imported
-/// - kept as one list so the add/edit dialog's dropdown items and its
-/// orphaned-value fallback (see `_showAlarmOverlay`'s doc comment on
-/// `selectedTone`) can't quietly drift apart.
-const List<(String, String)> _bundledTones = [
-  ('Annoying Alarm', 'assets/sounds/annoying_alarm.mp3'),
-  ('LolliPop', 'assets/sounds/lollipop.mp3'),
-  ('Old Telephone', 'assets/sounds/old_telephone_ring.mp3'),
-  ('Wake UP', 'assets/sounds/wake_up.mp3'),
-  ('WakeyWakey', 'assets/sounds/wakeywakey.mp3'),
-  ('WakeyWakey 2', 'assets/sounds/wakeywakey2.mp3'),
-];
 
 class ScreenAlarms extends StatefulWidget {
   const ScreenAlarms({super.key});
@@ -374,11 +362,11 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     // first bundled tone, the same default AppState itself starts with.
     String selectedTone = alarm?.tone ?? _appState.selectedTone;
     final validTonePaths = {
-      for (final (_, path) in _bundledTones) path,
+      for (final (_, path) in bundledTones) path,
       for (final tone in _appState.customTones) tone.path,
     };
     if (!validTonePaths.contains(selectedTone)) {
-      selectedTone = _bundledTones.first.$2;
+      selectedTone = bundledTones.first.$2;
     }
     DateTime nowDT = DateTime.now().add(const Duration(minutes: 1));
     TimeOfDay nowTOD = TimeOfDay(hour: nowDT.hour, minute: nowDT.minute);
@@ -532,7 +520,7 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                               // imported at least one (Settings > Alarm
                               // Tones).
                               items: [
-                                for (final (name, path) in _bundledTones)
+                                for (final (name, path) in bundledTones)
                                   _buildDropdownItem(context, name, path),
                                 for (final tone in _appState.customTones)
                                   _buildDropdownItem(
