@@ -249,6 +249,15 @@ jobs:
           ./android/gradlew -p android :app:cyclonedxBom
           osv-scanner --lockfile=build/app/reports/cyclonedx/bom.json
 
+      - name: Check for forbidden native dependencies (T-144)
+        # test/no_proprietary_dependencies_test.dart can only see
+        # pubspec.yaml/pubspec.lock and lib/ imports - a proprietary AAR
+        # arriving through a plugin's own build.gradle (exactly how Google's
+        # ML Kit arrived via mobile_scanner before T-33) never appears in
+        # either. This reuses the SBOM generated above instead of resolving
+        # the dependency tree a second time.
+        run: python3 scripts/check_proprietary_native_deps.py build/app/reports/cyclonedx/bom.json
+
       - name: Clean up signing key
         if: always()
         run: rm -rf android/app/keystore android/key.properties

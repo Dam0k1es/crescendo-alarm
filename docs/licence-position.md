@@ -32,9 +32,14 @@ Two dependencies were replaced under this rule:
 | `syncfusion_flutter_calendar` (+ `_core`, `_datepicker`, `syncfusion_localizations`, transitively) | Syncfusion Essential Studio licence: *"Under no circumstances can you use this product without (1) either a Community License or a commercial license."* Not an open-source licence, and not compatible with conveying it inside a GPLv3 APK. | `calendar_view` (MIT) |
 | `mobile_scanner` | The package itself is BSD-3, but its Android build links Google's ML Kit barcode scanning - `com.google.mlkit:barcode-scanning` bundled into the APK by default, `play-services-mlkit-barcode-scanning` with the `useUnbundled` flag. Both are proprietary Google binaries, and this one sat directly under the app's headline feature, so no calendar swap could have resolved it. | `flutter_zxing` (MIT), wrapping `zxing-cpp` (Apache-2.0) |
 
-`test/no_proprietary_dependencies_test.dart` enforces this against `pubspec.yaml` and every import
-in `lib/`, so a convenient widget library cannot re-create the conflict quietly some months from
-now. Adding a name to that test's list is a licence decision and the list says why for each entry.
+`test/no_proprietary_dependencies_test.dart` enforces this against `pubspec.yaml`, `pubspec.lock`
+(since 2026-09-24, `docs/TODO.md` T-144 - a transitive return with no direct `pubspec.yaml` line
+used to be invisible) and every import in `lib/`, so a convenient widget library cannot re-create
+the conflict quietly some months from now. `scripts/check_proprietary_native_deps.py` (same item)
+covers the one channel that guard structurally cannot see - a proprietary Android artifact arriving
+through a plugin's own `build.gradle` rather than anything in the Dart dependency graph, exactly how
+`mobile_scanner` brought in ML Kit. Adding a name to either list is a licence decision and each
+entry says why.
 
 ## The rest of the shipped set
 

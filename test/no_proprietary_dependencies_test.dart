@@ -37,6 +37,21 @@ const _forbidden = <String, String>{
 
 String _pubspec() => File('pubspec.yaml').readAsStringSync();
 
+/// docs/TODO.md T-144: pubspec.yaml alone can't see a forbidden package that
+/// comes back transitively - it never gets its own top-level `dependencies:`
+/// line, only a `dependency: transitive` entry in the lockfile. This reads
+/// `pubspec.lock`'s actually-resolved tree instead: every package, direct or
+/// not, is a top-level key at 2-space indent under `packages:`
+/// (`  some_package:`).
+Set<String> _resolvedPackages() {
+  final names = <String>{};
+  for (final line in File('pubspec.lock').readAsLinesSync()) {
+    final match = RegExp(r'^  ([a-z0-9_]+):$').firstMatch(line);
+    if (match != null) names.add(match.group(1)!);
+  }
+  return names;
+}
+
 /// The dependency names actually declared, ignoring comments - a package
 /// mentioned in an explanatory comment must not fail this test, and the
 /// explanations above are exactly such mentions.
@@ -86,6 +101,26 @@ void main() {
       expect(offenders, isEmpty, reason: offenders.join('\n'));
     });
 
+    // docs/TODO.md T-144: pubspec.yaml only lists direct dependencies, so a
+    // forbidden package returning transitively (pulled in by some other
+    // package, with no dependency_overrides line either) was invisible to
+    // the first test above. pubspec.lock is what actually got resolved.
+    test('no forbidden name in the resolved dependency tree (pubspec.lock)',
+        () {
+      final resolved = _resolvedPackages();
+      final offenders = <String>[];
+      for (final entry in _forbidden.entries) {
+        if (resolved.contains(entry.key)) {
+          offenders.add('${entry.key}: ${entry.value}');
+        }
+      }
+
+      expect(offenders, isEmpty,
+          reason: 'These dependencies resolved transitively even though '
+              'pubspec.yaml itself does not declare them - still cannot be '
+              'distributed inside a GPLv3 APK:\n${offenders.join('\n\n')}');
+    });
+
     test('the guard would actually catch something', () {
       // Counter-test: without it, the two tests above would also pass if the
       // matching had quietly stopped working - which is how a source-reading
@@ -93,6 +128,9 @@ void main() {
       expect(_declaredDependencies(), contains('flutter'),
           reason: 'the dependency parser reads nothing at all');
       expect(_declaredDependencies(), contains('alarm'));
+      expect(_resolvedPackages(), contains('flutter'),
+          reason: 'the lockfile parser reads nothing at all');
+      expect(_resolvedPackages(), contains('alarm'));
     });
   });
 }

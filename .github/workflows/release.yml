@@ -105,6 +105,11 @@ jobs:
           ./android/gradlew -p android :app:cyclonedxBom
           osv-scanner --lockfile=build/app/reports/cyclonedx/bom.json
 
+      - name: Check for forbidden native dependencies (T-144)
+        # docs/TODO.md T-144: see ci.yml's build-android-release job for the
+        # full rationale - reuses the SBOM generated above.
+        run: python3 scripts/check_proprietary_native_deps.py build/app/reports/cyclonedx/bom.json
+
       - name: Clean up signing key
         if: always()
         run: rm -rf android/app/keystore android/key.properties

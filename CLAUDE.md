@@ -188,7 +188,12 @@ Four workflows under `.github/workflows/`:
   scoped to that one configuration so debug/androidTest-only dependencies don't produce noise), which
   this reusable workflow has no Android build to provide. That pass exists because the
   `pubspec.lock`-only scan can't see the native Android dependency tree at all (`docs/TODO.md`
-  T-148) - AndroidX, media3, the camera plugin's own transitive deps.
+  T-148) - AndroidX, media3, the camera plugin's own transitive deps. The same SBOM feeds a second
+  check right after it, `scripts/check_proprietary_native_deps.py` (`docs/TODO.md` T-144): a
+  proprietary Android artifact (Google ML Kit, Syncfusion) arriving through a plugin's own
+  `build.gradle` rather than anything in the Dart dependency graph - the exact channel
+  `test/no_proprietary_dependencies_test.dart` cannot see, and exactly how `mobile_scanner` brought
+  in ML Kit before T-33 removed it.
 - **`release.yml`** is triggered by a `v*.*.*` tag or `workflow_dispatch` and gates its signed
   build on **both** `e2e-tests` and `security-gate`.
 - **`ci.yml`'s `mobsf-full-scan` job** (`needs: build-android-release`) runs a full MobSF Docker

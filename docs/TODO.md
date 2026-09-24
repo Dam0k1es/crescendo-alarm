@@ -1570,16 +1570,38 @@ that is the basis a decision can be formulated against.
       now twice-tuned values - **met**, see the confirmation above.
 - **Requirement:** R4, R13
 
-### T-144 · The proprietary-dependency guard cannot see the channel the offender used
+### T-144 · The proprietary-dependency guard cannot see the channel the offender used — RESOLVED (2026-09-24)
 
-- [ ] Extend `test/no_proprietary_dependencies_test.dart` to the resolved tree and to Gradle.
+- [x] Extend `test/no_proprietary_dependencies_test.dart` to the resolved tree and to Gradle.
 - **Why:** the guard reads `pubspec.yaml` and the imports in `lib/`. ML Kit - the offender it was
       written for - never appeared in either: it arrived through `mobile_scanner`'s own
       `build.gradle`. A different package linking a proprietary AAR would be just as invisible, and
       so would a forbidden package returning transitively, since the test never reads
       `pubspec.lock`. R8 credits this test with more than it can do.
 - **Done when:** the guard also fails on a forbidden name in `pubspec.lock`, and something checks
-      the Android artifacts the build actually resolves.
+      the Android artifacts the build actually resolves. Both done:
+  - [x] `test/no_proprietary_dependencies_test.dart` gained a fourth case reading `pubspec.lock`'s
+        actually-resolved package set (every top-level key under `packages:`, 2-space indent) - a
+        transitive return with no `pubspec.yaml` line and no `dependency_overrides` entry now fails
+        the same way a direct one already did. The counter-test ("the guard would actually catch
+        something") was extended to cover the lockfile parser too, not just the pubspec.yaml one.
+  - [x] `scripts/check_proprietary_native_deps.py` (new) checks the Android side - a forbidden
+        native artifact (`com.google.mlkit`, `com.google.android.gms:play-services-mlkit*`,
+        `com.syncfusion`) arriving through a plugin's own `build.gradle`, invisible to both Dart-side
+        checks above. Deliberately reuses the CycloneDX SBOM `:app:cyclonedxBom` already produces
+        for the native `osv-scanner` pass (`docs/TODO.md` T-148) rather than resolving the
+        dependency tree a second time - one new step in `ci.yml`'s `build-android-release` and
+        `release.yml`'s `build-signed-release`, right after the existing SBOM generation. Forbids by
+        (group, name-prefix) pairs, not a whole-group ban, so a legitimate future use of the (large,
+        otherwise-fine) `com.google.android.gms` group wouldn't become a standing false positive -
+        only its ML Kit "unbundled" artifact family is forbidden. Verified against the real,
+        currently-clean SBOM (162 resolved components, none flagged) and against a copy with three
+        synthetic offenders injected (all three correctly caught, exit code 1) - this project has no
+        Python test scaffold, so this stands in for a proper unit test, the same as
+        `scripts/mobsfscan_check.py`/`mobsf_summary.py` have none either.
+  - Not run in `scripts/security-scan.sh`: that script deliberately has no native-Android
+    `osv-scanner` pass either, for the same reason (`docs/TODO.md` T-148/CLAUDE.md's own text) - it
+    needs a resolved Gradle build this lightweight local script doesn't do.
 - **Requirement:** R8
 
 ### T-145 · Opening the Schedule screen no longer triggers a calendar fetch — FIXED (2026-09-20)

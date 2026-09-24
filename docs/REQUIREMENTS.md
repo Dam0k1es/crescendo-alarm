@@ -339,8 +339,14 @@ reasonable trust assessment is.
 
 - **Checked by:** `pubspec.yaml`/`pubspec.lock` review, plus
   `test/no_proprietary_dependencies_test.dart`, which fails the suite if either of the two
-  offenders below is declared again or imported anywhere in `lib/`. `osv-scanner` additionally
-  checks for known vulnerabilities in the resolved dependency tree.
+  offenders below is declared again, resolves back in transitively (`docs/TODO.md` T-144, since
+  2026-09-24 - the earlier version only ever read `pubspec.yaml`, missing a transitive return with
+  no direct line), or is imported anywhere in `lib/`. `scripts/check_proprietary_native_deps.py`
+  (also T-144) covers the channel that guard still can't see - a proprietary Android artifact
+  arriving through a plugin's own `build.gradle`, exactly how ML Kit arrived via `mobile_scanner`
+  before this was fixed - by checking the CycloneDX SBOM `ci.yml`/`release.yml` already generate for
+  the native `osv-scanner` pass. `osv-scanner` additionally checks for known vulnerabilities in the
+  resolved dependency tree.
 - **Status: met** (2026-09-17). The two dependencies that were not open-source are gone:
   `syncfusion_flutter_calendar` (Syncfusion Essential Studio licence - a commercial licence or a
   revenue/team-size-limited community programme) was replaced by `calendar_view` (MIT), and
