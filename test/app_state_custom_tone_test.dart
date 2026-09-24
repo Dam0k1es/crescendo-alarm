@@ -5,11 +5,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakeywakey/app_state.dart';
 import 'package:wakeywakey/models/alarms/custom_tone.dart';
 
-// AppState.importCustomTone wires the pure logic in custom_tone_test.dart to
+// AppState.addCustomTone wires the pure logic in custom_tone_test.dart to
 // persistence and to path_provider - the latter via an injected
 // [documentsDirectory] callback (the same pattern as this class's other
 // plugin boundaries, e.g. `fetchEvents`/`now`), so these tests never touch a
 // real platform channel.
+//
+// docs/TODO.md T-56: customTones is a growable list, not a single
+// replaceable slot - each entry carries the user-chosen [CustomTone.name]
+// alongside the file path.
 
 void main() {
   Future<AppState> freshAppState() async {
@@ -38,56 +42,77 @@ void main() {
     }
   });
 
-  test('customTonePath is null before anything is imported', () async {
+  test('customTones is empty before anything is imported', () async {
     final appState = await freshAppState();
-    expect(appState.customTonePath, isNull);
+    expect(appState.customTones, isEmpty);
   });
 
-  test('importing a supported file sets customTonePath and notifies', () async {
+  test('importing a supported file adds it to customTones and notifies',
+      () async {
     final appState = await freshAppState();
     final source = await makeSourceFile(documentsDir, 'ringtone.mp3');
     var notified = false;
     appState.addListener(() => notified = true);
 
-    await appState.importCustomTone(
+    await appState.addCustomTone(
       source.path,
+      name: 'My Ringtone',
       documentsDirectory: () async => documentsDir,
     );
 
-    expect(appState.customTonePath, 'custom_tones/custom_tone.mp3');
+    expect(appState.customTones, hasLength(1));
+    expect(appState.customTones.single.name, 'My Ringtone');
+    expect(appState.customTones.single.path, 'custom_tones/ringtone.mp3');
     expect(notified, isTrue);
   });
 
-  test('customTonePath survives an app restart (persistence round trip)',
+  test('importing a second file keeps the first one, both named', () async {
+    final appState = await freshAppState();
+    final first = await makeSourceFile(documentsDir, 'one.mp3');
+    final second = await makeSourceFile(documentsDir, 'two.wav');
+
+    await appState.addCustomTone(first.path,
+        name: 'First', documentsDirectory: () async => documentsDir);
+    await appState.addCustomTone(second.path,
+        name: 'Second', documentsDirectory: () async => documentsDir);
+
+    expect(appState.customTones, hasLength(2));
+    expect(appState.customTones.map((t) => t.name), ['First', 'Second']);
+  });
+
+  test('customTones survives an app restart (persistence round trip)',
       () async {
     SharedPreferences.setMockInitialValues({});
     final first = AppState();
     await first.initialized;
     final source = await makeSourceFile(documentsDir, 'ringtone.wav');
 
-    await first.importCustomTone(
+    await first.addCustomTone(
       source.path,
+      name: 'Restart Test',
       documentsDirectory: () async => documentsDir,
     );
 
     final second = AppState();
     await second.initialized;
-    expect(second.customTonePath, 'custom_tones/custom_tone.wav');
+    expect(second.customTones, hasLength(1));
+    expect(second.customTones.single.name, 'Restart Test');
+    expect(second.customTones.single.path, 'custom_tones/ringtone.wav');
   });
 
-  test('an unsupported file type propagates and leaves customTonePath unset',
-      () async {
+  test('an unsupported file type propagates and adds nothing', () async {
     final appState = await freshAppState();
     final source = await makeSourceFile(documentsDir, 'not_audio.txt');
 
     await expectLater(
-      appState.importCustomTone(
+      appState.addCustomTone(
         source.path,
+        name: 'Whatever',
         documentsDirectory: () async => documentsDir,
       ),
       throwsA(isA<UnsupportedToneFormatException>()),
     );
 
-    expect(appState.customTonePath, isNull);
+    expect(appState.customTones, isEmpty);
   });
 }

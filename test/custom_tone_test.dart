@@ -8,7 +8,7 @@ import 'package:wakeywakey/models/alarms/custom_tone.dart';
 // their own file sidesteps that class of problem entirely - the app then
 // isn't distributing anything, the user is).
 //
-// Two requirements drive this file's shape:
+// Three requirements drive this file's shape:
 //
 // - The imported tone must keep working even after the file the user picked
 //   it from is gone (moved, deleted, or the picker only ever granted a
@@ -22,6 +22,10 @@ import 'package:wakeywakey/models/alarms/custom_tone.dart';
 //   handed back must be *relative to that directory*, not absolute. An
 //   absolute path would also break across an app update, which is exactly
 //   what that native-side contract warns against.
+// - docs/TODO.md T-56: tones grow as a list, not a single replaceable slot -
+//   importing a second file must not delete the first one. Distinct
+//   destination filenames are what make that possible without one import
+//   overwriting another.
 void main() {
   late Directory documentsDir;
 
@@ -58,7 +62,8 @@ void main() {
   });
 
   group('importCustomTone', () {
-    Future<File> makeSourceFile(String name, [String contents = 'fake audio bytes']) async {
+    Future<File> makeSourceFile(String name,
+        [String contents = 'fake audio bytes']) async {
       final dir = await Directory.systemTemp.createTemp('wakeywakey_src_');
       final file = File('${dir.path}/$name');
       await file.writeAsString(contents);
@@ -74,7 +79,7 @@ void main() {
         documentsDirectory: documentsDir,
       );
 
-      expect(relativePath, 'custom_tones/custom_tone.mp3');
+      expect(relativePath, 'custom_tones/my_tone.mp3');
       // Not absolute, not asset-prefixed - exactly what
       // AlarmSettings.assetAudioPath needs for an on-device file.
       expect(relativePath.startsWith('/'), isFalse);
@@ -118,45 +123,6 @@ void main() {
       expect(await customTonesDir.exists(), isFalse);
     });
 
-    test('re-importing with a different extension removes the previous file',
-        () async {
-      final firstSource = await makeSourceFile('first.mp3', 'first');
-      await importCustomTone(
-        sourcePath: firstSource.path,
-        documentsDirectory: documentsDir,
-      );
-
-      final secondSource = await makeSourceFile('second.wav', 'second');
-      final relativePath = await importCustomTone(
-        sourcePath: secondSource.path,
-        documentsDirectory: documentsDir,
-      );
-
-      expect(relativePath, 'custom_tones/custom_tone.wav');
-      final customTonesDir = Directory('${documentsDir.path}/custom_tones');
-      final remaining = await customTonesDir.list().toList();
-      expect(remaining.map((e) => e.path.split('/').last), ['custom_tone.wav'],
-          reason: 'no leftover custom_tone.mp3 from the earlier import');
-    });
-
-    test('re-importing with the same extension replaces the old content',
-        () async {
-      final firstSource = await makeSourceFile('first.mp3', 'old content');
-      await importCustomTone(
-        sourcePath: firstSource.path,
-        documentsDirectory: documentsDir,
-      );
-
-      final secondSource = await makeSourceFile('second.mp3', 'new content');
-      final relativePath = await importCustomTone(
-        sourcePath: secondSource.path,
-        documentsDirectory: documentsDir,
-      );
-
-      final copied = File('${documentsDir.path}/$relativePath');
-      expect(await copied.readAsString(), 'new content');
-    });
-
     test('a missing source file propagates a clear filesystem error',
         () async {
       expect(
@@ -166,6 +132,52 @@ void main() {
         ),
         throwsA(isA<FileSystemException>()),
       );
+    });
+
+    // docs/TODO.md T-56: the whole point of the change - a second import
+    // must coexist with the first, not replace it.
+    test('importing a second, differently-named file keeps the first one',
+        () async {
+      final first = await makeSourceFile('alarm_one.mp3', 'first');
+      final second = await makeSourceFile('alarm_two.wav', 'second');
+
+      final firstPath = await importCustomTone(
+          sourcePath: first.path, documentsDirectory: documentsDir);
+      final secondPath = await importCustomTone(
+          sourcePath: second.path, documentsDirectory: documentsDir);
+
+      expect(firstPath, isNot(secondPath));
+      expect(await File('${documentsDir.path}/$firstPath').exists(), isTrue,
+          reason: 'the first import must still be there');
+      expect(await File('${documentsDir.path}/$secondPath').exists(), isTrue);
+      expect(await File('${documentsDir.path}/$firstPath').readAsString(),
+          'first');
+      expect(await File('${documentsDir.path}/$secondPath').readAsString(),
+          'second');
+    });
+
+    test(
+        'importing two files that happen to share a name produces two '
+        'distinct destination files, neither overwriting the other',
+        () async {
+      final firstDir = await Directory.systemTemp.createTemp('wakeywakey_a_');
+      final secondDir = await Directory.systemTemp.createTemp('wakeywakey_b_');
+      final first = File('${firstDir.path}/tone.mp3')
+        ..writeAsStringSync('first content');
+      final second = File('${secondDir.path}/tone.mp3')
+        ..writeAsStringSync('second content');
+
+      final firstPath = await importCustomTone(
+          sourcePath: first.path, documentsDirectory: documentsDir);
+      final secondPath = await importCustomTone(
+          sourcePath: second.path, documentsDirectory: documentsDir);
+
+      expect(firstPath, isNot(secondPath),
+          reason: 'same original filename must not collide on disk');
+      expect(await File('${documentsDir.path}/$firstPath').readAsString(),
+          'first content');
+      expect(await File('${documentsDir.path}/$secondPath').readAsString(),
+          'second content');
     });
   });
 }

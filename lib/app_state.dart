@@ -151,12 +151,13 @@ class AppState extends ChangeNotifier {
   /// hardcoded behaviour, since this setting didn't exist before.
   bool _vibrationEnabled = true;
 
-  /// The user's own imported tone, as a path relative to the app's Documents
-  /// directory (see `custom_tone.dart`'s doc comment for why) - `null` until
-  /// they've imported one. Distinct from [_selectedTone]/a `MyAlarm.tone`,
-  /// which may or may not point at this file: importing one doesn't select
-  /// it anywhere by itself.
-  String? _customTonePath;
+  /// The user's own imported tones (docs/TODO.md T-56) - each a name plus a
+  /// path relative to the app's Documents directory (see `custom_tone.dart`'s
+  /// doc comment for why a path, not a reference to the picked file), empty
+  /// until at least one has been imported. Distinct from
+  /// [_selectedTone]/a `MyAlarm.tone`, which may or may not point at one of
+  /// these: importing a tone doesn't select it anywhere by itself.
+  List<custom_tone.CustomTone> _customTones = [];
 
   // State variables
   bool _permissionsGranted = false;
@@ -432,7 +433,8 @@ class AppState extends ChangeNotifier {
 
   bool get vibrationEnabled => _vibrationEnabled;
 
-  String? get customTonePath => _customTonePath;
+  List<custom_tone.CustomTone> get customTones =>
+      List.unmodifiable(_customTones);
 
   // Setter
   //
@@ -752,8 +754,14 @@ class AppState extends ChangeNotifier {
   }
 
   /// Copies [sourcePath] (wherever the system file picker pointed at) into
-  /// the app's own storage and remembers it as [customTonePath] - see
+  /// the app's own storage and adds it to [customTones] under [name] - see
   /// `custom_tone.dart`'s doc comment for why a copy, not a reference.
+  ///
+  /// docs/TODO.md T-56: appends, never replaces - every previously imported
+  /// tone stays selectable. [name] is the picker UI's job to collect (it
+  /// pre-fills a dialog with `defaultCustomToneName(sourcePath)` but lets the
+  /// user change it), not this method's - by the time this is called, the
+  /// name is already decided.
   ///
   /// [documentsDirectory] is injected for testability (the same pattern as
   /// `fetchEvents`/`now` elsewhere in this class): production code leaves it
@@ -764,8 +772,9 @@ class AppState extends ChangeNotifier {
   /// plugin's player can't be relied on to play - the caller (the picker UI)
   /// is expected to catch it and tell the user, rather than this model layer
   /// reaching into `BuildContext` to do so itself.
-  Future<void> importCustomTone(
+  Future<custom_tone.CustomTone> addCustomTone(
     String sourcePath, {
+    required String name,
     Future<Directory> Function()? documentsDirectory,
   }) async {
     final dir = await (documentsDirectory ?? getApplicationDocumentsDirectory)();
@@ -773,9 +782,31 @@ class AppState extends ChangeNotifier {
       sourcePath: sourcePath,
       documentsDirectory: dir,
     );
-    _customTonePath = relativePath;
-    _prefs.setString('customTonePath', relativePath);
+    final tone = custom_tone.CustomTone(name: name, path: relativePath);
+    _customTones = [..._customTones, tone];
+    _saveCustomTones();
     notifyListeners();
+    return tone;
+  }
+
+  void _saveCustomTones() {
+    final encoded = jsonEncode(_customTones.map((t) => t.toJson()).toList());
+    _prefs.setString('customTones', encoded);
+  }
+
+  List<custom_tone.CustomTone>? _loadCustomTones() {
+    try {
+      final encoded = _prefs.getString('customTones');
+      if (encoded == null) return null;
+      final decoded = jsonDecode(encoded) as List<dynamic>;
+      return decoded
+          .map((e) =>
+              custom_tone.CustomTone.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint("=====_loadCustomTones: Error loading customTones: ${e.runtimeType}");
+      return null;
+    }
   }
 
   Future<Map<String, dynamic>> addAlarm(MyAlarm alarm) async {
@@ -1364,7 +1395,7 @@ class AppState extends ChangeNotifier {
       _scheduledAlarms = _loadScheduledAlarms() ?? _scheduledAlarms;
       _manualAlarms = _loadManualAlarms() ?? _manualAlarms;
       _selectedTone = _prefs.getString('selectedTone') ?? _selectedTone;
-      _customTonePath = _prefs.getString('customTonePath') ?? _customTonePath;
+      _customTones = _loadCustomTones() ?? _customTones;
       _selectedVolume = _prefs.getDouble('selectedVolume') ?? _selectedVolume;
       _vibrationEnabled =
           _prefs.getBool('vibrationEnabled') ?? _vibrationEnabled;

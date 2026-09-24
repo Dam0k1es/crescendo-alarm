@@ -2654,15 +2654,44 @@ that is the basis a decision can be formulated against.
 - **Done when:** an adaptive icon is configured with a transparent background and a foreground that
   fills most of its canvas.
 
-### T-56 · Alarm tones are a static bundled list
+### T-56 · Alarm tones are a static bundled list — IMPLEMENTED (2026-09-24)
 
-- [ ] Source available tones dynamically (e.g. from device storage or a user-added set) instead of
+- [x] Source available tones dynamically (e.g. from device storage or a user-added set) instead of
       a fixed list.
 - **Why:** carried forward from `lib/main.dart`'s old TODO backlog (T-31) - a nice-to-have, not a
   bug; the current static list works, it's just inflexible.
 - **Evidence:** `lib/main.dart`'s pre-triage TODO block, item `0x55` (see T-31);
   `lib/screens/settings/page_alarmtones.dart`.
-- **Done when:** either implemented, or explicitly deprioritised with a reason.
+- **Done when:** either implemented, or explicitly deprioritised with a reason. Implemented: custom
+  tones are now a growable, named list, not the single replaceable slot T-146 originally added.
+- **Implementation:**
+  - `lib/models/alarms/custom_tone.dart`'s `importCustomTone` no longer deletes `custom_tones/`
+    before writing - it keeps the source file's own name, only appending a numeric suffix
+    (`name (1).ext`, `name (2).ext`, …) if that exact name is already taken, so a second import
+    can never silently overwrite a first one. New `CustomTone` (name + path, JSON round-trippable)
+    and `defaultCustomToneName()` (the picked file's own name, minus its extension - the sensible
+    default label most imports won't even need to change).
+  - `AppState.customTones` (a `List<CustomTone>`, persisted as JSON) replaces the old single
+    `customTonePath`; `addCustomTone(sourcePath, {required name, ...})` replaces
+    `importCustomTone(...)`, appending rather than replacing.
+  - `page_alarmtones.dart`: each imported tone now renders as its own tile (name, tap-to-preview,
+    switch-to-select - the same shape a bundled tone's tile already had), with a permanently
+    present "Add custom tone" tile below the list rather than one fixed slot that's either empty
+    or full. Picking a file now opens a naming dialog first, pre-filled with
+    `defaultCustomToneName(pickedPath)`, before the import actually happens.
+  - `screen_alarms.dart`'s manual-alarm tone dropdown now offers every entry in
+    `AppState.customTones`, not a single conditional item.
+- **Test-writing note, not a product bug:** the new widget test
+  (`test/page_alarmtones_custom_tones_test.dart`) hung indefinitely the first time it combined real
+  `dart:io` calls (creating a temp directory, writing a file) with `testWidgets` - real async file
+  I/O inside `flutter_test`'s fake-async zone can hang rather than resolve. Fixed by moving that
+  setup inside `tester.runAsync(...)`, the same escape hatch this project's own tests already use
+  for real platform-channel futures elsewhere. A second, unrelated fix: a tile below the default
+  600px test viewport needs `tester.ensureVisible()` before it can be tapped, the same fix T-20's
+  test needed for the same reason.
+- **Not done, deliberately out of scope:** no rename/delete UI for an already-imported tone - not
+  requested, and adding it would have doubled this change's surface for a feature nobody asked for
+  yet. If it turns out to matter, it belongs in its own item.
 
 ### T-58 · Consider a toast instead of a notification for some feedback — CLOSED, no change wanted (2026-09-20)
 

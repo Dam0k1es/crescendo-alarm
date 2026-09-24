@@ -498,7 +498,11 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                                   selectedTone = newValue!;
                                 });
                               },
-                              // TODO source tones dynamic instead of static list - 0x55
+                              // docs/TODO.md T-56: every imported custom
+                              // tone is offered here, not just a single
+                              // fixed slot - none exist until the user has
+                              // imported at least one (Settings > Alarm
+                              // Tones).
                               items: [
                                 _buildDropdownItem(context, 'Annoying Alarm',
                                     'assets/sounds/annoying_alarm.mp3'),
@@ -512,12 +516,9 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                                     'assets/sounds/wakeywakey.mp3'),
                                 _buildDropdownItem(context, 'WakeyWakey 2',
                                     'assets/sounds/wakeywakey2.mp3'),
-                                // Only offered once the user has imported one
-                                // (Settings > Alarm Tones) - there is nothing
-                                // to select otherwise.
-                                if (_appState.customTonePath != null)
-                                  _buildDropdownItem(context, 'Custom Tone',
-                                      _appState.customTonePath!),
+                                for (final tone in _appState.customTones)
+                                  _buildDropdownItem(
+                                      context, tone.name, tone.path),
                               ],
                             ),
                           ],

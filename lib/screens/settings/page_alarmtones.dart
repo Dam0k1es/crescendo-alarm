@@ -99,8 +99,9 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
 
   /// Opens the system file picker (Storage Access Framework on Android - no
   /// declared permission needed, and none is requested until the user
-  /// actually taps this) restricted to [supportedCustomToneExtensions], then
-  /// imports whatever was picked.
+  /// actually taps this) restricted to [supportedCustomToneExtensions], asks
+  /// the user to name it (docs/TODO.md T-56), then imports whatever was
+  /// picked under that name.
   Future<void> _pickCustomTone() async {
     final picked = await FilePicker.pickFile(
       type: FileType.custom,
@@ -110,8 +111,12 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
     if (pickedPath == null) return; // user cancelled
 
     if (!mounted) return;
+    final name = await _promptForToneName(defaultCustomToneName(pickedPath));
+    if (name == null) return; // user cancelled the naming dialog
+
+    if (!mounted) return;
     try {
-      await _appState.importCustomTone(pickedPath);
+      await _appState.addCustomTone(pickedPath, name: name);
       if (!mounted) return;
       displayToast(context, 'Custom tone imported.');
     } on UnsupportedToneFormatException {
@@ -122,6 +127,40 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
       if (!mounted) return;
       displayToast(context, 'Could not import that file.');
     }
+  }
+
+  /// Pre-filled with [defaultName] (the picked file's own name, minus its
+  /// extension) so most imports need no typing at all - the user only has
+  /// to change it if that name isn't already a good enough label. Returns
+  /// `null` on Cancel, which [_pickCustomTone] takes as "import nothing"
+  /// rather than adding an unnamed entry.
+  Future<String?> _promptForToneName(String defaultName) async {
+    final controller = TextEditingController(text: defaultName);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Name this tone'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(
+                controller.text.trim().isEmpty
+                    ? defaultName
+                    : controller.text.trim()),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    return result;
   }
 
   @override
@@ -156,7 +195,7 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
               _buildToggle(
                   context, 'WakeyWakey 2', 'assets/sounds/wakeywakey2.mp3'),
               const SizedBox(height: 16.0),
-              _buildCustomToneTile(context),
+              _buildCustomToneSection(context),
               const SizedBox(height: 32.0),
               _buildVolumeSlider(context),
               const SizedBox(height: 16.0),
@@ -210,55 +249,81 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
     );
   }
 
-  /// The user's own tone. Before one is imported, the whole tile just opens
-  /// the picker; once one exists, it behaves like [_buildToggle] (tap to
-  /// preview, switch to select), plus a folder icon that is always available
-  /// to import a different file, replacing the current one.
-  Widget _buildCustomToneTile(BuildContext context) {
-    final customPath = context.watch<AppState>().customTonePath;
+  /// docs/TODO.md T-56: every imported tone gets its own tile (named,
+  /// selectable, previewable - the same shape as a bundled tone's
+  /// [_buildToggle]), followed by a permanently-available tile to import
+  /// another. Growable, not a single replaceable slot.
+  Widget _buildCustomToneSection(BuildContext context) {
+    final tones = context.watch<AppState>().customTones;
+    return Column(
+      children: [
+        for (final tone in tones) ...[
+          _buildCustomToneTile(context, tone),
+          const SizedBox(height: 16.0),
+        ],
+        _buildAddCustomToneTile(context),
+      ],
+    );
+  }
 
+  Widget _buildCustomToneTile(BuildContext context, CustomTone tone) {
     return GestureDetector(
-      onTap: customPath == null
-          ? _pickCustomTone
-          : () => _playOrStopAudio(customPath),
+      onTap: () => _playOrStopAudio(tone.path),
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Custom Tone', style: TextStyle(fontSize: 18.0)),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.folder_open),
-                    tooltip: customPath == null
-                        ? 'Choose a file'
-                        : 'Choose a different file',
-                    onPressed: _pickCustomTone,
-                  ),
-                  Switch(
-                    value: customPath != null &&
-                        _appState.selectedTone == customPath,
-                    onChanged: customPath == null
-                        ? null
-                        : (value) {
-                            if (value) {
-                              _appState.selectedTone = customPath;
-                              // docs/TODO.md T-84: see the built-in tones'
-                              // toggle above - a checkpoint is needed for
-                              // the change to reach already-planned alarms.
-                              runCheckpointSafely(_appState,
-                                  trigger: CheckpointTrigger.settingsChanged);
-                            }
-                          },
-                    activeThumbColor: context
-                        .watch<AppState>()
-                        .accentColor
-                        .withValues(alpha: 0.05),
-                  ),
-                ],
+              Expanded(
+                child: Text(
+                  tone.name,
+                  style: const TextStyle(fontSize: 18.0),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Switch(
+                value: _appState.selectedTone == tone.path,
+                onChanged: (value) {
+                  if (value) {
+                    _appState.selectedTone = tone.path;
+                    // docs/TODO.md T-84: see the built-in tones' toggle
+                    // above - a checkpoint is needed for the change to
+                    // reach already-planned alarms.
+                    runCheckpointSafely(_appState,
+                        trigger: CheckpointTrigger.settingsChanged);
+                  }
+                },
+                activeThumbColor: context
+                    .watch<AppState>()
+                    .accentColor
+                    .withValues(alpha: 0.05),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Always present, regardless of how many custom tones already exist -
+  /// this is what makes the list "grow", rather than a slot that's either
+  /// empty or full.
+  Widget _buildAddCustomToneTile(BuildContext context) {
+    return GestureDetector(
+      onTap: _pickCustomTone,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add, color: _appState.accentColor),
+              const SizedBox(width: 8.0),
+              Text(
+                'Add custom tone',
+                style:
+                    TextStyle(fontSize: 18.0, color: _appState.accentColor),
               ),
             ],
           ),
