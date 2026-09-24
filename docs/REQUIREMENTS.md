@@ -500,19 +500,17 @@ match any particular format or symbology.
 
 ---
 
-**Summary of open gaps (R1 partial, R3, R4 partial, R7 partial):** R2 is **no longer** among them - the
-scheduling-v2 rebuild (2026-09) replaced the old engine wholesale and is covered by unit tests; see
-R2 above for the one remaining caveat, which is really R3. R3 and part of R4 are no longer explained
-by "no build has ever run on a device or emulator" - that build now happens on every release and has
-surfaced what's actually still missing: no reboot/force-stop survival test over a long, never-
-reopened stretch (R3, `docs/TODO.md` T-04), and R4 is now only partial because of the QR gate's own
-`debugScanStreamOverride` seam remaining a plain mutable static rather than an injected dependency
-(`docs/TODO.md` T-16) - the gentle-wake ramp (T-15) and the real camera decode path (T-143) have
-both since been confirmed on real hardware, so this isn't the "audio and camera both unverified"
-gap it used to be. R1 is only partial now because two
-findings are *accepted* rather than fixed, each with a dated rationale in
-`.github/security-exceptions.json` - not because a check is missing or non-gating; every tool in
-the gate can fail the run, on the branch path and the tag path alike. R8 and R9 were a separate licensing conflict (Syncfusion and Google/ML Kit
+**Summary of open gaps (R3, R4 partial, R7 partial):** R1 is **no longer** among them (2026-09-24) -
+see R1's own status below; R2 is **no longer** among them either - the scheduling-v2 rebuild (2026-09)
+replaced the old engine wholesale and is covered by unit tests; see R2 above for the one remaining
+caveat, which is really R3. R3 and part of R4 are no longer explained by "no build has ever run on a
+device or emulator" - that build now happens on every release and has surfaced what's actually still
+missing: no reboot/force-stop survival test over a long, never-reopened stretch (R3, `docs/TODO.md`
+T-04), and R4 is now only partial because of the QR gate's own `debugScanStreamOverride` seam
+remaining a plain mutable static rather than an injected dependency (`docs/TODO.md` T-16) - the
+gentle-wake ramp (T-15), the real camera decode path (T-143), and the `alarm` plugin's exported-
+receiver bypass (T-165) have all since been confirmed on real hardware or build-verified, so this
+isn't the "audio and camera both unverified" gap it used to be. R8 and R9 were a separate licensing conflict (Syncfusion and Google/ML Kit
 are not open-source, and GPLv3 obligations for the distributed APK were unaddressed). That is
 resolved as of 2026-09-17: both dependencies were replaced rather than covered by a licence
 exception, and `docs/licence-position.md` records the decision. R9's one remaining condition -
