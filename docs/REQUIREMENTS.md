@@ -33,19 +33,21 @@ Medium/informational findings don't block a release but must be recorded and rev
   timezone leg failed as expected, and `security-gate`, `e2e-tests` and both Android build jobs all
   came back **skipped**, never run at all. The `needs:` chain holds transitively, not only at the
   one job (`build-android-release`) this was originally checked against.
-- **Status: partially met.** All gating tools are currently green against the recorded exceptions.
-  The two findings that are *accepted* rather than fixed, and therefore carry a dated rationale in
-  `.github/security-exceptions.json`: `mobsfscan`'s one ERROR (`android_task_hijacking2`, a
-  StrandHogg-style task-hijacking pattern), and MobSF's one HIGH ("app installable on unpatched
-  Android 7.0", i.e. `minSdk=24`) alongside 15 WARNING-level findings (2026-09-20: one more than
-  before - `DirectBootReceiver`'s exported-and-unprotected status, an expected consequence of
-  `docs/TODO.md` T-158 not yet triaged one way or the other, see `docs/TODO.md` T-160). The
-  rationale for the two accepted findings - the same text as in that file: the `mobsfscan` finding
-  is a known tool limitation - it flags a task-affinity/launch-mode pattern generically, without the
-  runtime context to distinguish it from this app's actual configuration. The MobSF HIGH restates
-  the project's own deliberate `minSdk=24` choice (see `CLAUDE.md`'s toolchain table) and is
-  accepted, not fixed, because lowering `minSdk` further is not currently planned. Update this
-  paragraph if either acceptance is revisited, or once T-160 is triaged.
+- **Status: met.** All gating tools are currently green against the recorded exceptions - and WARNING-
+  level MobSF findings (currently 15) were never gating under this requirement's own "high-or-above"
+  bar to begin with; only HIGH/ERROR findings block. Three findings are *accepted* rather than
+  fixed, and therefore carry a dated rationale in `.github/security-exceptions.json`: `mobsfscan`'s
+  one ERROR (`android_task_hijacking2`, a StrandHogg-style task-hijacking pattern), MobSF's one HIGH
+  ("app installable on unpatched Android 7.0", i.e. `minSdk=24`), and - recorded for documentation
+  completeness, not because it was ever blocking anything - MobSF's WARNING for
+  `DirectBootReceiver`'s exported-and-unprotected status (`docs/TODO.md` T-158's own consequence,
+  reviewed and closed 2026-09-24 under `docs/TODO.md` T-160: `LOCKED_BOOT_COMPLETED` is itself a
+  protected broadcast action the OS enforces at the sender, not something an app-level permission
+  could add anything to). The `mobsfscan` finding is a known tool limitation - it flags a
+  task-affinity/launch-mode pattern generically, without the runtime context to distinguish it from
+  this app's actual configuration. The MobSF HIGH restates the project's own deliberate `minSdk=24`
+  choice (see `CLAUDE.md`'s toolchain table) and is accepted, not fixed, because lowering `minSdk`
+  further is not currently planned. Update this paragraph if any acceptance is revisited.
 
 ## R2 - Reliable calendar-derived alarm scheduling
 

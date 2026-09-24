@@ -380,7 +380,7 @@ that is the basis a decision can be formulated against.
   deliberately non-gating legs). **Met.**
 - **Requirement:** R2 (the timezone-matrix fixture bug), R3/R4 (the E2E suite's own coverage)
 
-### T-160 · MobSF flags `DirectBootReceiver` as an unprotected exported component — FOUND (2026-09-20), not yet triaged
+### T-160 · MobSF flags `DirectBootReceiver` as an unprotected exported component — ACCEPTED (2026-09-24), independently reviewed
 
 - [x] Found while reading run 35513763937 (the first fully green `master` run since the repository
       went public): MobSF's full scan of the production APK now reports 15 WARNING-level findings,
@@ -390,28 +390,45 @@ that is the basis a decision can be formulated against.
       introduced by anything else: `DirectBootReceiver` has to be `exported="true"` for the OS to
       deliver `LOCKED_BOOT_COMPLETED` to it at all (an unexported receiver never gets *any*
       broadcast), so this specific warning was unavoidable the moment T-158 shipped.
-- **Why this isn't necessarily a real problem, but needs a real look rather than a shrug:**
+- **Why this isn't necessarily a real problem, but needed a real look rather than a shrug:**
       `DirectBootReceiver` accepts no data from the `Intent` other than its action string - it reads
       only the due time already mirrored into its own device-protected `SharedPreferences`
       (`DirectBootFallback.getDueAt`), so there is no obvious injection surface a malicious app could
-      exploit by sending it a forged `LOCKED_BOOT_COMPLETED` broadcast early. That reasoning has not
+      exploit by sending it a forged `LOCKED_BOOT_COMPLETED` broadcast early. That reasoning had not
       been independently checked the way the two already-accepted findings in
-      `.github/security-exceptions.json` were, though - it's this session's own assessment, not a
+      `.github/security-exceptions.json` were, though - it was this session's own assessment, not a
       reviewed one.
-- **Not fixed, not accepted, not exempted - deliberately left open:** the standard fix for "exported
-  receiver, no explicit protection" is either restricting it with a signature-level permission (adds
-  complexity for a receiver whose only real sender is the OS itself) or accepting the finding with a
-  dated rationale in `.github/security-exceptions.json`, the same pattern the two existing accepted
-  findings already use. Neither decision has been made here - this entry only records that the
-  finding exists and needs a decision, per this session's instruction to document without acting.
+- **Independently reviewed (2026-09-24) under `CLAUDE.md`'s new "Philipp, the Security Researcher"
+  review persona, and closed.** The load-bearing question was verified, not assumed:
+  `android.intent.action.LOCKED_BOOT_COMPLETED` is itself a **protected broadcast action**, declared
+  as such in AOSP's own `frameworks/base/core/res/AndroidManifest.xml`
+  (`<protected-broadcast android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />`) - the exact
+  same platform-enforced protection `BOOT_COMPLETED` itself relies on, and which the `alarm` plugin's
+  own `BootReceiver` already depends on elsewhere in this app, unexamined. That protection is
+  enforced by `system_server` at the *sender's* side, before delivery - an ordinary third-party app
+  calling `sendBroadcast()` with this action gets a `SecurityException` from the OS itself; only
+  system/platform-signed code can originate it. No `android:permission` this app could declare would
+  add anything on top of an OS-level check that cannot be targeted by app code at all - which also
+  means the textbook "exported receiver, no explicit permission" fix is not merely extra cost here,
+  it is **incoherent for this specific action**: the legitimate sender (the OS) is not signed with
+  this app's key, so a signature-level permission would either do nothing or actively break the
+  feature. Combined with the receiver's own narrow behaviour (no Intent data used beyond the action
+  string; the due time comes only from this app's own private storage), the review's verdict was
+  **accept, not fix** - the worst case even under a hypothetical bypass (itself requiring
+  platform-signature privilege, at which point this receiver is the least of the attacker's
+  capabilities) is an early, bounded, non-destructive 10-minute fallback siren using the system's own
+  default alarm sound.
+- **Resolution:** accepted into `.github/security-exceptions.json` with the full, dated technical
+  rationale above (verbatim from the review). `docs/REQUIREMENTS.md` R1 updated to describe three
+  accepted findings instead of two, and its status changed from "partially met" (pending this
+  triage) to "met" - noting explicitly that a WARNING-severity MobSF finding was never gating under
+  R1's own "high-or-above" bar in the first place, so this entry exists for the documented rationale
+  and audit trail, not because anything was actually blocked.
 - **Evidence:** run 35513763937, job `MobSF (full static scan of production APK)`
       (`gh api /repos/Dam0k1es/wakeywakey/actions/jobs/106089892754/logs`); `android/app/src/main/
       AndroidManifest.xml` (`DirectBootReceiver`'s `android:exported="true"`, required for
-      `LOCKED_BOOT_COMPLETED` delivery); `docs/REQUIREMENTS.md` R1 (still says 14 WARNING findings,
-      now stale by one).
-- **Done when:** either accepted into `.github/security-exceptions.json` with a dated rationale (the
-  established pattern), or actually restricted, and `docs/REQUIREMENTS.md` R1's WARNING count
-  updated either way.
+      `LOCKED_BOOT_COMPLETED` delivery); the independent review's AOSP source citation
+      (`frameworks/base/core/res/AndroidManifest.xml`'s `<protected-broadcast>` list).
 - **Requirement:** R1
 
 ### T-161 · Independent external-auditor review (licence/legal + shift-worker/business fitness) — REVIEWED (2026-09-24), one open item
