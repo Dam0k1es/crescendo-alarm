@@ -179,6 +179,10 @@ that is the basis a decision can be formulated against.
   that run only checks registration a few seconds after reboot/force-stop, not survival over a long
   dormant period with the app never reopened - see T-93 for that run's own result and an
   unexplained force-stop finding worth re-measuring cleanly regardless.
+- **A tool for exactly this gap now exists (2026-09-24, T-164):**
+  `scripts/verify-long-idle-alarm-survival.sh` - arms, reboots and force-stops, then waits a full 24h
+  with the phone genuinely untouched before checking whether the alarm actually rang, rather than
+  only whether it is still registered. Built, self-tested offline, not yet run against a real device.
 - **Requirement:** R3
 
 ### T-158 · A reboot while the device stays locked can silence the alarm entirely — RESOLVED (2026-09-20), confirmed on a real device
@@ -549,6 +553,64 @@ that is the basis a decision can be formulated against.
 - **Requirement:** none directly (a diagnostics/quality-assurance feature, not a product
   requirement), but touches the same PII boundary as R11/the Privacy Policy - see that document's
   own update.
+
+### T-164 · A scripted, repeatable long-idle alarm survival check — TOOL BUILT (2026-09-24), not yet run
+
+- [x] Maintainer question: how long would the app need to be inactive for a real-device alarm-
+  survival test to be robust evidence, and could it be turned into a script they can run themselves?
+- **Why 24 hours, not less:** `scripts/verify-alarm-survival.sh` (T-04/T-93) already shows an
+  alarm's registration surviving a reboot/force-stop within a few seconds - a shorter idle period
+  would not be new evidence, only a re-run of what's already measured. The alarm plugin registers
+  with `setExactAndAllowWhileIdle`, which is documented to bypass standard Doze restrictions
+  regardless of how long the device has been idle - so no Android platform threshold specifically
+  demands 24h. The real, documented risk class for alarm apps is OEM-specific aggressive background/
+  battery-optimisation killing, which is not duration-gated in any official, verifiable way either.
+  24h was chosen instead because it is the realistic worst case for this app's actual audience
+  (`docs/personas.md`'s Marie, a shift worker): a phone rebooted or force-stopped and then genuinely
+  left alone for a full day between shifts, not reopened even briefly - exactly the one scenario
+  T-04's own "still open" bullet names, and exactly what T-93's own registration-only check cannot
+  reach. 48h (spanning a weekend) would be more robust still, but was left for a possible follow-up
+  run rather than built into the first version - see "Not built, deliberately" below.
+- **Implementation:** `scripts/verify-long-idle-alarm-survival.sh`, split into two subcommands
+  because a single script cannot sleep for a day without tying up a terminal (and this session's own
+  tooling refuses long blind sleeps for exactly that reason):
+  - `arm [--apk PATH] [--yes]` - reuses the exact same UI-driven arming as
+    `scripts/verify-alarm-survival.sh` (~24h out, by not touching the pre-filled time and letting
+    `AppState` roll it to the next day), then reboots, waits for boot, and force-stops - the combined
+    worst case, and a direct, repeatable attempt at T-93's own unresolved contradiction (one
+    real-device run said force-stop loses the alarm, a later one said it survives). It then stops:
+    no sleep, just a printed "do not touch the phone before &lt;timestamp&gt;" instruction and a
+    `resume.env` marker file in the evidence directory.
+  - `check <evidence-dir> [--force]` - run separately, after the printed time has passed. Re-reads
+    `dumpsys alarm` as a weak corroborating signal only (a fired one-shot alarm removes its own
+    registration, so "gone" is consistent with, but not proof of, actually ringing - the log says so
+    explicitly rather than claiming more than it can). The actual verdict comes from asking directly
+    whether the phone rang, and whether the diagnostics log (if both switches were on) shows an
+    `alarmRang` event - the same standard every other real-device confirmation in this project was
+    measured against, not a new automated detection heuristic.
+- **Shared code, not duplicated:** `node_center`/`ui_dump`/`tap_label`/`ui_self_test` were extracted
+  from `scripts/verify-alarm-survival.sh` into `.github/scripts/ui_tap.sh` (parallel to
+  `.github/scripts/alarm_detection.sh`'s own existing counting logic) so both scripts share one
+  tested implementation - the same reasoning `alarm_detection.sh`'s own header already gives for why
+  a second copy is a second chance to repeat T-99/T-103. `scripts/verify-alarm-survival.sh`'s own
+  behaviour is unchanged by the refactor; its `--self-test` still passes.
+- **`--self-test`:** checks the reused detection and UI-tap self-tests (against the same recorded
+  fixtures) plus this script's own new logic - the pure `enough_time_passed()` timestamp arithmetic
+  the `check` gate depends on - all without a device, following this project's standing convention
+  for exactly this class of script.
+- **Not built, deliberately:** a way to arm an alarm further than ~24h out (e.g. 48h for a weekend-
+  spanning test) would need to drive the time picker's day/date rather than only rely on the
+  "leave the pre-filled time alone" trick, which is meaningfully more UI-automation surface to get
+  right without a device to verify it against in this environment. If 24h's result needs
+  corroborating further, the straightforward path is simply running `arm` again on a later occasion,
+  not stretching a single run.
+- **Evidence:** none yet - this entry only records that the tool now exists and passed its own
+  offline self-test (`bash scripts/verify-long-idle-alarm-survival.sh --self-test`). It has not been
+  run against a real device.
+- **Done when:** run once for real, with the phone genuinely left alone for the full 24h, and the
+  result recorded here and cross-referenced from T-04/T-93/R3 - the same way every other real-device
+  finding in this project is captured.
+- **Requirement:** R3
 
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 

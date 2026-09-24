@@ -274,7 +274,24 @@ device model and serial).
 
 The counting itself lives in `.github/scripts/alarm_detection.sh`, shared by that script and the CI
 leg. Keep it that way: a second copy is a second chance to repeat T-99/T-103, where a generic
-substring counted another app's alarms and produced a confident, unfounded verdict.
+substring counted another app's alarms and produced a confident, unfounded verdict. The UI-tap
+locating (`node_center`/`ui_dump`/`tap_label`/`ui_self_test`) lives in `.github/scripts/ui_tap.sh`
+for the same reason - shared with `scripts/verify-long-idle-alarm-survival.sh` below, never
+duplicated.
+
+**`scripts/verify-alarm-survival.sh` only ever checks *registration* a few seconds after an
+intervention - not whether the alarm actually rings hours later with the app never reopened.**
+That is the one scenario `docs/TODO.md` T-04/T-93 still call unresolved (two real-device runs on
+consecutive days disagreed about whether force-stop loses the alarm). `scripts/verify-long-idle-
+alarm-survival.sh` (T-164) answers that question directly: `arm` reuses the same UI-driven arming,
+reboots, then force-stops - the combined worst case - and stops there rather than sleeping for a
+day; `check`, run separately after the printed due time (24h later) with the phone left completely
+untouched in between, asks directly whether it actually rang, the same standard every other
+real-device confirmation in this project used. 24 hours, not less: a few seconds already passes
+(T-93), so anything shorter would not be new evidence, and 24h is the realistic worst case for this
+app's actual audience - a shift worker's phone sitting idle between shifts. `--self-test` checks the
+reused detection/tap-locating self-tests plus this script's own timestamp arithmetic, all without a
+device.
 
 `.github/scripts/check_alarm_survival.sh --self-test` is the other cheap local check: it runs the
 alarm-detection logic against recorded `dumpsys alarm` output in `.github/scripts/fixtures/`, needs

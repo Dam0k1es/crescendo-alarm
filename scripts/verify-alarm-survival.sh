@@ -36,6 +36,8 @@ REPO="$(cd "$HERE/.." && pwd)"
 FIXTURES="$REPO/.github/scripts/fixtures"
 # shellcheck source=.github/scripts/alarm_detection.sh
 source "$REPO/.github/scripts/alarm_detection.sh"
+# shellcheck source=.github/scripts/ui_tap.sh
+source "$REPO/.github/scripts/ui_tap.sh"
 
 PACKAGE="com.wakeywakey.wakeywakey"
 APK=""
@@ -53,54 +55,6 @@ while (( $# )); do
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
 done
-
-# Prints "x y" for the centre of the first node whose text or content-desc
-# equals the label.
-node_center() {
-  local label="$1" xml="$2"
-  printf '%s' "$xml" \
-    | sed 's/></>\n</g' \
-    | grep -F -e "text=\"$label\"" -e "content-desc=\"$label\"" \
-    | grep -oE 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' \
-    | head -1 \
-    | grep -oE '[0-9]+' \
-    | paste -sd' ' - \
-    | awk 'NF==4 { printf "%d %d", ($1+$3)/2, ($2+$4)/2 }'
-}
-
-# The tap locating proves itself too, against recorded accessibility trees -
-# the same principle the alarm counting learned the hard way (T-99/T-103). A
-# tap that lands on nothing would arm no alarm, and the script would then
-# report "not measurable" while the app was perfectly fine.
-ui_self_test() {
-  local failed=0 xml center
-
-  xml="$(cat "$FIXTURES/uiautomator_alarms_screen.xml")"
-  center="$(node_center "Add A New Alarm" "$xml")"
-  [[ "$center" == "936 1776" ]] || { echo "UI SELF-TEST FAIL: add button at '$center' instead of '936 1776'." >&2; failed=1; }
-
-  # A label must not match a longer one that contains it: "Manual" sits next to
-  # "Manual Alarm List" in that very tree.
-  center="$(node_center "Manual" "$xml")"
-  [[ "$center" == "810 360" ]] || { echo "UI SELF-TEST FAIL: 'Manual' at '$center' instead of '810 360' (matched 'Manual Alarm List'?)." >&2; failed=1; }
-
-  xml="$(cat "$FIXTURES/uiautomator_add_dialog.xml")"
-  center="$(node_center "Save" "$xml")"
-  [[ "$center" == "800 1945" ]] || { echo "UI SELF-TEST FAIL: 'Save' at '$center' instead of '800 1945'." >&2; failed=1; }
-  # Cancel and Save sit side by side - hitting the wrong one would silently
-  # create no alarm at all.
-  center="$(node_center "Cancel" "$xml")"
-  [[ "$center" == "600 1945" ]] || { echo "UI SELF-TEST FAIL: 'Cancel' at '$center' instead of '600 1945'." >&2; failed=1; }
-
-  # An empty tree (the usual first dump of a Flutter app) must yield nothing,
-  # not a bogus coordinate - that is what the retry loop depends on.
-  xml="$(cat "$FIXTURES/uiautomator_empty.xml")"
-  center="$(node_center "Save" "$xml")"
-  [[ -z "$center" ]] || { echo "UI SELF-TEST FAIL: empty tree yielded '$center'." >&2; failed=1; }
-
-  (( failed )) && return 1
-  echo "ui self-test ok (tap locating checked against recorded accessibility trees)"
-}
 
 if (( SELF_TEST_ONLY )); then
   self_test && ui_self_test
@@ -204,34 +158,10 @@ dump_context() {
 # The created alarm lands roughly 24 hours out: the dialog pre-fills the
 # current time, and AppState moves a time that is not still ahead to the next
 # day. So nothing rings during the measurement.
+#
+# node_center/ui_dump/tap_label/ui_self_test come from ui_tap.sh (sourced
+# above) - shared with scripts/verify-long-idle-alarm-survival.sh.
 # ---------------------------------------------------------------------------
-ui_dump() {
-  adb shell uiautomator dump /sdcard/ww_ui.xml >/dev/null 2>&1
-  adb shell cat /sdcard/ww_ui.xml 2>/dev/null | tr -d '\r'
-}
-
-
-tap_label() {
-  local label="$1" xml center
-  for attempt in 1 2 3; do
-    # The first dump after launch is regularly empty: a Flutter app only builds
-    # its semantics tree once an accessibility client connects, and uiautomator
-    # IS that client - so the tree exists from the second dump on.
-    xml="$(ui_dump)"
-    center="$(node_center "$label" "$xml")"
-    if [[ -n "$center" ]]; then
-      note "  tap '$label' at ($center)  [dump $attempt]"
-      # shellcheck disable=SC2086
-      adb shell input tap $center
-      sleep 2
-      return 0
-    fi
-    sleep 2
-  done
-  printf '%s' "$xml" | raw "ui dump without a node named '$label'"
-  note "  could not find '$label' in the accessibility tree"
-  return 1
-}
 
 note "--- launching the app ---"
 adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 2>&1 | raw "launch"
