@@ -131,6 +131,55 @@
             android:exported="false"
             android:directBootAware="true"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- docs/TODO.md T-165: the `alarm` plugin (5.12.0) declares its own
+             AlarmReceiver as `android:exported="true"` with no
+             `android:permission` and no `<intent-filter>` - reachable by ANY
+             other installed app via an explicit broadcast naming this
+             component. Its `ACTION_STOP` handler
+             (AlarmService.handleStopAlarmCommand, called from
+             AlarmReceiver.onReceive) fully silences a ringing alarm - audio,
+             vibration, foreground service teardown - with NO check of any
+             kind, completely bypassing this app's QR-scan "guaranteed
+             wake-up" gate, which lives entirely in the Dart layer and is
+             never consulted by this native receiver. The plugin's own
+             ACTION_SNOOZE branch (SnoozeCoordinator.snooze) has a guard
+             specifically because its authors know this receiver is exported
+             to the world; no equivalent guard exists for ACTION_STOP.
+
+             This override closes it the same way the camera <uses-feature>
+             entries above already override a merged plugin manifest
+             attribute (`tools:replace`). Confirmed safe: this app never
+             configures a `stopButton`/`snoozeButton` on its own
+             NotificationSettings (see
+             lib/models/alarms/ringing_alarm_settings.dart's own doc
+             comment), so the plugin's notification-building code
+             (NotificationService.kt) never actually attaches a
+             Stop/Snooze-action PendingIntent to any notification this app
+             ships - there is nothing of that kind for another app to
+             extract via NotificationListenerService and re-fire (the
+             mechanism https://developer.android.com/privacy-and-security/
+             risks/sender-of-pending-intents documents, and the one
+             android:exported="false" genuinely does NOT block - a
+             PendingIntent, once handed to another process, still resolves
+             regardless of the target's export status). What exported=false
+             DOES block is the plain, zero-precondition path this app is
+             actually exposed to: a foreign app constructing its own
+             explicit Intent naming this component directly and calling
+             `sendBroadcast()` - which needs no notification access, no
+             PendingIntent, nothing but the component's public,
+             open-source class name. AlarmManager's own delivery of the
+             app's scheduled alarms, and the app's own Dart-side
+             `Alarm.stop()`/`Alarm.snooze()` calls, are both unaffected:
+             neither goes through a foreign app's own `sendBroadcast()` -
+             see docs/security-assessment-2026-09.md's Finding F1 for the
+             full writeup, including how this specific configuration detail
+             was verified against the plugin's own source rather than
+             assumed. -->
+        <receiver
+            android:name="com.gdelataillade.alarm.alarm.AlarmReceiver"
+            android:exported="false"
+            tools:replace="android:exported" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility?hl=en and

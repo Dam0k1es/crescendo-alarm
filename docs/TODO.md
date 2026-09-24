@@ -629,6 +629,74 @@ that is the basis a decision can be formulated against.
   finding in this project is captured.
 - **Requirement:** R3
 
+### T-165 · The `alarm` plugin's exported `AlarmReceiver` could silence a ringing alarm without the QR code — FIXED (2026-09-24), build-verified
+
+- [x] Found by a full-project security assessment under `CLAUDE.md`'s security-researcher review
+  persona (`docs/security-assessment-2026-09.md`, Finding F1): the `alarm` plugin (5.12.0) declares
+  its own `AlarmReceiver` (`com.gdelataillade.alarm.alarm.AlarmReceiver`) as
+  `android:exported="true"` with no `android:permission` - reachable by any other installed app via
+  an explicit broadcast naming the component directly. Its `ACTION_STOP` handler
+  (`AlarmService.handleStopAlarmCommand`) fully silences a ringing alarm - audio, vibration,
+  foreground-service teardown - with **no check of any kind**, completely bypassing this app's
+  QR-scan "guaranteed wake-up" gate, which lives entirely in the Dart layer and is never consulted
+  by this native receiver. The plugin's own `ACTION_SNOOZE` branch has a narrow guard specifically
+  because its authors know the receiver is exported to the world; no equivalent guard exists for
+  `ACTION_STOP` - the one action that fully defeats "guaranteed wake-up" was the one left completely
+  unguarded.
+- **A load-bearing correction made during remediation, before accepting the finding as first
+  written:** the initial draft rated this **High**, on the theory that an app holding Android's
+  Notification-access permission could extract the ringing alarm's Stop-button `PendingIntent`
+  straight from the notification and re-fire it with no ID-guessing needed. That mechanism is real
+  in general (Android's own security docs name it explicitly), but checking it against *this
+  app's own* configuration - not the plugin's general capability - found it does not apply here:
+  `lib/models/alarms/ringing_alarm_settings.dart` never sets a `stopButton`/`androidSnoozeButton` on
+  its `NotificationSettings` (a deliberate T-147 choice, unrelated to this finding, that turns out to
+  also close this path as a side effect), and the plugin's own `NotificationService.kt` only attaches
+  the Stop/Snooze action - and their `PendingIntent`s - to a notification when those fields are
+  non-null. **There is therefore no Stop/Snooze `PendingIntent` in any notification this app ships**
+  for a Notification-access-holding app to extract. Severity revised to **Medium**: the remaining
+  realistic path is a permissionless app brute-forcing the ~10^8-value alarm-ID space via direct
+  explicit broadcasts during the ringing window - real, and needing no special permission, but not
+  the "instant, no guessing" scenario first assumed.
+- **Fixed regardless of the severity revision**, because the fix is cheap and the remaining path is
+  still a genuine, zero-permission bypass of the app's core promise: an `AndroidManifest.xml`
+  override, using the exact `tools:replace` pattern this file already uses for the camera
+  `<uses-feature>` entries -
+  ```xml
+  <receiver
+      android:name="com.gdelataillade.alarm.alarm.AlarmReceiver"
+      android:exported="false"
+      tools:replace="android:exported" />
+  ```
+  Confirmed safe (not just assumed): `AlarmManager`'s own delivery of a scheduled alarm, and this
+  app's own Dart-side `Alarm.stop()`/`Alarm.snooze()` calls, both resolve to the app addressing its
+  own component - unaffected by `exported="false"`, which only blocks a *foreign app's own*
+  `sendBroadcast()` call reaching an unexported receiver, not a `PendingIntent` a process already
+  holds (irrelevant here regardless, per the correction above, since no such `PendingIntent` is ever
+  exposed).
+- **Build-verified, not just applied:** a real `flutter build apk --release` was run against the
+  patched manifest. The Gradle manifest merger's own blame report
+  (`build/app/outputs/logs/manifest-merger-release-report.txt`) confirms `android:exported` was
+  `ADDED` from the app's own manifest and `REJECTED` from the `alarm` plugin's, and the final merged
+  manifest shows `AlarmReceiver` with `android:exported="false"` in the actual buildable output, not
+  merely in the source file.
+- **Regression-guarded:** `test/alarm_receiver_not_exported_test.dart` (new, source-reading, in the
+  shape of `test/no_proprietary_dependencies_test.dart`) asserts the override is present with
+  `tools:replace`, so a future manifest edit can't silently drop it. Confirmed against `git show` on
+  the pre-fix commit that this test would have failed against the original manifest (the component
+  name did not appear in it at all).
+- **Not yet done:** an on-device ring-to-dismiss cycle after this change, per
+  `docs/device-trial-checklist.md`'s own practice for native-layer changes - this fix was produced
+  and verified without a connected device (build/manifest-merger evidence only). Given the app never
+  exposes a Stop/Snooze notification action to begin with (see above), there is nothing native-UI-side
+  this change could plausibly break, but a real ring is still the standard this project holds
+  every other native-layer change to.
+- **Full writeup, including the corrected exploitation-path analysis, PoC-level evidence, and every
+  other finding from the same assessment:** `docs/security-assessment-2026-09.md`.
+- **Requirement:** none directly (no formal requirement currently covers third-party native-plugin
+  IPC exposure) - closest is R4 (alarm-ringing prerequisites), whose "guaranteed" caveat this finding
+  sits directly underneath.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`

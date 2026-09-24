@@ -265,6 +265,15 @@ camera for QR deactivation).
   The negative half of the QR gate is no longer E2E-only: `test/qr_scanner_gate_test.dart` asserts
   that a wrong code is not accepted, with `Diag.qrGate` as the oracle.
 
+- **Fixed (2026-09-24, `docs/TODO.md` T-165):** a bypass of the QR gate that didn't go through the
+  gate at all - the `alarm` plugin's own native `AlarmReceiver` was exported with no permission, and
+  its `ACTION_STOP` handler stopped a ringing alarm unconditionally, never consulting the Dart-side
+  deactivation-code check. Unlike the two fail-safes below (deliberate, user-facing escape hatches
+  for someone who cannot physically satisfy the gate), this was an unintended IPC exposure with no
+  design rationale behind it - closed via a manifest override, build-verified against the actual
+  merged manifest. See `docs/security-assessment-2026-09.md` Finding F1 for the full analysis,
+  including a correction made mid-remediation to the originally-assumed severity/exploitation path.
+
 - **Fail-safes, and why "guaranteed" isn't absolute (`docs/TODO.md` T-38):** the QR gate has two
   deliberate escape hatches, both weighed the same way - trapping someone behind a gate they have
   no physical way to satisfy is worse than the gate occasionally being bypassable.
