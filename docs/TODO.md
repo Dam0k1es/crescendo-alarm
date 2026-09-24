@@ -1482,7 +1482,7 @@ that is the basis a decision can be formulated against.
   splash-screen path it now also covers.
 - **Requirement:** R4
 
-### T-40 · No CI check is actually enforceable — PARTLY DECIDED (2026-09-24), two sub-questions still open
+### T-40 · No CI check is actually enforceable — LARGELY DECIDED (2026-09-24), one sub-question still open
 
 - [x] Decide how the "must pass before master" rule is enforced, given the repository's plan.
 - **Why:** the requirements register says its checks must be guaranteed "before any push to
@@ -1512,20 +1512,20 @@ that is the basis a decision can be formulated against.
   independently re-verifies everything at tag time regardless (a bad tag still cannot produce a
   signed release either way - this rule is about not burning the expensive gate a second time on a
   commit already known red, not about release safety, which doesn't depend on it).
-- **Still open, genuinely undecided - two independent, low-risk GitHub-config questions:**
-  1. An existing-but-inert ruleset ("Branch Protection", id 23728728, created automatically around
-     when the repo went public) has `deletion`/`non_fast_forward` rules but targets no branch at all
-     (`conditions.ref_name.include` is empty) - fixing it to actually target `master` would be a
-     purely additive safety net (protects the "never a merge commit, linear history" invariant
-     `CLAUDE.md` already documents) with zero effect on the normal fast-forward-push workflow.
-  2. Whether to additionally require `ci.yml`'s `Analyze & Test` (dev) check to have passed before a
-     commit may be fast-forwarded onto `master` at all - technically enforceable per the reasoning
-     above, but a real workflow change: it would block, for instance, an emergency fix committed
-     directly to `master` without first having gone through `dev`.
-  Neither has been actioned - both are GitHub repository-governance changes, a class of action this
-  session's own tooling declines to make unilaterally (confirmed: a `gh api` write to the ruleset was
-  denied by this environment's own permission classifier). Left for the maintainer to action
-  directly, or to ask for explicitly.
+- **Done (maintainer, 2026-09-24): the inert ruleset now actually targets `master`.** "Branch
+  Protection" (id 23728728) had `deletion`/`non_fast_forward` rules but targeted no branch at all
+  (`conditions.ref_name.include` was empty, apparently left that way since being auto-created around
+  when the repo went public) - re-pointed at `refs/heads/master` via `gh api .../rulesets/23728728`
+  (PUT), on the maintainer's explicit request. `master` can no longer be deleted or force-pushed/
+  history-rewritten; a normal fast-forward push (the only kind this project's own workflow ever
+  does) is unaffected. Confirmed live via a follow-up `GET` on the same ruleset.
+- **Still open, genuinely undecided:** whether to additionally require `ci.yml`'s `Analyze & Test`
+  (`dev`) check to have passed before a commit may be fast-forwarded onto `master` at all -
+  technically enforceable per the reasoning above (the check already exists on that SHA from its
+  `dev` push, so no chicken-and-egg problem), but a real workflow change: it would block, for
+  instance, an emergency fix committed directly to `master` without first having gone through `dev`.
+  Left for the maintainer to action directly, or to ask for explicitly - this is the one remaining
+  piece of T-40.
 - **Requirement:** R1
 
 ### T-41 · Permissions are requested before the privacy policy is reachable — FIXED (2026-09-20)
