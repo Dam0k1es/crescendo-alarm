@@ -71,11 +71,17 @@ verified (`apksigner verify`) instead.
 
 ### Usage
 
-- Open Wakey Wakey on your mobile device.
-- Allow the app to sync with your calendar.
-- Set up your alarm preferences
-- Optionally add QR codes in remote locations.
+- Open Wakey Wakey - the first screen is the privacy policy; nothing is requested until you
+  acknowledge it.
+- Open the **Schedule** tab and pick which calendars should drive your wake-up times (grants
+  calendar access the first time).
+- Adjust **Sleep Habits** to taste - most people only need "Preferred wake-up time" and the two
+  lead-time durations. Every option has a **?** button with a short explanation.
+- Optionally set up a **Scan Code** deactivation code and place it somewhere you have to get up to
+  reach.
 - Enjoy a more reliable and interactive waking experience.
+
+For every screen and control in detail, see the full [User Guide](docs/USER_GUIDE.md).
 
 ### Alarm scheduling
 
@@ -106,6 +112,8 @@ most:
   have their current status honestly stated) before any push to `master`.
 - [`docs/TODO.md`](docs/TODO.md) - every known open task, prioritised, with evidence and an
   acceptance criterion.
+- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) - every screen and control the app exposes, for
+  end users rather than contributors.
 
 ### Contributing
 

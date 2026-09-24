@@ -1355,11 +1355,18 @@ that is the basis a decision can be formulated against.
   tree), and `tester.ensureVisible()` before tapping (the screen scrolls, so later icons exist in
   the tree before they're actually on screen).
 
-### T-21 · Write a user manual
+### T-21 · Write a user manual — IMPLEMENTED (2026-09-24)
 
-- [ ] A complete version under `docs/`, and a minimal one in the README.
+- [x] A complete version under `docs/`, and a minimal one in the README.
 - **Why:** requested; there is no usage documentation beyond four bullet points.
-- **Done when:** the manual covers every screen and control that the GUI exposes.
+- **Done when:** the manual covers every screen and control that the GUI exposes. Met:
+  `docs/USER_GUIDE.md` walks every tab (Alarms' Scheduled/Manual sub-tabs and the add/edit dialog,
+  Schedule's views/Today/Calendars/ignore-event gesture, Scan Code's Generate/Import/description/
+  Remove/Share, all nine Sleep Habits options, Settings' four sub-pages including the growable
+  custom-tones list from T-56, and the ringing screen's Snooze/Stop), plus the lazy-permission
+  behaviour from T-157 and T-41's privacy-first splash screen. README's own "Usage" section is the
+  minimal version - five bullets instead of four, still short - with a link to the full guide, and
+  a new "Project Documentation" entry points at it too.
 
 ### T-22 · Rework the README for a reader who is not a developer — RESOLVED (2026-09-09)
 
