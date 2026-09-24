@@ -638,6 +638,9 @@ that is the basis a decision can be formulated against.
 - **Done when:** run once for real, with the phone genuinely left alone for the full 24h, and the
   result recorded here and cross-referenced from T-04/T-93/R3 - the same way every other real-device
   finding in this project is captured.
+- **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
+  state - the maintainer plans to run it with an idle period longer than the 24h minimum this tool
+  was built for.
 - **Requirement:** R3
 
 ### T-165 · The `alarm` plugin's exported `AlarmReceiver` could silence a ringing alarm without the QR code — FIXED (2026-09-24), build-verified
@@ -696,14 +699,11 @@ that is the basis a decision can be formulated against.
   `tools:replace`, so a future manifest edit can't silently drop it. Confirmed against `git show` on
   the pre-fix commit that this test would have failed against the original manifest (the component
   name did not appear in it at all).
-- **Partly confirmed on a real device (2026-09-24, maintainer):** Snooze was tested after this
-  change and works. Stop specifically was not separately reported - given the app never exposes a
-  Stop/Snooze notification action to begin with (see above), there was nothing native-UI-side this
-  change could plausibly break for either, and Snooze exercises the same
-  `AlarmService`/`AlarmReceiver` code path Stop does, so this is meaningful, if not
-  exhaustive, real-device evidence. `docs/device-trial-checklist.md`'s own practice for
-  native-layer changes calls for a full ring-to-dismiss cycle; treat Stop itself as still
-  informally rather than formally confirmed.
+- **Confirmed on a real device (2026-09-24, maintainer):** both Snooze and Stop were tested after
+  this change and work; the maintainer has been running the alarm on that device for several days
+  since with no problems. Given the app never exposes a Stop/Snooze notification action to begin
+  with (see above), there was nothing native-UI-side this change could plausibly break for either,
+  and both exercise the same `AlarmService`/`AlarmReceiver` code path this fix touches.
 - **Full writeup, including the corrected exploitation-path analysis, PoC-level evidence, and every
   other finding from the same assessment:** `docs/security-assessment-2026-09.md`.
 - **Requirement:** none directly (no formal requirement currently covers third-party native-plugin
@@ -3206,6 +3206,8 @@ that is the basis a decision can be formulated against.
   meetings-related fields.
 - **Done when:** the refactor is done and existing tests (once T-10 exists) still pass, or this is
   closed as not worth the churn.
+- **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
+  state.
 
 ### T-60 · Calendar data was cached forever per week, never re-fetched for the app's lifetime — FIXED (2026-09-19)
 
@@ -3758,6 +3760,8 @@ that is the basis a decision can be formulated against.
 - **Impact:** high and everyday. Every "early appointment — free days — early appointment again"
   pattern hits it, and the user gets two nights at one-and-a-half times the allowed step, plus a
   notification they cannot turn off.
+- **Postponed to the next version (maintainer, 2026-09-24):** the spec decision needed before this
+  can be fixed test-driven is not a blocker for the current release state.
 - **Requirement:** R2
 
 ### T-138 · Snooze (FR-20) — IMPLEMENTED (2026-09-12)
@@ -4129,6 +4133,8 @@ red and that stays invisible in the rest of the suite today.
   that `device_calendar` supplies anyway - that needs no lookahead, but changes the origin of the
   zone, and that is exactly what FR-2 pins down.
 - **Already hardened (T-118a):** day assignment near midnight under a **constant** offset.
+- **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
+  state.
 - **Requirement:** R2
 
 ### T-120 · OPEN SPEC DECISION: which day does a wake value belong to when it falls back over midnight?
@@ -4163,6 +4169,8 @@ red and that stays invisible in the rest of the suite today.
     00:30 appointment would be guaranteed to be missed. Ruled out from a reviewer's perspective.
 - **Already hardened (T-118b):** that `hardFloor` may fall before midnight of its own day - the
   precondition of every one of these readings.
+- **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
+  state.
 - **Requirement:** R2
 
 ### T-121 · OPEN SPEC DECISION: the asymmetry of FR-9's valve
@@ -4182,6 +4190,8 @@ red and that stays invisible in the rest of the suite today.
     the same time exactly the wording FR-9's **own three test cases** describe ("no `hardFloor`
     in the window") - to that extent the smaller change to the spec text.
 - **Already hardened (T-118c):** both restrictions present today.
+- **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
+  state.
 - **Requirement:** R2, R3
 
 ### T-122 · OPEN SPEC DECISION: anchoring by origin or by meaning?
@@ -4206,6 +4216,8 @@ red and that stays invisible in the rest of the suite today.
     `hardFloor` - which would require persisting that value too (a third map alongside values and
     anchors), because checkpoint 2 is not allowed to read the calendar. An extension of FR-3.
 - **Already hardened (T-118d):** the capping case.
+- **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
+  state.
 - **Requirement:** R2, R3
 
 ### T-118 · Four decided properties were uncovered — RESOLVED (2026-09-11)
@@ -4329,6 +4341,8 @@ red and that stays invisible in the rest of the suite today.
   branch is an *equivalent* mutant, uncatchable by any test — the two `if`s are not `else if`, at
   exactly +12h the first branch subtracts 24h and the second immediately adds it back. The
   boundary case depends solely on the second branch.
+- **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
+  state.
 - **Requirement:** R2
 
 ### T-114 · The following week's anchor hung off the trigger instead of the state — RESOLVED (2026-09-11)
@@ -4409,6 +4423,8 @@ red and that stays invisible in the rest of the suite today.
   check (which would otherwise compare curve values against another day's `hardFloor`).
 - **Do not implement before a decision:** without one there is no test that could turn this case
   red without inventing the intended behaviour itself first.
+- **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
+  state.
 - **Requirement:** R2
 
 ### T-113 · OPEN SPEC DECISION: should FR-16's Checkpoint 2 also update the already-armed alarms?
@@ -4437,6 +4453,8 @@ red and that stays invisible in the rest of the suite today.
   does not address - a plugin channel inside the isolate, the same failure class FR-16 already
   sidestepped once with direct SharedPreferences access (T-79). That is the real cost here, not
   the arithmetic.
+- **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
+  state.
 - **Requirement:** R2, R3
 
 ### T-111 · Checked and DISPROVEN: migration path `lastProcessedConcludedDay` → `lastReplanDate` (2026-09-11)
