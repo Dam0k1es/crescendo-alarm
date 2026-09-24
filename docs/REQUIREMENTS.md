@@ -122,23 +122,25 @@ valve never needs to fire at all).
   Not yet captured with the scripted `dumpsys alarm` procedure (`check_alarm_survival.sh`) or
   logged with device/APK details in `docs/device-trial-checklist.md`'s table format - see the
   Findings entry there for now.
-- **Status: partially met - one gap remains, one is now resolved, as of 2026-09-20.** Every scenario
-  where the app is reopened, or the device stays unlocked, has been observed working on a real
-  device: a UI swipe-away, a reboot with no app interaction (device left unlocked), and a force-stop
-  followed by reopening the app (FR-17's recovery). `am force-stop` with the app never reopened again
-  remains Android's own platform boundary, not something this app can fix, and is documented as such
-  rather than counted against this requirement. A **reboot followed by the device staying locked**
-  (never unlocked, `docs/TODO.md` T-158) was not a platform boundary - it was this app's own missing
-  Direct-Boot support, with a real ordinary-use trigger (an overnight OTA reboot) - and has since
-  been **confirmed fixed on a real device**: a Direct-Boot-aware fallback (native, self-contained,
-  does not touch the real ring pipeline or the user's actual tone/volume settings) vibrates and plays
-  an audible, looping siren while the device stays locked, and is silenced the moment the device is
-  unlocked. What's left: the scripted `dumpsys alarm` procedure
-  (`check_alarm_survival.sh`) has still never actually been run and logged via
-  `docs/device-trial-checklist.md`'s table template, and the E2E suite still doesn't exercise
-  reboot or force-stop at all (structurally can't, for the reasons `docs/TODO.md` T-93/T-131
-  record). A missed alarm is a total failure of the app's core purpose, so closing both gaps
-  remains worth doing.
+- **Status: partially met - one gap remains open and unresolved (not merely undocumented), one is
+  now resolved, as of 2026-09-24.** Every scenario where the app is reopened, or the device stays
+  unlocked, has been observed working on a real device: a UI swipe-away, a reboot with no app
+  interaction (device left unlocked), and a force-stop followed by reopening the app (FR-17's
+  recovery). **`am force-stop` with the app never reopened again is the one scenario this
+  requirement cannot currently make a claim about either way** - see the contradiction between the
+  2026-09-18 and 2026-09-19 real-device evidence documented below; it is not the settled platform
+  boundary earlier drafts of this section described. A **reboot followed by the device staying
+  locked** (never unlocked, `docs/TODO.md` T-158) was not a platform boundary - it was this app's
+  own missing Direct-Boot support, with a real ordinary-use trigger (an overnight OTA reboot) - and
+  has since been **confirmed fixed on a real device**: a Direct-Boot-aware fallback (native,
+  self-contained, does not touch the real ring pipeline or the user's actual tone/volume settings)
+  vibrates and plays an audible, looping siren while the device stays locked, and is silenced the
+  moment the device is unlocked. What's left: a clean, repeatable re-measurement of the force-stop
+  question (a longer post-force-stop wait, ideally cross-checked against an actual ring, not only
+  `dumpsys` registration) logged via `docs/device-trial-checklist.md`'s table template, and the E2E
+  suite still doesn't exercise reboot or force-stop at all (structurally can't, for the reasons
+  `docs/TODO.md` T-93/T-131 record). A missed alarm is a total failure of the app's core purpose, so
+  closing this gap remains the single highest-priority open item in this document.
   **Fixed (2026-09-18):** a `SharedPreferences` load failure could block app startup entirely
   instead of degrading to defaults - see `docs/TODO.md` T-45. (The per-alarm enable/disable switch
   not cancelling the underlying OS alarm, `docs/TODO.md` T-03, was already resolved on 2026-09-16 -
@@ -173,9 +175,24 @@ valve never needs to fire at all).
   next time the app is opened.
 - **Real-device confirmation (2026-09-18): force-stopping the app during a scheduled alarm indeed
   loses it - no ring.** This is the boundary above actually observed, not just reasoned from the
-  code, and it is not fixable: it's Android's own platform guarantee for what `am force-stop` does
-  to a package (every AlarmManager entry it owns is dropped, unconditionally, by the OS itself,
-  before the app gets any chance to react). No app-level code change can prevent this.
+  code, and was believed to be Android's own platform guarantee for what `am force-stop` does to a
+  package (every AlarmManager entry it owns dropped, unconditionally, before the app gets any chance
+  to react).
+  **Contradicted the next day and currently unresolved (2026-09-19, `docs/TODO.md` T-93):** a
+  second, independently-scripted real-device measurement (`dumpsys alarm`'s own uid counter, not a
+  wait-and-see ring test) found the app's alarms **still registered after `am force-stop`** on the
+  same physical device - the opposite of what this paragraph and T-93's own code-reading both
+  predicted, and checked directly against the `alarm` plugin's source, which does not use the one
+  documented exemption (`AlarmManager.setAlarmClock()`) that would explain it. Neither run has been
+  repeated to rule out a timing artifact (T-93's script waits only 5s after force-stop) or an
+  Android-16-specific behaviour change. **Read this requirement's force-stop half as genuinely
+  unresolved, not as either "loses the alarm" or "survives it"** - the two most recent real-device
+  data points disagree with each other, and closing that disagreement (a clean, longer-wait re-run
+  of `check_alarm_survival.sh`, ideally cross-checked against an actual ring rather than only
+  `dumpsys` registration) is the single most important open item for R3's core promise, because it
+  is exactly the scenario ("the app or OS does something unexpected, will the alarm still fire")
+  that this requirement exists to answer. Until it is closed, this app should not be recommended as
+  a sole, unconditionally-reliable alarm for a shift or commitment someone cannot afford to miss.
 - **Real-device confirmation, same session: FR-17's recovery works.** After the force-stop above,
   reopening the app re-armed the alarm and it rang. This is the actual, fixable half of C4/C5 that
   the force-stop boundary itself doesn't cover - "the alarm survives force-stop" is impossible by
@@ -409,6 +426,13 @@ working contact method.
   requirement was previously marked "met" on a check that never covered its actual content, which
   is itself worth remembering when reading any other "Checked by" line in this document: verify
   what a cited review actually covered before trusting its conclusion.
+- **Corrected again (2026-09-24, independent external-auditor review, `docs/TODO.md` T-161):** the
+  policy still claimed "no wake-up times, no dates or times of day" without acknowledging the
+  opt-in diagnostics clock-time switch added since (T-135), and separately still claimed the app
+  "declares an internet-access permission" - stale since T-33/T-101 removed `INTERNET` and
+  `ACCESS_NETWORK_STATE` from the manifest entirely. Both fixed in `assets/text/Privacy.md`. The
+  `WRITE_CALENDAR` permission remains declared but unused (known since T-17); T-161 records why
+  removing it is not a safe same-session fix.
 
 ## R12 - The project is human-readable and quickly understandable
 

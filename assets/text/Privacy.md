@@ -21,18 +21,22 @@ The App collects the following data, all of it stored locally on your device:
 - Diagnostics Log: the App keeps a short technical record of what its alarm scheduler did - for
   example how many days it planned, whether a calendar read succeeded, and how many alarms it
   registered. It is stored on your device only, is limited to the most recent few hundred entries,
-  and can be switched off, viewed and deleted under Settings > Diagnostics. It deliberately
-  contains **no** wake-up times, no dates or times of day, no calendar entries, no calendar or
-  account names, and not your deactivation code: the code that writes this record has no way to
-  store text at all, only counters and fixed categories. Nothing is ever transmitted - the only way
-  it leaves your device is if you copy it yourself from that screen and choose to send it
-  somewhere.
+  and can be switched off, viewed and deleted under Settings > Diagnostics. By default it
+  deliberately contains **no** wake-up times, no dates or times of day, no calendar entries, no
+  calendar or account names, and not your deactivation code: the code that writes this record has
+  no way to store text at all, only counters and fixed categories. A separate, off-by-default
+  switch under Settings > Diagnostics lets you additionally include each planned day's wake-up
+  time and its earliest appointment as exact clock times, with no date attached - intended only for
+  attaching to a bug report when a problem specifically needs it; turning it on means the exported
+  log does contain clock times, so it should only be shared deliberately. Nothing is ever
+  transmitted automatically - the only way any of this leaves your device is if you copy it
+  yourself from that screen and choose to send it somewhere.
 
 The App does not collect your name, email address, contact information, or your device's location.
 
-The installed app declares an internet-access permission, brought in by a bundled software
-component rather than requested by the App's own code; the App does not use it to send any data
-anywhere.
+The installed app makes no network requests of any kind and declares no internet-access
+permission at all - the App is fully usable offline and has no code path that could send data
+anywhere even if it wanted to.
 
 ## Use of Data
 
@@ -67,4 +71,4 @@ any updates.
 If you have any questions about this Privacy Policy, please contact us at
 dam0kes@member.fsf.org.\
 \
-Last updated: 2026-09-08
+Last updated: 2026-09-24

@@ -410,6 +410,57 @@ that is the basis a decision can be formulated against.
   updated either way.
 - **Requirement:** R1
 
+### T-161 · Independent external-auditor review (licence/legal + shift-worker/business fitness) — REVIEWED (2026-09-24), one open item
+
+- [x] Ran a full independent audit under the new "External Compliance & Fitness-for-Purpose Auditor"
+  review persona (`CLAUDE.md`), using a fresh review agent with no prior context on this project -
+  see that persona's own entry for its mandate and working method.
+- **Mandate 1 (licence/legal): signed off, no material caveats.** The auditor independently verified
+  - not merely cited - the GPLv3 dependency-compatibility claim (checked actual `LICENSE` files in
+  `~/.pub-cache` for every direct/notable transitive dependency), the licence-header coverage across
+  all of `lib/`, the "fully offline" claim (grepped for network calls, confirmed `INTERNET`/
+  `ACCESS_NETWORK_STATE` are absent from the merged manifest, not merely unused), and the PII-free
+  diagnostics-log design. All held up. Two disclosure items, not defects, acted on below.
+- **Mandate 2 (shift-worker/business fitness, Marie/Tom from `docs/personas.md`): NOT signed off
+  unconditionally.** The auditor's blocking finding: `docs/REQUIREMENTS.md` R3 stated the 2026-09-18
+  "force-stop loses the alarm" observation as a settled, unfixable platform guarantee without ever
+  being updated to reflect that T-93's independently-scripted measurement the very next day found
+  the opposite (alarms still registered after force-stop) - an unreconciled contradiction in the
+  project's own most safety-critical claim. **Fixed:** R3 rewritten to state the force-stop question
+  as genuinely unresolved rather than settled either way (see R3 and T-93's own entry for the
+  corrected text); this TODO entry and T-93 cross-reference each other. **Still open, and requires a
+  real device** (cannot be done from this environment): a clean, longer-wait re-run of
+  `check_alarm_survival.sh`, ideally cross-checked against an actual ring, to close the
+  disagreement. Until then the auditor's own words stand: *"do not rely on this app as a sole alarm
+  for a shift a person cannot afford to miss."*
+- **Two more findings, both fixed as documentation corrections:**
+  1. `docs/USER_GUIDE.md` claimed the optional diagnostics clock-time switch (`Diag.dayPlanned`,
+     T-135) records "bucketed, not exact clock times" - false; it records an exact minute-of-day.
+     The in-app Settings > Diagnostics text already said this correctly; only the external guide was
+     wrong. Fixed to match.
+  2. `assets/text/Privacy.md` had the same omission more absolutely ("no wake-up times, no dates or
+     times of day... at all") with no mention of that same opt-in exception, and separately still
+     claimed the app "declares an internet-access permission" - stale since T-33/T-101 removed both
+     `INTERNET` and `ACCESS_NETWORK_STATE` from the manifest entirely. Both fixed; `Last updated`
+     bumped.
+- **One finding investigated and deliberately left as-is, with the reasoning recorded so it isn't
+  re-investigated from scratch:** the auditor flagged the unused `WRITE_CALENDAR` permission
+  (already known since T-17) as worth removing now that it's confirmed vestigial. Checked whether
+  that's actually a safe, isolated manifest edit: it is not. `permission_handler`'s Android
+  implementation has no "calendar, read-only" request - `Permission.calendarFullAccess`
+  (`lib/utils/permissions.dart:139`) is the only option that yields `READ_CALENDAR`, and it requests
+  `WRITE_CALENDAR` in the same runtime dialog (verified against
+  `permission_handler_android`'s `PermissionConstants.java`: `calendarFullAccess` = read+write,
+  there is no read-only Android constant). Removing the manifest declaration while still calling
+  `calendarFullAccess` would leave the runtime request asking for a permission the manifest no
+  longer declares - undefined/likely-broken behaviour that needs a real device to verify safely, not
+  a same-session doc-review fix. Left open for whoever next touches `permissions.dart` to pick a
+  real fix (switch to a permission_handler version/API that exposes calendar-read-only on Android,
+  if one exists, or accept `WRITE_CALENDAR` as the necessary cost of the only available "read
+  calendar" request shape and document that explicitly in `docs/licence-position.md`/R11 instead of
+  leaving it looking like an oversight).
+- **Requirement:** R3, R9, R11
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
@@ -953,7 +1004,8 @@ that is the basis a decision can be formulated against.
 - **Evidence:** `assets/text/Privacy.md` against the permissions in
   `android/app/src/main/AndroidManifest.xml` and the QR/calendar code paths. Re-verified while
   fixing this: `WRITE_CALENDAR` is declared but unused (`createOrUpdateEvent` is commented out in
-  `lib/screens/schedule/calendar.dart:91`) - the app currently only *reads* the calendar, and
+  `lib/screens/schedule/calendar.dart:91`) - the app currently only *reads* the calendar (see T-161
+  for why this can't simply be deleted from the manifest as-is), and
   `READ_EXTERNAL_STORAGE` is declared but never actually requested at runtime
   (`lib/utils/permissions.dart` requests only exact-alarm, notification, camera and calendar) -
   consistent with T-44's dead gallery-import button.
@@ -4608,6 +4660,12 @@ red and that stays invisible in the rest of the suite today.
     a clean re-run (ideally with a longer post-force-stop wait) confirms it, treat "alarms survive
     force-stop on this app" as a promising real observation on one real device, not yet a verified
     property to build on or advertise more broadly.
+  - **Flagged by the external-auditor persona review (2026-09-24, see T-161):** `docs/REQUIREMENTS.md`
+    R3 had never been updated to reflect this contradiction - it still stated the 2026-09-18
+    force-stop-loses-the-alarm observation as a settled, unfixable platform guarantee, one day
+    after this entry's own measurement contradicted it. Fixed by rewriting R3's relevant paragraphs
+    to state plainly that the force-stop question is unresolved (not "loses it" and not "survives
+    it") until a clean re-measurement closes the disagreement - see R3 for the corrected text.
 - **Root cause known since 2026-09-11, and structural (T-131):** `flutter test` uninstalls the app
   after the run, so Android drops its AlarmManager entries with it - there can be no alarm
   registered at the time of measurement at all. The procedure therefore needs a different way of
