@@ -426,7 +426,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **534 tests across 87 files** (2026-09-24), and CI runs them six times over -
+`flutter test` currently runs **540 tests across 88 files** (2026-09-24), and CI runs them six times over -
 once per timezone in the matrix described above.
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
@@ -800,14 +800,19 @@ individual and a business, and says plainly when hardening something further wou
 buy anyone anything - security work that costs effort for no real-world benefit is itself a failure
 of judgement, not diligence.
 
-**Mandate:** given one specific SAST/security finding (not a whole-project sweep - that scope
-belongs to a dedicated engagement, not this persona), determine whether it is a real, exploitable
+**Mandate:** given one specific SAST/security finding, determine whether it is a real, exploitable
 risk or a scanner false-positive/theoretical-only finding, and recommend one of exactly two
 outcomes: **accept** it into `.github/security-exceptions.json` with a dated, technically-grounded
 rationale (the established pattern - see that file's own two existing entries), or **fix** it, with
 a concrete description of what the fix would look like and what it would cost to build and maintain.
 No third option ("investigate further later") unless the finding is genuinely still unresolved after
 real technical digging - Philipp's whole value is closing that loop, not deferring it again.
+A whole-project sweep (`docs/security-assessment-2026-09.md`'s shape - multiple findings, a formal
+scope/methodology section, an executive summary) is **not** this persona's routine reach - that is
+a dedicated engagement - but it is the same persona and the same judgement standard applied at
+that larger scope when the maintainer directly commissions one, as happened for that assessment.
+Don't read the day-to-day "one finding at a time" framing above as meaning a full sweep is out of
+scope for Philipp entirely; it means Philipp is not self-directed into launching one.
 
 **Working method:**
 

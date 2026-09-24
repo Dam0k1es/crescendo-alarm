@@ -12,13 +12,19 @@ build-verified before this report was finalized; see F1's own "Verification upda
 
 ## Confidentiality
 
-This document may describe security-relevant weaknesses in an application that, per the project's
-own licensing policy (`docs/licence-position.md`), is intended for public release under GPLv3.
-Until that release, this report itself should be handled as confidential: several findings below
-describe exact mechanisms to defeat the application's "guaranteed wake-up" security control, and
-premature disclosure would let the described weaknesses be exploited before a fix ships. No
-exploitation was carried out against a real device, a real user, or any system outside the source
-tree and local toolchain of this review.
+**Correction (2026-09-24, post-review):** this section originally framed this report as needing to
+stay confidential "until public release" — that framing was already false the moment it was
+written: per `docs/licence-position.md` (R9) and `docs/TODO.md` (T-34), the repository has been
+public since 2026-09-20, four days before this assessment was drafted, and v1.0.0 was already
+released. The findings below were nonetheless committed and pushed to the (already-public) `dev`
+branch alongside their fixes, not held back — in practice this was defensible only because the one
+substantive finding (F1) was fixed and build-verified before this report was finalized, and the
+remaining findings (F2–F5) are Low/Informational and describe accepted risks, not open,
+practically exploitable bypasses. That was the right outcome, but it should not be read as evidence
+that a pre-release confidentiality window was ever actually in effect - there was none, and any
+future assessment of this kind must be written against the repository's real visibility, not an
+assumed one. No exploitation was carried out against a real device, a real user, or any system
+outside the source tree and local toolchain of this review.
 
 ---
 
