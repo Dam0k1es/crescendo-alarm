@@ -221,6 +221,23 @@ Four workflows under `.github/workflows/`:
   in ML Kit before T-33 removed it.
 - **`release.yml`** is triggered by a `v*.*.*` tag or `workflow_dispatch` and gates its signed
   build on **both** `e2e-tests` and `security-gate`.
+
+  **Process rule, not a GitHub-enforced one (docs/TODO.md T-40, decided 2026-09-24): never tag a
+  release until `ci.yml`'s own `master`-push run for that exact commit is confirmed green.** Nothing
+  can technically stop the push itself - a GitHub ruleset's "required status checks" only sees
+  whether a check *already* ran for a commit, and a freshly-pushed commit's `master`-only checks
+  (`security-gate`, `e2e-tests`, `build-android-release`, `mobsf-full-scan`) cannot possibly exist
+  yet at push time, since they only run *because* of that push - a real chicken-and-egg limit, not a
+  gap left open by oversight. `release.yml` re-verifies everything independently at tag time
+  regardless (it calls its own `security-gate`/`e2e-tests`, not `ci.yml`'s results), so a bad tag
+  still cannot produce a signed release - this rule isn't about that safety, which already exists.
+  It's about not burning the ~45-minute/billed-minutes `master` gate a second time, on a tag, for a
+  commit already known to be red on `master` - precisely the mistake that emptied this account's
+  Actions minutes in September 2026 (see "Branches and where work happens" above). Deliberately kept
+  as a process rule rather than a second GitHub ruleset on `refs/tags/v*.*.*` (which would be
+  technically possible, since a tag is created strictly *after* the `master` run completes, so no
+  chicken-and-egg problem there) - the maintainer's own call, not worth the added GitHub-config
+  surface for what a habit already covers.
 - **`ci.yml`'s `mobsf-full-scan` job** (`needs: build-android-release`) runs a full MobSF Docker
   scan against the built signed APK - a second, independent scanner from `security-gate.yml`'s
   `mobsfscan` (a static source-pattern scanner; MobSF here scans the compiled binary). It is

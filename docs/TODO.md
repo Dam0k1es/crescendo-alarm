@@ -1482,22 +1482,50 @@ that is the basis a decision can be formulated against.
   splash-screen path it now also covers.
 - **Requirement:** R4
 
-### T-40 · No CI check is actually enforceable — BLOCKED ON A MAINTAINER DECISION (2026-09-09)
+### T-40 · No CI check is actually enforceable — PARTLY DECIDED (2026-09-24), two sub-questions still open
 
-- [ ] Decide how the "must pass before master" rule is enforced, given the repository's plan.
+- [x] Decide how the "must pass before master" rule is enforced, given the repository's plan.
 - **Why:** the requirements register says its checks must be guaranteed "before any push to
-  `master`", but branch protection and rulesets are unavailable on this private repository's plan,
-  every commit so far went straight to `master` with zero pull requests, and CI runs after the push
-  anyway. A red run cannot stop anything. This undercuts T-06 and T-11: gating the release build is
-  necessary but not sufficient while nothing can block a push.
-- **Evidence:** `gh api …/branches/master/protection` and `…/rulesets` both return 403
-  ("Upgrade to GitHub Pro or make this repository public"); `gh pr list --state all` is empty.
-- **Not actioned tonight, deliberately:** both routes to "done" here - making the repository public,
-  or upgrading its GitHub plan - are account/visibility decisions with real consequences (a private
-  repo becoming publicly readable, or a billing change) that only the maintainer should make. This
-  item is intentionally left for a maintainer decision rather than resolved unilaterally.
-- **Done when:** either the repository is public/upgraded and protection is on, or the register says
-  plainly that enforcement is by maintainer discipline.
+  `master`", but branch protection and rulesets were unavailable on this repository while private,
+  every commit went straight to `master` with zero pull requests, and CI runs after the push anyway.
+  A red run cannot stop anything on its own. This undercuts T-06 and T-11: gating the release build
+  is necessary but not sufficient while nothing can block a push.
+- **What changed (2026-09-24):** the repository is now public (T-34) - the original 403 ("Upgrade
+  to GitHub Pro or make this repository public") is gone, and rulesets are genuinely available now.
+  That does **not** solve the core problem, though, for a structural reason confirmed against real
+  GitHub behaviour: a ruleset's "required status checks" rule blocks a push unless the commit being
+  pushed already has a passing check recorded against its SHA - and a commit's `master`-only checks
+  (`security-gate`, `e2e-tests`, `build-android-release`, `mobsf-full-scan`) cannot possibly exist
+  before that same push triggers them for the first time. Requiring them would make every direct
+  push to `master` fail immediately, forever - not a partial gap, a chicken-and-egg dead end for
+  exactly the checks that matter most. The only status check that *can* legitimately already exist
+  on a commit before it reaches `master` is `ci.yml`'s `dev`-push check (`Analyze & Test`), since
+  `master` is always a fast-forward of `dev` - the identical commit SHA, already checked, moving to
+  a new branch pointer rather than a new commit being created.
+- **Decided (maintainer, 2026-09-24): the release-tagging half is a process rule, not a GitHub
+  ruleset.** Never tag a release until `ci.yml`'s own `master`-push run for that commit is confirmed
+  green - documented in `CLAUDE.md` next to `release.yml`'s own description. A GitHub ruleset on
+  `refs/tags/v*.*.*` requiring the `master`-gate checks *would* have been technically possible here
+  (a tag is created strictly after the `master` run completes, so the chicken-and-egg problem this
+  entry describes above doesn't apply to tags) - explicitly considered and declined as unnecessary
+  GitHub-config surface for what a documented habit already covers, especially since `release.yml`
+  independently re-verifies everything at tag time regardless (a bad tag still cannot produce a
+  signed release either way - this rule is about not burning the expensive gate a second time on a
+  commit already known red, not about release safety, which doesn't depend on it).
+- **Still open, genuinely undecided - two independent, low-risk GitHub-config questions:**
+  1. An existing-but-inert ruleset ("Branch Protection", id 23728728, created automatically around
+     when the repo went public) has `deletion`/`non_fast_forward` rules but targets no branch at all
+     (`conditions.ref_name.include` is empty) - fixing it to actually target `master` would be a
+     purely additive safety net (protects the "never a merge commit, linear history" invariant
+     `CLAUDE.md` already documents) with zero effect on the normal fast-forward-push workflow.
+  2. Whether to additionally require `ci.yml`'s `Analyze & Test` (dev) check to have passed before a
+     commit may be fast-forwarded onto `master` at all - technically enforceable per the reasoning
+     above, but a real workflow change: it would block, for instance, an emergency fix committed
+     directly to `master` without first having gone through `dev`.
+  Neither has been actioned - both are GitHub repository-governance changes, a class of action this
+  session's own tooling declines to make unilaterally (confirmed: a `gh api` write to the ruleset was
+  denied by this environment's own permission classifier). Left for the maintainer to action
+  directly, or to ask for explicitly.
 - **Requirement:** R1
 
 ### T-41 · Permissions are requested before the privacy policy is reachable — FIXED (2026-09-20)
