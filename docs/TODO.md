@@ -708,6 +708,38 @@ that is the basis a decision can be formulated against.
   IPC exposure) - closest is R4 (alarm-ringing prerequisites), whose "guaranteed" caveat this finding
   sits directly underneath.
 
+### T-166 · Sleep-Habits' always-visible hint texts merged into the T-20 help buttons — FIXED (2026-09-24)
+
+- [x] Maintainer request: now that every Sleep-Habits option has a "?" help button (T-20), four
+  small, always-visible grey hint texts sitting directly in the layout - an enforced-minimum note
+  under "Max. daily shift" (T-88) and under "Ramp duration" (T-96), a snooze-budget note under
+  "Duration to wake up" (FR-20), and a no-QR-code/budget-exhausted note under "Snooze time" (FR-20) -
+  became a second, redundant explanation channel for information the help text can now carry
+  instead. Removed from the layout, with their content merged into the corresponding tile's `help`
+  string rather than simply deleted - explicitly checked, not assumed, since the two channels
+  didn't always say quite the same thing (the "Duration to wake up" help text already mentioned the
+  snooze-budget connection in passing; the inline hint had the fuller "why" - the merge keeps the
+  fact, not the full reasoning, to stay inside T-20's own 140-character phone-screen budget).
+- **The four merges, old inline hint → what actually made it into the help text:**
+  - "Max. daily shift": "At least 00:15 h - smaller values are raised to that." → folded in
+    verbatim in substance ("Minimum 00:15; smaller values are raised to that.").
+  - "Duration to wake up": the snooze-budget connection kept ("...and your snooze budget - all
+    snoozes together may use at most this much"); the extra reasoning ("so the time you need to get
+    ready stays untouched") dropped for space - the actionable fact survives, the mechanism behind
+    it doesn't.
+  - "Ramp duration" (Gentle WakeUp): "At least 00:01 h..." → "Minimum 00:01 - the alarm stays quiet
+    at least that long."
+  - "Snooze time": both facts kept ("Never needs a QR code, and stops once that budget is used
+    up"), the "only moves it, doesn't switch off" framing dropped as inferable from "postpones".
+- **Guarded, not just asserted:** `test/screen_sleephabits_help_test.dart` gained a new group
+  specifically asserting the merged content is still present in each of the four affected help
+  texts (`00:15`, `snooze`, `00:01`, `QR` + `used up`) - a source-reading or count-only test would
+  have missed information quietly being dropped during the merge, which is exactly the failure mode
+  a "content survived" guard exists to catch. `test/sleep_habits_order_test.dart`'s now-obsolete
+  "the minimum hint stays with Max. daily shift" test (which asserted the *old*, now-removed inline
+  widget) was removed rather than left to bit-rot into a permanent failure.
+- **Requirement:** none directly - a UI-consolidation request, not a defect.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
@@ -1710,6 +1742,9 @@ that is the basis a decision can be formulated against.
   test conflict), and the agent's own verdict was this doesn't block the push. Left undone rather
   than rushed into this same change: reserving trailing padding on just those three tiles so the
   Switch never sits under the icon.
+- **Follow-up (2026-09-24, T-166):** four tiles' separate, always-visible grey hint texts were
+  merged into this feature's help texts and removed from the layout, once this button gave the
+  screen a single place to explain itself instead of two.
 
 ### T-21 · Write a user manual — IMPLEMENTED (2026-09-24)
 

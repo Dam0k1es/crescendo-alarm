@@ -212,8 +212,14 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               // approach this target (FR-6) - it qualifies the entry above
               // and is meaningless without it.
               _buildTile(
+                // docs/TODO.md T-88: AppState bounds this value below at 15
+                // minutes (otherwise the smoothing would practically never
+                // make progress) - merged into the help text (T-166) rather
+                // than a separate always-visible hint, now that the "?"
+                // button is the one place this screen explains itself.
                 help: 'How much the wake-up time may move per day while '
-                    'drifting toward your preferred time.',
+                    'drifting toward your preferred time. Minimum 00:15; '
+                    'smaller values are raised to that.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -225,17 +231,6 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                         minute: _appState.maxDailyDelta.inMinutes % 60,
                       ),
                     ),
-                    // docs/TODO.md T-88: AppState bounds this value below at
-                    // 15 minutes (otherwise the smoothing would practically
-                    // never make progress). That was invisible to the user -
-                    // whoever picked 5 minutes silently got 15.
-                    const Padding(
-                      padding: EdgeInsets.only(top: 4.0),
-                      child: Text(
-                        'At least 00:15 h - smaller values are raised to that.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -245,26 +240,18 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               // the order they actually occur in and in which `hardFloor`
               // subtracts them: wake up first, then get ready.
               _buildTile(
+                // FR-20: this same duration is also the snooze budget - the
+                // connection isn't guessable, so it's spelled out in the
+                // help text (T-166) rather than a separate, snooze-only
+                // hint that used to appear beneath this control.
                 help: 'Lead time reserved for waking up before an '
-                    'appointment. Also your snooze budget, if snooze is on.',
+                    'appointment, and your snooze budget - all snoozes '
+                    'together may use at most this much.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildLabel("Duration to wake up"),
                     _buildTimePicker("wakeUp", _appState.durationToWakeUp),
-                    // FR-20: this same duration is the snooze budget. The
-                    // connection isn't guessable, so it's spelled out here -
-                    // but only while snooze is actually on.
-                    if (_appState.snoozeEnabled)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4.0),
-                        child: Text(
-                          'Also your snooze budget: all snoozes together may '
-                          'push a wake-up by at most this much, so the time '
-                          'you need to get ready stays untouched.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -328,8 +315,14 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
 
               _buildSectionHeader("When the alarm rings"),
               _buildTile(
-                help: 'Ramps the volume up gradually instead of starting '
-                    'at full volume right away.',
+                // As with maxDailyDelta (T-88): the enforced minimum (the
+                // alarm plugin requires a genuinely positive duration, but
+                // the picker allows 00:00) must not be invisible - merged
+                // into the help text (T-166) rather than a separate,
+                // ramp-only hint that used to appear beneath the control.
+                help: 'Ramps the volume up gradually instead of jumping to '
+                    'full volume. Minimum 00:01 - the alarm stays quiet at '
+                    'least that long.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -356,17 +349,6 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                           minute: _appState.gentleWakeUpDuration.inMinutes % 60,
                         ),
                       ),
-                      // As with maxDailyDelta (T-88): the enforced minimum
-                      // must not be invisible. The alarm plugin requires a
-                      // genuinely positive duration, but the picker allows 00:00.
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4.0),
-                        child: Text(
-                          'At least 00:01 h - the alarm stays quiet for this '
-                          'long before reaching full volume.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ),
                     ],
                   ],
                 ),
@@ -376,8 +358,14 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               // describes what happens when the alarm rings, not when it
               // rings (the same causal grouping as T-95).
               _buildTile(
+                // Snooze never switches the alarm off, and never needs the
+                // QR code even when stopping does - both non-obvious, so
+                // spelled out in the help text (T-166) rather than a
+                // separate, snooze-only hint that used to appear beneath
+                // the control.
                 help: 'Postpones a ringing alarm by a fixed interval, up '
-                    'to the "Duration to wake up" budget above.',
+                    'to your wake-up budget. Never needs a QR code, and '
+                    'stops once that budget is used up.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -402,16 +390,6 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                         TimeOfDay(
                           hour: _appState.snoozeTime.inHours,
                           minute: _appState.snoozeTime.inMinutes % 60,
-                        ),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4.0),
-                        child: Text(
-                          'Snooze never switches the alarm off - it only moves '
-                          'it. No QR code needed, even when one is required to '
-                          'stop it. Once "Duration to wake up" is used up, '
-                          'snoozing stops being offered.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                       ),
                     ],

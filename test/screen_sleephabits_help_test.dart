@@ -101,4 +101,57 @@ void main() {
         reason: 'every option should have its own explanation, not a '
             'copy-pasted shared one');
   });
+
+  // docs/TODO.md T-166: four tiles used to carry a second, always-visible
+  // explanatory Text widget below their control (an enforced-minimum hint,
+  // or a snooze-budget/QR-code note) alongside their "?" help button - once
+  // T-20 gave every option a single place to explain itself, those became
+  // redundant and were removed from the layout. This guards that their
+  // *content* survived the merge into the help text rather than being
+  // silently dropped - a source-reading test would only catch the string
+  // moving file, not whether the information it carried is still there.
+  group('content merged from the removed inline hints (T-166)', () {
+    Future<String> helpTextAt(WidgetTester tester, int index) async {
+      final appState = await _freshAppState();
+      await _pumpScreen(tester, appState);
+
+      final icon = find.byIcon(Icons.help_outline).at(index);
+      await tester.ensureVisible(icon);
+      await tester.pumpAndSettle();
+      await tester.tap(icon);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      return tester
+          .widget<Text>(find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.byType(Text),
+          ))
+          .data!;
+    }
+
+    testWidgets('"Max. daily shift" still documents the enforced minimum',
+        (tester) async {
+      final text = await helpTextAt(tester, 2);
+      expect(text, contains('00:15'));
+    });
+
+    testWidgets('"Duration to wake up" still documents the snooze budget',
+        (tester) async {
+      final text = await helpTextAt(tester, 3);
+      expect(text.toLowerCase(), contains('snooze'));
+    });
+
+    testWidgets('"Gentle WakeUp" still documents the enforced minimum',
+        (tester) async {
+      final text = await helpTextAt(tester, 7);
+      expect(text, contains('00:01'));
+    });
+
+    testWidgets('"Snooze" still documents no-QR-code and the used-up budget',
+        (tester) async {
+      final text = await helpTextAt(tester, 8);
+      expect(text, contains('QR'));
+      expect(text.toLowerCase(), contains('used up'));
+    });
+  });
 }

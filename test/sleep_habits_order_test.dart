@@ -113,24 +113,11 @@ void main() {
     });
   });
 
-  testWidgets('the minimum hint stays with "Max. daily shift"',
-      (tester) async {
-    // The hint from T-88 must not be separated from its control when
-    // reordering - standing alone it would be meaningless.
-    await _pumpScreen(tester, await _appStateWithAllTilesVisible());
-
-    final hint = find.textContaining('smaller values are raised');
-    expect(hint, findsOneWidget);
-    expect(
-      tester.getTopLeft(hint).dy,
-      greaterThan(tester.getTopLeft(find.text('Max. daily shift')).dy),
-    );
-    expect(
-      tester.getTopLeft(hint).dy,
-      lessThan(tester.getTopLeft(find.text('Duration to wake up')).dy),
-      reason: 'the hint still belongs in the "Max. daily shift" tile',
-    );
-  });
+  // docs/TODO.md T-166: the always-visible "smaller values are raised to
+  // 00:15" hint was merged into the "?" help text once T-20 gave this
+  // screen a single place to explain itself - see
+  // test/screen_sleephabits_help_test.dart for the guard that the merged
+  // content is actually still there, not just dropped.
 
   // docs/TODO.md T-96: Gentle Wake had no control - the ramp was hardcoded to
   // 60 seconds.
@@ -145,11 +132,10 @@ void main() {
       greaterThan(tester.getTopLeft(find.text('Gentle WakeUp')).dy),
       reason: 'the control belongs below its switch',
     );
-
-    // As with maxDailyDelta (T-88), the enforced minimum must not be
-    // invisible - the hh:mm picker allows 00:00, the plugin does not.
-    expect(find.textContaining('At least 00:01'), findsOneWidget,
-        reason: 'hint about the minimum is missing');
+    // The enforced minimum (the hh:mm picker allows 00:00, the plugin does
+    // not) used to have its own always-visible hint here; it's now part of
+    // this tile's "?" help text instead (docs/TODO.md T-166) - see
+    // test/screen_sleephabits_help_test.dart.
   });
 
   testWidgets('with Gentle Wake off, there is also no control', (tester) async {
