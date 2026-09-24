@@ -163,6 +163,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               // First the target FR-4 drifts toward: the only setting a user
               // needs at all without calendar appointments.
               _buildTile(
+                help: 'Optional target time the plan drifts toward on days '
+                    'with no appointment of their own.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -192,6 +194,9 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               // docs/TODO.md T-52.1: whether a day with no calendar entry of
               // its own gets an alarm at all (FR-4's drift/hold) or none.
               _buildTile(
+                help: 'On: appointment-free days still get an alarm, '
+                    'drifting toward your preferred time. Off: those days '
+                    'get none.',
                 child: _buildToggle(
                   "Schedule an alarm on days without an appointment",
                   _appState.scheduleOnGapDays,
@@ -207,6 +212,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               // approach this target (FR-6) - it qualifies the entry above
               // and is meaningless without it.
               _buildTile(
+                help: 'How much the wake-up time may move per day while '
+                    'drifting toward your preferred time.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -238,6 +245,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               // the order they actually occur in and in which `hardFloor`
               // subtracts them: wake up first, then get ready.
               _buildTile(
+                help: 'Lead time reserved for waking up before an '
+                    'appointment. Also your snooze budget, if snooze is on.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -261,6 +270,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               ),
               const SizedBox(height: 16.0),
               _buildTile(
+                help: 'Lead time reserved for getting ready before an '
+                    'appointment. Can be overridden per weekday below.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -279,6 +290,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               // lib/utils/sleep_reminder.dart) and does NOT touch the alarm
               // time. Hence here, not in the group above.
               _buildTile(
+                help: 'How much sleep you\'re aiming for. Shifts the '
+                    'bedtime reminder below, not the alarm itself.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -291,6 +304,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               // The lead time is measured from the bedtime the entry above
               // sets - the two belong side by side.
               _buildTile(
+                help: 'A notification reminding you to go to bed, timed '
+                    'this far before your Sleep Goal\'s bedtime.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -313,6 +328,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
 
               _buildSectionHeader("When the alarm rings"),
               _buildTile(
+                help: 'Ramps the volume up gradually instead of starting '
+                    'at full volume right away.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -359,6 +376,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               // describes what happens when the alarm rings, not when it
               // rings (the same causal grouping as T-95).
               _buildTile(
+                help: 'Postpones a ringing alarm by a fixed interval, up '
+                    'to the "Duration to wake up" budget above.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -406,13 +425,47 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
     );
   }
 
-  Widget _buildTile({required Widget child}) {
-    return Card(
+  /// docs/TODO.md T-20: [help], when given, renders as a "?" button pinned
+  /// to the tile's top-right corner. A `Tooltip` (tap-triggered) was tried
+  /// first, but its tap gesture proved unreliable once embedded in this
+  /// screen's `SingleChildScrollView` with several tiles stacked on top of
+  /// each other - it worked in isolation, not here, and chasing gesture-arena
+  /// interactions with the scroll view wasn't worth it for a "?" button.
+  /// A plain `IconButton` showing a `SnackBar` is simpler, exercises only
+  /// well-tested Material widgets, and is just as compact on a phone screen.
+  Widget _buildTile({required Widget child, String? help}) {
+    final card = Card(
       child: Padding(
         padding: const EdgeInsets.all(8.0),
         child: child,
       ),
       // color: Theme.of(context).colorScheme.onPrimary,
+    );
+    if (help == null) return card;
+    return Stack(
+      children: [
+        card,
+        Positioned(
+          top: 0,
+          right: 0,
+          child: IconButton(
+            icon: Icon(
+              Icons.help_outline,
+              size: 18,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.all(8.0),
+            constraints: const BoxConstraints(),
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(help)),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 

@@ -1331,12 +1331,29 @@ that is the basis a decision can be formulated against.
   losing exactly the distinction FR-20 needed.
 - **Done when:** closed as "no change wanted", as of this entry.
 
-### T-20 · Add explanatory help buttons to every Sleep-Habits option
+### T-20 · Add explanatory help buttons to every Sleep-Habits option — IMPLEMENTED (2026-09-24)
 
-- [ ] Put a "?" button in the top-right of each Sleep-Habits element showing a short explanation.
+- [x] Put a "?" button in the top-right of each Sleep-Habits element showing a short explanation.
 - **Why:** requested; the options are not self-explanatory.
 - **Done when:** every option has one, the text is concise enough to read on a phone, and the
-  styling follows the existing elements.
+  styling follows the existing elements. All met: nine tiles, nine distinct explanations
+  (`test/screen_sleephabits_help_test.dart` checks both the count and that no two are the same
+  copy-pasted text), each capped at 140 characters.
+- **Implementation:** `_buildTile`'s optional `help` parameter renders a small `IconButton`
+  (`Icons.help_outline`, `Positioned(top: 0, right: 0)` over the tile's `Card`) that shows the text
+  via a `SnackBar`. **A `Tooltip` with `triggerMode: TooltipTriggerMode.tap` was tried first**, since
+  it needs no extra state and looks like the obvious fit for "tap a small icon, see a short
+  explanation" - but its tap gesture proved unreliable once embedded in this screen's
+  `SingleChildScrollView` with several tiles stacked on top of each other: it worked in an isolated
+  repro widget, not on the real screen, and chasing the gesture-arena interaction wasn't worth it
+  for a "?" button. `IconButton` + `SnackBar` are both plain, well-tested Material widgets and were
+  reliable immediately.
+- **Test-writing note, not a product bug:** the widget test that taps through all nine buttons in a
+  loop needed two fixes that have nothing to do with the feature itself - `pumpWidget`ing an
+  unrelated tree between iterations (Flutter reuses `ScaffoldMessenger` state, and with it a
+  previous iteration's `SnackBar`, across `pumpWidget` calls that build an equivalently-shaped
+  tree), and `tester.ensureVisible()` before tapping (the screen scrolls, so later icons exist in
+  the tree before they're actually on screen).
 
 ### T-21 · Write a user manual
 
