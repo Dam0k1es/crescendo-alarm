@@ -79,6 +79,14 @@ Consequences to respect when adding an event:
   isolate, so there are two `SharedPreferences` keys and a merge on read - the same trap as T-69,
   one level down. `Diag.init` belongs at the isolate's *entry point*
   (`onNotificationCreatedMethod`), never inside the checkpoint: it mutates global state.
+  **`onNotificationCreatedMethod` does not always run in a genuinely fresh isolate, though**
+  (`docs/TODO.md` T-162): `awesome_notifications` only spins one up when the app process wasn't
+  already running - a notification created while the app is alive (which `scheduleSleepReminder()`
+  does on every single checkpoint) fires that same callback in-process, in the main isolate. `Diag
+  .init()` is therefore idempotent per isolate (a no-op once `_boot != 0`), or a second, in-process
+  call silently mislabels every later event `(bg)` and double-bumps the persisted boot counter -
+  found by reading a real exported log, not by code review, and easy to reintroduce by "simplifying"
+  that guard away.
 - Persisted via `shared_preferences`, not a file via `path_provider`, precisely because that
   isolate already talks to it directly - a file logger would depend on plugin-channel availability
   there, which is the failure class T-79 was.

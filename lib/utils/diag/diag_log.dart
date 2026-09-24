@@ -454,11 +454,30 @@ abstract final class Diag {
   static int get bootSeq => _boot;
   static List<DiagRecord> get records => List.unmodifiable(_ring);
 
+  /// Idempotent per isolate (docs/TODO.md T-162): `onNotificationCreatedMethod`
+  /// calls this with `isolate: LogIsolate.background` on the assumption that
+  /// it always runs in a genuinely fresh isolate - true only when the app
+  /// process wasn't already running. `awesome_notifications` also fires that
+  /// callback IN-PROCESS, in the SAME isolate, whenever the app is alive
+  /// when a notification it just created is created - which
+  /// `scheduleSleepReminder()` does at the end of every checkpoint. Without
+  /// this guard, that second, in-process call would overwrite the shared
+  /// `_isolate`/`_boot` static state mid-session: every later event gets
+  /// mis-tagged `(bg)`, the persisted boot counter is bumped a second time
+  /// with no corresponding `boot()` event, and because [flush] persists
+  /// whichever key `_isolate` currently selects, records logged before the
+  /// corruption end up written under BOTH keys and exported twice by
+  /// [readAll]'s merge.
+  ///
+  /// `_boot != 0` is the signal: a genuinely fresh isolate's static state has
+  /// never been touched, so `_boot` is still its initial `0`. A second call
+  /// within an isolate that has already established an identity is a no-op.
   static Future<void> init({
     LogIsolate isolate = LogIsolate.main,
     bool enabled = true,
     SharedPreferences? prefs,
   }) async {
+    if (_boot != 0) return;
     _isolate = isolate;
     _enabled = enabled;
     _prefs = prefs ?? await SharedPreferences.getInstance();
@@ -538,6 +557,14 @@ abstract final class Diag {
   /// DIFFERENT one. The same trap as T-69, just one level deeper.
   static Future<List<DiagRecord>> readAll({SharedPreferences? prefs}) async {
     final p = prefs ?? _prefs ?? await SharedPreferences.getInstance();
+    // (boot, seq) is meant to be a unique record identity - a genuinely
+    // fresh isolate always starts `seq` at 0, so two records can only ever
+    // collide on the same pair if the SAME ring buffer got flushed under
+    // both keys, which T-162's guard on [init] now prevents going forward.
+    // Deduplicated here too (not just prevented at the source) so a log
+    // already corrupted on a device before that fix shipped heals itself
+    // on the next export instead of showing doubled events forever.
+    final seen = <(int, int)>{};
     final all = <DiagRecord>[];
     for (final key in <String>[prefsKeyMain, prefsKeyIsolate]) {
       final raw = p.getString(key);
@@ -545,7 +572,9 @@ abstract final class Diag {
       try {
         for (final entry in jsonDecode(raw) as List<dynamic>) {
           final record = DiagRecord.decode(entry as List<dynamic>);
-          if (record != null) all.add(record);
+          if (record != null && seen.add((record.boot, record.seq))) {
+            all.add(record);
+          }
         }
       } catch (_) {
         // A corrupted entry must not prevent the export. Deliberately no

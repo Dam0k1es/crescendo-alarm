@@ -461,6 +461,50 @@ that is the basis a decision can be formulated against.
   leaving it looking like an oversight).
 - **Requirement:** R3, R9, R11
 
+### T-162 · A re-entrant `Diag.init()` corrupts the diagnostics log mid-session — FIXED (2026-09-24)
+
+- [x] Found by reading a real, maintainer-exported diagnostics log with clock-time logging on
+  (68 events), not by code review: three lines (`boot`, the first `checkpointStarted trigger=1`,
+  the first `checkpointSkipped trigger=1`) appeared **twice**, byte-identical, at the exact same
+  `b<boot>.<seq>` coordinates; the persisted boot counter jumped from 202 to 203 mid-session with
+  **no corresponding `boot()` event**; and every event from that point on was mis-tagged `(bg)`,
+  including `calendarRead`/`weekPlanComputed`/`alarmSync` - events `runTimezoneCheckpoint2` (the
+  actual background-isolate function) structurally never calls.
+- **Root cause:** `lib/utils/notifications.dart`'s `onNotificationCreatedMethod` calls
+  `Diag.init(isolate: LogIsolate.background)`, documented (correctly, as far as it goes) as safe
+  because that callback "runs in its own background isolate with no `AppState`". That is true only
+  when the app process wasn't already running when the notification fired. `awesome_notifications`
+  also invokes the same callback **in-process, in the app's own isolate**, whenever the app is alive
+  when a notification it just created is created - and `checkpoint.dart`'s `runSchedulingCheckpoint`
+  does exactly that on **every single checkpoint**, via `scheduleSleepReminder()` in its `finally`
+  block, right before logging `checkpointFinished`. `Diag.init()`
+  (`lib/utils/diag/diag_log.dart:457-467`, unconditionally overwrote the shared static `_isolate`
+  and bumped+persisted the shared static `_boot` counter with no protection against a second,
+  in-process call. Because `flush()` persists the CURRENT contents of the whole ring buffer under
+  whichever key `_isolate` currently selects (not just newly-added records), records logged before
+  the corruption ended up written under **both** prefs keys, and `readAll()`'s merge had no
+  deduplication - so they were exported twice.
+- **Fixed at the source:** `Diag.init()` is now a no-op if `_boot != 0` - a genuinely fresh isolate's
+  static state has never been touched, so `_boot` is still its initial `0`; a second call within an
+  isolate that already has an identity means it never actually left that isolate. Verified this
+  doesn't break the real fresh-background-isolate case (a notification firing while the app process
+  isn't running at all), which still needs its own identity.
+- **Hardened defensively too:** `readAll()` now deduplicates by `(boot, seq)` - not just prevents
+  future corruption, but heals a log that was already corrupted on a device before this fix shipped,
+  instead of exporting doubled events forever until the user clears it.
+- **Evidence/tests:** `test/diag_log_reentrant_init_test.dart` - reproduces the bug against the
+  pre-fix code (confirmed red: boot bumped, export duplicated) before the fix, then green after;
+  separately confirms a genuinely fresh background isolate is unaffected, and that `readAll()`
+  collapses an already-duplicated `(boot, seq)` pair seeded directly into mock prefs (the shape a
+  pre-fix device's persisted state is actually in).
+- **Not itself a PII or reliability bug** - the log stayed structurally PII-free throughout (the
+  duplicated/mistagged records carried no more information than correct ones would have), and the
+  scheduling engine's own behaviour visible in that log (alarm counts, plan-vs-floor relationships
+  across all seven window days, `alarmSync`'s desired/existing counts) was entirely healthy - but a
+  diagnostics log that mislabels its own isolate and phantom-increments its own boot counter
+  undermines exactly the kind of investigation it exists to support, which is why this was worth
+  fixing immediately rather than only documenting.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
