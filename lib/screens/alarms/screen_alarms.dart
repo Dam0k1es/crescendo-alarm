@@ -29,6 +29,19 @@ import 'package:wakeywakey/models/scheduling/day_marker.dart';
 import 'package:wakeywakey/utils/permissions.dart';
 import 'package:wakeywakey/utils/utils.dart';
 
+/// The six bundled tones, always offered regardless of what's been imported
+/// - kept as one list so the add/edit dialog's dropdown items and its
+/// orphaned-value fallback (see `_showAlarmOverlay`'s doc comment on
+/// `selectedTone`) can't quietly drift apart.
+const List<(String, String)> _bundledTones = [
+  ('Annoying Alarm', 'assets/sounds/annoying_alarm.mp3'),
+  ('LolliPop', 'assets/sounds/lollipop.mp3'),
+  ('Old Telephone', 'assets/sounds/old_telephone_ring.mp3'),
+  ('Wake UP', 'assets/sounds/wake_up.mp3'),
+  ('WakeyWakey', 'assets/sounds/wakeywakey.mp3'),
+  ('WakeyWakey 2', 'assets/sounds/wakeywakey2.mp3'),
+];
+
 class ScreenAlarms extends StatefulWidget {
   const ScreenAlarms({super.key});
 
@@ -351,7 +364,22 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     double volume = alarm?.volume ?? _appState.selectedVolume;
     // docs/TODO.md T-50: same inheritance rule as the others above.
     bool vibrate = alarm?.vibrate ?? _appState.vibrationEnabled;
+    // A stored tone path (an existing alarm's, or AppState's own default)
+    // that matches neither a bundled tone nor a current custom tone would
+    // leave the dropdown below with a `value` none of its `items` match -
+    // an assertion in debug builds, a silently blank dropdown in release.
+    // Reachable on a real device: a pre-T-56 install's custom tone lived at
+    // a fixed path (`custom_tones/custom_tone.<ext>`) that this version
+    // never writes to again, so upgrading orphans it. Falls back to the
+    // first bundled tone, the same default AppState itself starts with.
     String selectedTone = alarm?.tone ?? _appState.selectedTone;
+    final validTonePaths = {
+      for (final (_, path) in _bundledTones) path,
+      for (final tone in _appState.customTones) tone.path,
+    };
+    if (!validTonePaths.contains(selectedTone)) {
+      selectedTone = _bundledTones.first.$2;
+    }
     DateTime nowDT = DateTime.now().add(const Duration(minutes: 1));
     TimeOfDay nowTOD = TimeOfDay(hour: nowDT.hour, minute: nowDT.minute);
     TimeOfDay pickedTime = alarm?.time ?? nowTOD;
@@ -504,18 +532,8 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                               // imported at least one (Settings > Alarm
                               // Tones).
                               items: [
-                                _buildDropdownItem(context, 'Annoying Alarm',
-                                    'assets/sounds/annoying_alarm.mp3'),
-                                _buildDropdownItem(context, 'LolliPop',
-                                    'assets/sounds/lollipop.mp3'),
-                                _buildDropdownItem(context, 'Old Telephone',
-                                    'assets/sounds/old_telephone_ring.mp3'),
-                                _buildDropdownItem(context, 'Wake UP',
-                                    'assets/sounds/wake_up.mp3'),
-                                _buildDropdownItem(context, 'WakeyWakey',
-                                    'assets/sounds/wakeywakey.mp3'),
-                                _buildDropdownItem(context, 'WakeyWakey 2',
-                                    'assets/sounds/wakeywakey2.mp3'),
+                                for (final (name, path) in _bundledTones)
+                                  _buildDropdownItem(context, name, path),
                                 for (final tone in _appState.customTones)
                                   _buildDropdownItem(
                                       context, tone.name, tone.path),

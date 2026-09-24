@@ -1354,6 +1354,14 @@ that is the basis a decision can be formulated against.
   previous iteration's `SnackBar`, across `pumpWidget` calls that build an equivalently-shaped
   tree), and `tester.ensureVisible()` before tapping (the screen scrolls, so later icons exist in
   the tree before they're actually on screen).
+- **Known, accepted follow-up (independent review, 2026-09-24):** on a narrow phone (~360px width)
+  the help `IconButton` overlaps a tile's own trailing `Switch` by roughly 4px×30-40px on the three
+  tiles whose entire content is a bare `SwitchListTile` ("Schedule an alarm on days without an
+  appointment", "Enable Reminder", "Gentle WakeUp") - confirmed geometrically by the review agent,
+  not just eyeballed. Both controls remain individually tappable (the overlap is visual, not a hit-
+  test conflict), and the agent's own verdict was this doesn't block the push. Left undone rather
+  than rushed into this same change: reserving trailing padding on just those three tiles so the
+  Switch never sits under the icon.
 
 ### T-21 · Write a user manual — IMPLEMENTED (2026-09-24)
 
@@ -2721,6 +2729,20 @@ that is the basis a decision can be formulated against.
 - **Not done, deliberately out of scope:** no rename/delete UI for an already-imported tone - not
   requested, and adding it would have doubled this change's surface for a feature nobody asked for
   yet. If it turns out to matter, it belongs in its own item.
+- **Fixed (independent review, 2026-09-24): orphaned-tone dropdown crash risk.** Because there is no
+  migration off the old, single-slot `customTonePath` key (accepted data loss - the setting itself
+  is exactly what "ignore data loss during the test phase" covers), any alarm or `AppState
+  .selectedTone` created before this change can still point at the pre-T-56 fixed path
+  (`custom_tones/custom_tone.<ext>`), which this version never writes to again. The review agent
+  showed that's a step beyond plain data loss: `screen_alarms.dart`'s tone `DropdownButton<String>`
+  requires its `value` to exactly match one `items` entry, so opening the edit dialog on such an
+  alarm threw an assertion in a debug build and would have rendered blank in release. Fixed by
+  extracting the six bundled tones into one `_bundledTones` const (so the dropdown's `items` and the
+  fallback check can't quietly drift apart) and falling back `selectedTone` to
+  `_bundledTones.first.$2` whenever it matches neither a bundled nor a custom tone path, before the
+  dialog builds. `test/screen_alarms_orphaned_tone_test.dart` reproduces a pre-upgrade alarm with
+  the dead path, confirms no exception and the dialog opens, and confirms saving persists the
+  fallback tone rather than the dead path.
 
 ### T-58 · Consider a toast instead of a notification for some feedback — CLOSED, no change wanted (2026-09-20)
 
