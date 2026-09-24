@@ -505,6 +505,51 @@ that is the basis a decision can be formulated against.
   undermines exactly the kind of investigation it exists to support, which is why this was worth
   fixing immediately rather than only documenting.
 
+### T-163 · Enrich the opt-in diagnostics log with per-event calendar times — IMPLEMENTED (2026-09-24)
+
+- [x] Maintainer request, explicit: since the wake/appointment-time logging (T-135) is already
+  opt-in, the log may carry a bit more while investigating a scheduling problem - **on the express
+  condition that calendar content stays out**: no title, no description, no attendees, no location.
+  Times are fine.
+- **Why:** `Diag.dayPlanned` already logs each window day's planned wake time and its single
+  earliest appointment, but only the one `hardFloor` picked as earliest - not what the day's other
+  real candidates were. A wrong pick (an all-day or ignored event miscounted, or the wrong one
+  winning among several genuine candidates) could previously only be diagnosed by re-deriving the
+  whole candidate set from a fresh calendar read; the log itself couldn't show it.
+- **Implementation:** new `Diag.dayEventTime({dayOffset, startMinuteOfDay, endMinuteOfDay})`
+  (`lib/utils/diag/diag_log.dart`), gated behind the exact same `Diag.includeClockTimes` switch as
+  `dayPlanned` - not a new, third toggle, since it's the same privacy boundary (exact times,
+  opt-in, off by default). One record per real, non-all-day, non-ignored calendar event within the
+  planning window (not one per day) - `replan.dart`'s existing `dayPlanned` loop already computes
+  exactly that list (`eventsForDay(...).removeWhere((e) => e.isAllDay)`, on `allEvents`, which is
+  already filtered to exclude ignored events before this layer ever sees it) to find the day's
+  earliest event; it now also emits one `dayEventTime` per entry in that same list, not just the
+  earliest. An all-day event is never logged this way (no meaningful minute-of-day, and it never
+  sets the hard floor either); an ignored event never reaches this code path at all, by the same
+  filter that already protects `hardFloor` itself.
+- **The boundary that does not move:** the two new `DiagField`s (`eventStartMinuteOfDay`,
+  `eventEndMinuteOfDay`) are minute-of-day integers, nothing else - `test/diag_log_api_test.dart`'s
+  source-reading guard (which forbids any `String` parameter on the public recording API, and any
+  `int` parameter that looks clock-shaped unless explicitly listed and justified) was extended to
+  allow exactly these two names, with the same reasoning recorded inline it already carries for
+  `dayPlanned`'s own two.
+- **Documented transparently, per the maintainer's explicit instruction:** the in-app Settings >
+  Diagnostics screen (`lib/screens/settings/page_diagnostics.dart`), `docs/USER_GUIDE.md`, and
+  `assets/text/Privacy.md` were all updated together to describe exactly what the switch now adds
+  (event start/end times) and to restate, in each place, that calendar content - title,
+  description, attendees, location, which calendar - is excluded regardless of the switch, not
+  merely by default. `CLAUDE.md`'s diagnostics section records the same boundary for future
+  changes to this file.
+- **Tests:** `test/diag_log_test.dart` (new group "per-event calendar times (T-163)") covers the
+  opt-in gate, one-record-per-event, and the "switch off → no-op" counter-case, mirroring
+  `dayPlanned`'s own existing group; `test/replan_test.dart` (new group "T-163: per-event calendar
+  times reach Diag when opted in") covers the actual wiring end to end against `replan()` - every
+  non-all-day event in a day is logged (not just the earliest), an all-day event produces nothing,
+  and nothing is logged with the switch off.
+- **Requirement:** none directly (a diagnostics/quality-assurance feature, not a product
+  requirement), but touches the same PII boundary as R11/the Privacy Policy - see that document's
+  own update.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`

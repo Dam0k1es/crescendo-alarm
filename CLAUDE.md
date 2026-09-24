@@ -54,25 +54,42 @@ Consequences to respect when adding an event:
   rebuild T-76 inside itself); moments appear only as *bucketed differences*; the absolute UTC
   offset is never recorded, only the shape of a change. A history of wake times plus offsets is a
   sleep pattern and a travel trace - identifying without any name.
-  - **The one exception is `Diag.dayPlanned`** (`docs/TODO.md` T-135), which records each window
-    day's planned wake time and its earliest appointment as a minute-of-day. It exists because
-    nothing else in the log answers *why* a given day got the wake time it did, and that question
-    cost a real diagnosis: T-132 could only be tracked down from screenshots and hand arithmetic.
-  - It is behind its **own** switch (`AppState.diagnosticsIncludeClockTimes`, Settings >
+  - **The two exceptions are `Diag.dayPlanned` and `Diag.dayEventTime`.** `dayPlanned`
+    (`docs/TODO.md` T-135) records each window day's planned wake time and its earliest appointment
+    as a minute-of-day. It exists because nothing else in the log answers *why* a given day got the
+    wake time it did, and that question cost a real diagnosis: T-132 could only be tracked down from
+    screenshots and hand arithmetic. `dayEventTime` (`docs/TODO.md` T-163, maintainer request) goes
+    one step further: one record per real calendar event within the planning window, carrying only
+    its start and end minute-of-day and which window day it falls on - **never** its title,
+    description, attendees, location, or which of the device's calendars it came from. It exists
+    because `dayPlanned` alone only shows what `hardFloor` picked as *the* earliest appointment, not
+    what the day's other real candidates were - so a wrong pick (an all-day/ignored event miscounted,
+    or the wrong one winning among several) could only be diagnosed by re-deriving the whole
+    candidate set from a fresh calendar read, not from the log itself. One record per event (not per
+    day), so a busy day produces several - accepted deliberately: the log is opt-in specifically so
+    a user actively investigating a problem can afford a bit more detail than the log's own default,
+    silent-by-construction posture.
+  - Both are behind the **same, single** switch (`AppState.diagnosticsIncludeClockTimes`, Settings >
     Diagnostics), **off by default** and deliberately not folded into the general diagnostics
     toggle - because the log is meant to be pasted into a bug report, and a user doing that should
     not ship their sleep pattern without having said so. The export header says which of the two
-    modes produced it.
+    modes produced it. A calendar event's *timing* crossing this boundary is a deliberate, scoped
+    exception to the log's own "structurally cannot represent PII" rule elsewhere - it is exactly the
+    tradeoff opt-in exists to allow, and the boundary that must never move is what stays excluded:
+    title, description, attendees, location, calendar identity. If you are ever tempted to add any
+    of those "just for this one case", don't - replace the missing signal with another numeric shape
+    instead (a count, a bucket, a flag), the same way every other event in this file already does.
   - When adding an event: the source-reading guard in `test/diag_log_api_test.dart` still rejects
     any `int` parameter whose name looks like a clock value, and the allowed names are listed there
-    explicitly - six as of T-140, not the original two (`plannedMinuteOfDay`,
+    explicitly - eight as of T-163, not the original two (`plannedMinuteOfDay`,
     `earliestEventMinuteOfDay`): `preferredWakeUpMinuteOfDay`, `maxDailyDeltaMinutes`,
     `wakeUpMinutes` and `getReadyMinutes` were added for `Diag.planInputs`, which logs those four
     durations **unconditionally** (outside the `diagnosticsIncludeClockTimes` switch, unlike the
-    first two) because they are configuration values, not clock readings - a duration reveals
-    nothing about when someone sleeps. Do not widen the list further without the same kind of
-    reason, and note that `...MinuteOfDay` had to be added to the pattern, because a `...OfDay`
-    suffix slipped past the original rule unnoticed.
+    others) because they are configuration values, not clock readings - a duration reveals
+    nothing about when someone sleeps. `startMinuteOfDay`/`endMinuteOfDay` (T-163) were added for
+    `Diag.dayEventTime`, gated behind the switch like `dayPlanned`'s own two. Do not widen the list
+    further without the same kind of reason, and note that `...MinuteOfDay` had to be added to the
+    pattern, because a `...OfDay` suffix slipped past the original rule unnoticed.
 - **Exceptions go in as `runtimeType`** through an identity table to an int; `toString()` is never
   called on a `Type` (R8 obfuscation is then irrelevant).
 - **The background isolate has its own ring buffer.** FR-16's Checkpoint 2 runs in a separate

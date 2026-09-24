@@ -336,6 +336,63 @@ void main() {
     });
   });
 
+  group('per-event calendar times (T-163)', () {
+    // docs/TODO.md T-163: the same opt-in boundary as dayPlanned above, but
+    // one record per calendar event within the planning window instead of
+    // only the single earliest one per day - so a wrong "earliest" pick can
+    // be checked against every candidate that day actually had. Only start
+    // and end minute-of-day: never a title, description, attendee or
+    // location - those stay structurally unrepresentable everywhere else in
+    // this file.
+
+    test('default: dayEventTime writes nothing', () async {
+      await _freshDiag();
+
+      Diag.dayEventTime(
+          dayOffset: 1, startMinuteOfDay: 480, endMinuteOfDay: 540);
+
+      expect(Diag.records, isEmpty);
+    });
+
+    test('when switched on, start and end are recorded per event', () async {
+      await _freshDiag();
+      Diag.setIncludeClockTimes(true);
+
+      Diag.dayEventTime(
+          dayOffset: 2, startMinuteOfDay: 480, endMinuteOfDay: 540);
+
+      final r = Diag.records.single;
+      expect(r.event, DiagEvent.dayEventTime);
+      expect(r.fields[DiagField.windowDayOffset], 2);
+      expect(r.fields[DiagField.eventStartMinuteOfDay], 480);
+      expect(r.fields[DiagField.eventEndMinuteOfDay], 540);
+    });
+
+    test('one record per event - a day with three events yields three',
+        () async {
+      await _freshDiag();
+      Diag.setIncludeClockTimes(true);
+
+      Diag.dayEventTime(dayOffset: 0, startMinuteOfDay: 480, endMinuteOfDay: 540);
+      Diag.dayEventTime(dayOffset: 0, startMinuteOfDay: 600, endMinuteOfDay: 630);
+      Diag.dayEventTime(dayOffset: 0, startMinuteOfDay: 900, endMinuteOfDay: 960);
+
+      expect(
+          Diag.records.where((r) => r.event == DiagEvent.dayEventTime),
+          hasLength(3));
+    });
+
+    test('the switch does not act as a bypass even when disabled', () async {
+      await _freshDiag(enabled: false);
+      Diag.setIncludeClockTimes(true);
+
+      Diag.dayEventTime(
+          dayOffset: 1, startMinuteOfDay: 480, endMinuteOfDay: 540);
+
+      expect(Diag.records, isEmpty);
+    });
+  });
+
   group('planning inputs (T-140)', () {
     test('durations are always in, preferredWakeUpTime only with the switch', () async {
       await _freshDiag();

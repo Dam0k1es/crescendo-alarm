@@ -22,15 +22,18 @@ The App collects the following data, all of it stored locally on your device:
   example how many days it planned, whether a calendar read succeeded, and how many alarms it
   registered. It is stored on your device only, is limited to the most recent few hundred entries,
   and can be switched off, viewed and deleted under Settings > Diagnostics. By default it
-  deliberately contains **no** wake-up times, no dates or times of day, no calendar entries, no
+  deliberately contains **no** wake-up times, no dates or times of day, no calendar content, no
   calendar or account names, and not your deactivation code: the code that writes this record has
   no way to store text at all, only counters and fixed categories. A separate, off-by-default
-  switch under Settings > Diagnostics lets you additionally include each planned day's wake-up
-  time and its earliest appointment as exact clock times, with no date attached - intended only for
-  attaching to a bug report when a problem specifically needs it; turning it on means the exported
-  log does contain clock times, so it should only be shared deliberately. Nothing is ever
-  transmitted automatically - the only way any of this leaves your device is if you copy it
-  yourself from that screen and choose to send it somewhere.
+  switch under Settings > Diagnostics lets you additionally include exact clock times (minute of
+  day, with no date attached), intended only for attaching to a bug report when a problem
+  specifically needs it: each planned day's wake-up time and its earliest appointment, and the
+  start and end time of every calendar event in the app's planning window - never its title,
+  description, attendees, location, or which of your calendars it came from, whether or not this
+  switch is on. Turning the switch on means the exported log does contain clock times, which
+  together are a sleep pattern and a daily routine, so it should only be shared deliberately.
+  Nothing is ever transmitted automatically - the only way any of this leaves your device is if you
+  copy it yourself from that screen and choose to send it somewhere.
 
 The App does not collect your name, email address, contact information, or your device's location.
 

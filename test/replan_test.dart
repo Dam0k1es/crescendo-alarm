@@ -8,6 +8,7 @@ import 'package:wakeywakey/models/alarms/manual_alarm.dart';
 import 'package:wakeywakey/models/scheduling/day_marker.dart';
 import 'package:wakeywakey/models/scheduling/replan.dart';
 import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:wakeywakey/utils/diag/diag_log.dart';
 
 // Phase 4 (docs/scheduling-v2-spec.md, "Implementation order"):
 // replan(AppState) - T-60 (calendar cache bypass), FR-11, FR-12, FR-15.
@@ -601,6 +602,87 @@ void main() {
       final appState = AppState();
       await appState.initialized;
       expect(appState.lastCheckedUtcOffset, const Duration(hours: 5));
+    });
+  });
+
+  group('T-163: per-event calendar times reach Diag when opted in', () {
+    setUp(() {
+      Diag.resetForTest();
+      Diag.setIncludeClockTimes(true);
+    });
+
+    test(
+        'every non-all-day event within the window is logged, not just the '
+        'earliest', () async {
+      final appState = await _freshAppState();
+      final ringDay = _utc(0, 0, day: 10);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
+
+      await replan(
+        appState,
+        now: () => ringDay,
+        deviceUtcOffset: Duration.zero,
+        fetchEvents: (start, end) async => [
+          _meetingAt(_utc(9, 0, day: 12)),
+          _meetingAt(_utc(14, 30, day: 12)),
+        ],
+      );
+
+      final events =
+          Diag.records.where((r) => r.event == DiagEvent.dayEventTime).toList();
+      expect(events, hasLength(2),
+          reason: 'both events that day must be logged, not only the one '
+              'hardFloor picked as earliest');
+      final starts =
+          events.map((r) => r.fields[DiagField.eventStartMinuteOfDay]).toSet();
+      expect(starts, {9 * 60, 14 * 60 + 30});
+      final ends =
+          events.map((r) => r.fields[DiagField.eventEndMinuteOfDay]).toSet();
+      expect(ends, {10 * 60, 15 * 60 + 30});
+    });
+
+    test('an all-day event produces no dayEventTime record', () async {
+      final appState = await _freshAppState();
+      final ringDay = _utc(0, 0, day: 10);
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
+
+      await replan(
+        appState,
+        now: () => ringDay,
+        deviceUtcOffset: Duration.zero,
+        fetchEvents: (start, end) async => [
+          Meeting(
+            from: _utc(0, 0, day: 12),
+            to: _utc(0, 0, day: 13),
+            isAllDay: true,
+            startTimeZone: 'Etc/UTC',
+            endTimeZone: 'Etc/UTC',
+          ),
+        ],
+      );
+
+      expect(
+          Diag.records.where((r) => r.event == DiagEvent.dayEventTime),
+          isEmpty,
+          reason: 'an all-day event has no meaningful minute-of-day and '
+              'never sets the hard floor - it must not be logged as one');
+    });
+
+    test('nothing is logged when the switch is off (default)', () async {
+      Diag.setIncludeClockTimes(false);
+      final appState = await _freshAppState();
+      final ringDay = _utc(0, 0, day: 10);
+
+      await replan(
+        appState,
+        now: () => ringDay,
+        deviceUtcOffset: Duration.zero,
+        fetchEvents: (start, end) async => [_meetingAt(_utc(9, 0, day: 12))],
+      );
+
+      expect(
+          Diag.records.where((r) => r.event == DiagEvent.dayEventTime),
+          isEmpty);
     });
   });
 }

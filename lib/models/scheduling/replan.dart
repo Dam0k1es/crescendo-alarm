@@ -391,6 +391,21 @@ Future<ReplanResult> replan(
         earliestEventMinuteOfDay:
             earliest == null ? -1 : minuteOfDay(earliest),
       );
+
+      // docs/TODO.md T-163 (maintainer request): every real candidate that
+      // day, not only the one `hardFloor` picked - so a wrong "earliest"
+      // pick (an all-day/ignored event miscounted, or several real
+      // candidates with the wrong one winning) can be checked against what
+      // the day actually had, not just trusted. `dayEvents` here is already
+      // the same non-all-day, non-ignored list `hardFloor` itself reduces
+      // to `earliest` from - nothing more is filtered or added for this.
+      for (final e in dayEvents) {
+        Diag.dayEventTime(
+          dayOffset: dayDistance(day, today),
+          startMinuteOfDay: minuteOfDay(e.from),
+          endMinuteOfDay: minuteOfDay(e.to),
+        );
+      }
     }
   }
 

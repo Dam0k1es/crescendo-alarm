@@ -155,10 +155,21 @@ A local, privacy-free event log for troubleshooting - readable here and exportab
 clipboard if you need to report a problem. It never records anything that could identify you (no
 calendar titles, no account names, no exception text) - see the export's own header for exactly
 what mode produced it. Most of the log only ever records bucketed differences, never a clock time.
-A separate switch lets you additionally include each window day's planned wake time and its
-earliest appointment, **as exact clock times** (minute-of-day, no date), if a bug report
-specifically needs to show *why* a day was planned the way it was; it's off by default precisely
-because that is a real sleep pattern, not a bucket - turn it on only if you intend to share that.
+
+A separate, off-by-default switch lets you additionally include **exact clock times** (minute-of-
+day, no date), for two things:
+
+- Each window day's planned wake time and its earliest appointment, so a bug report can show *why*
+  a day was planned the way it was.
+- The start and end time of **every** calendar event in the planning window - not just the one
+  picked as earliest - so a wrong pick can be checked against what the calendar actually held that
+  day. This is still never the event's title, description, attendees, location, or which calendar
+  it came from - only its timing. That boundary does not move, opt-in or not.
+
+Both are real clock times, and together with the rest of the log they amount to a sleep pattern and
+a daily routine - that is exactly why the switch is off by default and separate from ordinary
+diagnostics. Turn it on only while actively investigating a scheduling problem, and remember it is
+then included in anything you copy and share from this screen.
 
 ## When an alarm rings
 

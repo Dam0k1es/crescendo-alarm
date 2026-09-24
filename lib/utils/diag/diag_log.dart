@@ -71,6 +71,7 @@ enum DiagEvent {
   timezoneCheck(13),
   dayPlanned(14),
   planInputs(15),
+  dayEventTime(16),
   alarmSync(20),
   alarmRang(30),
   alarmDismissed(31),
@@ -164,6 +165,12 @@ enum DiagField {
   plannedMinuteOfDay(121),
   preferredWakeUpMinuteOfDay(123),
   earliestEventMinuteOfDay(122),
+  // T-163: per-calendar-event start/end, same opt-in switch as the three
+  // above. Deliberately no other property of the event reaches here - see
+  // Diag.dayEventTime's own doc comment for exactly what was excluded and
+  // why.
+  eventStartMinuteOfDay(124),
+  eventEndMinuteOfDay(125),
   // Errors
   site(110),
   errorKind(111),
@@ -835,12 +842,13 @@ abstract final class Diag {
   /// appointment, both as a minute of the local day (0..1439), `-1` for
   /// "none" (docs/TODO.md T-135).
   ///
-  /// **The only event carrying clock values.** It writes only while
-  /// [setIncludeClockTimes] is on; otherwise it is a no-op. Built for exactly
-  /// the question the rest of the log cannot answer: *why* does a given day
-  /// carry this wake time - is it the appointment, the curve, or the
-  /// preferred wake-up time? Counts and buckets alone cannot reconstruct
-  /// that; with these two numbers a week's plan can be recomputed by hand.
+  /// One of only two events carrying clock values (the other is
+  /// [dayEventTime] below), both gated behind [setIncludeClockTimes]; a
+  /// no-op otherwise. Built for exactly the question the rest of the log
+  /// cannot answer: *why* does a given day carry this wake time - is it the
+  /// appointment, the curve, or the preferred wake-up time? Counts and
+  /// buckets alone cannot reconstruct that; with these two numbers a week's
+  /// plan can be recomputed by hand.
   ///
   /// [dayOffset] stays relative (as everywhere in the log), and the minutes
   /// deliberately carry NO date - no calendar day can be derived from them.
@@ -854,6 +862,38 @@ abstract final class Diag {
       DiagField.windowDayOffset: dayOffset,
       DiagField.plannedMinuteOfDay: plannedMinuteOfDay,
       DiagField.earliestEventMinuteOfDay: earliestEventMinuteOfDay,
+    });
+  }
+
+  /// One calendar event within the planning window - its start and end,
+  /// both as a minute of the local day, and which window day it falls on.
+  /// Nothing else about the event: no title, no description, no attendees,
+  /// no location, no calendar name, not even which of the device's
+  /// calendars it came from (docs/TODO.md T-163, maintainer request).
+  ///
+  /// `dayPlanned` above already answers "what was the earliest appointment
+  /// that day" - this answers the next question an investigation actually
+  /// needs: was that genuinely the earliest, or did an all-day/ignored event
+  /// get miscounted, or were there several real candidates and the wrong
+  /// one won? One record per event (not one per day), so a busy day
+  /// produces several - gated behind the SAME [setIncludeClockTimes] switch
+  /// as `dayPlanned`, since it is the same privacy boundary: exact times,
+  /// opt-in, off by default.
+  ///
+  /// Only ever called for a real, non-all-day, non-ignored event - an
+  /// all-day event carries no meaningful minute-of-day, and an ignored one
+  /// is already filtered out of scheduling entirely before this layer ever
+  /// sees it (`replan.dart`'s `allEvents`).
+  static void dayEventTime({
+    required int dayOffset,
+    required int startMinuteOfDay,
+    required int endMinuteOfDay,
+  }) {
+    if (!_includeClockTimes) return;
+    _record(DiagEvent.dayEventTime, <DiagField, int>{
+      DiagField.windowDayOffset: dayOffset,
+      DiagField.eventStartMinuteOfDay: startMinuteOfDay,
+      DiagField.eventEndMinuteOfDay: endMinuteOfDay,
     });
   }
 

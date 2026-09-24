@@ -90,11 +90,13 @@ class _PageDiagnosticsState extends State<PageDiagnostics> {
                   const SizedBox(height: 8),
                   const Text(
                     'A local record of what the alarm scheduler did, kept on '
-                    'this device only. It contains no wake-up times, no dates, '
-                    'no calendar entries and no deactivation code - by '
-                    'construction, not by promise: the recording code has no '
-                    'way to store text at all. Nothing is ever sent anywhere; '
-                    'copying it below is the only way it leaves the device.',
+                    'this device only. By default it contains no wake-up '
+                    'times, no calendar content (never a title, description, '
+                    'attendee or location - not even with the switch below '
+                    'on) and no deactivation code - by construction, not by '
+                    'promise: the recording code has no way to store text at '
+                    'all. Nothing is ever sent anywhere; copying it below is '
+                    'the only way it leaves the device.',
                     style: TextStyle(fontSize: 13),
                   ),
                   const SizedBox(height: 12),
@@ -107,19 +109,22 @@ class _PageDiagnosticsState extends State<PageDiagnostics> {
                       appState.diagnosticsEnabled = value;
                     },
                   ),
-                  // docs/TODO.md T-135. Deliberately a SECOND switch, not
-                  // part of the first: it lifts exactly the property that
-                  // makes the paragraph above true.
+                  // docs/TODO.md T-135, extended by T-163. Deliberately a
+                  // SECOND switch, not part of the first: it lifts exactly
+                  // the property that makes the paragraph above true.
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Also record wake and appointment times'),
                     subtitle: const Text(
-                      'Off by default. Adds each day\'s planned wake time and '
-                      'its earliest appointment, so a week can be recalculated '
-                      'from the log. These are clock times: together they are a '
-                      'sleep pattern and a daily routine. Turn it on while '
-                      'investigating a scheduling problem - and remember it is '
-                      'then in anything you share.',
+                      'Off by default. Adds each day\'s planned wake time, '
+                      'plus the start and end time of every calendar event '
+                      'that day (still never its title, description, '
+                      'attendees or location), so a week\'s plan can be '
+                      'checked against what the calendar actually held. '
+                      'These are clock times: together they are a sleep '
+                      'pattern and a daily routine. Turn it on while '
+                      'investigating a scheduling problem - and remember it '
+                      'is then in anything you share.',
                       style: TextStyle(fontSize: 12),
                     ),
                     isThreeLine: true,

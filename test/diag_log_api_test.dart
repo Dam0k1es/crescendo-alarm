@@ -109,6 +109,14 @@ void main() {
           'plannedMinuteOfDay',
           'earliestEventMinuteOfDay',
           'preferredWakeUpMinuteOfDay',
+          // T-163 (maintainer request): one calendar event's start/end
+          // within the planning window, minute-of-day only - same opt-in
+          // switch as the three above, same reasoning. Deliberately no
+          // other property of the event: no title, description, attendee,
+          // location, or which calendar it came from. `Diag.dayEventTime`'s
+          // own doc comment has the full rationale.
+          'startMinuteOfDay',
+          'endMinuteOfDay',
           // Durations, not clock times (T-140): "90-minute cap" or
           // "30-minute lead time" reveal nothing about sleep - they are
           // configuration values, without which a logged plan can't be
