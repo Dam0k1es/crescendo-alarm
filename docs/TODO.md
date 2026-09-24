@@ -1482,7 +1482,7 @@ that is the basis a decision can be formulated against.
   splash-screen path it now also covers.
 - **Requirement:** R4
 
-### T-40 · No CI check is actually enforceable — LARGELY DECIDED (2026-09-24), one sub-question still open
+### T-40 · No CI check is actually enforceable — RESOLVED (2026-09-24)
 
 - [x] Decide how the "must pass before master" rule is enforced, given the repository's plan.
 - **Why:** the requirements register says its checks must be guaranteed "before any push to
@@ -1519,13 +1519,34 @@ that is the basis a decision can be formulated against.
   (PUT), on the maintainer's explicit request. `master` can no longer be deleted or force-pushed/
   history-rewritten; a normal fast-forward push (the only kind this project's own workflow ever
   does) is unaffected. Confirmed live via a follow-up `GET` on the same ruleset.
-- **Still open, genuinely undecided:** whether to additionally require `ci.yml`'s `Analyze & Test`
-  (`dev`) check to have passed before a commit may be fast-forwarded onto `master` at all -
-  technically enforceable per the reasoning above (the check already exists on that SHA from its
-  `dev` push, so no chicken-and-egg problem), but a real workflow change: it would block, for
-  instance, an emergency fix committed directly to `master` without first having gone through `dev`.
-  Left for the maintainer to action directly, or to ask for explicitly - this is the one remaining
-  piece of T-40.
+- **Done (maintainer, 2026-09-24), after an explicit request to check for problems first - none
+  found that weren't already mitigated:** the same ruleset now also requires all seven of `dev`'s
+  own checks (`Analyze & Test (TZ=UTC)`, `...Europe/Berlin`, `...Asia/Tokyo`, `...America/St_Johns`,
+  `...Pacific/Chatham`, `...Australia/Lord_Howe`, and `Build Android (development)`) to already show
+  `success` on a commit's SHA before it can be fast-forwarded onto `master`. Verified live, not just
+  configured: pushed a real commit to `dev`, watched all seven checks actually reach `success`
+  (`gh api repos/.../commits/<sha>/check-runs`), confirming both the exact context-name strings and
+  that this genuinely completes for a normal push - not just that the ruleset accepted valid JSON.
+  - **Why this is enforceable at all, when `master`'s own gate isn't (see above):** `dev`'s checks
+    are already complete by the time a promotion is attempted - promoting is a separate, later
+    action, not the same push that triggers them. No chicken-and-egg problem here, unlike requiring
+    `master`-only checks (`security-gate`, `e2e-tests`, `build-android-release`, `mobsf-full-scan`)
+    against `master` itself, which remains structurally impossible for the reason above.
+  - **Real, checked-for consequences, not hidden:** promoting now means waiting for `dev`'s CI
+    (~8 minutes, six timezones in parallel) to actually finish before `git -C /mnt/wakeywakey merge
+    --ff-only dev && git push` will succeed - a genuine process change, not just a formality, from
+    whatever was possible before. A commit made directly on `master` (bypassing `dev` entirely) can
+    no longer be pushed there at all, by design - matches the project's own stated workflow ("work
+    goes on `dev`") rather than contradicting it.
+  - **The one real fragility identified, and mitigated:** if `ci.yml`'s timezone matrix or the
+    `build-dev-apk` job's name ever changes, the required-checks list must be updated in the same
+    change or `master` becomes permanently un-fast-forwardable (a check name that will never report
+    again can never be satisfied). Mitigated with a `bypass_actors` entry (the repository owner,
+    `bypass_mode: "always"`) - the same escape hatch that also covers a GitHub Actions outage/quota
+    exhaustion like September 2026's, which without a bypass this rule would have turned into "and
+    now `master` cannot be updated either," compounding rather than helping that incident.
+  - **Full configuration recorded in `CLAUDE.md`** ("Branches and where work happens") rather than
+    only here, since it changes the day-to-day promotion workflow, not just a policy decision.
 - **Requirement:** R1
 
 ### T-41 · Permissions are requested before the privacy policy is reachable — FIXED (2026-09-20)

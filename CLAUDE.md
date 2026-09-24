@@ -189,6 +189,30 @@ thing somebody wrote".
 So `/mnt/wakeywakey` lags `dev` by exactly the work that has not been promoted yet - that is the
 design, not a mistake. Promote with `git -C /mnt/wakeywakey merge --ff-only dev` and push.
 
+**Promoting to `master` now requires waiting for `dev`'s own CI run to finish (2026-09-24,
+docs/TODO.md T-40).** A GitHub ruleset on `refs/heads/master` (`gh api repos/.../rulesets/23728728`)
+requires `ci.yml`'s seven `dev`-push checks - all six `Analyze & Test (TZ=...)` timezone legs plus
+`Build Android (development)` - to already show `success` for a commit's SHA before that commit can
+be fast-forwarded onto `master`. This is enforceable specifically because it targets checks that run
+on `dev` (already complete by promotion time, since promoting is a later, separate action from the
+`dev` push) rather than `master`'s own checks, which cannot possibly exist before the push that would
+trigger them - see the ruleset's own history/T-40 for why that distinction is load-bearing, not
+incidental. Practical consequence: `git -C /mnt/wakeywakey merge --ff-only dev && git push` can now
+be rejected if attempted before `dev`'s CI (roughly 8 minutes, six timezones in parallel) has
+actually finished - check `gh api repos/Dam0k1es/wakeywakey/commits/<sha>/check-runs` first, or just
+expect to wait. Same protection also blocks deleting or force-pushing/rewriting `master`
+(`deletion`/`non_fast_forward` rules, same ruleset).
+
+**A required-check name that stops existing permanently blocks `master`, so keep this in sync**: if
+`ci.yml`'s timezone matrix or the `build-dev-apk` job's `name:` ever changes, the ruleset's
+`required_status_checks` list has to change with it in the same commit/session - a stale reference
+to a check that will never report again means no fast-forward push to `master` can ever succeed
+again until someone notices and fixes the ruleset by hand. The repository owner has a `bypass_actors`
+entry (`bypass_mode: "always"`) specifically as the escape hatch for exactly that failure mode, or
+for a GitHub Actions outage/quota exhaustion like September 2026's (see above) - without it, this
+rule could have turned that incident into "and now `master` cannot be updated at all," which would
+have made a bad day worse, not better.
+
 ## CI/CD pipeline
 
 Four workflows under `.github/workflows/`:
