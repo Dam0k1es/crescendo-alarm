@@ -37,6 +37,16 @@ class _PageImportQrState extends State<PageImportQr> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         surfaceTintColor: Theme.of(context).colorScheme.surface,
+        // docs/TODO.md T-183. Maintainer report: this screen is pushed as `fullscreenDialog:
+        // true` (see `showFullScreenOverlay`), whose default AppBar leading
+        // widget is an auto-generated close ("X") button that only ever
+        // calls `Navigator.maybePop` - exactly what `QrScanner`'s own
+        // `PopScope(canPop: false)` exists to block, so it silently did
+        // nothing. `QrScanner(displayExitButton: true)`'s own "Cancel"
+        // button below already dismisses correctly (it pops explicitly,
+        // not via `maybePop`) - showing both was one working control and
+        // one dead one, not a choice.
+        automaticallyImplyLeading: false,
         title: const Text(
           'Import Code',
           style: TextStyle(

@@ -52,6 +52,18 @@ absorbs without further conditions. That includes the Flutter SDK and first-part
 they arrive with `flutter_zxing`. The two permissions stripped from the manifest both come from
 `camera_android_camerax`, not from `image_picker`; see `docs/TODO.md` T-49.)
 
+**`docs/TODO.md` T-182** added three more, each checked against pub.dev's own published licence
+text before adding, not assumed from reputation: `share_plus` (BSD-3, `fluttercommunity.dev`,
+verified publisher) wraps the native Android `ACTION_SEND` share-sheet intent - no external app
+required, the OS's own chooser is the mechanism. `printing` and `pdf` (both Apache-2.0, same
+publisher/repository) invoke `android.print.PrintManager` - the OS's own print framework -
+directly, so the deactivation code's new "Print" action does not depend on whatever happens to be
+installed. Their own transitive dependencies were checked the same way, not left to the blocklist
+test alone to catch: `barcode`/`pdf_widget_wrapper` (Apache-2.0), `bidi`/`path_parsing` (MIT),
+`share_plus_platform_interface`/`url_launcher_linux`/`url_launcher_platform_interface`/
+`url_launcher_web`/`url_launcher_windows` (BSD-3, first-party Flutter team packages). All
+GPLv3-compatible.
+
 `flutter_zxing` additionally compiles third-party C/C++ into the app - zxing-cpp (including its
 bundled "librscpp" Reed-Solomon implementation) under Apache-2.0, and zint under BSD-3. All
 GPLv3-compatible, so the claim above holds for them too. (An earlier pass through this document

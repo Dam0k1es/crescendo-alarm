@@ -1117,6 +1117,87 @@ that is the basis a decision can be formulated against.
   62/62, plus the full three-group run, 597/597), `flutter analyze` clean.
 - **Requirement:** yes - requested directly by the maintainer.
 
+### T-182 · The deactivation-code "Share" button now actually shares/prints the QR code — DONE (2026-09-25)
+
+- [x] Maintainer request, verbatim: "der qr generate dialog zeigt eine teilen option. diese ist als
+  future task kommentiert. bitte implementiere die funktionalität den qr code zu teilen. wichtig
+  wäre mir den qr code an einen drucker senden zu können. implementiere das nur, falls es mit
+  betriebsystemkomponenten von android direkt geht, nicht wenn externe apps erforderlich sind.
+  exportiert werden soll der qr code als png."
+- **`lib/models/scan_code/qr_export.dart` (new):** `renderQrCodePng(payload, {size})` renders the
+  code via `qr_flutter`'s `QrPainter`, with a white background explicitly painted first -
+  `QrPainter.paint`/`toPicture` draws only the QR modules, no background fill of its own, so a
+  naive export would come out with a transparent background. Pure, plugin-free, directly
+  unit-testable (`test/qr_export_test.dart`: real PNG signature, different payloads render
+  differently, the same payload is deterministic, size is respected).
+- **Two new dependencies, each checked against pub.dev's own published licence text before
+  adding** (see `docs/licence-position.md`): `share_plus` (BSD-3) wraps
+  `Intent.ACTION_SEND` - Android's own share-sheet chooser, no external app required, the user
+  picks whatever target they want from the OS's own list. `printing` + `pdf` (both Apache-2.0)
+  invoke `android.print.PrintManager` - the OS's own print framework - directly, which is what the
+  maintainer specifically asked for ("wichtig wäre mir... an einen Drucker"): a generic share does
+  not reliably surface a "Print" target on stock/AOSP Android (that's each app's own deliberate
+  choice to register for, not automatic for arbitrary shared content), so a dedicated path through
+  the OS's real print framework was needed to actually deliver on that request rather than merely
+  hoping a print-capable app is installed. All twelve resulting transitive dependencies checked
+  individually too, not left to the blocklist test alone.
+- **New "Print" button**, alongside the existing "Share" (which now actually works instead of
+  showing "This is a future feature!"). The three-button row (`Remove`/`Share`/`Print`) switched
+  from a `Row` of `Spacer`s to a `Wrap` - the same overflow lesson T-176 already learned for a
+  different dialog's button row, now applied proactively before it could recur.
+- **Both actions read `_appState.deactivationCode` directly**, not whatever the screen happens to
+  render right now - correct regardless of whether the QR image or the user's own description
+  (T-150) is currently shown.
+- **A real widget-testing lesson, not just a wiring exercise:** `renderQrCodePng`'s `dart:ui` image
+  rasterization (`Picture.toImage`/`Image.toByteData`) never resolves when triggered from inside an
+  active `testWidgets` binding via a real button tap - not even inside `tester.runAsync`, which
+  `qr_scanner_close_test.dart` already established as the fix for a *different* class of
+  never-resolving Future (real platform-channel calls). Confirmed this is specifically about the
+  rendering step, not the surrounding test, by first proving `renderQrCodePng` works fine on its
+  own in a plain `test()` (`test/qr_export_test.dart`, no widget binding at all). Fixed by adding a
+  third test seam (`debugRenderQrCodeOverride`) so `test/page_deactivation_code_share_print_test
+  .dart` verifies the Share/Print *wiring* against a fast deterministic fake, leaving the real
+  rendering pipeline to the test that already covers it in isolation.
+- **A second, unrelated real bug found while writing that test:** `page_deactivation_code.dart`
+  has no `Scaffold` of its own (production embeds it inside `screen_scancode.dart`'s
+  `Scaffold(body: PageDeactivationCode())`) - a test that only wraps it in a bare `MaterialApp`
+  crashes on `displayToast`'s `ScaffoldMessenger.of(context)` the moment a failure path actually
+  runs, with no descendant `Scaffold` to present to. Fixed by matching the real embedding in the
+  test fixture.
+- **E2E impact: none** - no E2E test touches the deactivation-code screen's Share/Print controls
+  (confirmed by grep).
+- **Verified:** full suite green (608/608 across three sequential groups), `flutter analyze`
+  clean, `flutter build apk --debug` succeeds (confirms the three new native Android plugins
+  integrate into the Gradle build/manifest merge without conflict).
+- **Requirement:** yes - requested directly by the maintainer, with an explicit constraint
+  (OS components only) that was verified to actually hold, not assumed.
+
+### T-183 · The QR-scan "Cancel" and the AppBar's own close ("X") button — only one worked — DONE (2026-09-25)
+
+- [x] Maintainer report, verbatim: "der qr scan dialog zeigt zum abbruch ein kreuz und einen
+  cancel button. ich will nur eines von beiden sehen, welches dann auch funktioniert - das kreuz
+  tut es bisher nicht."
+- **Root cause:** `page_import_qr.dart` is pushed via `showFullScreenOverlay`
+  (`MaterialPageRoute(fullscreenDialog: true)`), whose default `AppBar` leading widget is an
+  auto-generated `CloseButton` that only ever calls `Navigator.maybePop`. `QrScanner` wraps its
+  whole `Scaffold` in `PopScope(canPop: false)` - deliberately, so the "guaranteed wake-up" gate
+  cannot be dismissed by a system back gesture/button - which blocks exactly that call, so the X
+  silently did nothing. `QrScanner(displayExitButton: true)`'s own bottom "Cancel" button, by
+  contrast, already called `_closeView()` directly (an explicit `Navigator.pop`, not `maybePop`),
+  so it already worked correctly - the screen was showing one working control and one dead one,
+  not an actual choice between two.
+- **Fix:** `automaticallyImplyLeading: false` on `PageImportQr`'s `AppBar`, leaving only the
+  "Cancel" button.
+- **Tests:** `test/page_import_qr_dismiss_test.dart` (new) - confirms no `CloseButton` renders at
+  all, and that the one remaining "Cancel" button actually dismisses the screen. Confirmed red
+  first: the first case failed against the un-fixed code (a `CloseButton` was found), reproducing
+  the maintainer's report exactly.
+- **E2E impact: none** - `integration_test/app_test.dart` never navigates to or interacts with
+  `PageImportQr`; its `QrScanner` usage is the ringing-alarm gate (`Handler.handleAlarm`'s
+  `QrScanner(alarmId: ...)`, no `displayExitButton`, no `PageImportQr` in the picture at all).
+- **Verified:** full suite green, `flutter analyze` clean.
+- **Requirement:** yes - reported directly by the maintainer as a real, reproduced defect.
+
 ### T-181 · Regression coverage: a single selected weekday recurs every week, not just once — DONE (2026-09-25)
 
 - [x] Maintainer request, verbatim: "prüfe ob es tests gibt die manuelle alarme darauf prüfen, ob

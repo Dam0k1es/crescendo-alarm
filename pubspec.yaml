@@ -59,6 +59,17 @@ dependencies:
 
   qr_flutter: ^4.1.0
 
+  # docs/TODO.md T-182: sharing/printing the deactivation-code QR image.
+  # share_plus (BSD-3) wraps the native Android ACTION_SEND intent chooser -
+  # no external app required, the OS's own chooser is the mechanism. printing
+  # (Apache-2.0) and pdf (Apache-2.0) invoke android.print.PrintManager - the
+  # OS's own print framework - directly, so the printer path does not depend
+  # on whatever happens to be installed. Both licences verified compatible
+  # with GPLv3 before adding (see docs/licence-position.md).
+  share_plus: ^13.3.0
+  printing: ^5.15.1
+  pdf: ^3.11.3
+
   uuid: ^4.4.0
 
   intl: ^0.20.3

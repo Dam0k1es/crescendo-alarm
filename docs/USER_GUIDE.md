@@ -101,7 +101,12 @@ requires it - the idea being that if it's stuck somewhere across the room, you h
   code looks nothing like the original.
 - **Remove** deletes the current code (an alarm can then be stopped normally, without scanning
   anything).
-- **Share** is not implemented yet - it currently just says so.
+- **Share** exports the code as a PNG and opens Android's native share sheet - send it to any app
+  you have installed. Works on the actual code even while the screen is showing your own
+  description instead of the QR image.
+- **Print** sends the same PNG straight to Android's own print framework - pick a printer (or save
+  as PDF) without needing any particular app installed. Handy for sticking a physical copy
+  somewhere across the room, which is the whole point of the "guaranteed wake-up" gate.
 
 **If your camera can't decode anything at all** (a hardware kill-switch, a covered lens, or a
 broken sensor), a "Camera not working - Stop alarm" button appears automatically after about 30

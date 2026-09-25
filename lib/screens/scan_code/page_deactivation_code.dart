@@ -15,16 +15,44 @@
 // You should have received a copy of the GNU General Public License
 // along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
+import 'package:crescendo_alarm/models/scan_code/qr_export.dart';
 import 'package:crescendo_alarm/screens/scan_code/page_import_qr.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
 class PageDeactivationCode extends StatefulWidget {
   const PageDeactivationCode({super.key});
+
+  /// Test seam: replaces the real `Share.shareXFiles` call (share_plus has
+  /// no platform channel in `flutter test`) - same pattern as
+  /// `ScreenSleephabits.debugTimePickerOverride`. Receives the rendered PNG
+  /// bytes.
+  @visibleForTesting
+  static Future<void> Function(List<int> pngBytes)? debugShareOverride;
+
+  /// Test seam: replaces the real `Printing.layoutPdf` call.
+  @visibleForTesting
+  static Future<void> Function(List<int> pngBytes)? debugPrintOverride;
+
+  /// Test seam: replaces the real [renderQrCodePng] call. `test/qr_export_test
+  /// .dart` already covers that function itself in isolation (a plain
+  /// `test()`, not `testWidgets()`); its `dart:ui` image rasterization
+  /// (`Picture.toImage`/`Image.toByteData`) never resolves when triggered
+  /// from inside an active `testWidgets` binding via a real button tap - not
+  /// even inside `tester.runAsync` - so widget tests that only need to check
+  /// the Share/Print *wiring* use a fast, deterministic fake here instead of
+  /// re-exercising the real rendering pipeline.
+  @visibleForTesting
+  static Future<Uint8List> Function(String payload)? debugRenderQrCodeOverride;
 
   @override
   State<PageDeactivationCode> createState() => _PageDeactivationCodeState();
@@ -105,6 +133,70 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
         DeactivationCode(payload: current.payload, description: result.trim());
   }
 
+  /// docs/TODO.md T-182 (maintainer request): shares the deactivation code
+  /// as a PNG via the native Android share sheet (share_plus wraps
+  /// `Intent.ACTION_SEND` - no external app is required, the OS's own
+  /// chooser is the mechanism; the user picks whatever target they want
+  /// from it). Reads `_appState.deactivationCode` directly rather than
+  /// whatever `page_deactivation_code.dart` happens to have on screen right
+  /// now (the QR image, or the user's own description once one exists) -
+  /// the export always reflects the actual code.
+  Future<void> _shareQrCode() async {
+    final code = _appState.deactivationCode;
+    if (code == null) return;
+    try {
+      final pngBytes = await (PageDeactivationCode.debugRenderQrCodeOverride ??
+              renderQrCodePng)(code.payload);
+      if (PageDeactivationCode.debugShareOverride != null) {
+        await PageDeactivationCode.debugShareOverride!(pngBytes);
+        return;
+      }
+      // No accompanying text: the QR image already carries the secret, and
+      // a caption naming what it's for would be all a screenshot of the
+      // share sheet needs to identify it. XFile.fromData needs no temp
+      // file of its own - share_plus reads the bytes directly.
+      await SharePlus.instance.share(ShareParams(
+        files: [
+          XFile.fromData(pngBytes,
+              name: 'deactivation_code.png', mimeType: 'image/png'),
+        ],
+      ));
+    } catch (e) {
+      debugPrint('=====pageDeactivationCode: share failed: ${e.runtimeType}');
+      if (mounted) displayToast(context, 'Could not share the QR code.');
+    }
+  }
+
+  /// docs/TODO.md T-182 (maintainer request, "wichtig wäre mir den QR Code
+  /// an einen Drucker senden zu können"): prints the deactivation code
+  /// directly via `android.print.PrintManager` (through the `printing`/`pdf`
+  /// packages) - the OS's own print framework, not dependent on whether a
+  /// print target happens to be registered in the generic share sheet
+  /// `_shareQrCode` uses. `pdf` is needed only because that is the document
+  /// format Android's print framework itself expects; the underlying
+  /// content is the same PNG `_shareQrCode` exports.
+  Future<void> _printQrCode() async {
+    final code = _appState.deactivationCode;
+    if (code == null) return;
+    try {
+      final pngBytes = await (PageDeactivationCode.debugRenderQrCodeOverride ??
+              renderQrCodePng)(code.payload);
+      if (PageDeactivationCode.debugPrintOverride != null) {
+        await PageDeactivationCode.debugPrintOverride!(pngBytes);
+        return;
+      }
+      final document = pw.Document();
+      final image = pw.MemoryImage(Uint8List.fromList(pngBytes));
+      document.addPage(pw.Page(
+        build: (context) => pw.Center(child: pw.Image(image)),
+      ));
+      await Printing.layoutPdf(onLayout: (format) async => document.save());
+    } catch (e) {
+      debugPrint('=====pageDeactivationCode: print failed: ${e.runtimeType}');
+      if (mounted) displayToast(context, 'Could not print the QR code.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Real-device report: after importing a code via the QR scanner
@@ -170,13 +262,19 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
     );
 
     final shareCodeButton = OutlinedButton.icon(
-      onPressed: () {
-        // TODO: trigger print function here
-        displayToast(context, 'This is a future feature!');
-      },
+      onPressed: _shareQrCode,
       icon: Icon(Icons.share, color: _appState.accentColor),
       label: Text(
         'Share',
+        style: TextStyle(color: _appState.accentColor),
+      ),
+    );
+
+    final printCodeButton = OutlinedButton.icon(
+      onPressed: _printQrCode,
+      icon: Icon(Icons.print, color: _appState.accentColor),
+      label: Text(
+        'Print',
         style: TextStyle(color: _appState.accentColor),
       ),
     );
@@ -285,14 +383,19 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    // docs/TODO.md T-182: a `Wrap`, not a `Row` of
+                    // `Spacer`s - three buttons (was two) risk overflowing a
+                    // narrow phone width the way a fixed `Row` cannot
+                    // recover from, matching the lesson T-176 already found
+                    // the hard way for a different dialog's button row.
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        const Spacer(),
                         removeCodeButton,
-                        const Spacer(),
                         shareCodeButton,
-                        const Spacer(),
+                        printCodeButton,
                       ],
                     ),
                   ],
