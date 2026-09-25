@@ -450,6 +450,12 @@ working contact method.
   every `device_calendar` write method from being called anywhere in `lib/` - not merely a manifest
   comment asserting the app is read-only, but a structural guard that fails if that ever stops being
   true.
+- **Corrected again (2026-09-25, independent external-auditor review, `docs/TODO.md` T-177):** the
+  policy still opened with the app's pre-rename name ("Wakey Wakey") a full rename pass
+  (T-169, same day) had otherwise completed everywhere else a user could see it - this document's
+  own "met" status had been carried forward against a policy that misnamed the product it describes.
+  Fixed, and now guarded by `test/privacy_policy_branding_test.dart` so a future rename cannot miss
+  this file silently again.
 
 ## R12 - The project is human-readable and quickly understandable
 

@@ -1,7 +1,7 @@
 # Privacy Policy
 
-This Privacy Policy describes how the Wakey Wakey app ("the App") collects, uses, and protects your
-personal data.
+This Privacy Policy describes how the Crescendo Alarm app ("the App") collects, uses, and protects
+your personal data.
 
 ## Data Collected
 
@@ -74,4 +74,4 @@ any updates.
 If you have any questions about this Privacy Policy, please contact us at
 dam0k1es@member.fsf.org.\
 \
-Last updated: 2026-09-24
+Last updated: 2026-09-25

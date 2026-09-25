@@ -1069,6 +1069,37 @@ that is the basis a decision can be formulated against.
   the others, is what actually guards against a regression back to linear.
 - **Requirement:** yes - stated as one by the maintainer directly.
 
+### T-177 · Privacy Policy still named the app "Wakey Wakey" after the rename — DONE (2026-09-25)
+
+- [x] Found by an independent External Compliance & Fitness-for-Purpose Audit (2026-09-25, a fresh
+  agent with no prior involvement in this codebase, per this file's own review-persona independence
+  requirement): `assets/text/Privacy.md` still opened with "This Privacy Policy describes how the
+  Wakey Wakey app...". The 2026-09-25 rename (T-169) updated every other user-facing surface it
+  enumerated - app title, notification titles, About page, diagnostics export header,
+  deactivation-code label - but never touched this file, and it is the **first** document a user is
+  asked to read and accept (`README.md`, `docs/USER_GUIDE.md`). `docs/REQUIREMENTS.md` R11 ("the
+  privacy policy is accurate and complete") was marked "met" against a document that misnamed the
+  product it describes.
+- **Fix:** one line - "Wakey Wakey" → "Crescendo Alarm" - plus the "Last updated" date, since the
+  content changed.
+- **Deliberately left untouched, and why:** `docs/personas.md`'s "Goals with the 'Wakey Wakey' App"
+  headings (a planning-phase document, annotated elsewhere for claims that no longer hold, not
+  scrubbed of its original wording), `docs/security-assessment-2026-09.md` (already carries its own
+  explicit 2026-09-25 naming note stating every "WakeyWakey" reference below it is deliberately left
+  as assessed, matching this project's standing rule for frozen point-in-time records),
+  `assets/sounds/CREDITS.md`'s citation of the actual "Wakey Wakey it's time for scoo" meme this
+  bundled tone is traced to (a real external title, not this app's own name), and
+  `bundled_tones.dart`'s doc comment explaining why the *tones* used to be misleadingly named after
+  the app itself (historical context for a past decision, not a live branding claim). None of these
+  are the defect the audit found - only `assets/text/Privacy.md` was.
+- **Tests:** `test/privacy_policy_branding_test.dart` (new) - a source-reading test in
+  `licence_header_test.dart`'s own style, reading the asset directly off disk rather than through a
+  widget pump. Confirmed red first (failed against the un-fixed file with "does not contain
+  'Crescendo Alarm'"), then green after the fix.
+- **Verified:** `flutter analyze` clean; the new test plus every other privacy/branding-adjacent
+  test (`privacy_before_permissions_test.dart`, `widget_test.dart`, `bundled_tones_test.dart`) green.
+- **Requirement:** yes - `docs/REQUIREMENTS.md` R11.
+
 ### T-176 · Manual-alarm dialog: weekday selector in one row, per-alarm Snooze and Guaranteed Wake-Up toggles — DONE (2026-09-25)
 
 - [x] Maintainer request, verbatim: "Wenn ein neuer manuelle Alarm angelegt wird: ist die Auswahl
