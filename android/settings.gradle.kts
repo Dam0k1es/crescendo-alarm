@@ -19,7 +19,7 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "9.1.0" apply false
+    id("com.android.application") version "9.4.1" apply false
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
     // docs/TODO.md T-148: generates a CycloneDX SBOM of the FULLY RESOLVED
     // native Android dependency tree (AndroidX, media3, the camera plugin's
