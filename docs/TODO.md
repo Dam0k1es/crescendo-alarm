@@ -954,6 +954,25 @@ that is the basis a decision can be formulated against.
   `flutter analyze` clean; `flutter build apk --debug` still succeeds.
 - **Requirement:** none directly - a regression fix surfaced by T-170, not a new capability.
 
+### T-172 · v1.2.0 released — the first release under the Crescendo Alarm name — DONE (2026-09-25)
+
+- [x] `master` fast-forwarded to `3a39aea` (T-169 rename + 9 Dependabot bumps + T-170 defaults +
+  T-171 fix), full gate green (security-gate, real-emulator E2E, signed production build, MobSF),
+  tagged `v1.2.0` and pushed - `release.yml`'s own independent gate (security-gate + E2E again)
+  green, signed APK produced and attached.
+- **Release notes corrected:** GitHub's auto-generated notes only listed the 9 Dependabot PRs
+  (the rename, T-170, and T-171 landed as direct commits to `dev`, not PRs, so they never made it
+  into the auto-generated "What's Changed" list) - rewritten by hand to actually describe what
+  shipped, including the no-in-place-update consequence of the `applicationId` change. Title fixed
+  to "Crescendo Alarm v1.2.0" (was the bare tag name). A second, human-readable asset
+  `crescendo-alarm-v1.2.0.apk` uploaded alongside the generic `app-release.apk` (byte-identical,
+  SHA-256 `e648693899bafc434f487f2d6ce51c2062dcc8409a9ef7ea2ca7d6d2057040f2`), matching the same
+  fix already applied to the `v1.0.0` release's own naming gap (T-169's addendum).
+- **`current.apk` refreshed** from this release's actual signed artifact - `applicationId`
+  `com.crescendoalarm.crescendoalarm`, `versionCode=3`, `versionName=1.2.0`, verified via
+  `apksigner verify` before copying.
+- **Requirement:** none directly - a release milestone, not a defect fix or new capability.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
