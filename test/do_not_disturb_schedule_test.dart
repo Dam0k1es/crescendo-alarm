@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb.dart'
+    show doNotDisturbTargetWakeUpKey;
 import 'package:crescendo_alarm/utils/do_not_disturb_schedule.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
 import 'package:crescendo_alarm/utils/sleep_reminder.dart' show sleepReminderNotificationId;
@@ -139,5 +141,50 @@ void main() {
   test('the doNotDisturbActivationNotificationId is a distinct fixed id, '
       'not the sleep-reminder one', () {
     expect(doNotDisturbActivationNotificationId, isNot(sleepReminderNotificationId));
+  });
+
+  group('persisted target wake-up (docs/TODO.md T-184, independent review '
+      'finding)', () {
+    // Handler.handleAlarm reads this back (isTargetWakeUpRing) to tell
+    // whether a ring is the one Do Not Disturb was actually scheduled
+    // around, as opposed to some unrelated alarm ringing and becoming
+    // "final" first.
+
+    test('enabled: persists the WAKE-UP instant (not the bedtime) the '
+        'schedule was computed from', () async {
+      final appState = await _freshAppState();
+      appState.doNotDisturbEnabled = true;
+      final wakeUp = DateTime.now().toUtc().add(const Duration(hours: 10));
+      appState.pendingDayValues = {
+        isoDate(wakeUp): wakeUp.millisecondsSinceEpoch,
+      };
+      appState.sleepGoal = const TimeOfDay(hour: 8, minute: 0);
+      final prefs = await SharedPreferences.getInstance();
+
+      await scheduleDoNotDisturbActivation(appState,
+          notifications: _RecordingNotifications(), prefs: prefs);
+
+      final storedMillis = prefs.getInt(doNotDisturbTargetWakeUpKey);
+      expect(storedMillis, isNotNull);
+      final stored = DateTime.fromMillisecondsSinceEpoch(storedMillis!);
+      expect(stored.difference(wakeUp.toLocal()).abs().inMinutes,
+          lessThanOrEqualTo(1),
+          reason: 'expected the WAKE-UP instant itself, not the bedtime '
+              '(wakeUp - sleepGoal) that gets scheduled - got $stored');
+    });
+
+    test('disabled: clears any previously persisted target', () async {
+      SharedPreferences.setMockInitialValues(
+          {doNotDisturbTargetWakeUpKey: 123456});
+      final appState = AppState();
+      await appState.initialized;
+      appState.doNotDisturbEnabled = false;
+      final prefs = await SharedPreferences.getInstance();
+
+      await scheduleDoNotDisturbActivation(appState,
+          notifications: _RecordingNotifications(), prefs: prefs);
+
+      expect(prefs.getInt(doNotDisturbTargetWakeUpKey), isNull);
+    });
   });
 }

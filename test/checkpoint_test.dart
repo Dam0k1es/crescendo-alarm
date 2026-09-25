@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb_schedule.dart'
+    show doNotDisturbActivationNotificationId;
 import 'package:crescendo_alarm/utils/notifications.dart';
 
 // docs/TODO.md T-77 + T-80 + T-87: runSchedulingCheckpoint() is the one entry
@@ -283,6 +285,52 @@ void main() {
       expect(result, isNull, reason: 'FR-17: already planned today -> no-op');
       expect(notifications.callCount, 0,
           reason: 'without a replan there is nothing new to schedule either');
+    });
+  });
+
+  group('T-184: Do Not Disturb activation is rescheduled alongside the '
+      'bedtime reminder (independent review finding: this wiring had no '
+      'test coverage at all)', () {
+    test('enabled: the ring checkpoint also reschedules the Do Not Disturb '
+        'activation hook', () async {
+      final appState = await _freshAppState();
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
+      appState.doNotDisturbEnabled = true;
+      final notifications = _RecordingNotifications();
+
+      await runSchedulingCheckpoint(
+        appState,
+        trigger: CheckpointTrigger.alarmRing,
+        now: () => _utc(7, 0, day: 9),
+        deviceUtcOffset: Duration.zero,
+        fetchEvents: (start, end) async => const [],
+        notifications: notifications,
+      );
+
+      expect(notifications.callCount, 2,
+          reason: 'one call for the sleep reminder hook (always scheduled) '
+              'plus one for the Do Not Disturb activation hook');
+      expect(notifications.ids, contains(doNotDisturbActivationNotificationId));
+    });
+
+    test('disabled (the default): no Do Not Disturb notification is '
+        'scheduled, only the sleep-reminder hook', () async {
+      final appState = await _freshAppState();
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
+      final notifications = _RecordingNotifications();
+
+      await runSchedulingCheckpoint(
+        appState,
+        trigger: CheckpointTrigger.alarmRing,
+        now: () => _utc(7, 0, day: 9),
+        deviceUtcOffset: Duration.zero,
+        fetchEvents: (start, end) async => const [],
+        notifications: notifications,
+      );
+
+      expect(notifications.callCount, 1);
+      expect(notifications.ids,
+          isNot(contains(doNotDisturbActivationNotificationId)));
     });
   });
 

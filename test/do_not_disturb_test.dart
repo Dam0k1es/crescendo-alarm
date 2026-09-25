@@ -308,4 +308,60 @@ void main() {
       expect(applied, isTrue);
     });
   });
+
+  group('isTargetWakeUpRing', () {
+    // Independent-review finding (docs/TODO.md T-184, 2026-09-25): "final"
+    // alone is not enough to restore Do Not Disturb - an unrelated alarm
+    // (e.g. a manual reminder with Snooze switched off) can become "final"
+    // and ring hours before the real wake-up Do Not Disturb was scheduled
+    // around. This predicate closes that gap by comparing against the
+    // WAKE-UP instant `scheduleDoNotDisturbActivation` persisted, not by
+    // re-deriving `nextWakeUpTime` fresh (which would trivially match
+    // whatever is about to ring anyway, since it is always the soonest
+    // not-yet-passed candidate one tick before it fires).
+
+    test('nothing persisted yet (never scheduled, or disabled): trusts this '
+        'ring', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+
+      expect(isTargetWakeUpRing(prefs, DateTime(2026, 3, 10, 6, 0)), isTrue);
+    });
+
+    test('matches the persisted target exactly: is the target', () async {
+      final target = DateTime(2026, 3, 10, 6, 0);
+      SharedPreferences.setMockInitialValues(
+          {doNotDisturbTargetWakeUpKey: target.millisecondsSinceEpoch});
+      final prefs = await SharedPreferences.getInstance();
+
+      expect(isTargetWakeUpRing(prefs, target), isTrue);
+    });
+
+    test('within the small tolerance of the persisted target: still counts',
+        () async {
+      final target = DateTime(2026, 3, 10, 6, 0);
+      SharedPreferences.setMockInitialValues(
+          {doNotDisturbTargetWakeUpKey: target.millisecondsSinceEpoch});
+      final prefs = await SharedPreferences.getInstance();
+
+      expect(
+          isTargetWakeUpRing(
+              prefs, target.add(const Duration(minutes: 1))),
+          isTrue);
+    });
+
+    test('an unrelated alarm ringing hours before the persisted target: NOT '
+        'the target', () async {
+      // The exact scenario the review found: a medication reminder at 02:00
+      // (Snooze off, so it becomes "final" immediately) while Do Not Disturb
+      // was actually scheduled around a 06:00 wake-up.
+      final realWakeUp = DateTime(2026, 3, 10, 6, 0);
+      SharedPreferences.setMockInitialValues(
+          {doNotDisturbTargetWakeUpKey: realWakeUp.millisecondsSinceEpoch});
+      final prefs = await SharedPreferences.getInstance();
+      final medicationRing = DateTime(2026, 3, 10, 2, 0);
+
+      expect(isTargetWakeUpRing(prefs, medicationRing), isFalse);
+    });
+  });
 }

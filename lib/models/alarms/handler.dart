@@ -293,8 +293,15 @@ class Handler {
           wakeUpBudget: durationFromTimeOfDay(_appState.durationToWakeUp),
           snoozeEnabled: effectiveSnoozeEnabled(_appState, event.id),
         );
+        // docs/TODO.md T-184 (independent review finding): "final" alone is
+        // not enough - an unrelated alarm ringing before the actual wake-up
+        // could otherwise restore Do Not Disturb far too early. See
+        // isTargetWakeUpRing's own doc comment (do_not_disturb.dart).
         if (isFinalRing) {
-          await _restoreDoNotDisturb(_appState);
+          final prefs = await SharedPreferences.getInstance();
+          if (isTargetWakeUpRing(prefs, origin)) {
+            await _restoreDoNotDisturb(_appState);
+          }
         }
       } catch (e) {
         debugPrint(

@@ -7,6 +7,8 @@ import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/handler.dart';
 import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb.dart'
+    show doNotDisturbTargetWakeUpKey;
 
 // docs/TODO.md T-184 (maintainer request): "ab dem Wecker (nach snooze
 // time, nur finaler Alarm) wieder auf den Zustand vorher... setzen" - Do
@@ -183,5 +185,80 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(received, same(appState));
+  });
+
+  group('scoped to the wake-up Do Not Disturb was actually scheduled around '
+      '(independent review finding, docs/TODO.md T-184)', () {
+    // A ring being "final" (no further snooze possible) is not, by itself,
+    // enough to restore Do Not Disturb: an unrelated alarm (e.g. a manual
+    // reminder with Snooze switched off) can become "final" and ring hours
+    // before the real wake-up Do Not Disturb was scheduled around -
+    // restoring here would silence nothing for the rest of the night.
+
+    testWidgets(
+        'an unrelated alarm that is final does NOT restore, when it is not '
+        'the persisted target wake-up', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        doNotDisturbTargetWakeUpKey:
+            DateTime.now().add(const Duration(hours: 4)).millisecondsSinceEpoch,
+      });
+      final appState = AppState();
+      await appState.initialized;
+      appState.snoozeEnabled = false;
+      // A medication reminder-style alarm, unrelated to the real wake-up
+      // Do Not Disturb was scheduled around (4 hours from now, per the
+      // persisted target above).
+      _registerScheduledAlarm(appState, id: 5);
+      final context = await _pumpAppWithContext(tester, appState);
+
+      var restoreCalled = false;
+      final handler = Handler(
+        context,
+        runCheckpoint: (_) async => _fixedResult,
+        restoreDoNotDisturb: (a) async {
+          restoreCalled = true;
+          return true;
+        },
+      );
+
+      await handler.handleAlarm(_fakeAlarmSettings(
+          id: 5, dateTime: DateTime.now().add(const Duration(seconds: 1))));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(restoreCalled, isFalse,
+          reason: 'this ring is final, but hours away from the wake-up Do '
+              'Not Disturb was actually scheduled around - restoring here '
+              'would silence nothing for the rest of the night');
+    });
+
+    testWidgets('the ring matching the persisted target wake-up DOES restore',
+        (tester) async {
+      final ringTime = DateTime.now().add(const Duration(seconds: 1));
+      SharedPreferences.setMockInitialValues({
+        doNotDisturbTargetWakeUpKey: ringTime.millisecondsSinceEpoch,
+      });
+      final appState = AppState();
+      await appState.initialized;
+      appState.snoozeEnabled = false;
+      _registerScheduledAlarm(appState, id: 6);
+      final context = await _pumpAppWithContext(tester, appState);
+
+      var restoreCalled = false;
+      final handler = Handler(
+        context,
+        runCheckpoint: (_) async => _fixedResult,
+        restoreDoNotDisturb: (a) async {
+          restoreCalled = true;
+          return true;
+        },
+      );
+
+      await handler.handleAlarm(_fakeAlarmSettings(id: 6, dateTime: ringTime));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(restoreCalled, isTrue);
+    });
   });
 }

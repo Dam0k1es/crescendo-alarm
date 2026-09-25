@@ -16,7 +16,9 @@
 // along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
 import 'package:crescendo_alarm/utils/sleep_reminder.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
@@ -42,18 +44,40 @@ const int doNotDisturbActivationNotificationId = 100000002;
 /// Wecker (ohne reminder Zeit)": notifications go quiet at the actual
 /// sleep-goal-derived bedtime, not already at the earlier lead-time
 /// reminder.
+///
+/// Also persists the WAKE-UP instant this bedtime was computed from
+/// (docs/TODO.md T-184, independent review finding) - [bedtimeInstant]
+/// itself only returns the bedtime, so the wake-up is recovered by adding
+/// [AppState.sleepGoal] back. `Handler.handleAlarm` reads this later
+/// (`isTargetWakeUpRing`) to tell whether a given ring is the one Do Not
+/// Disturb was actually scheduled around, as opposed to some unrelated
+/// alarm that merely happens to ring and become final first. Cleared (not
+/// just left stale) whenever Do Not Disturb is disabled, so turning it back
+/// on later can never compare against a target from before the gap.
+/// [prefs] is injectable purely for testability, matching this project's
+/// established pattern elsewhere.
 Future<void> scheduleDoNotDisturbActivation(
   AppState appState, {
   Notifications? notifications,
+  SharedPreferences? prefs,
 }) async {
   try {
     final notifier = notifications ?? Notifications();
     await notifier.cancelNotification(doNotDisturbActivationNotificationId);
 
-    if (!appState.doNotDisturbEnabled) return;
+    final p = prefs ?? await SharedPreferences.getInstance();
+    if (!appState.doNotDisturbEnabled) {
+      await p.remove(doNotDisturbTargetWakeUpKey);
+      return;
+    }
 
-    final dateTime =
-        pushIntoFutureIfPast(bedtimeInstant(appState), DateTime.now());
+    final rawBedtime = bedtimeInstant(appState);
+    final targetWakeUp =
+        rawBedtime.add(durationFromTimeOfDay(appState.sleepGoal));
+    await p.setInt(
+        doNotDisturbTargetWakeUpKey, targetWakeUp.millisecondsSinceEpoch);
+
+    final dateTime = pushIntoFutureIfPast(rawBedtime, DateTime.now());
 
     try {
       // docs/TODO.md T-61: same boundary as the alarm plugin and the sleep

@@ -48,6 +48,46 @@ const String doNotDisturbPreviousFilterKey = 'doNotDisturbPreviousFilter';
 /// net, unrelated to anything [restoreDoNotDisturb] itself needs.
 const String doNotDisturbActivatedAtKey = 'doNotDisturbActivatedAt';
 
+/// The `SharedPreferences` key the WAKE-UP instant Do Not Disturb was most
+/// recently scheduled around is stored under (millisecondsSinceEpoch) -
+/// written by `scheduleDoNotDisturbActivation` (`do_not_disturb_schedule.dart`)
+/// every time it (re-)computes the bedtime, read by [isTargetWakeUpRing].
+const String doNotDisturbTargetWakeUpKey = 'doNotDisturbTargetWakeUp';
+
+/// docs/TODO.md T-184 (independent review finding, 2026-09-25): a ring being
+/// "final" (no further snooze possible) is not, by itself, enough to restore
+/// Do Not Disturb - Do Not Disturb is scheduled around ONE specific wake-up
+/// instant (whichever `nextWakeUpTime` considered earliest at the moment
+/// `scheduleDoNotDisturbActivation` last ran), not around "whatever alarm
+/// happens to ring and become final first". Without this check, an unrelated
+/// alarm (a manual reminder with Snooze switched off, or one that simply
+/// exhausts its own small snooze budget before the real wake-up is even due)
+/// would restore Do Not Disturb hours early - silencing nothing for the rest
+/// of the night, exactly the failure mode the feature exists to prevent.
+///
+/// Deliberately compares against a PERSISTED target rather than
+/// re-deriving `nextWakeUpTime` fresh at ring time: recomputing it right
+/// before any alarm rings would trivially return that very alarm's own time
+/// (it is, by definition, the soonest thing not yet passed), which would
+/// make the check a no-op - it has to ask "is this the wake-up Do Not
+/// Disturb was ACTUALLY scheduled around", not "is this the soonest thing
+/// happening right now".
+///
+/// A `null` stored value (Do Not Disturb was never scheduled, is disabled, or
+/// this ran before the target was first persisted) is treated as a match -
+/// nothing to compare against, so this ring must be the one. A small
+/// tolerance (not exact equality) absorbs any independent minute-truncation
+/// between the two DateTimes' own derivations (`alarmPlatformTime`, the
+/// notification scheduler) without weakening the check in practice - the
+/// unrelated-alarm scenario above differs by hours, not minutes.
+bool isTargetWakeUpRing(SharedPreferences prefs, DateTime candidateRing) {
+  final targetMillis = prefs.getInt(doNotDisturbTargetWakeUpKey);
+  if (targetMillis == null) return true;
+  final target = DateTime.fromMillisecondsSinceEpoch(targetMillis);
+  return candidateRing.difference(target).abs() <=
+      const Duration(minutes: 2);
+}
+
 /// How long Do Not Disturb may stay active before the safety net restores it
 /// regardless of whether an alarm ever rang - generous enough to cover any
 /// real sleep+wake+workday, deliberately NOT tied to any particular wake

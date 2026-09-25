@@ -1261,6 +1261,64 @@ that is the basis a decision can be formulated against.
 - **Requirement:** yes - requested directly by the maintainer, with precise, load-bearing timing
   semantics that were worked through carefully rather than approximated.
 
+**Addendum (2026-09-25/26) - independent review finding, fixed:** Günther (the Senior Developer
+review persona, `CLAUDE.md`) reviewed this commit against its own tests and found a real, blocking
+gap - `Handler.handleAlarm`'s restore check fired for **any** ringing alarm that turned out to be
+"final", `ScheduledAlarm` or `ManualAlarm` alike, with no check that it was the alarm Do Not Disturb
+was actually scheduled around. Concretely: a `ManualAlarm` with `snoozeEnabled` overridden to
+`false` (a real, supported per-alarm setting since T-176 - e.g. a medication reminder) ringing
+overnight, before the real calendar-derived wake-up, would restore Do Not Disturb hours early -
+silencing nothing for the rest of the night, exactly the failure mode the feature exists to
+prevent. None of the four original `handler_do_not_disturb_restore_test.dart` cases caught this,
+because every one of them used exactly one alarm id - the gap between "this alarm's own final ring"
+and "the alarm the Do Not Disturb window was scheduled around" was never exercised.
+
+The first fix attempt (re-deriving `nextWakeUpTime` fresh at ring time, scoped one tick before the
+ring) turned out to be a no-op on reflection, caught before landing: whatever is about to ring is,
+by definition, the soonest not-yet-passed candidate, so it would always "match itself" regardless
+of whether it was the real target. The actual fix persists the WAKE-UP instant (not the bedtime)
+that `scheduleDoNotDisturbActivation` computed the schedule from
+(`doNotDisturbTargetWakeUpKey`, `do_not_disturb.dart`), and `Handler.handleAlarm` now compares the
+ringing alarm's own origin against that persisted target (`isTargetWakeUpRing`, within a 2-minute
+tolerance) before restoring - a `null` target (never scheduled, or Do Not Disturb disabled) is
+treated as a match, preserving the original behavior when there is nothing to compare against.
+New/changed tests: `do_not_disturb_test.dart` (+4 cases for `isTargetWakeUpRing`),
+`do_not_disturb_schedule_test.dart` (+2, persisting/clearing the target),
+`handler_do_not_disturb_restore_test.dart` (+2, reproducing the exact medication-reminder scenario
+and confirming the correct case still restores), `checkpoint_test.dart` (+2, closing a second gap
+Günther flagged - the checkpoint's own DND rescheduling call had zero test coverage at the wiring
+level). Full suite re-verified green (645/645), `flutter analyze` clean.
+
+Two further findings from the same review were judged non-blocking and are tracked separately
+rather than expanded into more scope here: see T-185.
+
+### T-185 · Two non-blocking follow-ups from Günther's T-184 review (P2, OPEN)
+
+- [ ] **`do_not_disturb_channel.dart`'s own doc comment overstates what a `false` return actually
+  means.** It claims covering "a genuine platform failure (most likely: `ACCESS_NOTIFICATION_POLICY`
+  was never granted)", but the Kotlin side (`DoNotDisturbChannel.kt`) never checks permission state
+  before calling `setInterruptionFilter` - Android's own behavior is to silently no-op without the
+  permission rather than throw, so the Dart wrapper's `invokeMethod` will NOT throw in that case and
+  will return `true` regardless, permission or not. Harmless in practice (a permission-denied
+  activation just silently changes nothing on the device, and the persisted "previous filter"
+  bookkeeping stays internally consistent either way - nothing gets "stuck"), but the comment's
+  claim about what `false` means is simply wrong given the code's own logic. *Done when:* either the
+  comment is corrected to describe the real (harmless) behavior, or an actual permission check is
+  added before recording activation and the comment is left as originally written because it would
+  then be true.
+- [ ] **`restoreStaleDoNotDisturb`'s safety net has no wiring-level test through
+  `runSchedulingCheckpoint`.** The function itself is well covered in isolation
+  (`do_not_disturb_test.dart`), and T-184's own fix (above) closed the *scheduling* half of the
+  checkpoint wiring gap (`checkpoint_test.dart`'s new "Do Not Disturb activation is rescheduled"
+  group) - but the *restore* half still calls the real `setInterruptionFilter` directly
+  (`checkpoint.dart`'s `finally` block), which has no platform channel in `flutter test` and is
+  swallowed by the surrounding `try`/`catch`, so a checkpoint-level test can currently only confirm
+  it doesn't crash, not that it actually restores a stale state. *Done when:* `setInterruptionFilter`
+  is threaded through `runSchedulingCheckpoint`/`runCheckpointSafely` as an injectable parameter
+  (matching `fetchEvents`/`notifications`/`now` already are), and a test confirms a stale Do Not
+  Disturb activation is actually restored during a real checkpoint run, not just that the function
+  works when called directly.
+
 ### T-183 · The QR-scan "Cancel" and the AppBar's own close ("X") button — only one worked — DONE (2026-09-25)
 
 - [x] Maintainer report, verbatim: "der qr scan dialog zeigt zum abbruch ein kreuz und einen
