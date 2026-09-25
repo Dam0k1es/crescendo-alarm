@@ -821,6 +821,72 @@ that is the basis a decision can be formulated against.
      against an injected `getStringExtra` call.
 - **Requirement:** none directly - a test/documentation-quality pass, not a defect fix.
 
+### T-169 · Project renamed: WakeyWakey → Crescendo Alarm — DONE (2026-09-25)
+
+- [x] Maintainer-requested rebrand. No version bump (stays `1.1.0+2`) - this is a rename, not a
+  feature release, and the maintainer explicitly asked that it not read as one.
+- **Naming clearance done first, before any code changed:** two independent research passes (one
+  by this session, one by a fresh agent given no prior context) both concluded LOW trademark/
+  naming risk - no product named exactly "Crescendo Alarm" exists anywhere (Play Store, App Store,
+  F-Droid, USPTO/Trademarkia), "crescendo" is already used descriptively/generically across the
+  alarm-app category by unrelated competitors, and the closest registered marks (NCH Software's
+  "Crescendo" music-notation app; Crescendo Interactive's nonprofit-fundraising-software family;
+  a record label's media-only registration) sit in unrelated goods/services categories. Not legal
+  advice, and disproportionate to formally clear further for a non-commercial GPL hobby project.
+- **Backed up before touching anything:** tag `pre-crescendo-rename-2026-09-25` and branch
+  `pre-crescendo-rename-backup`, both on the pre-rename `master` HEAD (`4bd3ceb`), pushed and
+  verified on origin before any rename edit began.
+- **Scope, done in verified phases** (`flutter analyze`/`test`/`build apk --debug` after each):
+  Dart package `wakeywakey` → `crescendo_alarm` (every import across `lib/`/`test/`/
+  `integration_test/`); Android `applicationId`/`namespace` `com.wakeywakey.wakeywakey` →
+  `com.crescendoalarm.crescendoalarm` (Kotlin source directory moved and repackaged, the
+  `DirectBootFallback` `MethodChannel` string updated on both the Dart and Kotlin sides, the
+  `DirectBootReceiver` finding key in `.github/security-exceptions.json` updated to match what
+  MobSF now reports, CI/local verification scripts' `PACKAGE` defaults updated); iOS and Linux
+  scaffolding updated too for completeness, though neither is a real deployment target; the CI
+  signing keystore filename (`wakeywakey-release.jks` → `crescendo-alarm-release.jks` in both
+  `ci.yml` and `release.yml`); every user-facing UI string (About page, app title, notification
+  titles, diagnostics export header, deactivation-code semantics label) and the GPLv3 licence
+  header text in all 54 `lib/` source files; living docs (`CLAUDE.md`, `README.md`,
+  `docs/REQUIREMENTS.md`, `docs/licence-position.md`, `docs/use-cases.md`,
+  `docs/device-trial-checklist.md`, `docs/threat-model.svg` + regenerated `docs/risk.png`); and the
+  GitHub repository itself, `Dam0k1es/wakeywakey` → `Dam0k1es/crescendo-alarm` (both worktrees'
+  `origin` remotes updated afterward).
+- **Deliberately left as point-in-time historical record, not silently rewritten:**
+  `docs/security-assessment-2026-09.md`'s body (a frozen, dated security report) got a naming note
+  instead of having its ~22 in-body "WakeyWakey" references rewritten, so it still accurately
+  describes what was assessed under its original name; this file's own quoted historical
+  commands/output/filenames (e.g. `UML_WakeyWakey.drawio`, exact `dumpsys`/`gh api` quotes from
+  past entries) are exact records of specific past events, not generic prose, and stayed as
+  recorded; `assets/sounds/CREDITS.md` and `bundled_tones.dart`'s comment - `wakeywakey.mp3`/
+  `wakeywakey2.mp3` are real, unchanged asset filenames (T-167 kept paths stable on purpose), and
+  the retired tone display names "WakeyWakey"/"WakeyWakey 2" quoted there are historical fact, not
+  the current app name; `.github/scripts/alarm_detection.sh`'s self-test package variable and
+  `.github/scripts/fixtures/*` - these test detection logic against real, historical `dumpsys`/
+  `uiautomator` recordings made under the old package name, which must stay exactly as recorded or
+  the self-test would silently stop testing what it claims to; and `CLAUDE.md`'s real local
+  filesystem paths (`/mnt/wakeywakey`, the `~/projects/wakeywakey` example) - environment/
+  infrastructure on this dev VM, not part of the project's own identity.
+- **Verified at every layer, not assumed:** `flutter analyze` clean, full suite green (543/543),
+  a local `flutter build apk --debug` confirmed the new `applicationId` via `aapt2 dump badging`
+  before anything was pushed, `actionlint` reported no new findings, `.github/security-
+  exceptions.json` stayed valid JSON, and both `.github/scripts/alarm_detection.sh --self-test`
+  and `scripts/check_proprietary_native_deps.py --self-test` still passed. After push: `dev`'s own
+  seven required checks green, then `master`'s full gate (security-gate, the real E2E emulator
+  suite, the signed production build under the new keystore filename, and a full MobSF scan
+  against the new `applicationId`) all green on the first real attempt - confirming the
+  `security-exceptions.json` key update actually matched MobSF's new finding text, not just in
+  theory.
+- **Known, accepted consequence - not swept under the rug:** a changed `applicationId` is a
+  different app to Android. The maintainer's already-flashed production install cannot update
+  in place; it needs manual uninstall (losing all local data - alarms, settings) and a fresh
+  install of the new build. No trivial on-device data dump/import path exists for this (checked
+  and confirmed separately before the rename started - would need root, a debuggable build, or a
+  purpose-built export/import feature, none of which apply here). Accepted by the maintainer in
+  advance, in exchange for the new `applicationId` rather than keeping the old one under a new
+  display name.
+- **Requirement:** none directly - a rebrand, not a defect fix or new capability.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
