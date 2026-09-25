@@ -157,107 +157,127 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
       child: Scaffold(
         backgroundColor: Theme.of(context).colorScheme.surface,
         body: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(),
-              // FR-20: snooze sits above the stop button and disappears once
-              // the budget is exhausted.
-              SnoozeButton(
-                alarmId: widget.alarmId,
-                onBeforeSnooze: () => _snoozing = true,
-                onSnoozeAttemptFailed: () => _snoozing = false,
-                onSnoozed: _pop,
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      formatDateTime(_currentDateTime),
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blueGrey.shade400,
+          // The SnoozeButton (visible whenever snoozeEnabled, on by default)
+          // added just enough height to overflow this Column on short
+          // viewports - found via the CI timezone matrix's fixed 600dp test
+          // surface, not a real device report, but the fix has to hold on a
+          // real short/small screen too, not just make the test pass. A
+          // LayoutBuilder + ConstrainedBox(minHeight) + IntrinsicHeight lets
+          // the Spacer-based centering below work unchanged whenever content
+          // fits, and only turns scrollable once it doesn't - a plain
+          // SingleChildScrollView alone can't host Spacer (it needs a
+          // bounded height to compute flex, which an unbounded scroll axis
+          // doesn't give it).
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Spacer(),
+                      // FR-20: snooze sits above the stop button and disappears once
+                      // the budget is exhausted.
+                      SnoozeButton(
+                        alarmId: widget.alarmId,
+                        onBeforeSnooze: () => _snoozing = true,
+                        onSnoozeAttemptFailed: () => _snoozing = false,
+                        onSnoozed: _pop,
                       ),
-                    ),
-                    Text(
-                      formatTimeOfDay(_currentTime),
-                      style: TextStyle(
-                        fontSize: 100,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blueGrey.shade400,
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              formatDateTime(_currentDateTime),
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey.shade400,
+                              ),
+                            ),
+                            Text(
+                              formatTimeOfDay(_currentTime),
+                              style: TextStyle(
+                                fontSize: 100,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey.shade400,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              Center(
-                child: SizedBox(
-                  width: 200,
-                  height: 200,
-                  child: RotationTransition(
-                    turns: _animation,
-                    child: Icon(
-                      Icons.alarm,
-                      size: 200,
-                      color: Colors.blueGrey.shade300,
-                    ),
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _appState.accentColor,
-                    minimumSize: const Size(double.infinity, 60),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                  ),
-                  onPressed: () async {
-                    bool stopped = false;
-                    try {
-                      stopped = await Alarm.stop(widget.alarmId);
-                    } catch (e) {
-                      debugPrint(
-                          "=====ScreenAlarmActiveState: Failed to stop alarm: ${e.runtimeType}");
-                    }
-                    if (!stopped) {
-                      // Don't silently leave: the alarm is still ringing.
-                      // canPop is false, so staying here (rather than
-                      // popping anyway) is the only option that doesn't
-                      // strand the user behind a closed screen with a live
-                      // alarm.
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content:
-                                Text('Failed to stop the alarm - please try again.'),
+                      const Spacer(),
+                      Center(
+                        child: SizedBox(
+                          width: 200,
+                          height: 200,
+                          child: RotationTransition(
+                            turns: _animation,
+                            child: Icon(
+                              Icons.alarm,
+                              size: 200,
+                              color: Colors.blueGrey.shade300,
+                            ),
                           ),
-                        );
-                      }
-                      return;
-                    }
-                    _callOnAlarmHandledOnce();
-                    _pop();
-                  },
-                  child: const Text(
-                    'Stop',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 30,
-                    ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _appState.accentColor,
+                            minimumSize: const Size(double.infinity, 60),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          onPressed: () async {
+                            bool stopped = false;
+                            try {
+                              stopped = await Alarm.stop(widget.alarmId);
+                            } catch (e) {
+                              debugPrint(
+                                  "=====ScreenAlarmActiveState: Failed to stop alarm: ${e.runtimeType}");
+                            }
+                            if (!stopped) {
+                              // Don't silently leave: the alarm is still ringing.
+                              // canPop is false, so staying here (rather than
+                              // popping anyway) is the only option that doesn't
+                              // strand the user behind a closed screen with a live
+                              // alarm.
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Failed to stop the alarm - please try again.'),
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+                            _callOnAlarmHandledOnce();
+                            _pop();
+                          },
+                          child: const Text(
+                            'Stop',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 30,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                    ],
                   ),
                 ),
               ),
-              const Spacer(),
-            ],
+            ),
           ),
         ),
       ),

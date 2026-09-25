@@ -925,6 +925,35 @@ that is the basis a decision can be formulated against.
   needed their setup decoupled from the default instead.
 - **Requirement:** none directly - a configuration/default-value change, not a defect fix.
 
+### T-171 · T-170's snoozeEnabled default overflowed the ringing screen — FIXED (2026-09-25)
+
+- [x] Found by `dev`'s own required CI checks, not proactively: `Analyze & Test (TZ=Pacific/
+  Chatham)` failed on the very next commit after T-170 with `A RenderFlex overflowed by 7.0 pixels
+  on the bottom` in `screen_active_alarm.dart:160`, across 7 tests in
+  `test/handler_replan_wiring_test.dart`. Reproduced locally (`TZ=Pacific/Chatham flutter test
+  test/handler_replan_wiring_test.dart`) before touching anything, to confirm it wasn't CI-runner
+  flakiness.
+- **Root cause:** `ScreenAlarmActive`'s body is a fixed, non-scrollable `Column` (four `Spacer`s
+  distributing remaining space between the date/time text, a 200×200 alarm icon, and the Stop
+  button) with `SnoozeButton` sitting above all of that. `snoozeEnabled` defaulting to `true`
+  (T-170) means that button now always occupies space on this screen where it previously mostly
+  didn't (default was `false`) - just enough extra height to overflow the fixed Flutter test
+  viewport (800×600) by 7 pixels. Only the Chatham leg happened to fail because the fixed test
+  clock renders at its longest string length there, not because the underlying fragility is
+  timezone-specific - the same 7px would be exceeded on a real short/small screen too, so the fix
+  had to actually solve that, not just satisfy this one CI leg.
+- **Fix:** wrapped the `Column` in the standard Flutter idiom for "centered when it fits, scrollable
+  when it doesn't" - `LayoutBuilder` → `SingleChildScrollView` → `ConstrainedBox(minHeight:
+  constraints.maxHeight)` → `IntrinsicHeight` → the unchanged `Column`. A plain
+  `SingleChildScrollView` alone can't host the existing `Spacer`s (they need a bounded main-axis
+  size to compute flex, which an unbounded scroll axis doesn't provide) - `IntrinsicHeight` bounded
+  by the `ConstrainedBox` gives them that, while still allowing the whole thing to grow and scroll
+  once content genuinely doesn't fit.
+- **Verified:** the previously-failing tests green under `TZ=Pacific/Chatham`; the full suite
+  (543/543) re-run under all six CI timezones locally, not just the one that had failed;
+  `flutter analyze` clean; `flutter build apk --debug` still succeeds.
+- **Requirement:** none directly - a regression fix surfaced by T-170, not a new capability.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
