@@ -20,10 +20,21 @@ import 'package:provider/provider.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart' show DayOfWeek;
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
+import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/utils/sleep_reminder.dart';
 
 class ScreenSleephabits extends StatefulWidget {
   const ScreenSleephabits({super.key});
+
+  /// Test seam, same pattern as `ScreenAlarmActive.debugRingingStreamOverride`
+  /// / `QrScanner.debugScanStreamOverride`: replaces the real
+  /// `showTimePicker` call with a fake result, so a test can drive every
+  /// duration/time control on this screen without operating the actual
+  /// Material time-picker dial - no test anywhere in this project does that,
+  /// since it's third-party dialog UI, not this screen's own logic to prove
+  /// correct. `null` (the default) means the real dialog is used.
+  static Future<TimeOfDay?> Function(TimeOfDay? initialTime)?
+      debugTimePickerOverride;
 
   @override
   State<ScreenSleephabits> createState() => _ScreenSleephabitsState();
@@ -43,9 +54,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
     _appState = Provider.of<AppState>(context, listen: false);
   }
 
-  Future<void> _changeDuration(String setting,
-      {TimeOfDay? initialTime, DayOfWeek? forWeekday}) async {
-    final TimeOfDay? pickedTime = await showTimePicker(
+  Future<TimeOfDay?> _showRealTimePicker(TimeOfDay? initialTime) {
+    return showTimePicker(
       context: context,
       initialTime: initialTime ?? const TimeOfDay(hour: 0, minute: 15),
       initialEntryMode: TimePickerEntryMode.dial,
@@ -78,26 +88,42 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
         );
       },
     );
+  }
+
+  Future<void> _changeDuration(String setting,
+      {TimeOfDay? initialTime, DayOfWeek? forWeekday}) async {
+    final TimeOfDay? pickedTime =
+        await (ScreenSleephabits.debugTimePickerOverride ??
+            _showRealTimePicker)(initialTime);
 
     if (pickedTime != null) {
       if (!mounted) return;
       switch (setting) {
         case 'sleepGoal':
           _appState.sleepGoal = pickedTime;
+          Diag.sleepHabitChanged(setting: DiagSleepHabitSetting.sleepGoal);
           break;
         case 'wakeUp':
           _appState.durationToWakeUp = pickedTime;
+          Diag.sleepHabitChanged(
+              setting: DiagSleepHabitSetting.durationToWakeUp);
           break;
         case 'getReady':
           _appState.durationToGetReady = pickedTime;
+          Diag.sleepHabitChanged(
+              setting: DiagSleepHabitSetting.durationToGetReady);
           break;
         // docs/TODO.md T-52.3: a per-weekday override, distinct from the
         // global 'getReady' case above.
         case 'getReadyForDay':
           _appState.setDurationToGetReadyForWeekday(forWeekday!, pickedTime);
+          Diag.sleepHabitChanged(
+              setting: DiagSleepHabitSetting.durationToGetReadyPerWeekday);
           break;
         case 'reminder':
           _appState.reminderDuration = pickedTime;
+          Diag.sleepHabitChanged(
+              setting: DiagSleepHabitSetting.reminderDuration);
           break;
         // docs/TODO.md T-72: without these two controls, FR-4's drift, FR-7's
         // partial capping, and FR-10's preferredWakeUpTime branch were
@@ -105,10 +131,13 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
         // maxDailyDelta always the minimum.
         case 'preferredWakeUpTime':
           _appState.preferredWakeUpTime = pickedTime;
+          Diag.sleepHabitChanged(
+              setting: DiagSleepHabitSetting.preferredWakeUpTime);
           break;
         case 'maxDailyDelta':
           _appState.maxDailyDelta =
               Duration(hours: pickedTime.hour, minutes: pickedTime.minute);
+          Diag.sleepHabitChanged(setting: DiagSleepHabitSetting.maxDailyDelta);
           break;
         // docs/TODO.md T-96: how long the gentle-wake ramp takes, i.e. how
         // long the alarm stays quiet. Used to be hardcoded.
@@ -116,10 +145,13 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
         case 'snoozeTime':
           _appState.snoozeTime =
               Duration(hours: pickedTime.hour, minutes: pickedTime.minute);
+          Diag.sleepHabitChanged(setting: DiagSleepHabitSetting.snoozeTime);
           break;
         case 'gentleWakeDuration':
           _appState.gentleWakeUpDuration =
               Duration(hours: pickedTime.hour, minutes: pickedTime.minute);
+          Diag.sleepHabitChanged(
+              setting: DiagSleepHabitSetting.gentleWakeUpDuration);
           break;
       }
 
@@ -179,6 +211,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                         } else {
                           _appState.preferredWakeUpTime = null;
                         }
+                        Diag.sleepHabitChanged(
+                            setting: DiagSleepHabitSetting.preferredWakeUpTime);
                         runCheckpointSafely(_appState,
                             trigger: CheckpointTrigger.settingsChanged);
                       },
@@ -202,6 +236,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                   _appState.scheduleOnGapDays,
                   (value) {
                     _appState.scheduleOnGapDays = value;
+                    Diag.sleepHabitChanged(
+                        setting: DiagSleepHabitSetting.scheduleOnGapDays);
                     runCheckpointSafely(_appState,
                         trigger: CheckpointTrigger.settingsChanged);
                   },
@@ -301,6 +337,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                       _appState.reminderEnabled,
                       (value) {
                         _appState.reminderEnabled = value;
+                        Diag.sleepHabitChanged(
+                            setting: DiagSleepHabitSetting.reminderEnabled);
                         // FR-16 "precondition": scheduled unconditionally -
                         // silently (no visible notification) when disabled,
                         // still needed as Checkpoint 2's hook.
@@ -331,6 +369,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                       _appState.gentleWakeUpEnabled,
                       (value) {
                         _appState.gentleWakeUpEnabled = value;
+                        Diag.sleepHabitChanged(
+                            setting: DiagSleepHabitSetting.gentleWakeUpEnabled);
                         // docs/TODO.md T-84: see tone/volume - gentlewake is
                         // a property of the already-armed alarms.
                         runCheckpointSafely(_appState,
@@ -377,6 +417,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                         // 00:10 on switching on - otherwise the budget would
                         // be zero and the feature dead from the start.
                         _appState.snoozeEnabled = value;
+                        Diag.sleepHabitChanged(
+                            setting: DiagSleepHabitSetting.snoozeEnabled);
                         // The wake time itself changes as a result (FR-2
                         // subtracts `durationToWakeUp`), so a replan is needed.
                         runCheckpointSafely(_appState,
@@ -465,6 +507,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
 
   Widget _buildSleepGoalPicker(TimeOfDay sleepGoal) {
     return GestureDetector(
+      key: const Key('timePicker_sleepGoal'),
       onTap: () =>
           _changeDuration('sleepGoal', initialTime: _appState.sleepGoal),
       child: Container(
@@ -496,6 +539,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
   Widget _buildTimePicker(String setting, TimeOfDay value,
       {bool isDuration = true}) {
     return GestureDetector(
+      key: Key('timePicker_$setting'),
       onTap: () => _changeDuration(setting, initialTime: value),
       child: Container(
         decoration: BoxDecoration(
@@ -579,6 +623,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                   child: Text(_dayLabel(day)),
                 ),
                 Switch(
+                  key: Key('getReadyOverrideSwitch_${day.name}'),
                   value: _appState.durationToGetReadyByWeekday.containsKey(day),
                   onChanged: (value) {
                     _appState.setDurationToGetReadyForWeekday(
@@ -586,6 +631,9 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                         value
                             ? _appState.durationToGetReadyForWeekday(day)
                             : null);
+                    Diag.sleepHabitChanged(
+                        setting:
+                            DiagSleepHabitSetting.durationToGetReadyPerWeekday);
                     runCheckpointSafely(_appState,
                         trigger: CheckpointTrigger.settingsChanged);
                   },
@@ -596,6 +644,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
                 ),
                 if (_appState.durationToGetReadyByWeekday.containsKey(day))
                   GestureDetector(
+                    key: Key('timePicker_getReadyForDay_${day.name}'),
                     onTap: () => _changeDuration('getReadyForDay',
                         initialTime:
                             _appState.durationToGetReadyForWeekday(day),

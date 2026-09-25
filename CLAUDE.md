@@ -729,14 +729,14 @@ left stale (`docs/TODO.md` T-30, 2026-09-20). It will be redrawn from the curren
 a drawio-integration workflow exists to keep it in sync going forward - until then, this file's own
 architecture tables and `docs/TODO.md` are the accurate structural description of the app.
 
-**`docs/risk.png` is generated, not hand-drawn.** It used to be a planning-phase risk graphic
-modelling features that were never built; since 2026-09-10 it is a real threat model
-(`docs/TODO.md` T-101). Edit `docs/threat-model.svg` - which is text, and therefore diffable and
-reviewable - and re-render with:
-
-```sh
-rsvg-convert -w 1400 -b white docs/threat-model.svg -o docs/risk.png
-```
+**The threat model lives at `docs/threat-model.svg`** - text, and therefore diffable and
+reviewable, edited directly. Since 2026-09-10 it is a real threat model, not the planning-phase
+risk graphic it used to be (`docs/TODO.md` T-101). It used to also ship a rendered
+`docs/risk.png` for anyone who wanted an image rather than an SVG; removed 2026-09-25
+(`docs/TODO.md` T-173, maintainer request) as pure redundancy once the SVG needed no rendering
+step to be viewable - GitHub (and any modern browser) renders SVG directly, and the two were
+pixel-identical anyway, just one more generated artifact to remember to regenerate after every
+edit. Edit the SVG; there is no separate image to keep in sync with it.
 
 Two things about it are worth knowing before extending it. The primary asset here is
 **availability**: for an alarm clock, "outage" means oversleeping, so denial of service is the

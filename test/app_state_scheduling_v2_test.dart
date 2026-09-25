@@ -311,8 +311,9 @@ void main() {
       await appState.initialized;
 
       appState.diagnosticsIncludeClockTimes = true;
-      expect(appState.diagnosticsEnabled, isTrue);
-      appState.diagnosticsEnabled = false;
+      expect(appState.diagnosticsEnabled, isFalse,
+          reason: 'off by default (T-173, maintainer request)');
+      appState.diagnosticsEnabled = true;
       expect(appState.diagnosticsIncludeClockTimes, isTrue,
           reason: 'two separate switches - one does not flip the other');
     });

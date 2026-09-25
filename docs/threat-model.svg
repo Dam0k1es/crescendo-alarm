@@ -168,5 +168,4 @@
   <text x="36" y="994" class="n">E  Elevation</text>
   <text x="230" y="994" class="ns">Ueberberechtigung im Manifest: WRITE_CALENDAR und READ_EXTERNAL_STORAGE ohne zugehoerigen Codepfad -</text>
   <text x="230" y="1012" class="ns">der Kalender wird nur gelesen, das Schreiben ist auskommentiert. Aufzuraeumen, kein Datenabfluss.</text>
-  <text x="36" y="1046" class="ns" font-style="italic">Quelle dieses Bildes: docs/threat-model.svg. Neu rendern mit:  rsvg-convert -w 1400 -b white docs/threat-model.svg -o docs/risk.png</text>
 </svg>

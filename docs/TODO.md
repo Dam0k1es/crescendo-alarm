@@ -973,6 +973,69 @@ that is the basis a decision can be formulated against.
   `apksigner verify` before copying.
 - **Requirement:** none directly - a release milestone, not a defect fix or new capability.
 
+### T-173 · Diagnostics: log every Sleep Habits change, and make all logging opt-in — DONE (2026-09-25)
+
+- [x] Two maintainer requests, both formal requirements: (1) "the logs should be extended when
+  Sleep Habits are changed, no matter which" - previously nothing was logged when the user touched
+  any of these controls at all; (2) "the logs should be disabled by default. All of them. That is
+  also a requirement" - `AppState.diagnosticsEnabled` (the general on/off switch, distinct from the
+  clock-time sub-switch T-135/T-163 already gate) defaulted to `true`, meaning diagnostics were
+  collected out of the box unless a user found and disabled the setting themselves.
+- **New event, structurally still PII-free:** `Diag.sleepHabitChanged({required
+  DiagSleepHabitSetting setting})` carries only WHICH of the 13 Sleep Habits controls changed,
+  never the value it changed to or from - most of them are clock-shaped (durations, times of day),
+  and this log structurally excludes clock values everywhere except the three fields already gated
+  behind the opt-in clock-time switch (`test/diag_log_api_test.dart`'s own structural checks). New
+  `DiagSleepHabitSetting` enum enumerates every control: `sleepGoal`, `durationToWakeUp`,
+  `durationToGetReady`, `durationToGetReadyPerWeekday`, `reminderDuration`, `preferredWakeUpTime`,
+  `maxDailyDelta`, `snoozeTime`, `gentleWakeUpDuration`, `scheduleOnGapDays`, `reminderEnabled`,
+  `gentleWakeUpEnabled`, `snoozeEnabled`. Wired into all 15 call sites on
+  `screen_sleephabits.dart` (8 through the shared `_changeDuration`, the rest at each toggle's own
+  `onChanged`), never gated behind the clock-time switch since it carries no clock value at all.
+- **New test seam, same shape as existing ones:** no test in this project drives the real Material
+  `showTimePicker` dialog (it's third-party dialog UI, not this screen's own logic to prove
+  correct) - `ScreenSleephabits.debugTimePickerOverride` replaces it with a fake result, the same
+  pattern as `ScreenAlarmActive.debugRingingStreamOverride`/`QrScanner.debugScanStreamOverride`.
+  Needed `tester.ensureVisible()` before every tap, on both pickers and several toggles - several
+  controls sit below the fold on the 800×600 test viewport, the same scroll trap other dialog
+  tests in this project already hit. `test/screen_sleephabits_diag_test.dart` (new, 16 cases)
+  covers all 13 settings, confirmed red first via a deliberately removed `Diag` call
+  (`maxDailyDelta`), then reverted.
+- **Off by default, at every layer that could matter, not just the one already wired up:**
+  `AppState._diagnosticsEnabled` (the one that actually matters for a real install, read by
+  `main.dart` into `Diag.init(enabled: ...)`), `Diag._enabled`'s own static default, and
+  `Diag.init`'s own `enabled` parameter default - all changed `true` → `false`, so the "off by
+  default" contract holds even for a call site that skips the normal `AppState` wiring, not only
+  the one real app startup path already used. `test/app_state_scheduling_v2_test.dart`'s existing
+  "general diagnostics switch stays independent of [clock-time switch]" test asserted the old
+  default explicitly; updated, confirmed red against the old value first.
+- **Verified:** full suite green (559/559, +16 for the new file), `flutter analyze` clean, no other
+  test broke - everything else already used `Diag.resetForTest()`/explicit `AppState
+  .diagnosticsEnabled = true` setup rather than relying on the default, which is exactly the
+  isolation this project's test conventions already required.
+- **Requirement:** yes - both changes were stated as requirements by the maintainer directly, not
+  requests for a nice-to-have.
+
+### T-174 · `docs/risk.png` removed as redundant with `docs/threat-model.svg` — DONE (2026-09-25)
+
+- [x] Maintainer request: "risk.png ist identisch mit threat-model.svg, lösche risk.png." Verified
+  before deleting: no markdown file anywhere in the repository actually embeds `risk.png` as an
+  image (`![...](...risk.png)`) - `CLAUDE.md` only described how to regenerate it, `docs/TODO.md`
+  only referenced it in historical entries (left untouched, same as every other point-in-time
+  record in that file). `docs/threat-model.svg` itself carried a one-line caption inside the
+  rendered image ("Quelle dieses Bildes: ... Neu rendern mit: rsvg-convert ...") pointing at the
+  now-removed regeneration step - removed along with the PNG, since it no longer describes
+  anything real.
+- **Why this was a defensible removal, not just a deletion:** the PNG was a pure rendering of the
+  SVG (`rsvg-convert -w 1400 -b white docs/threat-model.svg -o docs/risk.png`, pixel-identical to
+  it), kept only for viewers that couldn't render SVG directly - GitHub (and every modern browser)
+  renders SVG natively, so it bought nothing while still being one more generated artifact someone
+  could forget to regenerate after editing the real source, silently going stale exactly the way
+  `docs/UML_WakeyWakey.drawio` (T-30) did before it was retired for the same reason.
+  `CLAUDE.md`'s own section updated to describe the SVG as the only artifact, with no regeneration
+  step to keep in sync.
+- **Requirement:** none directly - documentation/repo hygiene, not a defect fix.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`

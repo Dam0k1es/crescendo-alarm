@@ -122,7 +122,9 @@ class AppState extends ChangeNotifier {
   Map<String, bool> _pendingDayInstantAnchored = {};
   bool _overrunNotificationSent = false;
   bool _safetyValveNotificationSent = false;
-  bool _diagnosticsEnabled = true;
+  // T-173 (maintainer request): off by default - all of it, not just the
+  // clock-time sub-switch below.
+  bool _diagnosticsEnabled = false;
   bool _diagnosticsIncludeClockTimes = false;
   TimeOfDay? _preferredWakeUpTime;
   // Default 1 hour, per maintainer request - the enforced minimum below is

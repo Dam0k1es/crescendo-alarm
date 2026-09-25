@@ -72,6 +72,10 @@ enum DiagEvent {
   dayPlanned(14),
   planInputs(15),
   dayEventTime(16),
+  // docs/TODO.md T-173 (maintainer request): any Sleep Habits setting
+  // changing, regardless of which - see Diag.sleepHabitChanged's own doc
+  // comment for why WHICH setting is carried but never the new value.
+  sleepHabitChanged(17),
   alarmSync(20),
   alarmRang(30),
   alarmDismissed(31),
@@ -171,6 +175,9 @@ enum DiagField {
   // why.
   eventStartMinuteOfDay(124),
   eventEndMinuteOfDay(125),
+  // T-173: which Sleep Habits setting changed - never the value it changed
+  // to or from (see Diag.sleepHabitChanged's own doc comment).
+  sleepHabitSetting(130),
   // Errors
   site(110),
   errorKind(111),
@@ -313,6 +320,31 @@ enum ErrorKind {
   final int code;
 }
 
+/// docs/TODO.md T-173: every settable Sleep Habits control, identified by
+/// which one changed - never by its new (or old) value, which for most of
+/// these would be a clock value (exactly what this log structurally
+/// excludes everywhere else). "That the user touched Max Daily Shift" is
+/// diagnostically useful on its own; "to what" is not worth the PII-free
+/// design's one hard rule for.
+enum DiagSleepHabitSetting {
+  sleepGoal(1),
+  durationToWakeUp(2),
+  durationToGetReady(3),
+  durationToGetReadyPerWeekday(4),
+  reminderDuration(5),
+  preferredWakeUpTime(6),
+  maxDailyDelta(7),
+  snoozeTime(8),
+  gentleWakeUpDuration(9),
+  scheduleOnGapDays(10),
+  reminderEnabled(11),
+  gentleWakeUpEnabled(12),
+  snoozeEnabled(13);
+
+  const DiagSleepHabitSetting(this.code);
+  final int code;
+}
+
 enum LogIsolate {
   main(0),
   background(1);
@@ -445,7 +477,12 @@ abstract final class Diag {
   static LogIsolate _isolate = LogIsolate.main;
   static int _boot = 0;
   static int _seq = 0;
-  static bool _enabled = true;
+  // T-173 (maintainer request): off by default. main.dart always passes an
+  // explicit `enabled:` from AppState.diagnosticsEnabled at real startup, so
+  // this only matters as the honest default for anything that doesn't - a
+  // test that skips both `init()` and `resetForTest()`, or code that reads
+  // `Diag.enabled` before `init()` has run.
+  static bool _enabled = false;
   static bool _dirty = false;
 
   /// A `Type` is mapped to a code via an identity table. `toString()` is
@@ -481,7 +518,7 @@ abstract final class Diag {
   /// within an isolate that has already established an identity is a no-op.
   static Future<void> init({
     LogIsolate isolate = LogIsolate.main,
-    bool enabled = true,
+    bool enabled = false,
     SharedPreferences? prefs,
   }) async {
     if (_boot != 0) return;
@@ -894,6 +931,23 @@ abstract final class Diag {
       DiagField.windowDayOffset: dayOffset,
       DiagField.eventStartMinuteOfDay: startMinuteOfDay,
       DiagField.eventEndMinuteOfDay: endMinuteOfDay,
+    });
+  }
+
+  /// A Sleep Habits control changed, identified by which one - never by its
+  /// new or old value (docs/TODO.md T-173, maintainer request: "the logs
+  /// should be extended when Sleep Habits change, no matter which"). Most of
+  /// these settings ARE clock values (durations, times of day), so carrying
+  /// the actual value would violate this log's own structural no-clock-value
+  /// rule for every setting but the three already gated behind
+  /// [setIncludeClockTimes] - carrying only WHICH setting changed answers
+  /// "did the user touch their configuration around the time something went
+  /// wrong" without ever answering "to what", and needs no switch: unlike a
+  /// clock value, it is not gated behind [setIncludeClockTimes] and is always
+  /// recorded when diagnostics are on at all.
+  static void sleepHabitChanged({required DiagSleepHabitSetting setting}) {
+    _record(DiagEvent.sleepHabitChanged, <DiagField, int>{
+      DiagField.sleepHabitSetting: setting.code,
     });
   }
 
