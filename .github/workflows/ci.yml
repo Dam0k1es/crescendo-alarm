@@ -14,7 +14,7 @@ on:
   push:
     branches: [master, dev]
   pull_request:
-    branches: [master]
+    branches: [master, dev]
   workflow_dispatch:
 
 env:
@@ -169,7 +169,7 @@ jobs:
     # The SCA/secret/SAST gate lives in a reusable file so the tag-triggered
     # release path (release.yml) goes through the same gate - it used to
     # have none at all.
-    if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
+    if: github.ref == 'refs/heads/master' || (github.event_name == 'pull_request' && github.base_ref == 'master')
     uses: ./.github/workflows/security-gate.yml
 
   e2e-tests:
@@ -177,12 +177,12 @@ jobs:
     # Runs the same real-emulator suite as release.yml (docs/TODO.md T-37) -
     # so a broken scenario is caught on the next master push/PR, not only
     # when someone cuts a release, which had never happened before this.
-    if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
+    if: github.ref == 'refs/heads/master' || (github.event_name == 'pull_request' && github.base_ref == 'master')
     uses: ./.github/workflows/e2e-tests.yml
 
   build-android-release:
     name: Build Android (production)
-    if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
+    if: github.ref == 'refs/heads/master' || (github.event_name == 'pull_request' && github.base_ref == 'master')
     needs: [analyze-and-test, security-gate, e2e-tests]
     runs-on: ubuntu-latest
     steps:
@@ -284,7 +284,7 @@ jobs:
 
   mobsf-full-scan:
     name: MobSF (full static scan of production APK)
-    if: github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
+    if: github.ref == 'refs/heads/master' || (github.event_name == 'pull_request' && github.base_ref == 'master')
     runs-on: ubuntu-latest
     needs: build-android-release
     permissions:

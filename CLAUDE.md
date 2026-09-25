@@ -222,6 +222,15 @@ Four workflows under `.github/workflows/`:
   additionally runs the security gate and the E2E suite, and builds a signed production release
   APK - **gated**: `build-android-release` has
   `needs: [analyze-and-test, security-gate, e2e-tests]`.
+  **Fixed (2026-09-25):** `pull_request.branches` only ever listed `master`, so a PR opened
+  against `dev` (which is where every `dependabot.yml` update targets, by design - see "Branches
+  and where work happens" above) never triggered CI at all: nine open Dependabot PRs sat for five
+  days with an empty `statusCheckRollup` and zero workflow runs, not because anything was wrong
+  with them, but because nothing ever looked. Now `pull_request.branches: [master, dev]` - and the
+  four gated jobs' own `if:` conditions were tightened from a bare `github.event_name ==
+  'pull_request'` (true for *any* PR, which would have made a `dev` PR run the full 45-minute gate
+  - the opposite of "dev gets fast feedback only") to `... && github.base_ref == 'master'`, so a
+  `dev`-targeted PR now gets exactly `analyze-and-test`, nothing more.
 - **`e2e-tests.yml`** (reusable, `workflow_call`) runs `integration_test/` against a real Android
   emulator with KVM acceleration, collecting video, an audio-focus timeline and ActivityManager
   logs as an evidence artifact. Called by both `ci.yml` and `release.yml`.
