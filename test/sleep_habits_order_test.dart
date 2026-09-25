@@ -63,17 +63,22 @@ void main() {
     //    lead times, which only apply on days with an appointment at all -
     //    in the order they actually occur in and in which hardFloor
     //    subtracts them (wake up first, then get ready).
-    // 2. What determines the bedtime reminder. The sleep goal defines the
+    // 2. How the alarm behaves once it rings.
+    // 3. What determines the bedtime reminder. The sleep goal defines the
     //    bedtime, the lead time is measured from it - hence this order.
-    // 3. How the alarm behaves once it rings.
+    //
+    // docs/TODO.md T-178 (maintainer request): groups 2 and 3 swapped from
+    // their previous order - "when the alarm rings" now comes directly
+    // after "wake-up time", with the bedtime reminder (a separate concern -
+    // it shifts the reminder, never the alarm itself) last.
     final expectedOrder = <String>[
       'Preferred wake-up time',
       'Max. daily shift',
       'Duration to wake up',
       'Duration to get ready',
+      'Gentle WakeUp',
       'Sleep Goal',
       'Enable Reminder',
-      'Gentle WakeUp',
     ];
 
     final positions = _verticalPositions(tester, expectedOrder);

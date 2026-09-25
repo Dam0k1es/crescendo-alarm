@@ -143,13 +143,15 @@ void main() {
 
     testWidgets('"Gentle WakeUp" still documents the enforced minimum',
         (tester) async {
-      final text = await helpTextAt(tester, 7);
+      // docs/TODO.md T-178: index 5, not 7 - "when the alarm rings" now
+      // comes before "bedtime reminder" in tile order.
+      final text = await helpTextAt(tester, 5);
       expect(text, contains('00:01'));
     });
 
     testWidgets('"Snooze" still documents no-QR-code and the used-up budget',
         (tester) async {
-      final text = await helpTextAt(tester, 8);
+      final text = await helpTextAt(tester, 6);
       expect(text, contains('QR'));
       expect(text.toLowerCase(), contains('used up'));
     });

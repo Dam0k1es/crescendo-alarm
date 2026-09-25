@@ -48,6 +48,15 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
   // has no overrides to look at anyway.
   bool _showGetReadyOverrides = false;
 
+  // docs/TODO.md T-178 (maintainer request): each of the three causal groups
+  // below can be collapsed independently - the same "not worth persisting"
+  // reasoning as _showGetReadyOverrides above, and expanded by default so
+  // every entry is reachable without first discovering the collapse
+  // affordance.
+  bool _wakeUpTimeExpanded = true;
+  bool _whenAlarmRingsExpanded = true;
+  bool _bedtimeReminderExpanded = true;
+
   @override
   void initState() {
     super.initState();
@@ -185,264 +194,297 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              // Three causal groups (docs/TODO.md T-95). The previous order
-              // was misleading: "Sleep Goal" was at the top, but doesn't
-              // affect the alarm time at all - it only shifts the bedtime
-              // reminder - and was separated from "Enable Reminder", its
-              // other half of the same calculation, by three unrelated
-              // entries.
-              _buildSectionHeader("Wake-up time"),
-              // First the target FR-4 drifts toward: the only setting a user
-              // needs at all without calendar appointments.
-              _buildTile(
-                help: 'Optional target time the plan drifts toward on days '
-                    'with no appointment of their own.',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildToggle(
-                      "Preferred wake-up time",
-                      _appState.preferredWakeUpTime != null,
-                      (value) {
-                        if (value) {
-                          _appState.preferredWakeUpTime =
-                              _appState.preferredWakeUpTime ??
-                                  const TimeOfDay(hour: 7, minute: 0);
-                        } else {
-                          _appState.preferredWakeUpTime = null;
-                        }
-                        Diag.sleepHabitChanged(
-                            setting: DiagSleepHabitSetting.preferredWakeUpTime);
-                        runCheckpointSafely(_appState,
-                            trigger: CheckpointTrigger.settingsChanged);
-                      },
-                    ),
-                    if (_appState.preferredWakeUpTime != null)
-                      _buildTimePicker(
-                          "preferredWakeUpTime", _appState.preferredWakeUpTime!,
-                          isDuration: false),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16.0),
-              // docs/TODO.md T-52.1: whether a day with no calendar entry of
-              // its own gets an alarm at all (FR-4's drift/hold) or none.
-              _buildTile(
-                help: 'On: appointment-free days still get an alarm, '
-                    'drifting toward your preferred time. Off: those days '
-                    'get none.',
-                child: _buildToggle(
-                  "Schedule an alarm on days without an appointment",
-                  _appState.scheduleOnGapDays,
-                  (value) {
-                    _appState.scheduleOnGapDays = value;
-                    Diag.sleepHabitChanged(
-                        setting: DiagSleepHabitSetting.scheduleOnGapDays);
-                    runCheckpointSafely(_appState,
-                        trigger: CheckpointTrigger.settingsChanged);
-                  },
-                ),
-              ),
-              const SizedBox(height: 16.0),
-              // Directly below it, the bound on how fast the wake time may
-              // approach this target (FR-6) - it qualifies the entry above
-              // and is meaningless without it.
-              _buildTile(
-                // docs/TODO.md T-88: AppState bounds this value below at 15
-                // minutes (otherwise the smoothing would practically never
-                // make progress) - merged into the help text (T-166) rather
-                // than a separate always-visible hint, now that the "?"
-                // button is the one place this screen explains itself.
-                help: 'How much the wake-up time may move per day while '
-                    'drifting toward your preferred time. Minimum 00:15; '
-                    'smaller values are raised to that.',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildLabel("Max. daily shift"),
-                    _buildTimePicker(
-                      "maxDailyDelta",
-                      TimeOfDay(
-                        hour: _appState.maxDailyDelta.inHours,
-                        minute: _appState.maxDailyDelta.inMinutes % 60,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16.0),
-              // Then the two lead times. They only apply on days WITH an
-              // appointment (FR-2) and therefore come after the target - in
-              // the order they actually occur in and in which `hardFloor`
-              // subtracts them: wake up first, then get ready.
-              _buildTile(
-                // FR-20: this same duration is also the snooze budget - the
-                // connection isn't guessable, so it's spelled out in the
-                // help text (T-166) rather than a separate, snooze-only
-                // hint that used to appear beneath this control.
-                help: 'Lead time reserved for waking up before an '
-                    'appointment, and your snooze budget - all snoozes '
-                    'together may use at most this much.',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildLabel("Duration to wake up"),
-                    _buildTimePicker("wakeUp", _appState.durationToWakeUp),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16.0),
-              _buildTile(
-                help: 'Lead time reserved for getting ready before an '
-                    'appointment. Can be overridden per weekday below.',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildLabel("Duration to get ready"),
-                    _buildTimePicker("getReady", _appState.durationToGetReady),
-                    const SizedBox(height: 8.0),
-                    _buildGetReadyOverridesToggle(),
-                    if (_showGetReadyOverrides) _buildGetReadyOverrides(),
-                  ],
-                ),
-              ),
+              // Three causal groups (docs/TODO.md T-95), each independently
+              // collapsible (docs/TODO.md T-178). The order below is itself
+              // causal: first what determines the wake-up time, then what
+              // happens once the alarm actually rings, then the separate
+              // concern of the bedtime reminder (which shifts only itself,
+              // never the alarm) last.
+              _buildSectionHeader("Wake-up time", _wakeUpTimeExpanded,
+                  () => setState(() => _wakeUpTimeExpanded = !_wakeUpTimeExpanded)),
+              if (_wakeUpTimeExpanded) ..._buildWakeUpTimeTiles(),
 
-              _buildSectionHeader("Bedtime reminder"),
-              // The sleep goal defines the bedtime
-              // (wake time - sleepGoal - reminderDuration, see
-              // lib/utils/sleep_reminder.dart) and does NOT touch the alarm
-              // time. Hence here, not in the group above.
-              _buildTile(
-                help: 'How much sleep you\'re aiming for. Shifts the '
-                    'bedtime reminder below, not the alarm itself.',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildLabel("Sleep Goal"),
-                    _buildSleepGoalPicker(_appState.sleepGoal),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16.0),
-              // The lead time is measured from the bedtime the entry above
-              // sets - the two belong side by side.
-              _buildTile(
-                help: 'A notification reminding you to go to bed, timed '
-                    'this far before your Sleep Goal\'s bedtime.',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildToggle(
-                      "Enable Reminder",
-                      _appState.reminderEnabled,
-                      (value) {
-                        _appState.reminderEnabled = value;
-                        Diag.sleepHabitChanged(
-                            setting: DiagSleepHabitSetting.reminderEnabled);
-                        // FR-16 "precondition": scheduled unconditionally -
-                        // silently (no visible notification) when disabled,
-                        // still needed as Checkpoint 2's hook.
-                        scheduleSleepReminder(_appState);
-                      },
-                    ),
-                    if (_appState.reminderEnabled)
-                      _buildTimePicker("reminder", _appState.reminderDuration),
-                  ],
-                ),
-              ),
+              _buildSectionHeader(
+                  "When the alarm rings",
+                  _whenAlarmRingsExpanded,
+                  () => setState(
+                      () => _whenAlarmRingsExpanded = !_whenAlarmRingsExpanded)),
+              if (_whenAlarmRingsExpanded) ..._buildWhenAlarmRingsTiles(),
 
-              _buildSectionHeader("When the alarm rings"),
-              _buildTile(
-                // As with maxDailyDelta (T-88): the enforced minimum (the
-                // alarm plugin requires a genuinely positive duration, but
-                // the picker allows 00:00) must not be invisible - merged
-                // into the help text (T-166) rather than a separate,
-                // ramp-only hint that used to appear beneath the control.
-                help: 'Ramps the volume up gradually instead of jumping to '
-                    'full volume. Minimum 00:01 - the alarm stays quiet at '
-                    'least that long.',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildToggle(
-                      "Gentle WakeUp",
-                      _appState.gentleWakeUpEnabled,
-                      (value) {
-                        _appState.gentleWakeUpEnabled = value;
-                        Diag.sleepHabitChanged(
-                            setting: DiagSleepHabitSetting.gentleWakeUpEnabled);
-                        // docs/TODO.md T-84: see tone/volume - gentlewake is
-                        // a property of the already-armed alarms.
-                        runCheckpointSafely(_appState,
-                            trigger: CheckpointTrigger.settingsChanged);
-                      },
-                    ),
-                    // docs/TODO.md T-96: only visible while Gentle Wake is
-                    // on - without the ramp, the duration has no meaning.
-                    // Same pattern as the reminder switch above.
-                    if (_appState.gentleWakeUpEnabled) ...[
-                      _buildLabel("Ramp duration"),
-                      _buildTimePicker(
-                        "gentleWakeDuration",
-                        TimeOfDay(
-                          hour: _appState.gentleWakeUpDuration.inHours,
-                          minute: _appState.gentleWakeUpDuration.inMinutes % 60,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16.0),
-              // FR-20. Belongs here, not in the wake-time group: snooze
-              // describes what happens when the alarm rings, not when it
-              // rings (the same causal grouping as T-95).
-              _buildTile(
-                // Snooze never switches the alarm off, and never needs the
-                // QR code even when stopping does - both non-obvious, so
-                // spelled out in the help text (T-166) rather than a
-                // separate, snooze-only hint that used to appear beneath
-                // the control.
-                help: 'Postpones a ringing alarm by a fixed interval, up '
-                    'to your wake-up budget. Never needs a QR code, and '
-                    'stops once that budget is used up.',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildToggle(
-                      "Snooze",
-                      _appState.snoozeEnabled,
-                      (value) {
-                        // The setter raises `durationToWakeUp` from 00:00 to
-                        // 00:10 on switching on - otherwise the budget would
-                        // be zero and the feature dead from the start.
-                        _appState.snoozeEnabled = value;
-                        Diag.sleepHabitChanged(
-                            setting: DiagSleepHabitSetting.snoozeEnabled);
-                        // The wake time itself changes as a result (FR-2
-                        // subtracts `durationToWakeUp`), so a replan is needed.
-                        runCheckpointSafely(_appState,
-                            trigger: CheckpointTrigger.settingsChanged);
-                      },
-                    ),
-                    if (_appState.snoozeEnabled) ...[
-                      _buildLabel("Snooze time"),
-                      _buildTimePicker(
-                        "snoozeTime",
-                        TimeOfDay(
-                          hour: _appState.snoozeTime.inHours,
-                          minute: _appState.snoozeTime.inMinutes % 60,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+              _buildSectionHeader(
+                  "Bedtime reminder",
+                  _bedtimeReminderExpanded,
+                  () => setState(() =>
+                      _bedtimeReminderExpanded = !_bedtimeReminderExpanded)),
+              if (_bedtimeReminderExpanded) ..._buildBedtimeReminderTiles(),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// First the target FR-4 drifts toward: the only setting a user needs at
+  /// all without calendar appointments. Then the bound on how fast it may
+  /// approach it. Then the two lead times, which only apply on days with an
+  /// appointment at all - in the order they actually occur in and in which
+  /// `hardFloor` subtracts them (wake up first, then get ready).
+  List<Widget> _buildWakeUpTimeTiles() {
+    return [
+      _buildTile(
+        help: 'Optional target time the plan drifts toward on days '
+            'with no appointment of their own.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildToggle(
+              "Preferred wake-up time",
+              _appState.preferredWakeUpTime != null,
+              (value) {
+                if (value) {
+                  _appState.preferredWakeUpTime =
+                      _appState.preferredWakeUpTime ??
+                          const TimeOfDay(hour: 7, minute: 0);
+                } else {
+                  _appState.preferredWakeUpTime = null;
+                }
+                Diag.sleepHabitChanged(
+                    setting: DiagSleepHabitSetting.preferredWakeUpTime);
+                runCheckpointSafely(_appState,
+                    trigger: CheckpointTrigger.settingsChanged);
+              },
+            ),
+            if (_appState.preferredWakeUpTime != null)
+              _buildTimePicker(
+                  "preferredWakeUpTime", _appState.preferredWakeUpTime!,
+                  isDuration: false),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16.0),
+      // docs/TODO.md T-52.1: whether a day with no calendar entry of its own
+      // gets an alarm at all (FR-4's drift/hold) or none.
+      _buildTile(
+        help: 'On: appointment-free days still get an alarm, '
+            'drifting toward your preferred time. Off: those days '
+            'get none.',
+        child: _buildToggle(
+          "Schedule an alarm on days without an appointment",
+          _appState.scheduleOnGapDays,
+          (value) {
+            _appState.scheduleOnGapDays = value;
+            Diag.sleepHabitChanged(
+                setting: DiagSleepHabitSetting.scheduleOnGapDays);
+            runCheckpointSafely(_appState,
+                trigger: CheckpointTrigger.settingsChanged);
+          },
+        ),
+      ),
+      const SizedBox(height: 16.0),
+      // Directly below it, the bound on how fast the wake time may approach
+      // this target (FR-6) - it qualifies the entry above and is
+      // meaningless without it.
+      _buildTile(
+        // docs/TODO.md T-88: AppState bounds this value below at 15 minutes
+        // (otherwise the smoothing would practically never make progress) -
+        // merged into the help text (T-166) rather than a separate
+        // always-visible hint, now that the "?" button is the one place
+        // this screen explains itself.
+        help: 'How much the wake-up time may move per day while '
+            'drifting toward your preferred time. Minimum 00:15; '
+            'smaller values are raised to that.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildLabel("Max. daily shift"),
+            _buildTimePicker(
+              "maxDailyDelta",
+              TimeOfDay(
+                hour: _appState.maxDailyDelta.inHours,
+                minute: _appState.maxDailyDelta.inMinutes % 60,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16.0),
+      // Then the two lead times. They only apply on days WITH an
+      // appointment (FR-2) and therefore come after the target - in the
+      // order they actually occur in and in which `hardFloor` subtracts
+      // them: wake up first, then get ready.
+      _buildTile(
+        // FR-20: this same duration is also the snooze budget - the
+        // connection isn't guessable, so it's spelled out in the help text
+        // (T-166) rather than a separate, snooze-only hint that used to
+        // appear beneath this control.
+        help: 'Lead time reserved for waking up before an '
+            'appointment, and your snooze budget - all snoozes '
+            'together may use at most this much.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildLabel("Duration to wake up"),
+            _buildTimePicker("wakeUp", _appState.durationToWakeUp),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16.0),
+      _buildTile(
+        help: 'Lead time reserved for getting ready before an '
+            'appointment. Can be overridden per weekday below.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildLabel("Duration to get ready"),
+            _buildTimePicker("getReady", _appState.durationToGetReady),
+            const SizedBox(height: 8.0),
+            _buildGetReadyOverridesToggle(),
+            if (_showGetReadyOverrides) _buildGetReadyOverrides(),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  /// docs/TODO.md T-178: moved here from after "Bedtime reminder" - this
+  /// group (what happens once the alarm rings) is causally closer to
+  /// "wake-up time" (what determines whether/when it rings at all) than the
+  /// bedtime reminder is, which shifts only itself, never the alarm.
+  List<Widget> _buildWhenAlarmRingsTiles() {
+    return [
+      _buildTile(
+        // As with maxDailyDelta (T-88): the enforced minimum (the alarm
+        // plugin requires a genuinely positive duration, but the picker
+        // allows 00:00) must not be invisible - merged into the help text
+        // (T-166) rather than a separate, ramp-only hint that used to
+        // appear beneath the control.
+        help: 'Ramps the volume up gradually instead of jumping to '
+            'full volume. Minimum 00:01 - the alarm stays quiet at '
+            'least that long.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildToggle(
+              "Gentle WakeUp",
+              _appState.gentleWakeUpEnabled,
+              (value) {
+                _appState.gentleWakeUpEnabled = value;
+                Diag.sleepHabitChanged(
+                    setting: DiagSleepHabitSetting.gentleWakeUpEnabled);
+                // docs/TODO.md T-84: see tone/volume - gentlewake is a
+                // property of the already-armed alarms.
+                runCheckpointSafely(_appState,
+                    trigger: CheckpointTrigger.settingsChanged);
+              },
+            ),
+            // docs/TODO.md T-96: only visible while Gentle Wake is on -
+            // without the ramp, the duration has no meaning. Same pattern
+            // as the reminder switch below.
+            if (_appState.gentleWakeUpEnabled) ...[
+              _buildLabel("Ramp duration"),
+              _buildTimePicker(
+                "gentleWakeDuration",
+                TimeOfDay(
+                  hour: _appState.gentleWakeUpDuration.inHours,
+                  minute: _appState.gentleWakeUpDuration.inMinutes % 60,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 16.0),
+      // FR-20. Belongs here, not in the wake-time group: snooze describes
+      // what happens when the alarm rings, not when it rings (the same
+      // causal grouping as T-95).
+      _buildTile(
+        // Snooze never switches the alarm off, and never needs the QR code
+        // even when stopping does - both non-obvious, so spelled out in the
+        // help text (T-166) rather than a separate, snooze-only hint that
+        // used to appear beneath the control.
+        help: 'Postpones a ringing alarm by a fixed interval, up '
+            'to your wake-up budget. Never needs a QR code, and '
+            'stops once that budget is used up.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildToggle(
+              "Snooze",
+              _appState.snoozeEnabled,
+              (value) {
+                // The setter raises `durationToWakeUp` from 00:00 to 00:10
+                // on switching on - otherwise the budget would be zero and
+                // the feature dead from the start.
+                _appState.snoozeEnabled = value;
+                Diag.sleepHabitChanged(
+                    setting: DiagSleepHabitSetting.snoozeEnabled);
+                // The wake time itself changes as a result (FR-2 subtracts
+                // `durationToWakeUp`), so a replan is needed.
+                runCheckpointSafely(_appState,
+                    trigger: CheckpointTrigger.settingsChanged);
+              },
+            ),
+            if (_appState.snoozeEnabled) ...[
+              _buildLabel("Snooze time"),
+              _buildTimePicker(
+                "snoozeTime",
+                TimeOfDay(
+                  hour: _appState.snoozeTime.inHours,
+                  minute: _appState.snoozeTime.inMinutes % 60,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    ];
+  }
+
+  /// The sleep goal defines the bedtime (wake time - sleepGoal -
+  /// reminderDuration, see lib/utils/sleep_reminder.dart) and does NOT
+  /// touch the alarm time - a separate concern from the two groups above,
+  /// so it comes last (docs/TODO.md T-178).
+  List<Widget> _buildBedtimeReminderTiles() {
+    return [
+      _buildTile(
+        help: 'How much sleep you\'re aiming for. Shifts the '
+            'bedtime reminder below, not the alarm itself.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildLabel("Sleep Goal"),
+            _buildSleepGoalPicker(_appState.sleepGoal),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16.0),
+      // The lead time is measured from the bedtime the entry above sets -
+      // the two belong side by side.
+      _buildTile(
+        help: 'A notification reminding you to go to bed, timed '
+            'this far before your Sleep Goal\'s bedtime.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildToggle(
+              "Enable Reminder",
+              _appState.reminderEnabled,
+              (value) {
+                _appState.reminderEnabled = value;
+                Diag.sleepHabitChanged(
+                    setting: DiagSleepHabitSetting.reminderEnabled);
+                // FR-16 "precondition": scheduled unconditionally -
+                // silently (no visible notification) when disabled, still
+                // needed as Checkpoint 2's hook.
+                scheduleSleepReminder(_appState);
+              },
+            ),
+            if (_appState.reminderEnabled)
+              _buildTimePicker("reminder", _appState.reminderDuration),
+          ],
+        ),
+      ),
+    ];
   }
 
   /// docs/TODO.md T-20: [help], when given, renders as a "?" button pinned
@@ -686,17 +728,37 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
   /// invisible to the user and the order just a different one, not an
   /// explained one (docs/TODO.md T-95). The top spacing is larger than the
   /// spacing between tiles, so the groups visually stand apart.
-  Widget _buildSectionHeader(String text) => Padding(
-        padding: const EdgeInsets.only(top: 24.0, bottom: 8.0, left: 4.0),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.8,
-              color: _appState.accentColor,
+  ///
+  /// docs/TODO.md T-178 (maintainer request): the whole row is now one
+  /// tappable area toggling [expanded] via [onToggle] - clicking the
+  /// heading text or the small chevron on its right both work, since both
+  /// sit inside the same `InkWell`.
+  Widget _buildSectionHeader(
+          String text, bool expanded, VoidCallback onToggle) =>
+      Padding(
+        padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
+        child: InkWell(
+          onTap: onToggle,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8,
+                    color: _appState.accentColor,
+                  ),
+                ),
+                Icon(
+                  expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 20,
+                  color: _appState.accentColor,
+                ),
+              ],
             ),
           ),
         ),

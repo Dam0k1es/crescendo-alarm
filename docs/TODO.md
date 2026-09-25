@@ -1069,6 +1069,41 @@ that is the basis a decision can be formulated against.
   the others, is what actually guards against a regression back to linear.
 - **Requirement:** yes - stated as one by the maintainer directly.
 
+### T-178 · Sleep Habits: reordered groups, each independently collapsible — DONE (2026-09-25)
+
+- [x] Maintainer request, verbatim: "Sortiere die Option im sleep habit neu: erst wake up time,
+  dann when the alarm rings, dann sleep reminder... die optionen im sleep habit sollen nicht nur
+  eine überschrift haben, sondern auch durch klicken auf diese (oder eine kleine markierung
+  rechts) eingeklappt werden können."
+- **Reorder:** the three causal groups (T-95) now read Wake-up time → When the alarm rings →
+  Bedtime reminder - swapping the previous second and third groups. "When the alarm rings" sits
+  directly after "Wake-up time" (what determines whether/when it rings), with the bedtime reminder
+  last as the one genuinely separate concern (it shifts only itself, never the alarm). Each
+  group's tiles now live in their own list-returning method
+  (`_buildWakeUpTimeTiles`/`_buildWhenAlarmRingsTiles`/`_buildBedtimeReminderTiles`) instead of one
+  flat inline `Column`, so the order is a one-line change in `build()` rather than moving a block
+  of tile source around.
+- **Collapsible groups:** `_buildSectionHeader` is now a tappable `InkWell` row (heading text +
+  a small `Icons.expand_less`/`Icons.expand_more` chevron on the right, either one toggling the
+  same state) instead of a plain `Text`. Three new local booleans
+  (`_wakeUpTimeExpanded`/`_whenAlarmRingsExpanded`/`_bedtimeReminderExpanded`), default `true` -
+  purely local UI state, not persisted, the same precedent `_showGetReadyOverrides` (T-52.3)
+  already established for this screen: a user who never collapsed a group has nothing to restore
+  anyway.
+- **E2E impact: none.** `integration_test/app_test.dart` never navigates to or interacts with the
+  Sleep Habits screen at all - its one `durationToWakeUp` reference sets the value directly on
+  `AppState`, not through this screen's UI - confirmed by grep before assuming so.
+- **Existing tests adjusted, not just re-run:** `test/sleep_habits_order_test.dart`'s expected
+  order swapped to match; `test/screen_sleephabits_help_test.dart`'s two index-based lookups for
+  "Gentle WakeUp"/"Snooze" moved from 7/8 to 5/6, since those tiles now sit earlier in the help-icon
+  list. Both confirmed red against the reordered-but-not-yet-updated test first, then green.
+- **New test:** `test/sleep_habits_collapsible_sections_test.dart` (5 cases) - expanded by default,
+  tapping a heading collapses only its own group, tapping again re-expands it, tapping the chevron
+  specifically (not just the heading text) works too, and collapsing all three leaves only the
+  headings themselves visible. Confirmed red first (the chevron icons/tap behavior didn't exist).
+- **Verified:** full suite green (592/592 across three sequential groups), `flutter analyze` clean.
+- **Requirement:** yes - both changes were requested directly by the maintainer.
+
 ### T-177 · Privacy Policy still named the app "Wakey Wakey" after the rename — DONE (2026-09-25)
 
 - [x] Found by an independent External Compliance & Fitness-for-Purpose Audit (2026-09-25, a fresh

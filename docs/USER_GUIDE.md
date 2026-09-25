@@ -110,7 +110,11 @@ seconds of trying, so you're never physically trapped by a broken gate.
 ## Sleep Habits
 
 Every option here has a small **?** button in its top-right corner with a short explanation - tap
-it if a setting isn't obvious.
+it if a setting isn't obvious. The three group headings below (**Wake-up time**, **When the alarm
+rings**, **Bedtime reminder**) can each be collapsed independently - tap the heading itself or the
+small chevron on its right to hide or show that group's options.
+
+**Wake-up time** - what determines whether/when the alarm rings at all:
 
 - **Preferred wake-up time** - the target FR-4's drift aims for on days with no appointment.
 - **Schedule an alarm on days without an appointment** - on, gap days still get an alarm (drifting
@@ -120,14 +124,20 @@ it if a setting isn't obvious.
   snooze budget, if Snooze is on (see below).
 - **Duration to get ready** - lead time reserved before an appointment for getting ready. Tap
   "Customize per weekday" to override it for specific days.
-- **Sleep Goal** - how much sleep you're aiming for; shifts the bedtime reminder below, not the
-  alarm itself.
-- **Enable Reminder** - a notification reminding you to go to bed, timed this far before your Sleep
-  Goal's bedtime.
+
+**When the alarm rings** - how it behaves once it actually rings:
+
 - **Gentle WakeUp** - ramps the volume up gradually; **Ramp duration** controls how long that takes.
 - **Snooze** - lets you postpone a ringing alarm by a fixed interval (**Snooze time**), up to the
   "Duration to wake up" budget above. Once that budget is used up, the snooze button simply stops
   appearing - there's no separate "maximum snooze count" setting, the budget does that job.
+
+**Bedtime reminder** - a separate concern: shifts only the reminder below, never the alarm itself:
+
+- **Sleep Goal** - how much sleep you're aiming for; shifts the bedtime reminder below, not the
+  alarm itself.
+- **Enable Reminder** - a notification reminding you to go to bed, timed this far before your Sleep
+  Goal's bedtime.
 
 ## Settings
 
