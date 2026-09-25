@@ -111,7 +111,7 @@ tasks.named<org.cyclonedx.gradle.CyclonedxDirectTask>("cyclonedxDirectBom") {
 // carry a fixable HIGH when the fix is a one-line version bump.
 configurations.all {
     resolutionStrategy {
-        force("com.google.code.gson:gson:2.8.9")
+        force("com.google.code.gson:gson:2.14.0")
     }
 }
 
