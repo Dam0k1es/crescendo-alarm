@@ -885,6 +885,17 @@ that is the basis a decision can be formulated against.
   purpose-built export/import feature, none of which apply here). Accepted by the maintainer in
   advance, in exchange for the new `applicationId` rather than keeping the old one under a new
   display name.
+- **Gap found by a second independent audit (2026-09-25) and closed same-day:** the original pass
+  above covered the git-tracked repository exhaustively but missed the one piece of project
+  identity that lives outside it - the `v1.0.0` GitHub Release. Its title ("WakeyWakey v1.0.0"),
+  body (two `github.com/Dam0k1es/wakeywakey/...` URLs - GitHub's rename redirect made them still
+  resolve, but the visible text was stale), and one release asset's filename
+  (`wakeywakey-v1.0.0.apk`) all still carried the old name. Fixed: title and both URLs updated;
+  the asset was re-uploaded as `crescendo-alarm-v1.0.0.apk` (byte-identical, SHA-256 confirmed
+  unchanged: `8003d9774817b3a021ed86ccccc5852e1fc1c95de0fdad85778ed7f65849143b`) and the old-named
+  one deleted. Left deliberately unchanged: `OU=WakeyWakey` in the body's certificate description
+  - that is what the actual signing certificate used for that specific historical build says, not
+  a naming artifact to correct.
 - **Requirement:** none directly - a rebrand, not a defect fix or new capability.
 
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
