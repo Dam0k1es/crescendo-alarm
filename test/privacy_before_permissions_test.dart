@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/main.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/main.dart';
 
 // docs/TODO.md T-41: the privacy policy used to be reachable only through
 // Settings, which a user only reaches AFTER the splash screen has already

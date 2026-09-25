@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/screens/alarms/screen_alarms.dart';
-import 'package:wakeywakey/screens/scan_code/qr_scanner.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
-import 'package:wakeywakey/utils/permissions.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/screens/alarms/screen_alarms.dart';
+import 'package:crescendo_alarm/screens/scan_code/qr_scanner.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/permissions.dart';
 
 // Maintainer request (2026-09-20): permissions should be requested only when
 // actually needed, not all upfront on the splash screen -

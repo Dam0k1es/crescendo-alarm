@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/scheduling/scheduling_v2.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/models/scheduling/scheduling_v2.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 
 // docs/TODO.md T-61, levels 1/2/3 of the planned test structure.
 //

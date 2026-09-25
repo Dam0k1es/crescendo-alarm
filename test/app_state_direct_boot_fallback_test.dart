@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/manual_alarm.dart';
-import 'package:wakeywakey/utils/direct_boot_mirror.dart' as direct_boot_mirror;
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
+import 'package:crescendo_alarm/utils/direct_boot_mirror.dart' as direct_boot_mirror;
 
 // docs/TODO.md T-158: neither this app nor the `alarm` plugin is
 // direct-boot-aware, so a reboot followed by the device staying locked

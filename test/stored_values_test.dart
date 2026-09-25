@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/scheduling/stored_values.dart';
+import 'package:crescendo_alarm/models/scheduling/stored_values.dart';
 
 // docs/TODO.md T-83: the same `Map<String, int?>` (AppState.pendingDayValues)
 // was read in five places, three times UTC-tagged and twice with no tag.

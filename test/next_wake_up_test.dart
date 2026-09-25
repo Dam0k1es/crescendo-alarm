@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/alarms/manual_alarm.dart';
-import 'package:wakeywakey/models/scheduling/next_wake_up.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
+import 'package:crescendo_alarm/models/scheduling/next_wake_up.dart';
 
 // docs/TODO.md T-66: replacement for Scheduler.nextAlarmTime(), which
 // scheduleSleepReminder() (FR-16 checkpoint 2) depends on - Phase 6 would

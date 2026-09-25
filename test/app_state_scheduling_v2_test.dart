@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/manual_alarm.dart' show DayOfWeek;
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart' show DayOfWeek;
 
 // Phase 0, step 2 (docs/scheduling-v2-spec.md, "Implementation order"):
 // persistence round-trip for the four new scheduling-v2 fields (FR-3),

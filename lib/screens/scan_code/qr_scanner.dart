@@ -1,19 +1,19 @@
 // Copyright (C) 2026 Dam0k1es, centron5961
 //
-// This file is part of WakeyWakey.
+// This file is part of Crescendo Alarm.
 //
-// WakeyWakey is free software: you can redistribute it and/or modify
+// Crescendo Alarm is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// WakeyWakey is distributed in the hope that it will be useful,
+// Crescendo Alarm is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with WakeyWakey. If not, see <https://www.gnu.org/licenses/>.
+// along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
 import 'dart:async';
 
@@ -22,15 +22,15 @@ import 'package:alarm/utils/alarm_set.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_zxing/flutter_zxing.dart';
 import 'package:provider/provider.dart';
-import 'package:wakeywakey/screens/alarms/snooze_button.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/utils/diag/diag_log.dart';
-import 'package:wakeywakey/models/alarms/handler.dart';
-import 'package:wakeywakey/models/alarms/ringing_watch.dart';
-import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
-import 'package:wakeywakey/models/scan_code/deactivation_stop.dart';
-import 'package:wakeywakey/models/scan_code/scan_result.dart';
-import 'package:wakeywakey/utils/permissions.dart';
+import 'package:crescendo_alarm/screens/alarms/snooze_button.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/models/alarms/handler.dart';
+import 'package:crescendo_alarm/models/alarms/ringing_watch.dart';
+import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
+import 'package:crescendo_alarm/models/scan_code/deactivation_stop.dart';
+import 'package:crescendo_alarm/models/scan_code/scan_result.dart';
+import 'package:crescendo_alarm/utils/permissions.dart';
 
 /// Pure comparison at the heart of the "guaranteed wake-up" gate: does the
 /// scanned payload match the stored deactivation code? Extracted out of

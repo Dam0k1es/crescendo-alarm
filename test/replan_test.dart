@@ -3,12 +3,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/manual_alarm.dart';
-import 'package:wakeywakey/models/scheduling/day_marker.dart';
-import 'package:wakeywakey/models/scheduling/replan.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
-import 'package:wakeywakey/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
+import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/models/scheduling/replan.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 
 // Phase 4 (docs/scheduling-v2-spec.md, "Implementation order"):
 // replan(AppState) - T-60 (calendar cache bypass), FR-11, FR-12, FR-15.

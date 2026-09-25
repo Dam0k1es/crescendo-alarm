@@ -6,9 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/alarm_ring_gate.dart';
-import 'package:wakeywakey/models/alarms/handler.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/alarm_ring_gate.dart';
+import 'package:crescendo_alarm/models/alarms/handler.dart';
 
 // docs/TODO.md T-39: the whole "guaranteed wake-up" gate used to hang off
 // one Alarm.ringing subscription owned by _MyHomePageState - if that one

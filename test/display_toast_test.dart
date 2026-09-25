@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/utils/utils.dart';
+import 'package:crescendo_alarm/utils/utils.dart';
 
 // docs/TODO.md T-136: messages like "Can not edit scheduled alarms!" stayed
 // on screen until the user tapped them away - even though `displayToast` has

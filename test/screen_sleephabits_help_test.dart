@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/screens/sleep_habits/screen_sleephabits.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/screens/sleep_habits/screen_sleephabits.dart';
 
 // docs/TODO.md T-20: every Sleep-Habits option gets a "?" help button in its
 // top-right corner, showing a short, on-screen explanation on tap.

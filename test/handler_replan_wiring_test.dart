@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/handler.dart';
-import 'package:wakeywakey/models/alarms/manual_alarm.dart';
-import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
-import 'package:wakeywakey/models/scheduling/replan.dart';
-import 'package:wakeywakey/screens/alarms/screen_active_alarm.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/handler.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
+import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
+import 'package:crescendo_alarm/models/scheduling/replan.dart';
+import 'package:crescendo_alarm/screens/alarms/screen_active_alarm.dart';
 
 // Phase 5 (docs/scheduling-v2-spec.md, "Implementation order", step
 // 19): Handler.handleAlarm() -> runAlarmRingCheckpoint(). FR-8 says the ring

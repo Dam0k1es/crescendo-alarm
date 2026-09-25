@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/utils/diag/diag_log.dart';
-import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
-import 'package:wakeywakey/models/scan_code/scan_result.dart';
-import 'package:wakeywakey/screens/scan_code/qr_scanner.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
+import 'package:crescendo_alarm/models/scan_code/scan_result.dart';
+import 'package:crescendo_alarm/screens/scan_code/qr_scanner.dart';
 
 // docs/TODO.md T-33: the QR gate moved off `mobile_scanner`, which links
 // Google's proprietary ML Kit binaries and therefore cannot travel inside a
@@ -150,7 +150,7 @@ void main() {
 
       expect(appState.deactivationCode?.payload, payload,
           reason: 'the payload must be adopted verbatim, with no format '
-              'assumption of its own - a WakeyWakey-generated code is not '
+              'assumption of its own - a Crescendo Alarm-generated code is not '
               'the only kind of QR code that must work here');
     });
 

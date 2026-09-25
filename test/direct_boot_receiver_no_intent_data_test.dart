@@ -18,7 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 // step re-checks.
 void main() {
   final source = File(
-          'android/app/src/main/kotlin/com/wakeywakey/wakeywakey/DirectBootReceiver.kt')
+          'android/app/src/main/kotlin/com/crescendoalarm/crescendoalarm/DirectBootReceiver.kt')
       .readAsStringSync();
 
   test('DirectBootReceiver.onReceive reads no Intent data beyond .action',

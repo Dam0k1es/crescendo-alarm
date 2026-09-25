@@ -8,10 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
-import 'package:wakeywakey/models/scan_code/scan_result.dart';
-import 'package:wakeywakey/screens/scan_code/qr_scanner.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
+import 'package:crescendo_alarm/models/scan_code/scan_result.dart';
+import 'package:crescendo_alarm/screens/scan_code/qr_scanner.dart';
 
 // Same bug and fix as test/screen_alarm_active_ringing_test.dart, for the
 // other screen a ringing alarm can open: QrScanner, shown instead of

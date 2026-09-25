@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/app_state.dart';
+import 'package:crescendo_alarm/app_state.dart';
 
 // docs/TODO.md T-45: `_loadFromPreferences`'s own comment promised "a failure
 // here must never leave the app unable to start", but `SharedPreferences

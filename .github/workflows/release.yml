@@ -77,12 +77,12 @@ jobs:
       - name: Decode signing key
         run: |
           mkdir -p android/app/keystore
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/keystore/wakeywakey-release.jks
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/keystore/crescendo-alarm-release.jks
           cat > android/key.properties <<EOF
           storePassword=${{ secrets.KEYSTORE_STORE_PASSWORD }}
           keyPassword=${{ secrets.KEYSTORE_KEY_PASSWORD }}
           keyAlias=${{ secrets.KEYSTORE_KEY_ALIAS }}
-          storeFile=keystore/wakeywakey-release.jks
+          storeFile=keystore/crescendo-alarm-release.jks
           EOF
 
       - run: flutter pub get

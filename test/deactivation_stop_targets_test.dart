@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/scan_code/deactivation_stop.dart';
+import 'package:crescendo_alarm/models/scan_code/deactivation_stop.dart';
 
 // An independent review of the scanner migration found that a successful scan
 // could cancel EVERY armed alarm while nothing was ringing at all.

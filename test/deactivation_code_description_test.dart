@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
+import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
 
 // User request: the QR code re-rendered from a scanned-in payload looks
 // nothing like the physical code that was actually scanned (a QR code is

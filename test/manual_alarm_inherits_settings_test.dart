@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/screens/alarms/screen_alarms.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/screens/alarms/screen_alarms.dart';
 
 // docs/TODO.md T-96: the dialog for creating a manual alarm pre-fills
 // gentlewake, volume and tone from the AppState (screen_alarms.dart:265-267)

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
+import 'package:crescendo_alarm/app_state.dart';
 
 // docs/TODO.md T-55: "wrong scheduled alarm infos if opening scheduled alarm
 // page before preloading finished" and "duplicate calendar entries for

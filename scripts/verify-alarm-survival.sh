@@ -39,7 +39,7 @@ source "$REPO/.github/scripts/alarm_detection.sh"
 # shellcheck source=.github/scripts/ui_tap.sh
 source "$REPO/.github/scripts/ui_tap.sh"
 
-PACKAGE="com.wakeywakey.wakeywakey"
+PACKAGE="com.crescendoalarm.crescendoalarm"
 APK=""
 DO_REBOOT=1
 ASSUME_YES=0

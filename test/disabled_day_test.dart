@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
-import 'package:wakeywakey/models/scheduling/apply_alarms.dart';
-import 'package:wakeywakey/models/scheduling/day_marker.dart';
-import 'package:wakeywakey/models/scheduling/replan.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
+import 'package:crescendo_alarm/models/scheduling/apply_alarms.dart';
+import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/models/scheduling/replan.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 
 // FR-21 (docs/scheduling-v2-spec.md), docs/TODO.md T-03: a switched-off
 // planned alarm does not ring. The cases come from the requirement's

@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 
 // docs/TODO.md T-53: a checkable calendar list, reachable from a corner
 // button in the Schedule screen's app bar, that filters which calendars

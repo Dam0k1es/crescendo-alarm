@@ -1,19 +1,19 @@
 // Copyright (C) 2026 Dam0k1es, centron5961
 //
-// This file is part of WakeyWakey.
+// This file is part of Crescendo Alarm.
 //
-// WakeyWakey is free software: you can redistribute it and/or modify
+// Crescendo Alarm is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// WakeyWakey is distributed in the hope that it will be useful,
+// Crescendo Alarm is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with WakeyWakey. If not, see <https://www.gnu.org/licenses/>.
+// along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
 // Scheduling-Logik v2 (docs/scheduling-v2-spec.md). Pure functions only - no
 // AppState, no BuildContext, no plugin access, so every function here is
@@ -23,8 +23,8 @@
 // "preferredWakeUpTime" as a [TimeOfDay]; day windows as plain integer day-offsets.
 
 import 'package:flutter/material.dart' show TimeOfDay;
-import 'package:wakeywakey/models/scheduling/day_marker.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart' show Meeting;
+import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart' show Meeting;
 
 /// One real `hardFloor` point in the visible window (FR-2/FR-5), [dayOffset]
 /// relative to whichever anchor day is currently under consideration.

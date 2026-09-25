@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/manual_alarm.dart';
-import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
-import 'package:wakeywakey/models/scheduling/apply_alarms.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
+import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
+import 'package:crescendo_alarm/models/scheduling/apply_alarms.dart';
 import 'package:flutter/material.dart' show TimeOfDay;
 
 // docs/TODO.md T-63: replan() computed the week correctly into

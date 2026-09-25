@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/custom_tone.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/custom_tone.dart';
 
 // AppState.addCustomTone wires the pure logic in custom_tone_test.dart to
 // persistence and to path_provider - the latter via an injected
@@ -33,7 +33,7 @@ void main() {
   late Directory documentsDir;
 
   setUp(() async {
-    documentsDir = await Directory.systemTemp.createTemp('wakeywakey_docs_');
+    documentsDir = await Directory.systemTemp.createTemp('crescendo_alarm_docs_');
   });
 
   tearDown(() async {

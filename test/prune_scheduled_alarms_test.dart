@@ -1,5 +1,5 @@
-import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
-import 'package:wakeywakey/models/scheduling/apply_alarms.dart';
+import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
+import 'package:crescendo_alarm/models/scheduling/apply_alarms.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // docs/TODO.md T-141: planAlarmSync's removal loop deliberately never

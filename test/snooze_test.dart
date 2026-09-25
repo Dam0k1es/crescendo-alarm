@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/alarms/snooze.dart';
+import 'package:crescendo_alarm/models/alarms/snooze.dart';
 
 // docs/scheduling-v2-spec.md FR-20, docs/TODO.md T-138.
 //

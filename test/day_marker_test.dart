@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:wakeywakey/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 
 // docs/TODO.md T-76 (and T-74d, whose fix was incomplete): day arithmetic must
 // run over date fields, not over absolute durations. Tested with

@@ -1,21 +1,21 @@
 // Copyright (C) 2026 Dam0k1es, centron5961
 //
-// This file is part of WakeyWakey.
+// This file is part of Crescendo Alarm.
 //
-// WakeyWakey is free software: you can redistribute it and/or modify
+// Crescendo Alarm is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// WakeyWakey is distributed in the hope that it will be useful,
+// Crescendo Alarm is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with WakeyWakey. If not, see <https://www.gnu.org/licenses/>.
+// along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
-package com.wakeywakey.wakeywakey
+package com.crescendoalarm.crescendoalarm
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -72,7 +72,7 @@ class DirectBootFallbackService : Service() {
         private const val TAG = "DirectBootFallback"
         private const val CHANNEL_ID = "direct_boot_fallback"
         private const val NOTIFICATION_ID = 0x158
-        const val ACTION_STOP = "com.wakeywakey.wakeywakey.direct_boot_fallback.STOP"
+        const val ACTION_STOP = "com.crescendoalarm.crescendoalarm.direct_boot_fallback.STOP"
 
         // A real alarm rings until dismissed, but nothing here can tell
         // whether anyone is even present to dismiss it - an uncapped
@@ -185,7 +185,7 @@ class DirectBootFallbackService : Service() {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
-                "wakeywakey:direct_boot_fallback"
+                "crescendoalarm:direct_boot_fallback"
             ).apply {
                 setReferenceCounted(false)
                 acquire(MAX_RING_MILLIS + 5_000)

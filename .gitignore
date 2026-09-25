@@ -8,7 +8,7 @@
 .dart_tool/
 .packages
 build/
-# WakeyWakey is an application (not a library), so pubspec.lock is checked in
+# Crescendo Alarm is an application (not a library), so pubspec.lock is checked in
 # for reproducible builds - see the "library packages" note further below.
 
 # Directory created by dartdoc

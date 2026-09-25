@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/snooze.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/snooze.dart';
 
 // FR-20 (docs/scheduling-v2-spec.md), docs/TODO.md T-138: state and
 // defaults around snooze.

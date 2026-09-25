@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/screens/settings/page_aboutpage.dart';
+import 'package:crescendo_alarm/screens/settings/page_aboutpage.dart';
 
 // docs/TODO.md T-142: flutter_zxing compiles third-party C/C++ (zxing-cpp,
 // its bundled "librscpp", and zint) into the app at build time -

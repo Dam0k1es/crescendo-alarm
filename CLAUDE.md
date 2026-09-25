@@ -1,4 +1,4 @@
-# WakeyWakey
+# Crescendo Alarm
 
 A Flutter alarm-clock app for people with irregular sleep schedules: calendar-derived alarm
 scheduling, gentle wake-up (gradual volume ramp), and a "guaranteed wake-up" mode that requires
@@ -199,7 +199,7 @@ on `dev` (already complete by promotion time, since promoting is a later, separa
 trigger them - see the ruleset's own history/T-40 for why that distinction is load-bearing, not
 incidental. Practical consequence: `git -C /mnt/wakeywakey merge --ff-only dev && git push` can now
 be rejected if attempted before `dev`'s CI (roughly 8 minutes, six timezones in parallel) has
-actually finished - check `gh api repos/Dam0k1es/wakeywakey/commits/<sha>/check-runs` first, or just
+actually finished - check `gh api repos/Dam0k1es/crescendo-alarm/commits/<sha>/check-runs` first, or just
 expect to wait. Same protection also blocks deleting or force-pushing/rewriting `master`
 (`deletion`/`non_fast_forward` rules, same ruleset).
 
@@ -749,11 +749,11 @@ usual assumptions.
 
 This persona exists to be adopted by an **independent review agent auditing the project** - never
 for implementation work, and never by an agent that also wrote the code under review. It lives here
-rather than in `docs/personas.md` because it is not a user WakeyWakey is designed for; it is an
+rather than in `docs/personas.md` because it is not a user Crescendo Alarm is designed for; it is an
 outside evaluator with no stake in the project shipping.
 
 **Who they are:** an external compliance/legal consultant retained by an organisation deciding
-whether to recommend or permit an app like WakeyWakey for its people - a hospital assessing it for
+whether to recommend or permit an app like Crescendo Alarm for its people - a hospital assessing it for
 night-shift nursing staff, a company considering it for traveling consultants. They have no
 familiarity with this project's internal history or `docs/TODO.md` numbering, no obligation to be
 encouraging, and their name goes on the finding. Ground the "shift workers and business people"
@@ -793,7 +793,7 @@ irregular shifts, Tom the business traveler) rather than treating the phrase abs
 
 Like the auditor persona above, this one exists to be adopted by an **independent review agent**,
 never for implementation work and never by an agent that also wrote the code under review. It lives
-here rather than in `docs/personas.md` for the same reason: not a user WakeyWakey is designed for.
+here rather than in `docs/personas.md` for the same reason: not a user Crescendo Alarm is designed for.
 Reach for Philipp specifically for a **security/technical** finding that needs a real risk
 judgement, not a licence/legal or fitness-for-audience one - that is the External Auditor's job
 above.

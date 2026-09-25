@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/handler.dart';
-import 'package:wakeywakey/utils/notifications.dart';
-import 'package:wakeywakey/models/scheduling/day_marker.dart';
-import 'package:wakeywakey/utils/sleep_reminder.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/handler.dart';
+import 'package:crescendo_alarm/utils/notifications.dart';
+import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/utils/sleep_reminder.dart';
 
 // Phase 5 (docs/scheduling-v2-spec.md, "Implementation order", step
 // 21): the bedtime notification must ALWAYS be scheduled - even when

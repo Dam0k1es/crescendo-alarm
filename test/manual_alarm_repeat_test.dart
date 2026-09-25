@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/alarms/manual_alarm.dart';
-import 'package:wakeywakey/models/alarms/manual_alarm_enable.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm_enable.dart';
 
 // docs/TODO.md T-14: `repeatOnDays` is editable and persisted but was never
 // consulted when deciding when a manual alarm actually fires - the selector

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/screens/settings/page_aboutpage.dart';
+import 'package:crescendo_alarm/screens/settings/page_aboutpage.dart';
 
 // docs/TODO.md T-36: Flutter embeds every dependency's licence in the
 // binary, but nothing in the app ever displayed them - so the BSD/MIT/

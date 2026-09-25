@@ -5,7 +5,7 @@
 // scenarios, and docs/TODO.md for the full E2E coverage picture.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/alarms/handler.dart';
+import 'package:crescendo_alarm/models/alarms/handler.dart';
 
 void main() {
   group('isAlarmStale', () {

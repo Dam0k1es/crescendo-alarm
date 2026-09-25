@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/screens/settings/page_appearance.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/screens/settings/page_appearance.dart';
 
 // docs/TODO.md T-51: a new "Follow System Theme" option, which - per the
 // maintainer's own spec - greys out the manual Dark Mode switch while it is

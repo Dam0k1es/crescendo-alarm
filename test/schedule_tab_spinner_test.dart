@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/main.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/main.dart';
 
 // docs/TODO.md T-60: while the app is (re-)reading the calendar, the
 // Schedule tab shows a small spinner in place of its static icon - the only

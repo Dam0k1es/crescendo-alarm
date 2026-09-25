@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/alarms/ringing_alarm_settings.dart';
+import 'package:crescendo_alarm/models/alarms/ringing_alarm_settings.dart';
 
 // Bug report: swiping the alarm notification away stopped the alarm at the
 // native level (`NotificationSettings.androidStopAlarmOnDismiss` defaults to

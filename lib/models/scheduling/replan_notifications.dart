@@ -1,19 +1,19 @@
 // Copyright (C) 2026 Dam0k1es, centron5961
 //
-// This file is part of WakeyWakey.
+// This file is part of Crescendo Alarm.
 //
-// WakeyWakey is free software: you can redistribute it and/or modify
+// Crescendo Alarm is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// WakeyWakey is distributed in the hope that it will be useful,
+// Crescendo Alarm is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with WakeyWakey. If not, see <https://www.gnu.org/licenses/>.
+// along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
 // docs/TODO.md T-67/T-74a/T-74b/T-81/T-88: turning a ReplanResult's flags into
 // user notifications used to live inline in Handler with an inline
@@ -22,9 +22,9 @@
 // through here (in practice: `runSchedulingCheckpoint`).
 
 import 'package:flutter/foundation.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/scheduling/replan.dart';
-import 'package:wakeywakey/utils/notifications.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/scheduling/replan.dart';
+import 'package:crescendo_alarm/utils/notifications.dart';
 
 /// Reports [result]'s three flags (FR-6, FR-9, FR-12) to the user.
 ///
@@ -71,7 +71,7 @@ Future<void> reportReplanNotifications(
     if (needed) {
       if (alreadySent) return;
       try {
-        await notifier.scheduleNotification(title: 'WakeyWakey', body: body);
+        await notifier.scheduleNotification(title: 'Crescendo Alarm', body: body);
         remember(true);
       } catch (e) {
         debugPrint("=====reportReplanNotifications: $label failed: ${e.runtimeType}");
@@ -103,7 +103,7 @@ Future<void> reportReplanNotifications(
   if (result.possiblyMissedAppointment) {
     try {
       await notifier.scheduleNotification(
-        title: 'WakeyWakey',
+        title: 'Crescendo Alarm',
         body: 'A newly-added appointment may not have been accounted for '
             'by your last alarm.',
       );

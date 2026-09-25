@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/scheduling/checkpoint.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
-import 'package:wakeywakey/utils/notifications.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/notifications.dart';
 
 // docs/TODO.md T-77 + T-80 + T-87: runSchedulingCheckpoint() is the one entry
 // point for every trigger (ring, app foreground, setting change). Previously

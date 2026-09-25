@@ -5,7 +5,7 @@ import 'package:alarm/model/notification_settings.dart';
 import 'package:alarm/model/volume_settings.dart';
 import 'package:alarm/utils/alarm_set.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/alarms/ringing_watch.dart';
+import 'package:crescendo_alarm/models/alarms/ringing_watch.dart';
 
 // Bug report: an alarm stopped by swiping its notification away (no app UI
 // open) left the ring screen - opened for that same alarm before it was

@@ -1,19 +1,19 @@
 // Copyright (C) 2026 Dam0k1es, centron5961
 //
-// This file is part of WakeyWakey.
+// This file is part of Crescendo Alarm.
 //
-// WakeyWakey is free software: you can redistribute it and/or modify
+// Crescendo Alarm is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// WakeyWakey is distributed in the hope that it will be useful,
+// Crescendo Alarm is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with WakeyWakey. If not, see <https://www.gnu.org/licenses/>.
+// along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
 import 'dart:async';
 import 'dart:convert';
@@ -24,18 +24,18 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/models/alarms/custom_tone.dart' as custom_tone;
-import 'package:wakeywakey/models/alarms/manual_alarm.dart';
-import 'package:wakeywakey/models/alarms/manual_alarm_enable.dart';
-import 'package:wakeywakey/models/alarms/myalarm.dart';
-import 'package:wakeywakey/models/alarms/ringing_alarm_settings.dart';
-import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
-import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
-import 'package:wakeywakey/models/scheduling/next_wake_up.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
-import 'package:wakeywakey/utils/diag/diag_log.dart';
-import 'package:wakeywakey/utils/direct_boot_mirror.dart' as direct_boot_mirror;
-import 'package:wakeywakey/utils/utils.dart';
+import 'package:crescendo_alarm/models/alarms/custom_tone.dart' as custom_tone;
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm_enable.dart';
+import 'package:crescendo_alarm/models/alarms/myalarm.dart';
+import 'package:crescendo_alarm/models/alarms/ringing_alarm_settings.dart';
+import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
+import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
+import 'package:crescendo_alarm/models/scheduling/next_wake_up.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/utils/direct_boot_mirror.dart' as direct_boot_mirror;
+import 'package:crescendo_alarm/utils/utils.dart';
 
 class AppState extends ChangeNotifier {
   late final SharedPreferences _prefs;

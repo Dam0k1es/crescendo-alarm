@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
+import 'package:crescendo_alarm/app_state.dart';
 
 // docs/TODO.md T-50: there was no vibration setting anywhere in the app at
 // all before this - every alarm always vibrated (buildRingingAlarmSettings'

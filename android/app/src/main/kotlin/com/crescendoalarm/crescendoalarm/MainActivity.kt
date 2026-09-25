@@ -1,4 +1,4 @@
-package com.wakeywakey.wakeywakey
+package com.crescendoalarm.crescendoalarm
 
 import android.content.Intent
 import android.os.Bundle

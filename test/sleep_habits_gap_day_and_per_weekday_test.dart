@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/screens/sleep_habits/screen_sleephabits.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/screens/sleep_habits/screen_sleephabits.dart';
 
 // docs/TODO.md T-52.1/T-52.3: the two new Sleep Habits controls - the
 // gap-day scheduling toggle and the per-weekday "duration to get ready"

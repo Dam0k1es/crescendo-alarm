@@ -47,7 +47,7 @@ source "$REPO/.github/scripts/alarm_detection.sh"
 # shellcheck source=.github/scripts/ui_tap.sh
 source "$REPO/.github/scripts/ui_tap.sh"
 
-PACKAGE="com.wakeywakey.wakeywakey"
+PACKAGE="com.crescendoalarm.crescendoalarm"
 
 # How long the alarm must sit untouched before `check` is meaningful. Not a
 # command-line option on purpose: shorter defeats the point of this script -

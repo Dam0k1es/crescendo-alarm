@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/screens/scan_code/page_deactivation_code.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/screens/scan_code/page_deactivation_code.dart';
 
 // docs/REQUIREMENTS.md R13: "Import" already accepted any pre-existing QR
 // code (and, since widening the scanner's codeFormat to Format.any, any
 // barcode too), verbatim - but nothing on screen said so, so it read like
-// it only accepted something WakeyWakey itself had generated and exported.
+// it only accepted something Crescendo Alarm itself had generated and exported.
 // This pins down the hint that makes the existing capability discoverable.
 void main() {
   testWidgets(

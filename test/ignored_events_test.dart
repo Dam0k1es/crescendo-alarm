@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 
 // New feature (user request): a calendar appointment can be "ignored" - it
 // then plays no part in scheduling-v2's hardFloor derivation, without ever

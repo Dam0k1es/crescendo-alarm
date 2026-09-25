@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
-import 'package:wakeywakey/models/scan_code/scan_result.dart';
-import 'package:wakeywakey/screens/scan_code/qr_scanner.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
+import 'package:crescendo_alarm/models/scan_code/scan_result.dart';
+import 'package:crescendo_alarm/screens/scan_code/qr_scanner.dart';
 
 // The one assertion whose absence let three mutations survive: deleting the
 // pop, deleting `Alarm.stop`, and deleting the emergency button all kept the

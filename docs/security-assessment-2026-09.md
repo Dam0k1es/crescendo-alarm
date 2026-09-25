@@ -10,6 +10,14 @@ on-device testing — see Scope & Methodology)
 build-verified before this report was finalized; see F1's own "Verification update" and
 "Remediation" sections for exactly what changed and why.
 
+**Naming note (2026-09-25, post-assessment):** the app assessed below as "WakeyWakey" was renamed
+to "Crescendo Alarm" the day after this report was finalized (`applicationId`
+`com.wakeywakey.wakeywakey` → `com.crescendoalarm.crescendoalarm`, no other functional change).
+Every reference to "WakeyWakey", the old `applicationId`, and old file paths below is left
+unchanged as a point-in-time record of the assessed commit
+(`5898d969359bd41f83507b3395f6d63f989accab`) - this is the same application, under its current
+name, not a different one.
+
 ## Confidentiality
 
 **Correction (2026-09-24, post-review):** this section originally framed this report as needing to

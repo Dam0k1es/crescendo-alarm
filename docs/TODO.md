@@ -1,6 +1,6 @@
 # TODOs
 
-The single task list for WakeyWakey, sorted by priority. Two sources feed it:
+The single task list for Crescendo Alarm, sorted by priority. Two sources feed it:
 
 - **Device feedback** from the maintainer trying the app on real hardware (intake happens in the
   untracked `tasks.txt`; items are moved here once they are formulated as TODOs).

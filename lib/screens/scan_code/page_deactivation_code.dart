@@ -1,27 +1,27 @@
 // Copyright (C) 2026 Dam0k1es, centron5961
 //
-// This file is part of WakeyWakey.
+// This file is part of Crescendo Alarm.
 //
-// WakeyWakey is free software: you can redistribute it and/or modify
+// Crescendo Alarm is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// WakeyWakey is distributed in the hope that it will be useful,
+// Crescendo Alarm is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with WakeyWakey. If not, see <https://www.gnu.org/licenses/>.
+// along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
-import 'package:wakeywakey/screens/scan_code/page_import_qr.dart';
-import 'package:wakeywakey/utils/utils.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
+import 'package:crescendo_alarm/screens/scan_code/page_import_qr.dart';
+import 'package:crescendo_alarm/utils/utils.dart';
 
 class PageDeactivationCode extends StatefulWidget {
   const PageDeactivationCode({super.key});
@@ -55,7 +55,7 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
       version: QrVersions.auto,
       size: _displayArea,
       backgroundColor: Colors.white,
-      semanticsLabel: 'WakeyWakey Deactivation Code',
+      semanticsLabel: 'Crescendo Alarm Deactivation Code',
     );
   }
 
@@ -209,7 +209,7 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
                   // code this app generated, or even to QR codes - any QR
                   // code or barcode already at hand works, verbatim. Without
                   // saying so, "Import" reads like it only accepts a QR code
-                  // exported from WakeyWakey itself.
+                  // exported from Crescendo Alarm itself.
                   Text(
                     'Import works with any QR code or barcode you already '
                     'have - it does not have to come from this app.',

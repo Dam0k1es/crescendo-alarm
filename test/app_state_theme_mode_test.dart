@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
+import 'package:crescendo_alarm/app_state.dart';
 
 // docs/TODO.md T-51: the app could only ever be switched to dark mode by
 // hand (`MyApp.build` read `appState.darkMode`, never `ThemeMode.system`) -

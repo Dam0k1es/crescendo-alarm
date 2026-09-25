@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local security/quality baseline for WakeyWakey.
+# Local security/quality baseline for Crescendo Alarm.
 # Runs, independently of each other:
 #   1. flutter analyze         - static analysis / lints
 #   2. osv-scanner              - known vulnerabilities in pubspec.lock dependencies

@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/main.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/main.dart';
 
 void main() {
   testWidgets('App builds and shows the splash screen on first launch',

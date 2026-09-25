@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/alarms/custom_tone.dart';
+import 'package:crescendo_alarm/models/alarms/custom_tone.dart';
 
 // A user-supplied alarm tone (docs/TODO.md T-29 follow-up: the six bundled
 // tones turned out to include an unlicensed rip, and letting the user bring
@@ -30,7 +30,7 @@ void main() {
   late Directory documentsDir;
 
   setUp(() async {
-    documentsDir = await Directory.systemTemp.createTemp('wakeywakey_docs_');
+    documentsDir = await Directory.systemTemp.createTemp('crescendo_alarm_docs_');
   });
 
   tearDown(() async {
@@ -64,7 +64,7 @@ void main() {
   group('importCustomTone', () {
     Future<File> makeSourceFile(String name,
         [String contents = 'fake audio bytes']) async {
-      final dir = await Directory.systemTemp.createTemp('wakeywakey_src_');
+      final dir = await Directory.systemTemp.createTemp('crescendo_alarm_src_');
       final file = File('${dir.path}/$name');
       await file.writeAsString(contents);
       return file;
@@ -160,8 +160,8 @@ void main() {
         'importing two files that happen to share a name produces two '
         'distinct destination files, neither overwriting the other',
         () async {
-      final firstDir = await Directory.systemTemp.createTemp('wakeywakey_a_');
-      final secondDir = await Directory.systemTemp.createTemp('wakeywakey_b_');
+      final firstDir = await Directory.systemTemp.createTemp('crescendo_alarm_a_');
+      final secondDir = await Directory.systemTemp.createTemp('crescendo_alarm_b_');
       final first = File('${firstDir.path}/tone.mp3')
         ..writeAsStringSync('first content');
       final second = File('${secondDir.path}/tone.mp3')

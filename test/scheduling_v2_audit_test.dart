@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/models/scheduling/day_marker.dart';
-import 'package:wakeywakey/models/scheduling/scheduling_v2.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/models/scheduling/scheduling_v2.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 
 // Regressions from the independent spec review (2026-09-11).
 //

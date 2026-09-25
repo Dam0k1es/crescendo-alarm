@@ -1,19 +1,19 @@
 // Copyright (C) 2026 Dam0k1es, centron5961
 //
-// This file is part of WakeyWakey.
+// This file is part of Crescendo Alarm.
 //
-// WakeyWakey is free software: you can redistribute it and/or modify
+// Crescendo Alarm is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// WakeyWakey is distributed in the hope that it will be useful,
+// Crescendo Alarm is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with WakeyWakey. If not, see <https://www.gnu.org/licenses/>.
+// along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
 // docs/TODO.md T-63: the missing bridge between scheduling-v2's computed week
 // (AppState.pendingDayValues, written by replan()) and the alarms the app
@@ -25,12 +25,12 @@
 
 import 'package:alarm/alarm.dart';
 import 'package:flutter/foundation.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
-import 'package:wakeywakey/models/scheduling/day_marker.dart';
-import 'package:wakeywakey/models/scheduling/stored_values.dart';
-import 'package:wakeywakey/utils/diag/diag_log.dart';
-import 'package:wakeywakey/utils/utils.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
+import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/models/scheduling/stored_values.dart';
+import 'package:crescendo_alarm/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/utils/utils.dart';
 
 /// The difference between the alarms that currently exist and the ones
 /// scheduling-v2's plan calls for.

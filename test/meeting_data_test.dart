@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 
 // New feature (user request): an ignored event must be shown "grayed out"
 // on the calendar. calendar_view's DefaultEventTile draws a

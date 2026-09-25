@@ -68,7 +68,7 @@ FIXTURES="$REPO/.github/scripts/fixtures"
 # shellcheck source=.github/scripts/alarm_detection.sh
 source "$REPO/.github/scripts/alarm_detection.sh"
 
-PACKAGE="com.wakeywakey.wakeywakey"
+PACKAGE="com.crescendoalarm.crescendoalarm"
 DO_REBOOT=1
 ASSUME_YES=0
 SELF_TEST_ONLY=0

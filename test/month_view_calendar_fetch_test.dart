@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 
 // docs/TODO.md T-145 (the part kept open after the "fetch on open" concern
 // was superseded by T-60): calendar_view's MonthView shows a fixed 6-week

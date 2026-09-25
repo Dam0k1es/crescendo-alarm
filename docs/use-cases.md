@@ -77,7 +77,7 @@
   stored, a scan validates against it (the "guaranteed wake-up" gate); with none stored yet, a scan
   **adopts whatever code was just scanned as the new deactivation code, verbatim and with no
   format of its own** - any pre-existing QR code *or ordinary barcode* someone already has works,
-  not only one WakeyWakey generated. See `docs/REQUIREMENTS.md` R13.)
+  not only one Crescendo Alarm generated. See `docs/REQUIREMENTS.md` R13.)
 - Optional: Write Deactivation Code to NFC Tag (="Deactivation Tag") - **not implemented**
 - Optional: Read Deactivation Tag - **not implemented**
 

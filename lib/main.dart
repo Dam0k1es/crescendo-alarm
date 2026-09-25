@@ -1,19 +1,19 @@
 // Copyright (C) 2026 Dam0k1es, centron5961
 //
-// This file is part of WakeyWakey.
+// This file is part of Crescendo Alarm.
 //
-// WakeyWakey is free software: you can redistribute it and/or modify
+// Crescendo Alarm is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// WakeyWakey is distributed in the hope that it will be useful,
+// Crescendo Alarm is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with WakeyWakey. If not, see <https://www.gnu.org/licenses/>.
+// along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
 import 'dart:async';
 
@@ -24,21 +24,21 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/alarms/alarm_ring_gate.dart';
-import 'package:wakeywakey/models/alarms/manual_alarm.dart';
-import 'package:wakeywakey/models/alarms/scheduled_alarm.dart';
-import 'package:wakeywakey/models/scheduling/day_marker.dart';
-import 'package:wakeywakey/models/scheduling/checkpoint.dart';
-import 'package:wakeywakey/screens/alarms/screen_alarms.dart';
-import 'package:wakeywakey/screens/scan_code/screen_scancode.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
-import 'package:wakeywakey/screens/settings/screen_settings.dart';
-import 'package:wakeywakey/screens/sleep_habits/screen_sleephabits.dart';
-import 'package:wakeywakey/utils/diag/diag_log.dart';
-import 'package:wakeywakey/utils/notifications.dart';
-import 'package:wakeywakey/utils/permissions.dart';
-import 'package:wakeywakey/utils/utils.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/alarm_ring_gate.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
+import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
+import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
+import 'package:crescendo_alarm/screens/alarms/screen_alarms.dart';
+import 'package:crescendo_alarm/screens/scan_code/screen_scancode.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/screens/settings/screen_settings.dart';
+import 'package:crescendo_alarm/screens/sleep_habits/screen_sleephabits.dart';
+import 'package:crescendo_alarm/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/utils/notifications.dart';
+import 'package:crescendo_alarm/utils/permissions.dart';
+import 'package:crescendo_alarm/utils/utils.dart';
 
 // Feature backlog: see docs/TODO.md T-50 through T-59 (triaged from this file's former ad-hoc
 // TODO list - docs/TODO.md T-31 records what happened to each original item).
@@ -98,7 +98,7 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
-      title: 'WakeyWakey',
+      title: 'Crescendo Alarm',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
@@ -117,7 +117,7 @@ class _MyAppState extends State<MyApp> {
       // can't independently drift from that combination.
       themeMode: Provider.of<AppState>(context).themeMode,
       home: appState.permissionsGranted
-          ? const MyHomePage(title: 'WakeyWakey')
+          ? const MyHomePage(title: 'Crescendo Alarm')
           : const SplashScreen(),
     );
   }

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 
 // docs/TODO.md T-89: behavior of the PII-free event logger. The
 // structural assertion (no String parameters) is checked against the

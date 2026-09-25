@@ -1,9 +1,9 @@
-# wakeywakey
+# Crescendo Alarm
 
-[![CI](https://github.com/Dam0k1es/wakeywakey/actions/workflows/ci.yml/badge.svg)](https://github.com/Dam0k1es/wakeywakey/actions/workflows/ci.yml)
+[![CI](https://github.com/Dam0k1es/crescendo-alarm/actions/workflows/ci.yml/badge.svg)](https://github.com/Dam0k1es/crescendo-alarm/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-Welcome to Wakey Wakey, an innovative alarm clock app designed for individuals with irregular sleep patterns. Whether you work shifts, travel frequently, or simply have trouble waking up, Wakey Wakey has features tailored to your needs.
+Welcome to Crescendo Alarm, an innovative alarm clock app designed for individuals with irregular sleep patterns. Whether you work shifts, travel frequently, or simply have trouble waking up, Crescendo Alarm has features tailored to your needs.
 
 <p align="center">
   <img src="assets/screenshots/alarms.png" alt="The Alarms screen, Scheduled tab, showing a week of calendar-derived wake-up times" width="240">
@@ -38,8 +38,8 @@ Ensure you have the following installed:
 
 1. **Clone the Repository**
    ```sh
-   git clone https://github.com/Dam0k1es/wakeywakey.git
-   cd wakeywakey
+   git clone https://github.com/Dam0k1es/crescendo-alarm.git
+   cd crescendo-alarm
    ```
 
 2. *Install Dependencies*
@@ -71,7 +71,7 @@ verified (`apksigner verify`) instead.
 
 ### Usage
 
-- Open Wakey Wakey - the first screen is the privacy policy; nothing is requested until you
+- Open Crescendo Alarm - the first screen is the privacy policy; nothing is requested until you
   acknowledge it.
 - Open the **Schedule** tab and pick which calendars should drive your wake-up times (grants
   calendar access the first time).

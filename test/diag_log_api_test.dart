@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 
 // docs/TODO.md T-89: the event logger should deliver diagnostically useful
 // feedback from real usage WITHOUT collecting personal data.

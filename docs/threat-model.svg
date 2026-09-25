@@ -21,7 +21,7 @@
     .sub { font-size:13px; fill:#555; }
   </style>
 
-  <text x="24" y="34" class="h">WakeyWakey - Threat Model (Datenfluss, STRIDE)</text>
+  <text x="24" y="34" class="h">Crescendo Alarm - Threat Model (Datenfluss, STRIDE)</text>
   <text x="24" y="56" class="sub">Das schuetzenswerte Gut ist hier zuerst die VERFUEGBARKEIT: dass der Wecker klingelt. Erst danach Geheimnis und Vertraulichkeit.</text>
   <text x="24" y="74" class="sub">Rot = Bedrohung, gruen = wirksame Gegenmassnahme. T-Nummern -> docs/TODO.md, FR-Nummern -> docs/scheduling-v2-spec.md.</text>
 

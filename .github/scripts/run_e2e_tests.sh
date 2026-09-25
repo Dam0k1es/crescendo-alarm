@@ -12,7 +12,7 @@
 # doesn't survive that, so it's kept here as one real script instead.
 set -uo pipefail
 
-PACKAGE=com.wakeywakey.wakeywakey
+PACKAGE=com.crescendoalarm.crescendoalarm
 EVIDENCE_DIR="${EVIDENCE_DIR:-e2e_evidence}"
 mkdir -p "$EVIDENCE_DIR"
 MANIFEST="$EVIDENCE_DIR/manifest.log"

@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/screens/settings/page_alarmtones.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/screens/settings/page_alarmtones.dart';
 
 // docs/TODO.md T-56: custom tones render as a growable list of named tiles,
 // not a single replaceable slot. The file-picker half of importing a new
@@ -38,7 +38,7 @@ void main() {
   late Directory documentsDir;
 
   setUp(() async {
-    documentsDir = await Directory.systemTemp.createTemp('wakeywakey_docs_');
+    documentsDir = await Directory.systemTemp.createTemp('crescendo_alarm_docs_');
   });
 
   tearDown(() async {

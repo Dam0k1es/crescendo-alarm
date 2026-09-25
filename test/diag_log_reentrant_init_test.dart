@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 
 // docs/TODO.md T-162: found by reading a real user's exported diagnostics
 // log, not by code review. `Diag.init()` was called a second time WITHIN

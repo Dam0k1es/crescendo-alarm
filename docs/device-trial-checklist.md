@@ -61,10 +61,10 @@ things it structurally **cannot** show, and those are exactly what's here:
 
 | # | Check | Expectation | Result |
 |---|---|---|---|
-| C1 | Set an alarm, `adb shell dumpsys alarm \| grep com.wakeywakey` | entry present | |
+| C1 | Set an alarm, `adb shell dumpsys alarm \| grep com.crescendoalarm.crescendoalarm` | entry present | |
 | C2 | Reboot the device **without** opening the app, then repeat C1 | entry present again | |
 | C3 | Wait for the alarm to ring after the reboot | rings | |
-| C4 | `adb shell am force-stop com.wakeywakey.wakeywakey`, then C1 | **Expectation: entry gone** — Android removes the alarms of a force-stopped package; this is platform behaviour, not an app defect. Record it here so R3 tracks it as a boundary, not a bug. | |
+| C4 | `adb shell am force-stop com.crescendoalarm.crescendoalarm`, then C1 | **Expectation: entry gone** — Android removes the alarms of a force-stopped package; this is platform behaviour, not an app defect. Record it here so R3 tracks it as a boundary, not a bug. | |
 | C5 | Open the app after C4 | alarms are re-armed (FR-17 recovery) | |
 | C6 | Enable battery saver, set an alarm for +10 min, screen off | rings anyway | |
 

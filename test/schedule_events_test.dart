@@ -2,7 +2,7 @@ import 'package:flutter/material.dart' show Colors;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 
 // docs/TODO.md T-05: the Schedule screen moved from Syncfusion's SfCalendar to
 // calendar_view. `Meeting` stays exactly as it is - the scheduling engine and

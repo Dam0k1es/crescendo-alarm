@@ -1,6 +1,6 @@
 # Licence position
 
-WakeyWakey is distributed under the **GNU GPLv3** (`LICENSE`). The project grew out of a university
+Crescendo Alarm is distributed under the **GNU GPLv3** (`LICENSE`). The project grew out of a university
 project with three original developers. All three have now given explicit consent (2026-09-20) to
 this GPLv3 licensing; two, Dam0k1es and centron5961, also consented to being named as copyright
 holders. The third consented to the licence only, not to being named - a deliberate choice by that

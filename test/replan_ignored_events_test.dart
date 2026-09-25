@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/scheduling/replan.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/scheduling/replan.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 
 // New feature (user request): an ignored calendar event must not produce a
 // hardFloor - the point of the feature is to let the user opt an appointment

@@ -19,7 +19,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.wakeywakey.wakeywakey"
+    namespace = "com.crescendoalarm.crescendoalarm"
     compileSdk = flutter.compileSdkVersion
 
     compileOptions {
@@ -45,7 +45,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.wakeywakey.wakeywakey"
+        applicationId = "com.crescendoalarm.crescendoalarm"
         // Was intended to stay below the Flutter default (21) for older-device
         // compatibility, but several plugins (image_picker_android,
         // shared_preferences_android, flutter_plugin_android_lifecycle in their

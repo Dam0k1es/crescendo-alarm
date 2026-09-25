@@ -32,17 +32,17 @@ import 'package:integration_test/integration_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/main.dart';
-import 'package:wakeywakey/models/scheduling/checkpoint.dart';
-import 'package:wakeywakey/models/scan_code/deactivation_code.dart';
-import 'package:wakeywakey/screens/alarms/screen_active_alarm.dart';
-import 'package:wakeywakey/screens/alarms/screen_alarms.dart';
-import 'package:wakeywakey/models/scan_code/scan_result.dart';
-import 'package:wakeywakey/screens/scan_code/qr_scanner.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
-import 'package:wakeywakey/utils/notifications.dart';
-import 'package:wakeywakey/utils/utils.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/main.dart';
+import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
+import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
+import 'package:crescendo_alarm/screens/alarms/screen_active_alarm.dart';
+import 'package:crescendo_alarm/screens/alarms/screen_alarms.dart';
+import 'package:crescendo_alarm/models/scan_code/scan_result.dart';
+import 'package:crescendo_alarm/screens/scan_code/qr_scanner.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/notifications.dart';
+import 'package:crescendo_alarm/utils/utils.dart';
 
 /// Repeatedly pumps [tester] until [finder] matches something, or [timeout]
 /// elapses. Unlike `pumpAndSettle`, this is safe to use while waiting on a
@@ -295,7 +295,7 @@ void main() {
   testWidgets(
     'manual alarm with a deactivation code set is dismissed via QR scan',
     (tester) async {
-      const testPayload = 'wakeywakey-e2e-test-code';
+      const testPayload = 'crescendo-alarm-e2e-test-code';
 
       final appState = await pumpFreshApp(tester);
       appState.deactivationCode = DeactivationCode(payload: testPayload);

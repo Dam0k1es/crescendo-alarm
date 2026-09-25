@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/screens/settings/page_aboutpage.dart';
+import 'package:crescendo_alarm/screens/settings/page_aboutpage.dart';
 
 // docs/TODO.md T-36, second half - see page_aboutpage_licenses_test.dart for
 // why this lives in its own file (an isolate-pairing quirk, not a real

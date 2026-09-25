@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/scheduling/replan.dart';
-import 'package:wakeywakey/models/scheduling/replan_notifications.dart';
-import 'package:wakeywakey/utils/notifications.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/scheduling/replan.dart';
+import 'package:crescendo_alarm/models/scheduling/replan_notifications.dart';
+import 'package:crescendo_alarm/utils/notifications.dart';
 
 // docs/TODO.md T-67/T-74a/T-74b: the three warning flags (FR-6, FR-9, FR-12)
 // used to be reported only in the ring path, shared one common try, and

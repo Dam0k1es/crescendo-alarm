@@ -1,25 +1,25 @@
 // Copyright (C) 2026 Dam0k1es, centron5961
 //
-// This file is part of WakeyWakey.
+// This file is part of Crescendo Alarm.
 //
-// WakeyWakey is free software: you can redistribute it and/or modify
+// Crescendo Alarm is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// WakeyWakey is distributed in the hope that it will be useful,
+// Crescendo Alarm is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with WakeyWakey. If not, see <https://www.gnu.org/licenses/>.
+// along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:wakeywakey/screens/settings/page_license.dart';
-import 'package:wakeywakey/screens/settings/page_native_notices.dart';
+import 'package:crescendo_alarm/screens/settings/page_license.dart';
+import 'package:crescendo_alarm/screens/settings/page_native_notices.dart';
 
 class PageAboutpage extends StatelessWidget {
   const PageAboutpage({super.key});
@@ -31,7 +31,7 @@ class PageAboutpage extends StatelessWidget {
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         title: const Text(
-          'About WakeyWakey',
+          'About Crescendo Alarm',
           style: TextStyle(fontSize: 24),
         ),
       ),
@@ -83,7 +83,7 @@ class PageAboutpage extends StatelessWidget {
                   onPressed: () {
                     showLicensePage(
                       context: context,
-                      applicationName: 'WakeyWakey',
+                      applicationName: 'Crescendo Alarm',
                       applicationLegalese:
                           'Copyright (C) 2026 Dam0k1es, centron5961. Licensed '
                           'under the GNU General Public License v3.0.',

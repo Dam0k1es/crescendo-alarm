@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:wakeywakey/models/scheduling/scheduling_v2.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
-import 'package:wakeywakey/utils/utils.dart';
+import 'package:crescendo_alarm/models/scheduling/scheduling_v2.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/utils.dart';
 
 // docs/TODO.md T-61, levels 1 and 4 of the planned test structure - with the
 // infrastructure that had been missing so far: `tz.initializeTimeZones()`

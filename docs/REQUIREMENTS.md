@@ -1,6 +1,6 @@
 # Requirements
 
-Essential requirements for WakeyWakey. These must be guaranteed - or their current
+Essential requirements for Crescendo Alarm. These must be guaranteed - or their current
 verification status honestly stated - before any push to `master` (production track). This
 document formalizes and supersedes an earlier informal `tasks.txt` planning note.
 
@@ -466,7 +466,7 @@ manual intervention/override should always remain possible (no fully opaque auto
 Without being told otherwise, a user's realistic expectation of the "guaranteed wake-up" feature is
 that they can scan an arbitrary code they already have - a QR code or an ordinary barcode, printed
 on a household object, a poster, anything with a scannable code already on it - and have the app
-adopt it as their deactivation code, without that code needing to come from WakeyWakey itself or
+adopt it as their deactivation code, without that code needing to come from Crescendo Alarm itself or
 match any particular format or symbology.
 
 - **Why a formal requirement, not just an implementation detail:** the mechanism (`QrScanner`'s
@@ -486,7 +486,7 @@ match any particular format or symbology.
   imported" (a simple token) and its "requirement: any pre-existing QR code can be adopted as the
   deactivation code" group - a real-world URL and a long string with unicode/whitespace/
   punctuation, proving the payload is adopted verbatim with no format assumption of its own, not
-  just the shape of a WakeyWakey-generated code (`DeactivationCode.generateRandomHash`'s base64
+  just the shape of a Crescendo Alarm-generated code (`DeactivationCode.generateRandomHash`'s base64
   output). These exercise the app-logic layer through the debug scan-stream seam, which is
   necessarily format-agnostic (`ScanResult` carries only decoded text, never a symbology) - it
   cannot prove `ReaderWidget` itself actually decodes a barcode, since that seam bypasses

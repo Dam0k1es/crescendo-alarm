@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wakeywakey/utils/notifications.dart';
+import 'package:crescendo_alarm/utils/notifications.dart';
 
 // Phase 5 (docs/scheduling-v2-spec.md, "Implementation order", step
 // 21): the bedtime notification must ALWAYS be scheduled, regardless

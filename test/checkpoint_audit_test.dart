@@ -3,10 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:wakeywakey/app_state.dart';
-import 'package:wakeywakey/models/scheduling/checkpoint.dart';
-import 'package:wakeywakey/screens/schedule/screen_schedule.dart';
-import 'package:wakeywakey/utils/notifications.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/notifications.dart';
 
 // Regressions from the independent spec review (2026-09-11), at the
 // checkpoint-trigger level. The domain layer and replan() live in

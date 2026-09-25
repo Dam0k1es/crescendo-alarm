@@ -14,7 +14,7 @@ void main() {
     for (final entity in Directory('lib').listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
       final content = entity.readAsStringSync();
-      if (!content.contains('This file is part of WakeyWakey.') ||
+      if (!content.contains('This file is part of Crescendo Alarm.') ||
           !content.contains('GNU General Public License')) {
         missing.add(entity.path);
       }

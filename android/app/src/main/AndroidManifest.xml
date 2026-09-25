@@ -62,7 +62,7 @@
     <application
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:label="WakeyWakey"
+        android:label="Crescendo Alarm"
         android:allowBackup="false">
         <activity
             android:name=".MainActivity"
