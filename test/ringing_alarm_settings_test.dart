@@ -1,3 +1,4 @@
+import 'package:alarm/alarm.dart' show VolumeFadeStep;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:crescendo_alarm/models/alarms/ringing_alarm_settings.dart';
 
@@ -34,7 +35,8 @@ void main() {
     expect(settings.notificationSettings.androidStopAlarmOnDismiss, isFalse);
   });
 
-  test('gentle wake produces a fade, otherwise a fixed volume', () {
+  test('gentle wake produces a staircase fade, otherwise a fixed volume',
+      () {
     final fading = buildRingingAlarmSettings(
       id: 1,
       dateTime: DateTime(2026, 3, 10, 7, 30),
@@ -58,8 +60,76 @@ void main() {
       vibrate: true,
     );
 
-    expect(fading.volumeSettings.fadeDuration, const Duration(minutes: 3));
-    expect(fixed.volumeSettings.fadeDuration, isNull);
+    // docs/TODO.md T-175: no longer VolumeSettings.fade (a plain
+    // fadeDuration, which the plugin's own native source confirms is a
+    // strictly linear ramp) - fadeSteps carries the actual curve instead.
+    expect(fading.volumeSettings.fadeDuration, isNull);
+    expect(fading.volumeSettings.fadeSteps, isNotEmpty);
+    expect(fixed.volumeSettings.fadeSteps, isEmpty);
+  });
+
+  group('T-175: the gentle-wake ramp is exponential, not linear', () {
+    // Maintainer feedback from real-device use: the ramp "felt" too fast,
+    // reaching full volume too quickly to feel gentle. The fix isn't
+    // testable by ear from here - these instead pin down the actual
+    // mathematical shape the plugin is handed, which is the only thing
+    // this layer controls.
+    List<VolumeFadeStep> stepsFor(Duration duration, double volume) =>
+        buildRingingAlarmSettings(
+          id: 1,
+          dateTime: DateTime(2026, 3, 10, 7, 30),
+          tone: null,
+          gentlewake: true,
+          volume: volume,
+          gentleWakeDuration: duration,
+          title: 'Alarm',
+          body: 'Your alarm is ringing',
+          vibrate: true,
+        ).volumeSettings.fadeSteps;
+
+    test('starts at (near-)silent and ends exactly at the target volume',
+        () {
+      final steps = stepsFor(const Duration(minutes: 5), 0.8);
+
+      expect(steps.first.time, Duration.zero);
+      expect(steps.first.volume, 0.0);
+      expect(steps.last.time, const Duration(minutes: 5));
+      expect(steps.last.volume, closeTo(0.8, 0.0001));
+    });
+
+    test('is monotonically increasing - never dips back down', () {
+      final steps = stepsFor(const Duration(minutes: 5), 0.8);
+
+      for (var i = 1; i < steps.length; i++) {
+        expect(steps[i].volume, greaterThanOrEqualTo(steps[i - 1].volume));
+        expect(steps[i].time, greaterThan(steps[i - 1].time));
+      }
+    });
+
+    test(
+        'the midpoint sits below the halfway volume - the defining '
+        'difference from a linear ramp', () {
+      final steps = stepsFor(const Duration(minutes: 10), 1.0);
+      final midpoint =
+          steps.firstWhere((s) => s.time == const Duration(minutes: 5));
+
+      // A linear ramp would put the 5-minute mark at exactly half volume.
+      // Staying meaningfully quieter than that at the midpoint, then
+      // catching up by the end, is exactly the "quiet for longer" shape
+      // the maintainer asked for.
+      expect(midpoint.volume, lessThan(0.5));
+    });
+
+    test('scales with the target volume, same time points either way', () {
+      final full = stepsFor(const Duration(minutes: 5), 1.0);
+      final half = stepsFor(const Duration(minutes: 5), 0.5);
+
+      expect(half.length, full.length);
+      for (var i = 0; i < full.length; i++) {
+        expect(half[i].time, full[i].time);
+        expect(half[i].volume, closeTo(full[i].volume / 2, 0.0001));
+      }
+    });
   });
 
   test('carries the id, time, tone, title and body through unchanged', () {

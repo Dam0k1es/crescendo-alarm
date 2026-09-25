@@ -145,10 +145,11 @@ void main() {
       await second.initialized;
       expect(second.gentleWakeUpDuration, const Duration(minutes: 10));
 
-      // The alarm plugin has `assert(fadeDuration > Duration.zero)`. But the
-      // hh:mm picker on the sleep-habits screen allows 00:00, and assertions
-      // are off in the release build - so a zero would reach the plugin
-      // unchecked. Hence the same bound as for maxDailyDelta.
+      // The hh:mm picker on the sleep-habits screen allows 00:00, and
+      // assertions are off in the release build - so a zero would reach the
+      // plugin unchecked (T-175: now VolumeSettings.staircaseFade, which
+      // needs at least one fade step). Hence the same bound as for
+      // maxDailyDelta.
       second.gentleWakeUpDuration = Duration.zero;
       expect(second.gentleWakeUpDuration, const Duration(minutes: 1));
     });

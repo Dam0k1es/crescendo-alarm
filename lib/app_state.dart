@@ -134,11 +134,16 @@ class AppState extends ChangeNotifier {
 
   static const _maxDailyDeltaMinimum = Duration(minutes: 15);
 
-  /// docs/TODO.md T-96: the alarm plugin has `assert(fadeDuration > Duration.zero)`
-  /// (`VolumeSettings.fade`), and the hh:mm picker on the sleep-habits screen
-  /// allows 00:00. Assertions are off in the release build, so a zero would
-  /// reach it unchecked - hence a hard lower bound. One minute is also the
-  /// value that was hardcoded before T-96.
+  /// docs/TODO.md T-96: the hh:mm picker on the sleep-habits screen allows
+  /// 00:00, which would otherwise reach the alarm plugin unchecked - hence
+  /// a hard lower bound. One minute is also the value that was hardcoded
+  /// before T-96. Originally guarded against the plugin's own
+  /// `assert(fadeDuration > Duration.zero)` on `VolumeSettings.fade`
+  /// (assertions are off in the release build, so a zero would have
+  /// reached it unchecked); T-175 switched the ramp itself to
+  /// `VolumeSettings.staircaseFade` (see `ringing_alarm_settings.dart`),
+  /// whose own guard is "at least one fade step", satisfied by the same
+  /// positive-duration floor for the same underlying reason.
   static const _gentleWakeUpDurationMinimum = Duration(minutes: 1);
 
   // Theming variables

@@ -1036,6 +1036,39 @@ that is the basis a decision can be formulated against.
   step to keep in sync.
 - **Requirement:** none directly - documentation/repo hygiene, not a defect fix.
 
+### T-175 · The gentle-wake ramp felt too fast - switched from linear to exponential — DONE (2026-09-25)
+
+- [x] Maintainer feedback from real-device use, stated as a requirement: "die Ramp duration geht
+  meiner Wahrnehmung nach zu schnell nach oben... es soll eher exponentiell als linear ansteigen.
+  Das ist auch eine Anforderung, da man nur so wirklich sanft aufsteht" - the ramp reaches full
+  volume too quickly to feel gentle, and should stay quiet for longer before catching up, rather
+  than climbing at a constant rate.
+- **Confirmed against the plugin's own native source before changing anything:** `buildRingingAlarmSettings`
+  used `VolumeSettings.fade(fadeDuration: ...)`, whose native implementation
+  (`alarm-5.12.0/android/.../AudioService.kt`'s `startFadeIn`) sets `deltaVolume = maxVolume /
+  numberOfSteps` and applies it every 100ms - a strictly linear ramp, exactly matching the
+  maintainer's perception, not a misperception to correct instead.
+- **Fix, without touching the plugin or any native code:** the same plugin version already
+  exposes `VolumeSettings.staircaseFade(fadeSteps: List<VolumeFadeStep>)` - an explicit list of
+  (time, volume) points its native side linearly interpolates *between* at the same 100ms tick
+  (`startStaircaseFadeIn`, same file). `_exponentialFadeSteps` (`ringing_alarm_settings.dart`)
+  samples `volume(t) = target * (e^(k·t/T) - 1) / (e^k - 1)` at 40 fixed points regardless of
+  `T` (more points than that only bloats the platform-channel payload for no perceptible gain,
+  since the plugin already interpolates linearly between whatever points it's given) - `k = 3.0`
+  chosen as a noticeably-curved but not extreme middle ground, not measured against a real ear;
+  revisit that one constant on further feedback rather than treating it as settled.
+- **Tests:** `test/ringing_alarm_settings_test.dart` - the existing "gentle wake produces a fade"
+  case updated for `fadeSteps` instead of the now-unused `fadeDuration`, plus four new cases
+  pinning down the actual shape: starts at (near-)zero and ends exactly at the target volume,
+  monotonically increasing, scales linearly with the target volume at identical time points, and -
+  the one that actually distinguishes this from a linear ramp - the midpoint sits *below* half
+  volume rather than exactly at it. Confirmed red first by temporarily reverting the formula to
+  plain linear (`volume * i / stepCount`): every case but the midpoint one still passed unaffected
+  (correctly, since "starts at 0/ends at target/monotonic/scales linearly" all hold for a linear
+  ramp too), and the midpoint case failed exactly as it should - proving that specific test, not
+  the others, is what actually guards against a regression back to linear.
+- **Requirement:** yes - stated as one by the maintainer directly.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
