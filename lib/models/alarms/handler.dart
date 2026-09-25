@@ -22,6 +22,7 @@ import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
+import 'package:crescendo_alarm/models/alarms/myalarm.dart';
 import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
@@ -43,6 +44,25 @@ bool isAlarmStale(DateTime eventDateTime, DateTime now) {
   final nowMinute =
       DateTime(now.year, now.month, now.day, now.hour, now.minute);
   return eventMinute.isBefore(nowMinute);
+}
+
+/// docs/TODO.md T-176 (maintainer request): whether the QR/deactivation-code
+/// gate should be shown for this specific ringing alarm. A global code must
+/// be [codeConfigured] at all - there is nothing to scan against otherwise -
+/// AND, when [ringingAlarm] is a [ManualAlarm], it must not have opted out
+/// via [ManualAlarm.requireDeactivationCode]. A [ScheduledAlarm], or an id
+/// `AppState` has no record of at all (`ringingAlarm == null`), has no such
+/// override and follows [codeConfigured] alone - exactly the behavior that
+/// existed before this per-alarm override.
+///
+/// A pure function (matching [isAlarmStale]'s own precedent above) so this
+/// routing decision has a test that needs neither a `BuildContext` nor the
+/// real `alarm` plugin.
+bool shouldRequireDeactivationCode(
+    MyAlarm? ringingAlarm, bool codeConfigured) {
+  if (!codeConfigured) return false;
+  if (ringingAlarm is ManualAlarm) return ringingAlarm.requireDeactivationCode;
+  return true;
 }
 
 class Handler {
@@ -212,10 +232,12 @@ class Handler {
 
       // If the event is in the future or now, show either the default alarm overlay or the QR code scanner
 
-      // Check if the deactivation code is set
+      // Check if the deactivation code is set - and, since T-176, whether
+      // this specific alarm has opted out of requiring it.
       bool isDeactivationCodeSet = false;
       try {
-        isDeactivationCodeSet = _appState.deactivationCode != null;
+        isDeactivationCodeSet = shouldRequireDeactivationCode(
+            _appState.getAlarm(event.id), _appState.deactivationCode != null);
       } catch (e) {
         debugPrint(
             "=====handleAlarm: Failed to check if deactivation code is set: ${e.runtimeType}");

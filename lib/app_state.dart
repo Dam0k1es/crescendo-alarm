@@ -845,6 +845,12 @@ class AppState extends ChangeNotifier {
           tone: alarm.tone,
           volume: alarm.volume,
           vibrate: alarm.vibrate,
+          // docs/TODO.md T-176: missing here, this reconstruction silently
+          // dropped both back to their constructor defaults regardless of
+          // what the dialog actually saved - the same "setting with a UI
+          // that never reaches the alarm" bug class as T-84.
+          snoozeEnabled: alarm.snoozeEnabled,
+          requireDeactivationCode: alarm.requireDeactivationCode,
           repeatOnDays: alarm.repeatOnDays);
       if (_manualAlarms.contains(alarm)) {
         debugPrint(

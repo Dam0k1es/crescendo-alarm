@@ -17,6 +17,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
 // FR-20 (docs/scheduling-v2-spec.md): snooze postpones a wake call, but never
@@ -68,6 +69,19 @@ DateTime snoozedRingTime({
 }) =>
     now.add(snoozeTime);
 
+/// docs/TODO.md T-176 (maintainer request): a `ManualAlarm`'s own
+/// `snoozeEnabled` overrides the global `AppState.snoozeEnabled` once set -
+/// resolved in exactly one place and called from both [snoozeRingingAlarm]
+/// and `SnoozeButton`, so the two cannot drift apart the same way this
+/// file's own doc comment already explains for why `canSnooze` itself is
+/// shared. A `ScheduledAlarm`, or an id `AppState` has no record of at all,
+/// has no such override and falls back to the global setting unchanged.
+bool effectiveSnoozeEnabled(AppState appState, int alarmId) {
+  final alarm = appState.getAlarm(alarmId);
+  if (alarm is ManualAlarm) return alarm.snoozeEnabled;
+  return appState.snoozeEnabled;
+}
+
 /// Postpones the currently ringing wake call by [AppState.snoozeTime].
 ///
 /// Returns `true` if it was actually postponed. `false` means: it wasn't
@@ -104,7 +118,7 @@ Future<bool> snoozeRingingAlarm(
     originalRing: origin,
     snoozeTime: appState.snoozeTime,
     wakeUpBudget: durationFromTimeOfDay(appState.durationToWakeUp),
-    snoozeEnabled: appState.snoozeEnabled,
+    snoozeEnabled: effectiveSnoozeEnabled(appState, alarmId),
   )) {
     return false;
   }

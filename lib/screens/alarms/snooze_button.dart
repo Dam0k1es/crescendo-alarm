@@ -80,7 +80,7 @@ class SnoozeButton extends StatelessWidget {
       originalRing: origin,
       snoozeTime: appState.snoozeTime,
       wakeUpBudget: durationFromTimeOfDay(appState.durationToWakeUp),
-      snoozeEnabled: appState.snoozeEnabled,
+      snoozeEnabled: effectiveSnoozeEnabled(appState, alarmId),
     )) {
       return const SizedBox.shrink();
     }

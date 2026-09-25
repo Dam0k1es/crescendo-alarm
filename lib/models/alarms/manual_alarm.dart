@@ -23,6 +23,29 @@ import 'package:crescendo_alarm/utils/utils.dart';
 class ManualAlarm extends MyAlarm {
   Map<DayOfWeek, bool> repeatOnDays;
 
+  /// docs/TODO.md T-176 (maintainer request): whether snooze is available
+  /// at all for this specific alarm - a per-alarm override of
+  /// `AppState.snoozeEnabled`. Unlike `gentleWakeDuration`/`volume`/`tone`/
+  /// `vibrate` above, this is not part of `AlarmSettings` - it's read only
+  /// at ring time (`snoozeRingingAlarm`, `SnoozeButton`) via
+  /// `AppState.getAlarm`, never baked into the native platform alarm, so it
+  /// needs no `planAlarmSync` deviation handling of its own.
+  ///
+  /// Missing from an alarm serialized before T-176 defaults to `true` - the
+  /// small behavior change this implies for anyone who had already turned
+  /// the global setting off is accepted the same way as every other
+  /// pre-existing-data case in this project's test phase.
+  bool snoozeEnabled;
+
+  /// docs/TODO.md T-176 (maintainer request): whether this alarm requires a
+  /// deactivation-code (QR) scan to be silenced - a per-alarm override,
+  /// checked alongside (not instead of) `AppState.deactivationCode != null`
+  /// in `Handler.shouldRequireDeactivationCode`: an alarm can opt out of the
+  /// gate, but none can opt into one that was never configured. Defaults to
+  /// `true`, matching the only behavior that existed before this override:
+  /// every alarm required the scan whenever a code was set at all.
+  bool requireDeactivationCode;
+
   ManualAlarm({
     required TimeOfDay super.time,
     super.title,
@@ -37,8 +60,12 @@ class ManualAlarm extends MyAlarm {
     // AppState.vibrationEnabled at creation time by the caller, not read
     // live from AppState on every ring.
     super.vibrate,
+    bool? snoozeEnabled,
+    bool? requireDeactivationCode,
     Map<DayOfWeek, bool>? repeatOnDays,
-  }) : repeatOnDays =
+  })  : snoozeEnabled = snoozeEnabled ?? true,
+        requireDeactivationCode = requireDeactivationCode ?? true,
+        repeatOnDays =
             repeatOnDays ?? {for (var day in DayOfWeek.values) day: true};
 
   factory ManualAlarm.fromJson(String jsonString) {
@@ -66,6 +93,11 @@ class ManualAlarm extends MyAlarm {
       // (true) applies, matching what every alarm did before this setting
       // existed.
       vibrate: data['vibrate'] as bool?,
+      // Missing for alarms stored before T-176 - then this constructor's
+      // own default (true) applies; see snoozeEnabled/requireDeactivationCode's
+      // doc comments above for why that's the right migration behavior.
+      snoozeEnabled: data['snoozeEnabled'] as bool?,
+      requireDeactivationCode: data['requireDeactivationCode'] as bool?,
       repeatOnDays: repeatOnDays,
       id: data['id'],
     );
@@ -82,6 +114,8 @@ class ManualAlarm extends MyAlarm {
       'tone': tone,
       'volume': volume,
       'vibrate': vibrate,
+      'snoozeEnabled': snoozeEnabled,
+      'requireDeactivationCode': requireDeactivationCode,
       'repeatOnDays':
           repeatOnDays.map((day, value) => MapEntry(day.toString(), value)),
       'id': id,
@@ -104,6 +138,8 @@ class ManualAlarm extends MyAlarm {
           tone == other.tone &&
           volume == other.volume &&
           vibrate == other.vibrate &&
+          snoozeEnabled == other.snoozeEnabled &&
+          requireDeactivationCode == other.requireDeactivationCode &&
           id == other.id &&
           compareRepeatDays(repeatOnDays, other.repeatOnDays);
     } else {

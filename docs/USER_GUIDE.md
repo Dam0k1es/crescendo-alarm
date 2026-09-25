@@ -57,6 +57,11 @@ Alarms you create yourself, independent of any calendar.
 - **Tone** - pick from the bundled tones or any custom tone you've imported (Settings > Alarm
   Tones).
 - **Volume**.
+- **Snooze** - whether this specific alarm allows postponing, independent of the global Snooze
+  setting under Sleep Habits.
+- **Guaranteed Wake-Up** - whether this specific alarm requires a deactivation-code scan to stop it
+  (see "Scan Code" below). Only takes effect once a code is actually configured there; with none
+  set, no alarm requires a scan regardless of this toggle.
 - **Repeat on** - a day-of-week picker. Defaults to just today, so a one-off alarm needs no
   interaction here at all; check more days for a recurring alarm. Repeating alarms re-arm themselves
   automatically each time you dismiss them.

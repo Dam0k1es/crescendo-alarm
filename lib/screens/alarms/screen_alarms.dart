@@ -352,6 +352,16 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     double volume = alarm?.volume ?? _appState.selectedVolume;
     // docs/TODO.md T-50: same inheritance rule as the others above.
     bool vibrate = alarm?.vibrate ?? _appState.vibrationEnabled;
+    // docs/TODO.md T-176 (maintainer request): same inheritance rule again -
+    // a per-alarm override of AppState.snoozeEnabled, independently
+    // editable once created.
+    bool snoozeEnabled = alarm?.snoozeEnabled ?? _appState.snoozeEnabled;
+    // docs/TODO.md T-176: unlike the settings above, this has no AppState
+    // default to inherit from at all - it defaults to `true` regardless,
+    // matching the only behavior that existed before this per-alarm
+    // override: every alarm required the deactivation-code scan whenever a
+    // code was configured.
+    bool requireDeactivationCode = alarm?.requireDeactivationCode ?? true;
     // A stored tone path (an existing alarm's, or AppState's own default)
     // that matches neither a bundled tone nor a current custom tone would
     // leave the dropdown below with a `value` none of its `items` match -
@@ -480,13 +490,79 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Gentle Wake Up',
-                                style: TextStyle(fontSize: 20)),
+                            // docs/TODO.md T-176: pre-existing overflow at
+                            // narrow phone widths, found while adding the
+                            // "Guaranteed Wake-Up" toggle below and testing
+                            // this dialog at a realistic width for the
+                            // first time - same Expanded fix.
+                            const Expanded(
+                              child: Text('Gentle Wake Up',
+                                  style: TextStyle(fontSize: 20)),
+                            ),
                             Switch(
                               value: gentleWake,
                               onChanged: (value) {
                                 setState(() {
                                   gentleWake = value;
+                                });
+                              },
+                              activeThumbColor: _appState.accentColor,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // docs/TODO.md T-176 (maintainer request): per-alarm
+                    // Snooze toggle - same Card/Row/Switch pattern as
+                    // Gentle Wake Up above.
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Snooze',
+                                style: TextStyle(fontSize: 20)),
+                            Switch(
+                              value: snoozeEnabled,
+                              onChanged: (value) {
+                                setState(() {
+                                  snoozeEnabled = value;
+                                });
+                              },
+                              activeThumbColor: _appState.accentColor,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // docs/TODO.md T-176: per-alarm override of the
+                    // deactivation-code ("guaranteed wake-up") gate - only
+                    // takes effect when a code is actually configured
+                    // (Handler.shouldRequireDeactivationCode), but is shown
+                    // unconditionally, matching every other per-alarm
+                    // setting in this dialog.
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // T-176: longer than the other toggle labels in
+                            // this dialog - wrapped in Expanded so it wraps
+                            // onto a second line on a narrow phone instead
+                            // of overflowing the Row.
+                            const Expanded(
+                              child: Text('Guaranteed Wake-Up',
+                                  style: TextStyle(fontSize: 20)),
+                            ),
+                            Switch(
+                              value: requireDeactivationCode,
+                              onChanged: (value) {
+                                setState(() {
+                                  requireDeactivationCode = value;
                                 });
                               },
                               activeThumbColor: _appState.accentColor,
@@ -560,29 +636,32 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                     ),
                     const SizedBox(height: 16),
                     // Set repeatOnDays
+                    //
+                    // docs/TODO.md T-176 (maintainer request): a title
+                    // label, and all seven days on one visible row rather
+                    // than wrapping into three (the old `Wrap` with 40dp
+                    // chips, 10dp spacing and a forced break before the
+                    // weekend). Each day now sits in its own `Expanded`
+                    // slot, so the row divides the available width by
+                    // seven and can never wrap regardless of screen width.
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
-                        child: Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: 10,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            for (var day in [
-                              DayOfWeek.monday,
-                              DayOfWeek.tuesday,
-                              DayOfWeek.wednesday,
-                              DayOfWeek.thursday,
-                              DayOfWeek.friday
-                            ])
-                              _buildDaySelector(
-                                  context, day, repeatOnDays, setState),
-                            const SizedBox(width: double.infinity),
-                            for (var day in [
-                              DayOfWeek.saturday,
-                              DayOfWeek.sunday
-                            ])
-                              _buildDaySelector(
-                                  context, day, repeatOnDays, setState),
+                            const Text('Repeat on',
+                                style: TextStyle(fontSize: 20)),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                for (var day in DayOfWeek.values)
+                                  Expanded(
+                                    child: _buildDaySelector(
+                                        context, day, repeatOnDays, setState),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -611,6 +690,8 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                       repeatOnDays: repeatOnDays,
                       volume: volume,
                       vibrate: vibrate,
+                      snoozeEnabled: snoozeEnabled,
+                      requireDeactivationCode: requireDeactivationCode,
                     ));
                   },
                 ),
@@ -674,22 +755,27 @@ Widget _buildWeekdayPills(BuildContext context, ManualAlarm alarm) {
 Widget _buildDaySelector(BuildContext context, DayOfWeek day,
     Map<DayOfWeek, bool> repeatOnDays, StateSetter setState) {
   String dayLabel = _getDayLabel(day);
-  return GestureDetector(
-    onTap: () {
-      setState(() {
-        repeatOnDays[day] = !repeatOnDays[day]!;
-      });
-    },
-    child: CircleAvatar(
-      radius: 20,
-      backgroundColor: repeatOnDays[day]!
-          ? context.watch<AppState>().accentColor
-          : Colors.white,
-      child: Text(
-        dayLabel,
-        style: TextStyle(
-          color: repeatOnDays[day]! ? Colors.white : Colors.black,
-          fontSize: 16,
+  // docs/TODO.md T-176: shrunk from radius 20 (its own `Expanded` slot now
+  // bounds its width instead of a `Wrap`'s `spacing`) so seven of these fit
+  // one row on a realistic phone width without wrapping.
+  return Center(
+    child: GestureDetector(
+      onTap: () {
+        setState(() {
+          repeatOnDays[day] = !repeatOnDays[day]!;
+        });
+      },
+      child: CircleAvatar(
+        radius: 16,
+        backgroundColor: repeatOnDays[day]!
+            ? context.watch<AppState>().accentColor
+            : Colors.white,
+        child: Text(
+          dayLabel,
+          style: TextStyle(
+            color: repeatOnDays[day]! ? Colors.white : Colors.black,
+            fontSize: 13,
+          ),
         ),
       ),
     ),

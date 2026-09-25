@@ -1069,6 +1069,67 @@ that is the basis a decision can be formulated against.
   the others, is what actually guards against a regression back to linear.
 - **Requirement:** yes - stated as one by the maintainer directly.
 
+### T-176 · Manual-alarm dialog: weekday selector in one row, per-alarm Snooze and Guaranteed Wake-Up toggles — DONE (2026-09-25)
+
+- [x] Maintainer request, verbatim: "Wenn ein neuer manuelle Alarm angelegt wird: ist die Auswahl
+  der Wochentage anzupassen. Auch dort soll ein kleiner Titel erscheinen, die Auswahlboxen sollen
+  jedoch nicht in 3 Reihen, sondern in einer sichtbar sein. ist eine Aktivierung/Deaktivierung von
+  Snooze möglich sein. Soll eine aktivierung/deaktivierung des QR Mechanismus möglich sein."
+- **Weekday selector (`screen_alarms.dart`):** the old layout was a `Wrap` of 40dp chips, 10dp
+  spacing, with a forced break between the five weekdays and the weekend - on a realistic phone
+  width that wraps into three visual rows, and had no title. Replaced with a `Row` of seven
+  `Expanded` slots (one per day, 32dp chips), which divides the available width by seven and
+  therefore cannot wrap regardless of screen width, under a new "Repeat on" title label (matching
+  `docs/USER_GUIDE.md`'s existing term for this control). `test/screen_alarms_dialog_toggles_test.dart`
+  sets a realistic narrow test viewport (360×800) before pumping the dialog - the default 800-wide
+  test window is wide enough that the old layout would not have visibly wrapped, which would have
+  masked the bug entirely - and asserts all seven day labels sit at the same vertical center.
+- **Per-alarm Snooze toggle:** `ManualAlarm.snoozeEnabled` (new field, defaults to `true`), a
+  per-alarm override of `AppState.snoozeEnabled` following the same "property of the alarm, not
+  just an AppState default" pattern as `gentlewake`/`gentleWakeDuration`/`tone`/`volume`/`vibrate` -
+  except this one is not part of `AlarmSettings` at all, since it's read only at ring time
+  (`snoozeRingingAlarm`, `SnoozeButton`) via `AppState.getAlarm`, never baked into the native
+  platform alarm, so it needs no `planAlarmSync` deviation handling. Both read sites now resolve it
+  through one new shared function, `effectiveSnoozeEnabled` (`snooze.dart`) - matching that file's
+  own existing reasoning for why `canSnooze` itself is shared, rather than risk the two call sites
+  drifting apart the way the five checkpoint entry points once did (T-87).
+- **Per-alarm Guaranteed Wake-Up (QR gate) toggle:** `ManualAlarm.requireDeactivationCode` (new
+  field, defaults to `true` - the only behavior that existed before this override: every alarm
+  required the scan whenever a code was configured at all). `Handler.handleAlarm` used to decide
+  the QR-vs-default-overlay routing from `_appState.deactivationCode != null` alone; extracted into
+  a new pure function, `shouldRequireDeactivationCode(ringingAlarm, codeConfigured)` (matching
+  `isAlarmStale`'s own precedent in the same file), so the decision has a test that needs neither a
+  `BuildContext` nor the real `alarm` plugin. A global code must still exist at all - an alarm can
+  opt out of the gate, but none can opt into one that was never configured.
+- **A real bug found along the way, not introduced by this change:** `AppState.addAlarm` never
+  stores the `ManualAlarm` it's given directly - it reconstructs a new one from a fixed field
+  whitelist (working around the `alarm` plugin's own id-reuse quirk). That whitelist did not
+  include the two new fields, so every alarm silently reverted to their constructor defaults the
+  moment it was saved, regardless of what the dialog's switches actually showed - the exact
+  "setting with a UI that never reaches the alarm" bug class as T-84, this time in `addAlarm`'s own
+  reconstruction step rather than the dialog. Caught by
+  `test/screen_alarms_dialog_toggles_test.dart`'s own end-to-end save-and-read-back cases, which is
+  also why it doubles as that bug's regression test - confirmed by reverting the fix and seeing
+  those two cases fail before restoring it.
+- **A second, unrelated pre-existing bug found the same way:** the existing "Gentle Wake Up" toggle
+  row also overflows at this same narrow width - invisible before because no test had ever pumped
+  this dialog at a realistic phone width. Fixed with the same `Expanded`-wrapped-label pattern
+  applied to the two new toggles.
+- **Tests:** `test/manual_alarm_per_alarm_toggles_test.dart` (the model: construction defaults,
+  JSON round-trip, pre-T-176 JSON missing the fields still defaults to `true`, equality),
+  `test/snooze_per_alarm_override_test.dart` (`effectiveSnoozeEnabled`'s resolution, and
+  `snoozeRingingAlarm` actually refusing to snooze for an opted-out alarm),
+  `test/handler_deactivation_code_override_test.dart` (`shouldRequireDeactivationCode`'s four
+  cases: no code configured at all, opted-out `ManualAlarm`, opted-in `ManualAlarm`, and a
+  `ScheduledAlarm`/unknown id following the global setting), and
+  `test/screen_alarms_dialog_toggles_test.dart` (the dialog itself: title label, single-row layout,
+  both new switches' defaults and their effect on the saved alarm). Every new test confirmed red
+  first (compile failure against the not-yet-existing fields/functions for the brand-new pieces;
+  actual failing assertions, reverted and reconfirmed, for both bugs found along the way).
+- **Verified:** full suite green (586/586 across three sequential groups, this VM's own memory-safe
+  convention for a full local run), `flutter analyze` clean.
+- **Requirement:** yes - all three changes were requested directly by the maintainer.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`
