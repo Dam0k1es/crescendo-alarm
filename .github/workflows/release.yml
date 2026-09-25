@@ -48,12 +48,12 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.pub-cache
           key: pub-${{ hashFiles('pubspec.lock') }}
           restore-keys: pub-
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           # docs/TODO.md T-102: this used to hold the whole of `~/.gradle/caches`.
           # That grows without bound - besides the downloaded dependencies it
