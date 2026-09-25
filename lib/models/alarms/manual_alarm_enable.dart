@@ -18,6 +18,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
+import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 
 // FR-21 (docs/scheduling-v2-spec.md), "Manual alarms" - docs/TODO.md T-03.
 //
@@ -56,6 +57,18 @@ import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 /// never arming the alarm again: a switch that claims to still be armed but
 /// silently never rings is exactly the class of bug T-03/FR-21 already
 /// fixed once for the enable toggle.
+///
+/// docs/TODO.md T-181: the day-search below walks via [dayMarker] (over
+/// calendar date FIELDS), not `today.add(Duration(days: offset))` - across a
+/// daylight-saving transition, adding a fixed real-time Duration to a local
+/// midnight lands short of the intended calendar day (this project's own
+/// `day_marker.dart` doc comment explains why, having already fixed the same
+/// bug class once for the scheduling engine, T-74d/T-76). This function
+/// reintroduced it independently: found via a CI-only failure on the
+/// `Australia/Lord_Howe` timezone leg, where the 7-day search window can
+/// straddle a transition and silently corrupt every subsequent candidate's
+/// calendar day, making the loop miss its target and fall through to the
+/// wrong weekday entirely.
 DateTime nextManualOccurrence(
   TimeOfDay time,
   DateTime now,
@@ -63,7 +76,7 @@ DateTime nextManualOccurrence(
 ) {
   final today = DateTime(now.year, now.month, now.day);
   for (var offset = 0; offset <= 7; offset++) {
-    final day = today.add(Duration(days: offset));
+    final day = dayMarker(today, offset);
     final candidate =
         DateTime(day.year, day.month, day.day, time.hour, time.minute);
     if (!candidate.isAfter(now)) continue;
@@ -73,9 +86,10 @@ DateTime nextManualOccurrence(
   // No day selected at all: the old, day-agnostic behaviour.
   final todayAtTime =
       DateTime(now.year, now.month, now.day, time.hour, time.minute);
-  return todayAtTime.isAfter(now)
-      ? todayAtTime
-      : todayAtTime.add(const Duration(days: 1));
+  if (todayAtTime.isAfter(now)) return todayAtTime;
+  final tomorrow = dayMarker(today, 1);
+  return DateTime(tomorrow.year, tomorrow.month, tomorrow.day, time.hour,
+      time.minute);
 }
 
 /// Makes the alarm-list toggle of a [ManualAlarm] real (FR-21).

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm_enable.dart';
+import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 
 // docs/TODO.md T-14: `repeatOnDays` is editable and persisted but was never
 // consulted when deciding when a manual alarm actually fires - the selector
@@ -112,11 +113,19 @@ void main() {
             reason: 'every occurrence must land on the one selected day');
       }
       for (var i = 1; i < occurrences.length; i++) {
-        expect(occurrences[i].difference(occurrences[i - 1]),
-            const Duration(days: 7),
+        // docs/TODO.md T-181: calendar days apart, via dayDistance - not
+        // `.difference(...).inDays`/a raw Duration comparison, which is one
+        // day too few (or, as first written here, off by the DST delta)
+        // across a daylight-saving transition (day_marker.dart's own doc
+        // comment; this is exactly the bug class this test itself caught
+        // in nextManualOccurrence, once fixed there this same test's own
+        // first version was still wrong to assert on real elapsed Duration).
+        expect(dayDistance(occurrences[i], occurrences[i - 1]), 7,
             reason: 'a single selected weekday must repeat every week - '
                 'ringing only once (or skipping/repeating a week) would '
                 'silently break the "repeat on" promise');
+        expect(occurrences[i].hour, occurrences[i - 1].hour);
+        expect(occurrences[i].minute, occurrences[i - 1].minute);
       }
     });
 
@@ -149,8 +158,9 @@ void main() {
 
       expect(armedDates.every((d) => d.weekday == DateTime.sunday), isTrue);
       for (var i = 1; i < armedDates.length; i++) {
-        expect(armedDates[i].difference(armedDates[i - 1]),
-            const Duration(days: 7));
+        expect(dayDistance(armedDates[i], armedDates[i - 1]), 7);
+        expect(armedDates[i].hour, armedDates[i - 1].hour);
+        expect(armedDates[i].minute, armedDates[i - 1].minute);
       }
     });
   });

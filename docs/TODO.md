@@ -1140,12 +1140,37 @@ that is the basis a decision can be formulated against.
   `nextManualOccurrence`'s day-match check to `if (true) return candidate;` (reverting to the
   pre-T-14 day-agnostic behaviour) and confirmed both new cases fail, along with three pre-existing
   ones - then reverted.
+- **A real, previously-unknown production bug found by the new coverage, not by inspection:**
+  pushed to `dev`, the `Analyze & Test (TZ=Australia/Lord_Howe)` CI leg failed on the first new
+  case - reproduced locally with `TZ=Australia/Lord_Howe flutter test ...`. `nextManualOccurrence`'s
+  day-search loop built each candidate day via `today.add(Duration(days: offset))` - adding a fixed
+  *real-time* Duration to a local midnight, which lands short of the intended calendar day across a
+  daylight-saving transition (exactly the bug class `day_marker.dart`'s own doc comment describes,
+  already fixed once for the scheduling engine at T-74d/T-76 - `manual_alarm_enable.dart`, added
+  later for T-14, never adopted that fix and reintroduced the same bug independently). Lord Howe's
+  DST-end transition landed inside the test's 5-week date range and pushed every subsequent
+  candidate's calendar day back by its 30-minute offset delta, so the 7-day search window silently
+  missed the actual next Sunday and fell through to the day-agnostic fallback, landing on the wrong
+  weekday (Monday) entirely - a real defect that could affect any user whose device crosses a DST
+  boundary between two occurrences of their selected repeat day, not just Lord Howe residents.
+  **Fixed** by switching both of the function's day-arithmetic sites to `dayMarker` (computed over
+  calendar date fields, not an absolute Duration) - the same helper this project already built and
+  tested for exactly this reason, simply not reused here before now.
+- **The test's own first assertion was also wrong, for the same underlying reason:** once the
+  production fix was in place, the "exactly `Duration(days: 7)` apart" assertion itself started
+  failing under `TZ=Australia/Lord_Howe` - correctly so, since 7 real-time days across a DST
+  transition is `168:30:00`, not `168:00:00`, at that latitude. Replaced with `dayDistance`
+  (calendar-day count, DST-independent) plus a same-hour/same-minute check - the correct invariant
+  to assert ("the same wall-clock time, 7 calendar days later") rather than the wrong one ("exactly
+  168 hours of elapsed real time").
 - **E2E impact: none** - no E2E test exercises `repeatOnDays`/`nextManualOccurrence`/
   `applyManualAlarmEnabled` (confirmed by grep: the one match in `integration_test/app_test.dart`
   is a comment, not an interaction).
-- **Verified:** full suite green (597/597 across three sequential groups), `flutter analyze` clean.
-- **Requirement:** the existing "repeat on" feature (T-14) already was one; this closes a real gap
-  in verifying it, at the maintainer's direct request.
+- **Verified:** full suite green (597/597 across three sequential groups) in all six CI timezones,
+  each reproduced locally with `TZ=<zone> flutter test test/manual_alarm_repeat_test.dart`, not just
+  the default UTC/dev-machine zone - `flutter analyze` clean.
+- **Requirement:** the existing "repeat on" feature (T-14) already was one; this closes both a real
+  gap in verifying it and a real defect the gap had been hiding, at the maintainer's direct request.
 
 ### T-178 · Sleep Habits: reordered groups, each independently collapsible — DONE (2026-09-25)
 
