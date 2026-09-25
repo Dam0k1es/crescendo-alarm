@@ -898,6 +898,33 @@ that is the basis a decision can be formulated against.
   a naming artifact to correct.
 - **Requirement:** none directly - a rebrand, not a defect fix or new capability.
 
+### T-170 · New out-of-the-box defaults for six Sleep Habits settings — DONE (2026-09-25)
+
+- [x] Maintainer-requested default-value change, not a behaviour change: `maxDailyDelta` 15min →
+  **1 hour** (the enforced minimum stays 15min, only the starting point moved), `durationToWakeUp`
+  00:00 → **00:15**, `durationToGetReady` 1h → **00:45**, `gentleWakeUpEnabled` false → **true**
+  with `gentleWakeUpDuration` 1min → **5 minutes**, `snoozeEnabled` false → **true** (`snoozeTime`
+  already defaulted to 5 minutes, unchanged), `followSystemTheme` false → **true**.
+- **Spec updated to match, not just the code:** `docs/scheduling-v2-spec.md` FR-3's field table and
+  FR-20's own "Defaults" paragraph both stated `snoozeEnabled = false` / `durationToWakeUp = 00:00`
+  explicitly - now read `true` / `00:15`, dated, with the old values kept alongside for context.
+  `maxDailyDelta`/`durationToGetReady`/gentle-wake/theme have no default stated in the spec (only
+  `maxDailyDelta`'s minimum is formally specified, unchanged), so no other spec edit was needed.
+- **A real ripple, not just six field initializers:** several tests used the *old* defaults
+  (`durationToWakeUp = 00:00`, `snoozeEnabled = false`, `followSystemTheme = false`) as convenient
+  setup for unrelated behaviour under test, not as the thing being asserted - e.g.
+  `test/snooze_state_test.dart`'s FR-20 budget-boundary tests relied on a fresh `AppState` starting
+  at `00:00` to reliably trigger the "arm to 00:10" bump; with the new default already at `00:15`,
+  that bump no longer fires from a fresh install at all. Fixed by making every one of those tests
+  set its starting state explicitly rather than leaning on whatever the default happens to be -
+  the same fix shape in `test/page_appearance_theme_test.dart` (three cases that toggled `Follow
+  System Theme` assuming it started off) and `test/app_state_theme_mode_test.dart`. Found by
+  running the full suite after the default change and triaging each of the resulting 12 failures
+  individually - some genuinely asserted the old default and needed their expectation updated
+  (`test/app_state_scheduling_v2_test.dart`'s `gentleWakeUpDuration`/`maxDailyDelta` tests), others
+  needed their setup decoupled from the default instead.
+- **Requirement:** none directly - a configuration/default-value change, not a defect fix.
+
 ### T-05 · A direct dependency is not open source — GPLv3 conflict — RESOLVED (2026-09-17)
 
 - [x] Replaced, not excepted. `syncfusion_flutter_calendar` (and with it `_core`, `_datepicker`

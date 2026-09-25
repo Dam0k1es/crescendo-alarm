@@ -16,22 +16,21 @@ Future<AppState> _fresh() async {
 
 void main() {
   group('FR-20: defaults', () {
-    test('snooze is off, snoozeTime 5 minutes, durationToWakeUp 00:00',
-        () async {
+    test(
+        'snooze is on, snoozeTime 5 minutes, durationToWakeUp 00:15 '
+        '(maintainer request)', () async {
       final appState = await _fresh();
 
-      expect(appState.snoozeEnabled, isFalse);
+      expect(appState.snoozeEnabled, isTrue);
       expect(appState.snoozeTime, const Duration(minutes: 5));
-      expect(appState.durationToWakeUp, const TimeOfDay(hour: 0, minute: 0),
-          reason: 'FR-20 sets the default to 00:00 - without snooze there '
-              'is no reason to wake up early');
+      expect(appState.durationToWakeUp, const TimeOfDay(hour: 0, minute: 15));
     });
   });
 
   group('FR-20: switching on makes the budget usable', () {
     test('at 00:00, durationToWakeUp is armed to 00:10', () async {
       final appState = await _fresh();
-      expect(appState.durationToWakeUp, const TimeOfDay(hour: 0, minute: 0));
+      appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
 
       appState.snoozeEnabled = true;
 
@@ -53,6 +52,7 @@ void main() {
       // Counter-check: the user should keep their setting if they only
       // briefly switch snooze off.
       final appState = await _fresh();
+      appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
       appState.snoozeEnabled = true;
       expect(appState.durationToWakeUp, const TimeOfDay(hour: 0, minute: 10));
 
@@ -123,6 +123,7 @@ void main() {
 
     test('postpones by snoozeTime and ends the old wake call', () async {
       final appState = await _fresh();
+      appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
       appState.snoozeEnabled = true; // sets the budget to 00:10
       final ring = DateTime(2026, 9, 14, 6, 0);
 
@@ -138,6 +139,7 @@ void main() {
       // Without this, the budget would restart from scratch on every
       // snooze.
       final appState = await _fresh();
+      appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
       appState.snoozeEnabled = true;
       final ring = DateTime(2026, 9, 14, 6, 0);
 
@@ -151,6 +153,7 @@ void main() {
     test('at the end of the budget nothing is postponed any more - and nothing is stopped',
         () async {
       final appState = await _fresh();
+      appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
       appState.snoozeEnabled = true; // budget 10min
       final ring = DateTime(2026, 9, 14, 6, 0);
 
@@ -166,6 +169,7 @@ void main() {
 
     test('if arming fails, the old alarm stays armed', () async {
       final appState = await _fresh();
+      appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
       appState.snoozeEnabled = true;
 
       final ok = await snooze(appState,
@@ -180,7 +184,9 @@ void main() {
     });
 
     test('nothing happens when switched off', () async {
-      final appState = await _fresh(); // snoozeEnabled is off
+      final appState = await _fresh();
+      appState.snoozeEnabled = false; // default on (maintainer request);
+      // explicitly off here to test that state.
 
       final ok = await snooze(appState,
           alarmId: 1,

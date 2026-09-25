@@ -61,10 +61,12 @@ class AppState extends ChangeNotifier {
 
   // Sleep Goal Configuration variables
   TimeOfDay _sleepGoal = const TimeOfDay(hour: 8, minute: 0);
-  // FR-20: default 00:00. Without snooze there is no reason to pull the
-  // alarm ahead of the appointment; with snooze this duration is the budget
-  // and gets raised to 00:10 when snooze is switched on.
-  TimeOfDay _durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
+  // FR-20: default 00:15 (maintainer request) - snooze is on by default
+  // (see _snoozeEnabled below), so a real wake-up budget out of the box
+  // makes more sense than 00:00. If a user explicitly drives it down to
+  // 00:00 while snooze is on, it still gets raised to 00:10 when snooze is
+  // (re-)switched on - see the snoozeEnabled setter.
+  TimeOfDay _durationToWakeUp = const TimeOfDay(hour: 0, minute: 15);
   Set<String> _disabledDays = <String>{};
 
   /// Calendar events (by their `device_calendar` id, `Meeting.ids`) the user
@@ -85,10 +87,12 @@ class AppState extends ChangeNotifier {
   // seen before, so absent from this set either way) is included by default
   // rather than silently dropped until the user notices and opts it in.
   Set<String> _deselectedCalendarIds = <String>{};
-  bool _snoozeEnabled = false;
+  // Default on, per maintainer request - snooze is the common case, not an
+  // opt-in most users would otherwise never discover.
+  bool _snoozeEnabled = true;
   Duration _snoozeTime = const Duration(minutes: 5);
   Map<int, DateTime> _snoozeOriginOf = <int, DateTime>{};
-  TimeOfDay _durationToGetReady = const TimeOfDay(hour: 1, minute: 0);
+  TimeOfDay _durationToGetReady = const TimeOfDay(hour: 0, minute: 45);
   // docs/TODO.md T-52.3: absent from this map means "use the global
   // _durationToGetReady value for that day" - so an empty map (the default,
   // matching every existing install) behaves exactly as before. A day gets
@@ -105,8 +109,9 @@ class AppState extends ChangeNotifier {
 
   bool _reminderEnabled = false;
   TimeOfDay _reminderDuration = const TimeOfDay(hour: 0, minute: 30);
-  bool _gentleWakeUpEnabled = false;
-  Duration _gentleWakeUpDuration = _gentleWakeUpDurationMinimum;
+  // Default on with a 5-minute ramp, per maintainer request.
+  bool _gentleWakeUpEnabled = true;
+  Duration _gentleWakeUpDuration = const Duration(minutes: 5);
 
   // Scheduling-v2 variables (docs/scheduling-v2-spec.md FR-3/FR-9/FR-16/FR-17)
   int _gapDayCounter = 0;
@@ -120,7 +125,10 @@ class AppState extends ChangeNotifier {
   bool _diagnosticsEnabled = true;
   bool _diagnosticsIncludeClockTimes = false;
   TimeOfDay? _preferredWakeUpTime;
-  Duration _maxDailyDelta = const Duration(minutes: 15);
+  // Default 1 hour, per maintainer request - the enforced minimum below is
+  // unchanged (15 minutes), this only raises the out-of-the-box starting
+  // point.
+  Duration _maxDailyDelta = const Duration(hours: 1);
 
   static const _maxDailyDeltaMinimum = Duration(minutes: 15);
 
@@ -138,8 +146,8 @@ class AppState extends ChangeNotifier {
   /// instead of [_darkMode]'s manual value. Kept as a separate flag, not a
   /// tri-state replacement of [_darkMode] itself, so switching it back off
   /// restores the user's manual choice instead of losing it - see
-  /// [themeMode]'s own doc comment.
-  bool _followSystemTheme = false;
+  /// [themeMode]'s own doc comment. Default on, per maintainer request.
+  bool _followSystemTheme = true;
   Color _accentColor = Colors.blue;
 
   // Alarm tone and volume variables

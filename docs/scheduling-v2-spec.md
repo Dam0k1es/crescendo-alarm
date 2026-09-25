@@ -120,7 +120,7 @@ the thin AppState layer (architecture) reads the actual, current offset (`DateTi
 | `pendingDayValues` | `Map<Date, Instant?>` | the planned values themselves; `null` = no alarm for this day (a gap day without `preferredWakeUpTime`, or FR-9's valve). Revisable for any day not yet triggered (FR-11), fixed forever after that. Bounded from below at "from the day before yesterday" (T-82) |
 | `pendingDayInstantAnchored` | `Map<Date, bool>` | per planned day: did the value come directly from a real `hardFloor` (instant-anchored), or from `preferredWakeUpTime`/the curve (wall-clock-anchored)? FR-16 checkpoint 2 has no calendar access and cannot re-derive this |
 | `disabledDays` | `Set<Date>` | FR-21: days for which the user has explicitly **switched off** the planned alarm. Separate from `pendingDayValues`, because `null` there means "nothing planned" (FR-9/FR-10) and would be overwritten by the next planning run - the user's veto must not be |
-| `snoozeEnabled` | `bool` | FR-20: is the user allowed to postpone the alarm? Default **false** |
+| `snoozeEnabled` | `bool` | FR-20: is the user allowed to postpone the alarm? Default **true** (2026-09-25, maintainer request - was **false**) |
 | `snoozeTime` | `Duration` | FR-20: by how much pressing snooze postpones. Default **5 minutes** |
 | `snoozeOriginOf` | `Map<int, Instant>` | FR-20: per ringing alarm, the **original** wake instant. Carries the remaining budget across app restarts and across multiple snoozes - without it, a process death would restore the full budget |
 | `overrunNotificationSent` | `bool` | FR-6 requires "once" - a marker for the current overrun episode |
@@ -720,10 +720,14 @@ nothing - it only postpones, and within a budget that cannot endanger the appoin
 the code just to **keep being woken up** would be pointless, and would risk pushing the user to
 switch the device off entirely.
 
-**Defaults.** `snoozeEnabled` = `false`; `snoozeTime` = 5 minutes; `durationToWakeUp` = `00:00`.
-If `snoozeEnabled` is switched on while `durationToWakeUp` is `00:00`, it is set to **10
-minutes** - otherwise the budget would be zero and the feature just switched on would be dead from
-the start. An already-set value is left untouched.
+**Defaults (2026-09-25, maintainer request).** `snoozeEnabled` = `true`; `snoozeTime` = 5 minutes;
+`durationToWakeUp` = `00:15`. Previously `snoozeEnabled` = `false` and `durationToWakeUp` =
+`00:00` - the bump mechanism below existed specifically for that combination and is unchanged, it
+just no longer fires on a fresh install, since `durationToWakeUp` no longer starts at exactly
+`00:00`. If `snoozeEnabled` is switched on while `durationToWakeUp` is `00:00` (e.g. a user who
+manually drove it down to zero), it is set to **10 minutes** - otherwise the budget would be zero
+and the feature just switched on would be dead from the start. An already-set value is left
+untouched.
 
 **Two interactions that are not obvious, and without which it breaks:**
 

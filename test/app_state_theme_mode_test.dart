@@ -19,14 +19,15 @@ Future<AppState> _fresh() async {
 }
 
 void main() {
-  test('follows the system by default is off, dark mode off -> light', () async {
+  test('follows the system by default (maintainer request)', () async {
     final appState = await _fresh();
-    expect(appState.followSystemTheme, isFalse);
-    expect(appState.themeMode, ThemeMode.light);
+    expect(appState.followSystemTheme, isTrue);
+    expect(appState.themeMode, ThemeMode.system);
   });
 
   test('dark mode on, not following the system -> dark', () async {
     final appState = await _fresh();
+    appState.followSystemTheme = false;
     appState.darkMode = true;
     expect(appState.themeMode, ThemeMode.dark);
   });

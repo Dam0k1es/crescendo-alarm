@@ -135,9 +135,10 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
       await first.initialized;
-      // Default = the previously hardcoded behaviour, so existing
-      // installations don't suddenly sound different.
-      expect(first.gentleWakeUpDuration, const Duration(minutes: 1));
+      // Default 5 minutes, gentle wake-up itself on by default (maintainer
+      // request).
+      expect(first.gentleWakeUpEnabled, isTrue);
+      expect(first.gentleWakeUpDuration, const Duration(minutes: 5));
 
       first.gentleWakeUpDuration = const Duration(minutes: 10);
       final second = AppState();
@@ -203,11 +204,11 @@ void main() {
       expect(second.scheduleOnGapDays, isFalse);
     });
 
-    test('maxDailyDelta (FR-3) - the system minimum of 15 minutes is enforced', () async {
+    test('maxDailyDelta (FR-3) - default 1 hour, minimum of 15 minutes enforced', () async {
       SharedPreferences.setMockInitialValues({});
       final first = AppState();
       await first.initialized;
-      expect(first.maxDailyDelta, const Duration(minutes: 15)); // default = minimum
+      expect(first.maxDailyDelta, const Duration(hours: 1)); // maintainer request
 
       first.maxDailyDelta = const Duration(minutes: 45);
       final second = AppState();

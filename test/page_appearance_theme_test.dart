@@ -30,7 +30,11 @@ Switch _switchFor(WidgetTester tester, Key key) =>
 void main() {
   testWidgets('the dark mode switch is enabled while not following the '
       'system', (tester) async {
-    await _pumpAppearance(tester);
+    final appState = await _pumpAppearance(tester);
+    // Default on (maintainer request) - explicitly off here to test the
+    // "not following the system" state itself.
+    appState.followSystemTheme = false;
+    await tester.pumpAndSettle();
 
     expect(_switchFor(tester, const Key('darkModeSwitch')).onChanged,
         isNotNull);
@@ -40,6 +44,8 @@ void main() {
       'turning on "Follow System Theme" disables (greys out) the dark mode '
       'switch', (tester) async {
     final appState = await _pumpAppearance(tester);
+    appState.followSystemTheme = false;
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('followSystemThemeSwitch')));
     await tester.pumpAndSettle();
@@ -53,6 +59,8 @@ void main() {
   testWidgets('turning "Follow System Theme" back off re-enables the dark '
       'mode switch', (tester) async {
     final appState = await _pumpAppearance(tester);
+    appState.followSystemTheme = false;
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('followSystemThemeSwitch')));
     await tester.pumpAndSettle();
