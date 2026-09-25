@@ -44,34 +44,62 @@ const int sleepReminderNotificationId = 100000001;
 /// leaving Checkpoint 2 without a hook in the meantime) - rather than
 /// re-duplicating this computation a third time. [notifications] is
 /// injectable purely for testability.
+/// The actual bedtime instant - wake time minus [AppState.sleepGoal] -
+/// before any reminder lead time is subtracted. Shared by
+/// [scheduleSleepReminder] (which further subtracts [AppState.reminderDuration]
+/// for the earlier reminder notification) and
+/// `scheduleDoNotDisturbActivation` (docs/TODO.md T-184, which uses this
+/// instant directly: "vor dem Wecker (ohne reminder Zeit)" - notifications
+/// go quiet at the sleep-goal-derived bedtime itself, not already at the
+/// earlier reminder). Extracted rather than duplicated: this computation has
+/// three independent failure modes already handled below, exactly the kind
+/// of logic this project has hit real bugs from re-deriving twice before
+/// (`nextManualOccurrence`, `canSnooze`).
+DateTime bedtimeInstant(AppState appState, {DateTime Function()? now}) {
+  final nowFn = now ?? DateTime.now;
+  DateTime dateTime;
+  try {
+    // docs/TODO.md T-66: sourced from scheduling-v2's own plan plus the
+    // user's manual alarms (see nextWakeUpTime), no longer from the old
+    // Scheduler, which Phase 6 removed (docs/TODO.md T-64).
+    // Fallback when nothing is planned at all mirrors the old behavior
+    // (a week out), which still leaves FR-16 Checkpoint 2 a hook.
+    dateTime = nextWakeUpTime(
+          pendingDayValues: appState.pendingDayValues,
+          manualAlarms: appState.manualAlarms,
+          now: nowFn(),
+        ) ??
+        nowFn().add(const Duration(days: 7));
+  } catch (e) {
+    debugPrint("=====bedtimeInstant: Error getting next alarm time: ${e.runtimeType}");
+    dateTime = nowFn();
+  }
+  try {
+    dateTime = dateTime.subtract(durationFromTimeOfDay(appState.sleepGoal));
+  } catch (e) {
+    debugPrint("=====bedtimeInstant: Error subtracting sleepGoal: ${e.runtimeType}");
+    dateTime = dateTime.subtract(const Duration(hours: 8));
+  }
+  return dateTime;
+}
+
+/// Pushes [dateTime] a couple of minutes into the future if it isn't after
+/// [now] already - shared by [scheduleSleepReminder] and
+/// `scheduleDoNotDisturbActivation` (docs/TODO.md T-110/T-184): a fully
+/// determined date before "now" has no next valid occurrence for
+/// `awesome_notifications`' own scheduler, which silently discards it and
+/// leaves FR-16 Checkpoint 2 (or Do Not Disturb activation) with no hook at
+/// all for that night. Two minutes, not one: `alarmPlatformTime` truncates
+/// to whole minutes, so one minute could shrink down to mere seconds.
+DateTime pushIntoFutureIfPast(DateTime dateTime, DateTime now) =>
+    !dateTime.isAfter(now) ? now.add(const Duration(minutes: 2)) : dateTime;
+
 Future<void> scheduleSleepReminder(
   AppState appState, {
   Notifications? notifications,
 }) async {
   try {
-    DateTime dateTime;
-    try {
-      // docs/TODO.md T-66: sourced from scheduling-v2's own plan plus the
-      // user's manual alarms (see nextWakeUpTime), no longer from the old
-      // Scheduler, which Phase 6 removed (docs/TODO.md T-64).
-      // Fallback when nothing is planned at all mirrors the old behavior
-      // (a week out), which still leaves FR-16 Checkpoint 2 a hook.
-      dateTime = nextWakeUpTime(
-            pendingDayValues: appState.pendingDayValues,
-            manualAlarms: appState.manualAlarms,
-            now: DateTime.now(),
-          ) ??
-          DateTime.now().add(const Duration(days: 7));
-    } catch (e) {
-      debugPrint("=====scheduleSleepReminder: Error getting next alarm time: ${e.runtimeType}");
-      dateTime = DateTime.now();
-    }
-    try {
-      dateTime = dateTime.subtract(durationFromTimeOfDay(appState.sleepGoal));
-    } catch (e) {
-      debugPrint("=====scheduleSleepReminder: Error subtracting sleepGoal: ${e.runtimeType}");
-      dateTime = dateTime.subtract(const Duration(hours: 8));
-    }
+    DateTime dateTime = bedtimeInstant(appState);
     try {
       dateTime =
           dateTime.subtract(durationFromTimeOfDay(appState.reminderDuration));

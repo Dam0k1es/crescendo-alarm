@@ -20,15 +20,20 @@ import 'dart:async';
 import 'package:alarm/alarm.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 import 'package:crescendo_alarm/models/alarms/myalarm.dart';
 import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
+import 'package:crescendo_alarm/models/alarms/snooze.dart';
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/screens/alarms/screen_active_alarm.dart';
 import 'package:crescendo_alarm/screens/scan_code/qr_scanner.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb_channel.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb_schedule.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
 import 'package:crescendo_alarm/utils/sleep_reminder.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
@@ -75,6 +80,13 @@ class Handler {
   /// between retries without a real test waiting on real wall-clock time.
   final Future<void> Function(Duration duration) _sleep;
 
+  /// docs/TODO.md T-184: restores whatever Do Not Disturb state existed
+  /// before bedtime, if this feature ever activated it. Injectable for the
+  /// same reason [_runCheckpoint]/[_sleep] are - the real implementation
+  /// touches `SharedPreferences.getInstance()` and a native platform channel,
+  /// neither available in `flutter test`.
+  final Future<bool> Function(AppState appState) _restoreDoNotDisturb;
+
   /// docs/TODO.md T-38 (maintainer request): showing the ringing overlay is
   /// retried this many times, [overlayRetryDelay] apart, before the 3-second
   /// fallback below gives up and silently stops the alarm. A single failed
@@ -95,10 +107,18 @@ class Handler {
   /// regression test, which needs full control over when/whether it completes.
   Handler(this._context,
       {Future<ReplanResult?> Function(AppState)? runCheckpoint,
-      Future<void> Function(Duration)? sleep})
+      Future<void> Function(Duration)? sleep,
+      Future<bool> Function(AppState)? restoreDoNotDisturb})
       : _runCheckpoint = runCheckpoint ?? _ringCheckpoint,
-        _sleep = sleep ?? Future.delayed {
+        _sleep = sleep ?? Future.delayed,
+        _restoreDoNotDisturb =
+            restoreDoNotDisturb ?? _restoreDoNotDisturbDefault {
     _appState = Provider.of<AppState>(_context, listen: false);
+  }
+
+  static Future<bool> _restoreDoNotDisturbDefault(AppState appState) async {
+    final prefs = await SharedPreferences.getInstance();
+    return restoreDoNotDisturb(prefs: prefs, setFilter: setInterruptionFilter);
   }
 
   /// FR-8: the actual ring is scheduling-v2's daily replanning trigger -
@@ -256,6 +276,31 @@ class Handler {
             "=====handleAlarm: rememberSnoozeOrigin failed: ${e.runtimeType}");
       }
 
+      // docs/TODO.md T-184: this is the FINAL ring exactly when postponing
+      // again would no longer fit the snooze budget - the same "final ring"
+      // concept T-179 established for gentle wake, generalized here to the
+      // very FIRST ring too, not only a snoozed one: with snooze disabled,
+      // or the budget already zero, the first ring already IS final. Do Not
+      // Disturb (if this feature ever activated it) must be restored right
+      // here, not only once the alarm is actually dismissed - "ab dem
+      // Wecker", the maintainer's own wording, means from the ring itself.
+      try {
+        final origin = _appState.snoozeOriginFor(event.id) ?? event.dateTime;
+        final isFinalRing = !canSnooze(
+          now: event.dateTime,
+          originalRing: origin,
+          snoozeTime: _appState.snoozeTime,
+          wakeUpBudget: durationFromTimeOfDay(_appState.durationToWakeUp),
+          snoozeEnabled: effectiveSnoozeEnabled(_appState, event.id),
+        );
+        if (isFinalRing) {
+          await _restoreDoNotDisturb(_appState);
+        }
+      } catch (e) {
+        debugPrint(
+            "=====handleAlarm: Do Not Disturb restore check failed: ${e.runtimeType}");
+      }
+
       // If the deactivation code is not set, show the alarm overlay; if it
       // is, show the QR code scanner instead.
       final overlayShown = await _showOverlayWithRetries(
@@ -331,6 +376,11 @@ class Handler {
         setManualAlarmEnabled,
   }) {
     scheduleSleepReminder(appState, notifications: notifications);
+    // docs/TODO.md T-184: symmetric with scheduleSleepReminder above - a
+    // ManualAlarm dismiss never runs the full scheduling-v2 checkpoint
+    // (T-73), so this direct call is the only place its Do Not Disturb
+    // activation hook would otherwise get rescheduled at all.
+    scheduleDoNotDisturbActivation(appState, notifications: notifications);
 
     final alarm = appState.getAlarm(alarmID);
     if (alarm is ManualAlarm && alarm.enabled) {

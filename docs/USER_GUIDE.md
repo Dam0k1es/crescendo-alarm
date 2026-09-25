@@ -146,6 +146,10 @@ small chevron on its right to hide or show that group's options.
   alarm itself.
 - **Enable Reminder** - a notification reminding you to go to bed, timed this far before your Sleep
   Goal's bedtime.
+- **Do Not Disturb** - silences notifications from your Sleep Goal's bedtime (not the earlier
+  reminder above) until your alarm's final ring - the one you can no longer snooze - then restores
+  your phone's notification settings exactly as they were. Needs Android's own Do Not Disturb
+  access, granted from Settings the first time you turn this on.
 
 ## Settings
 

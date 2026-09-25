@@ -6,6 +6,7 @@ import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart' show DayOfWeek;
 import 'package:crescendo_alarm/screens/sleep_habits/screen_sleephabits.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/utils/permissions.dart';
 
 // docs/TODO.md T-173 (maintainer request): "the logs should be extended
 // whenever any Sleep Habits setting changes, no matter which". Diag.
@@ -217,6 +218,22 @@ void main() {
       await _tapToggle(tester, 'Snooze');
       expect(_settingsLogged(), [DiagSleepHabitSetting.snoozeEnabled.code]);
     });
+
+    testWidgets('doNotDisturbEnabled', (tester) async {
+      // Turning it ON needs Android's special "Do Not Disturb access"
+      // permission to actually be granted (a real Settings-screen grant, no
+      // runtime dialog) before the setting itself changes at all - see
+      // _handleDoNotDisturbToggle's own doc comment. No platform channel in
+      // `flutter test`, so the injectable seam simulates a grant.
+      requestDoNotDisturbPermission = () async => true;
+      addTearDown(() =>
+          requestDoNotDisturbPermission = requestDoNotDisturbPermissionDefault);
+
+      await _pumpScreen(tester);
+      await _tapToggle(tester, 'Do Not Disturb');
+      expect(
+          _settingsLogged(), [DiagSleepHabitSetting.doNotDisturbEnabled.code]);
+    });
   });
 
   testWidgets(
@@ -224,7 +241,7 @@ void main() {
       'a new setting added here without a matching Diag call would leave '
       'this list stale, not the enum wrong', (tester) async {
     // Not a functional test - documents the enum's completeness against
-    // the 13 real controls above, so the two can't silently drift apart.
-    expect(DiagSleepHabitSetting.values.length, 13);
+    // the 14 real controls above, so the two can't silently drift apart.
+    expect(DiagSleepHabitSetting.values.length, 14);
   });
 }

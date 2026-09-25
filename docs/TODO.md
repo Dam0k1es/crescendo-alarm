@@ -1172,6 +1172,95 @@ that is the basis a decision can be formulated against.
 - **Requirement:** yes - requested directly by the maintainer, with an explicit constraint
   (OS components only) that was verified to actually hold, not assumed.
 
+### T-184 · A Do Not Disturb toggle: silences notifications for sleep time, restores at the final ring — DONE (2026-09-25)
+
+- [x] Maintainer request, verbatim: "Implementiere einen toggle do not disturb. dieser soll in der
+  schlafenszeit (sleep goal) vor dem wecker (ohne reminder zeit) benachrichtigungen deaktivieren
+  und ab dem wecker (nach snooze time, nur finaler alarm) wieder auf den zustand vorher (vibration,
+  ton, etc) setzen."
+- **What "vor dem Wecker (ohne reminder Zeit)" actually means, precisely:** the bedtime reminder
+  notification already fires at `wakeTime - sleepGoal - reminderDuration` - this feature activates
+  later still, at `wakeTime - sleepGoal` alone (`bedtimeInstant`, extracted from
+  `scheduleSleepReminder` into a shared, reusable function rather than re-derived - the exact bug
+  class this project has hit real regressions from before, `nextManualOccurrence`/`canSnooze`).
+  Two genuinely different, independently-scheduled instants: the reminder tells you to go to bed,
+  this silences the phone once you're actually there.
+- **What "ab dem Wecker (nach snooze time, nur finaler Alarm)" means:** generalizes T-179's own
+  "final ring" concept (there, for disabling the gentle-wake ramp on a snoozed ring that can no
+  longer be postponed further) to the FIRST ring too, not only a snoozed one - with snooze
+  disabled, or the budget already zero, the first ring already IS final. Computed reactively inside
+  `Handler.handleAlarm` at ring time (not precomputed at arm time the way T-179's gentle-wake flag
+  is, since restoring device state is itself a ring-time action, unlike baking a value into
+  `AlarmSettings`).
+- **Real Android mechanism, not a third-party plugin:** `android.app.NotificationManager`'s own
+  `getCurrentInterruptionFilter`/`setInterruptionFilter` - pure AOSP framework API. The only pub.dev
+  package found (`do_not_disturb`) is unmaintained (~21 months stale) and MPL-2.0-licensed -
+  GPLv3-compatible, but a different licence category than every other dependency this project
+  carries, for four one-line framework calls this project can just make directly. Custom Kotlin
+  (`DoNotDisturbChannel.kt`, wired into `MainActivity.kt` alongside the existing `DirectBootFallback`
+  channel) instead - zero new dependency, zero licence-review nuance. The *permission* to call it at
+  all (`ACCESS_NOTIFICATION_POLICY`, one of Android's "special" permissions - a Settings-screen
+  grant, no runtime dialog) goes through the already-present `permission_handler` dependency
+  (`Permission.accessNotificationPolicy`), matching `requestCameraPermission`/
+  `requestCalendarPermission`'s existing pattern exactly - no manifest change needed either, the
+  permission was already declared (pulled in by `permission_handler` itself).
+- **Interruption filter used: `ALARMS` (4), never `NONE` (3)** - `NONE` is total silence and would
+  silence the alarm clock's own alarm too, defeating the entire point of this app.
+- **Architecture, by layer:**
+  - `lib/utils/do_not_disturb_channel.dart` - the raw platform-channel wrapper (injectable, no
+    channel in `flutter test`) plus the real Android constants.
+  - `lib/utils/do_not_disturb.dart` - the pure "what state do we end up in" logic
+    (`activateDoNotDisturb`/`restoreDoNotDisturb`/`runDoNotDisturbActivation`/
+    `restoreStaleDoNotDisturb`), the same split as `snooze.dart`/`manual_alarm_enable.dart`.
+    Persisted via `shared_preferences`, not held only in memory: activation and restoration happen
+    from two independent triggers (a scheduled background-isolate notification, and whichever ring
+    turns out to be final), possibly across a process death in between.
+  - `lib/utils/do_not_disturb_schedule.dart` - `scheduleDoNotDisturbActivation`, mirroring
+    `scheduleSleepReminder`'s own structure (a fixed notification id,
+    `doNotDisturbActivationNotificationId`, cancelled/rescheduled the same way, including the same
+    T-110 past-bedtime handling) at the different `bedtimeInstant` computed above. Called from the
+    same two places `scheduleSleepReminder` already is (`checkpoint.dart`'s finally-block, and
+    `Handler.onAlarmHandled` - the latter is the ONLY place a `ManualAlarm` dismiss reschedules
+    anything at all, T-73 forbids it from running the full checkpoint).
+  - `lib/utils/notifications.dart`'s `onNotificationCreatedMethod` now branches by notification id -
+    the DND-activation notification routes to `runDoNotDisturbActivation` instead of
+    `runTimezoneCheckpoint2`, since the two hooks do unrelated things and neither needs the other.
+  - `Handler.handleAlarm` computes `isFinalRing` and calls an injectable `_restoreDoNotDisturb`
+    (the same `_runCheckpoint`/`_sleep` injection pattern) when true.
+- **Safety net (docs/threat-model.svg names availability as this project's primary asset - a stuck
+  Do Not Disturb activation is exactly the "self-inflicted alarm shutdown" class T-64/T-78 already
+  were, just for the whole device's notifications instead of one alarm):** `restoreStaleDoNotDisturb`
+  checks, during the regular scheduling checkpoint (already runs on every app open, FR-17,
+  regardless of Do Not Disturb specifically), whether activation has been active longer than a fixed
+  18-hour cap - deliberately NOT tied to any particular wake time/snooze budget, since re-deriving
+  those here would risk getting the safety check itself wrong too. A missing activation timestamp
+  is treated as stale too, not left untouched.
+- **UI:** a new "Do Not Disturb" toggle in Sleep Habits' "Bedtime reminder" group, alongside Sleep
+  Goal/Enable Reminder. Turning it ON cannot be confirmed synchronously (Android's special
+  permission has no runtime dialog); turning it OFF restores immediately if currently active,
+  rather than leaving the phone silenced until whatever alarm eventually rings next.
+- **Diagnostics (T-173's own standing requirement, "the logs should be extended whenever any Sleep
+  Habits setting changes"):** `DiagSleepHabitSetting.doNotDisturbEnabled` (14th value) added, with a
+  matching test case and the enum-completeness assertion updated 13→14.
+- **Tests:** `test/do_not_disturb_test.dart` (14 cases: activate/restore/the background-isolate
+  entry point/the staleness safety net), `test/do_not_disturb_schedule_test.dart` (5 cases,
+  including the specific proof that the DND instant is NOT further reduced by reminderDuration the
+  way the reminder notification's own is), `test/app_state_do_not_disturb_test.dart` (3 cases, the
+  standard default/persist/notify triple), `test/handler_do_not_disturb_restore_test.dart` (4 cases:
+  snooze disabled makes the first ring already final, snooze enabled with budget remaining does
+  NOT restore yet, a snoozed re-ring that exhausts the budget IS final, and the AppState wiring
+  itself) - the "not final yet" case was confirmed to actually distinguish the fix by temporarily
+  hardcoding `isFinalRing = false` and watching the other three cases fail while it alone kept
+  passing, then reverting. `screen_sleephabits_help_test.dart`'s help-icon counts (9→10) and
+  `screen_sleephabits_diag_test.dart`'s enum-completeness assertion (13→14) updated to match.
+- **E2E impact: none** - no E2E test touches Sleep Habits' Do Not Disturb toggle or the native
+  channel (confirmed by grep).
+- **Verified:** full suite green (635/635 across three sequential groups), `flutter analyze` clean,
+  `flutter build apk --debug` succeeds (confirms the new Kotlin platform channel compiles and
+  integrates into the Gradle build without conflict).
+- **Requirement:** yes - requested directly by the maintainer, with precise, load-bearing timing
+  semantics that were worked through carefully rather than approximated.
+
 ### T-183 · The QR-scan "Cancel" and the AppBar's own close ("X") button — only one worked — DONE (2026-09-25)
 
 - [x] Maintainer report, verbatim: "der qr scan dialog zeigt zum abbruch ein kreuz und einen

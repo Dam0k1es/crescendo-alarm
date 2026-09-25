@@ -57,6 +57,19 @@ Future<void> requestCalendarPermissionDefault() async {
 Future<void> Function() requestCalendarPermission =
     requestCalendarPermissionDefault;
 
+/// docs/TODO.md T-184: requested lazily, the moment the user turns the Do
+/// Not Disturb toggle on - the same reasoning as camera/calendar above.
+/// `Permission.accessNotificationPolicy` is Android's "special" permission
+/// model (like `scheduleExactAlarm`): there is no runtime dialog, `.request()`
+/// opens the OS's own "Do Not Disturb access" settings screen directly.
+Future<bool> requestDoNotDisturbPermissionDefault() async {
+  if (!Platform.isAndroid) return false;
+  return PermissionsManager().checkDoNotDisturbPermission();
+}
+
+Future<bool> Function() requestDoNotDisturbPermission =
+    requestDoNotDisturbPermissionDefault;
+
 class PermissionsManager {
   /// docs/TODO.md T-41-adjacent (maintainer request, 2026-09-20): camera and
   /// calendar access moved out of this upfront batch - see
@@ -148,5 +161,27 @@ class PermissionsManager {
         debugPrint('Calendar permission not granted.');
       }
     }
+  }
+
+  /// docs/TODO.md T-184: `accessNotificationPolicy` is one of Android's
+  /// "special" permissions (like `scheduleExactAlarm` above) - there is no
+  /// runtime dialog, `.request()` only opens the OS's own settings screen
+  /// and returns immediately, before the user has had any chance to act on
+  /// it. Returns whether access is granted RIGHT NOW - almost always still
+  /// `false` immediately after a fresh request, honestly, rather than
+  /// pretending the toggle can be confirmed synchronously.
+  Future<bool> checkDoNotDisturbPermission() async {
+    PermissionStatus status = await Permission.accessNotificationPolicy.status;
+    if (status.isGranted) {
+      debugPrint('Do Not Disturb access already granted.');
+      return true;
+    }
+    debugPrint('Requesting Do Not Disturb access...');
+    status = await Permission.accessNotificationPolicy.request();
+    final granted = status.isGranted;
+    debugPrint(granted
+        ? 'Do Not Disturb access granted.'
+        : 'Do Not Disturb access not granted.');
+    return granted;
   }
 }

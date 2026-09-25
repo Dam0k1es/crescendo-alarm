@@ -339,7 +339,8 @@ enum DiagSleepHabitSetting {
   scheduleOnGapDays(10),
   reminderEnabled(11),
   gentleWakeUpEnabled(12),
-  snoozeEnabled(13);
+  snoozeEnabled(13),
+  doNotDisturbEnabled(14);
 
   const DiagSleepHabitSetting(this.code);
   final int code;

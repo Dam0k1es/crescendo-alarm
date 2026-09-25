@@ -41,12 +41,16 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
 import 'package:crescendo_alarm/models/scheduling/replan_notifications.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb_channel.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb_schedule.dart';
 import 'package:crescendo_alarm/utils/sleep_reminder.dart';
 
 /// What triggered the checkpoint. The only difference between the flows -
@@ -235,6 +239,25 @@ Future<ReplanResult?> runSchedulingCheckpoint(
       // lacks its entry point. `scheduleSleepReminder` swallows its own
       // errors, so it cannot additionally break this path.
       await scheduleSleepReminder(appState, notifications: notifications);
+      // docs/TODO.md T-184: the Do Not Disturb activation hook needs
+      // rescheduling for exactly the same reason, on the same triggers -
+      // bedtime shifts whenever the plan does.
+      await scheduleDoNotDisturbActivation(appState, notifications: notifications);
+      // docs/TODO.md T-184: the safety net. This checkpoint already runs on
+      // every app open (FR-17) regardless of Do Not Disturb specifically -
+      // exactly the right place to notice "this has been active far too
+      // long" and restore it, rather than let a missed or failed final-ring
+      // restore leave a device silenced indefinitely (this project's own
+      // threat model names availability as the primary asset - see
+      // docs/threat-model.svg - and this is exactly that failure class).
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await restoreStaleDoNotDisturb(
+            prefs: prefs, setFilter: setInterruptionFilter);
+      } catch (e) {
+        debugPrint(
+            "=====runSchedulingCheckpoint: Do Not Disturb staleness check failed: ${e.runtimeType}");
+      }
 
       Diag.checkpointFinished(
         trigger: diagTriggerOf(trigger),

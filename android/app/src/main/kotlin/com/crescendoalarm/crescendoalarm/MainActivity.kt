@@ -51,5 +51,26 @@ class MainActivity: FlutterActivity() {
                     result.notImplemented()
                 }
             }
+
+        // docs/TODO.md T-184: lib/utils/do_not_disturb_channel.dart's native
+        // side - see DoNotDisturbChannel's own doc comment for why this is
+        // custom code rather than a third-party plugin.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DoNotDisturbChannel.CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getCurrentInterruptionFilter" ->
+                        result.success(DoNotDisturbChannel.getCurrentInterruptionFilter(applicationContext))
+                    "setInterruptionFilter" -> {
+                        val filter = call.argument<Int>("filter")
+                        if (filter == null) {
+                            result.error("missing_filter", "filter argument is required", null)
+                        } else {
+                            DoNotDisturbChannel.setInterruptionFilter(applicationContext, filter)
+                            result.success(null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 }

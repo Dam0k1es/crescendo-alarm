@@ -1,0 +1,143 @@
+import 'package:flutter/material.dart' show TimeOfDay;
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb_schedule.dart';
+import 'package:crescendo_alarm/utils/notifications.dart';
+import 'package:crescendo_alarm/utils/sleep_reminder.dart' show sleepReminderNotificationId;
+
+// docs/TODO.md T-184 (maintainer request): "in der Schlafenszeit (sleep
+// goal) vor dem Wecker (ohne reminder Zeit) benachrichtigungen
+// deaktivieren" - Do Not Disturb activates at the sleep-goal-derived
+// bedtime itself (wake time - sleepGoal), NOT further reduced by
+// reminderDuration the way the separate bedtime-reminder notification is -
+// those are two different instants, scheduled independently.
+
+class _RecordingNotifications implements Notifications {
+  String? lastTitle;
+  String? lastBody;
+  DateTime? lastScheduledDate;
+  int? lastScheduledId;
+  int callCount = 0;
+  int cancelAllCount = 0;
+  final List<int> cancelledIds = [];
+
+  @override
+  Future<int> scheduleNotification({
+    String? title,
+    String? body,
+    DateTime? scheduledDate,
+    int? id,
+  }) async {
+    callCount++;
+    lastTitle = title;
+    lastBody = body;
+    lastScheduledDate = scheduledDate;
+    lastScheduledId = id;
+    return id ?? 1;
+  }
+
+  @override
+  Future<void> cancelAllNotifications() async {
+    cancelAllCount++;
+  }
+
+  @override
+  Future<void> cancelNotification(int id) async {
+    cancelledIds.add(id);
+  }
+
+  @override
+  Future<void> init() async {}
+}
+
+Future<AppState> _freshAppState() async {
+  SharedPreferences.setMockInitialValues({});
+  final appState = AppState();
+  await appState.initialized;
+  return appState;
+}
+
+void main() {
+  test('disabled: nothing is scheduled, any previous one is cancelled',
+      () async {
+    final appState = await _freshAppState();
+    appState.doNotDisturbEnabled = false;
+    final notifications = _RecordingNotifications();
+
+    await scheduleDoNotDisturbActivation(appState, notifications: notifications);
+
+    expect(notifications.callCount, 0);
+    expect(notifications.cancelAllCount, 0);
+    expect(notifications.cancelledIds, [doNotDisturbActivationNotificationId]);
+  });
+
+  test('enabled: a silent notification is scheduled at wakeTime - sleepGoal, '
+      'NOT further reduced by reminderDuration', () async {
+    final appState = await _freshAppState();
+    appState.doNotDisturbEnabled = true;
+    final wakeUp = DateTime.now().toUtc().add(const Duration(hours: 10));
+    appState.pendingDayValues = {
+      isoDate(wakeUp): wakeUp.millisecondsSinceEpoch,
+    };
+    appState.sleepGoal = const TimeOfDay(hour: 8, minute: 0);
+    // Deliberately non-zero, to prove it is NOT subtracted here too.
+    appState.reminderDuration = const TimeOfDay(hour: 0, minute: 30);
+    final notifications = _RecordingNotifications();
+
+    await scheduleDoNotDisturbActivation(appState, notifications: notifications);
+
+    expect(notifications.callCount, 1);
+    expect(notifications.lastTitle, isNull,
+        reason: 'a background/silent notification - Do Not Disturb '
+            'activation is not something the user needs to see happen');
+    expect(notifications.lastBody, isNull);
+    expect(notifications.lastScheduledId, doNotDisturbActivationNotificationId);
+
+    final expected = wakeUp.subtract(const Duration(hours: 8));
+    expect(notifications.lastScheduledDate!.isUtc, isFalse);
+    expect(
+      notifications.lastScheduledDate!.difference(expected).abs().inMinutes,
+      lessThanOrEqualTo(1),
+      reason: 'expected the same real moment (bedtime, no reminder lead '
+          'time subtracted), got ${notifications.lastScheduledDate}',
+    );
+  });
+
+  test('only cancels its own notification (by a fixed id), never all',
+      () async {
+    final appState = await _freshAppState();
+    appState.doNotDisturbEnabled = true;
+    final notifications = _RecordingNotifications();
+
+    await scheduleDoNotDisturbActivation(appState, notifications: notifications);
+
+    expect(notifications.cancelAllCount, 0);
+    expect(notifications.cancelledIds, [doNotDisturbActivationNotificationId]);
+  });
+
+  test('a bedtime already in the past is still scheduled, just soon (T-110 '
+      'same reasoning)', () async {
+    final appState = await _freshAppState();
+    appState.doNotDisturbEnabled = true;
+    final now = DateTime.now();
+    // Next wake in 5 hours, sleep goal 9 hours -> bedtime 4 hours ago.
+    appState.pendingDayValues = {
+      isoDate(now.add(const Duration(hours: 5))):
+          now.add(const Duration(hours: 5)).millisecondsSinceEpoch,
+    };
+    appState.sleepGoal = const TimeOfDay(hour: 9, minute: 0);
+    final notifications = _RecordingNotifications();
+
+    await scheduleDoNotDisturbActivation(appState, notifications: notifications);
+
+    expect(notifications.callCount, 1);
+    expect(notifications.lastScheduledDate!.isAfter(now), isTrue);
+  });
+
+  test('the doNotDisturbActivationNotificationId is a distinct fixed id, '
+      'not the sleep-reminder one', () {
+    expect(doNotDisturbActivationNotificationId, isNot(sleepReminderNotificationId));
+  });
+}

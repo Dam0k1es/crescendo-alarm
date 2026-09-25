@@ -109,6 +109,11 @@ class AppState extends ChangeNotifier {
 
   bool _reminderEnabled = false;
   TimeOfDay _reminderDuration = const TimeOfDay(hour: 0, minute: 30);
+
+  // docs/TODO.md T-184: off by default - a new, silent-by-default change to
+  // the device's own notifications is not something to turn on for everyone
+  // unasked.
+  bool _doNotDisturbEnabled = false;
   // Default on with a 5-minute ramp, per maintainer request.
   bool _gentleWakeUpEnabled = true;
   Duration _gentleWakeUpDuration = const Duration(minutes: 5);
@@ -196,6 +201,8 @@ class AppState extends ChangeNotifier {
   DeactivationCode? get deactivationCode => _deactivationCode;
 
   bool get reminderEnabled => _reminderEnabled;
+
+  bool get doNotDisturbEnabled => _doNotDisturbEnabled;
 
   bool get gentleWakeUpEnabled => _gentleWakeUpEnabled;
 
@@ -474,6 +481,12 @@ class AppState extends ChangeNotifier {
   set reminderEnabled(bool value) {
     _reminderEnabled = value;
     _prefs.setBool('reminderEnabled', _reminderEnabled);
+    notifyListeners();
+  }
+
+  set doNotDisturbEnabled(bool value) {
+    _doNotDisturbEnabled = value;
+    _prefs.setBool('doNotDisturbEnabled', _doNotDisturbEnabled);
     notifyListeners();
   }
 
@@ -1405,6 +1418,8 @@ class AppState extends ChangeNotifier {
       _permissionsGranted =
           _prefs.getBool('permissionsGranted') ?? _permissionsGranted;
       _reminderEnabled = _prefs.getBool('reminderEnabled') ?? _reminderEnabled;
+      _doNotDisturbEnabled =
+          _prefs.getBool('doNotDisturbEnabled') ?? _doNotDisturbEnabled;
       _gentleWakeUpEnabled =
           _prefs.getBool('gentleWakeUpEnabled') ?? _gentleWakeUpEnabled;
       final gentleWakeUpSeconds = _prefs.getInt('gentleWakeUpSeconds');
