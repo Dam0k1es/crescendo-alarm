@@ -130,7 +130,10 @@ small chevron on its right to hide or show that group's options.
 - **Gentle WakeUp** - ramps the volume up gradually; **Ramp duration** controls how long that takes.
 - **Snooze** - lets you postpone a ringing alarm by a fixed interval (**Snooze time**), up to the
   "Duration to wake up" budget above. Once that budget is used up, the snooze button simply stops
-  appearing - there's no separate "maximum snooze count" setting, the budget does that job.
+  appearing - there's no separate "maximum snooze count" setting, the budget does that job. The
+  ring you get once the budget runs out - the one you can no longer postpone - always starts
+  straight at full planned volume, even with Gentle WakeUp on: it's your last call, so it isn't
+  eased into.
 
 **Bedtime reminder** - a separate concern: shifts only the reminder below, never the alarm itself:
 

@@ -261,7 +261,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           ],
         ),
       ),
-      const SizedBox(height: 16.0),
+      const SizedBox(height: 8.0),
       // docs/TODO.md T-52.1: whether a day with no calendar entry of its own
       // gets an alarm at all (FR-4's drift/hold) or none.
       _buildTile(
@@ -280,7 +280,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           },
         ),
       ),
-      const SizedBox(height: 16.0),
+      const SizedBox(height: 8.0),
       // Directly below it, the bound on how fast the wake time may approach
       // this target (FR-6) - it qualifies the entry above and is
       // meaningless without it.
@@ -307,7 +307,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           ],
         ),
       ),
-      const SizedBox(height: 16.0),
+      const SizedBox(height: 8.0),
       // Then the two lead times. They only apply on days WITH an
       // appointment (FR-2) and therefore come after the target - in the
       // order they actually occur in and in which `hardFloor` subtracts
@@ -328,7 +328,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           ],
         ),
       ),
-      const SizedBox(height: 16.0),
+      const SizedBox(height: 8.0),
       _buildTile(
         help: 'Lead time reserved for getting ready before an '
             'appointment. Can be overridden per weekday below.',
@@ -393,7 +393,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           ],
         ),
       ),
-      const SizedBox(height: 16.0),
+      const SizedBox(height: 8.0),
       // FR-20. Belongs here, not in the wake-time group: snooze describes
       // what happens when the alarm rings, not when it rings (the same
       // causal grouping as T-95).
@@ -457,7 +457,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           ],
         ),
       ),
-      const SizedBox(height: 16.0),
+      const SizedBox(height: 8.0),
       // The lead time is measured from the bedtime the entry above sets -
       // the two belong side by side.
       _buildTile(
@@ -736,7 +736,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
   Widget _buildSectionHeader(
           String text, bool expanded, VoidCallback onToggle) =>
       Padding(
-        padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
+        padding: const EdgeInsets.only(top: 16.0, bottom: 4.0),
         child: InkWell(
           onTap: onToggle,
           child: Padding(

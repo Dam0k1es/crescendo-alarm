@@ -84,6 +84,77 @@ void main() {
         reason: 'the next Monday, not the passed Thursday');
   });
 
+  // docs/TODO.md T-181 (maintainer request): "prüfe ob es tests gibt die
+  // manuelle alarme darauf prüfen, ob sie bei z. B. Auswahl von Sonntag nur
+  // einen, oder alle Sonntage klingelt" - the existing cases above only ever
+  // call nextManualOccurrence ONCE per test, proving the next candidate is
+  // picked correctly but never proving the alarm actually keeps recurring
+  // across multiple weeks rather than only ever firing on the first match.
+  group('a single selected weekday recurs indefinitely, not just once', () {
+    test('selecting only Sunday rings every Sunday, chained across 5 weeks',
+        () {
+      // 2026-03-08 is a Sunday. Each iteration simulates the alarm having
+      // just rung and been dismissed a minute later - exactly what
+      // Handler.onAlarmHandled's re-arm does in production.
+      var now = DateTime(2026, 3, 8, 7, 1);
+      final sundaysOnly = _only([DayOfWeek.sunday]);
+      final occurrences = <DateTime>[];
+
+      for (var i = 0; i < 5; i++) {
+        final next = nextManualOccurrence(
+            const TimeOfDay(hour: 7, minute: 0), now, sundaysOnly);
+        occurrences.add(next);
+        now = next.add(const Duration(minutes: 1));
+      }
+
+      for (final date in occurrences) {
+        expect(date.weekday, DateTime.sunday,
+            reason: 'every occurrence must land on the one selected day');
+      }
+      for (var i = 1; i < occurrences.length; i++) {
+        expect(occurrences[i].difference(occurrences[i - 1]),
+            const Duration(days: 7),
+            reason: 'a single selected weekday must repeat every week - '
+                'ringing only once (or skipping/repeating a week) would '
+                'silently break the "repeat on" promise');
+      }
+    });
+
+    test(
+        'the actual FR-21 re-arm path (applyManualAlarmEnabled) repeats a '
+        'Sunday-only alarm every week, not just once', () async {
+      // Exercises the real function Handler.onAlarmHandled's re-arm goes
+      // through (via AppState.setManualAlarmEnabled), not just the pure
+      // date-math helper - a regression in applyManualAlarmEnabled's own
+      // wiring (e.g. its own `now` handling) would not be caught by the
+      // nextManualOccurrence-only test above.
+      final alarm = ManualAlarm(
+        time: const TimeOfDay(hour: 7, minute: 0),
+        repeatOnDays: _only([DayOfWeek.sunday]),
+      );
+      var now = DateTime(2026, 3, 8, 7, 1);
+      final armedDates = <DateTime>[];
+
+      for (var i = 0; i < 3; i++) {
+        final applied = await applyManualAlarmEnabled(
+          alarm: alarm,
+          enabled: true,
+          now: now,
+          armAlarm: (a, at) async => armedDates.add(at),
+          stopAlarm: (id) async {},
+        );
+        expect(applied, isTrue);
+        now = armedDates.last.add(const Duration(minutes: 1));
+      }
+
+      expect(armedDates.every((d) => d.weekday == DateTime.sunday), isTrue);
+      for (var i = 1; i < armedDates.length; i++) {
+        expect(armedDates[i].difference(armedDates[i - 1]),
+            const Duration(days: 7));
+      }
+    });
+  });
+
   test('no day selected at all falls back to today-or-tomorrow rather than '
       'never arming', () {
     // Not a case the UI can normally reach (creation pre-selects the current

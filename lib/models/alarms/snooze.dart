@@ -105,20 +105,22 @@ Future<bool> snoozeRingingAlarm(
   required int alarmId,
   required DateTime ringTime,
   DateTime Function()? now,
-  required Future<void> Function(int id, DateTime at) setAlarm,
+  required Future<void> Function(int id, DateTime at, bool gentleWakeAllowed)
+      setAlarm,
   required Future<void> Function(int id) stopAlarm,
   int Function()? newId,
 }) async {
   final nowFn = now ?? DateTime.now;
   final origin = appState.snoozeOriginFor(alarmId) ?? ringTime;
   final at = nowFn();
+  final snoozeEnabled = effectiveSnoozeEnabled(appState, alarmId);
 
   if (!canSnooze(
     now: at,
     originalRing: origin,
     snoozeTime: appState.snoozeTime,
     wakeUpBudget: durationFromTimeOfDay(appState.durationToWakeUp),
-    snoozeEnabled: effectiveSnoozeEnabled(appState, alarmId),
+    snoozeEnabled: snoozeEnabled,
   )) {
     return false;
   }
@@ -126,11 +128,23 @@ Future<bool> snoozeRingingAlarm(
   final next = snoozedRingTime(now: at, snoozeTime: appState.snoozeTime);
   final id = (newId ?? getRandom)();
 
+  // docs/TODO.md T-179 (maintainer request): if postponing again from
+  // [next] would no longer be allowed, this new ring is the FINAL one - no
+  // more snoozing is coming, so it must not be softened by a gentle-wake
+  // ramp. It needs to wake the user right now, not ease them into it.
+  final gentleWakeAllowed = canSnooze(
+    now: next,
+    originalRing: origin,
+    snoozeTime: appState.snoozeTime,
+    wakeUpBudget: durationFromTimeOfDay(appState.durationToWakeUp),
+    snoozeEnabled: snoozeEnabled,
+  );
+
   // Arm the new call first, then end the old one: if arming fails, the old
   // one keeps ringing - that's the safe outcome. The other way around, a
   // failure would have left the user without any alarm at all.
   try {
-    await setAlarm(id, next);
+    await setAlarm(id, next, gentleWakeAllowed);
   } catch (e) {
     debugPrint("=====snoozeRingingAlarm: setAlarm failed: ${e.runtimeType}");
     return false;

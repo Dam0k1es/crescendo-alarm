@@ -69,7 +69,7 @@ void main() {
         alarmId: 7,
         ringTime: DateTime(2026, 9, 25, 7, 0),
         now: () => DateTime(2026, 9, 25, 7, 1),
-        setAlarm: (id, at) async {
+        setAlarm: (id, at, gentleWakeAllowed) async {
           setAlarmCalled = true;
         },
         stopAlarm: (id) async {},

@@ -1069,6 +1069,84 @@ that is the basis a decision can be formulated against.
   the others, is what actually guards against a regression back to linear.
 - **Requirement:** yes - stated as one by the maintainer directly.
 
+### T-179 · Gentle Wake Up disabled for the final snoozed ring — DONE (2026-09-25)
+
+- [x] Maintainer request, verbatim: "die gentle wake up option soll für den finalen alarm im
+  falle von snooze nicht mehr gelten. der letzte alarm bei nutzung von snooze soll direkt auf der
+  geplanten lautstärke starten." - once postponing again would no longer fit the snooze budget,
+  the ring a press arms is the FINAL one: no more snoozing is coming, so it must not be softened
+  by a ramp - it needs to wake the user right now, not ease them into it.
+- **Fix:** `snoozeRingingAlarm` (`lib/models/alarms/snooze.dart`) now computes a second,
+  prospective `canSnooze` check at the moment it arms the new ring - `canSnooze(now: next, ...)` -
+  to ask "would postponing again from here still fit the budget?". If not, `gentleWakeAllowed:
+  false` is passed to `setAlarm`. `AppState.setSnoozeAlarm`'s signature grew a third parameter to
+  receive it, ANDed into the real `gentlewake` flag it hands `buildRingingAlarmSettings`
+  (`gentlewake: _gentleWakeUpEnabled && gentleWakeAllowed`) - the global setting can still say yes,
+  but the final ring overrides it to no.
+- **Callback signature change:** `setAlarm`'s type grew from `(int, DateTime)` to `(int, DateTime,
+  bool)`. Only three call sites existed: `AppState.setSnoozeAlarm` (production, updated in place -
+  `SnoozeButton`'s `setAlarm: appState.setSnoozeAlarm` tear-off needed no change of its own, since
+  it now matches the widened type automatically) and two test files'
+  inline fake closures (`test/snooze_state_test.dart`, `test/snooze_per_alarm_override_test.dart`),
+  both updated to accept the third parameter.
+- **E2E impact: none.** No E2E test exercises snooze at all (confirmed by grep, not assumed).
+- **Tests:** three new cases in `test/snooze_state_test.dart`'s new
+  `T-179: gentle wake is disabled for the final snoozed ring` group - still allowed while another
+  press would still fit the budget, disabled once a press exhausts it, and the exact inclusive
+  boundary case (one press before exhaustion, still allowed). Confirmed the middle case actually
+  distinguishes the fix by temporarily hardcoding `setAlarm(id, next, true)` and seeing exactly
+  that one case (and only that one) fail, then reverting.
+- **Requirement:** yes - stated as one by the maintainer directly.
+
+### T-180 · Tighter spacing in Sleep Habits, Alarm Tones, and the manual-alarm dialog — DONE (2026-09-25)
+
+- [x] Maintainer request: "verkleinere die abstände zwischen den text/container-elementen im
+  sleep habit reiter und im alarm tone reiter, sowie bei neuen manuellen alarmen."
+- **Sleep Habits** (`screen_sleephabits.dart`): inter-tile `SizedBox(height: 16.0)` → `8.0`
+  (6 occurrences); section-header padding `top: 24.0, bottom: 8.0` → `top: 16.0, bottom: 4.0`.
+- **Alarm Tones** (`page_alarmtones.dart`): inter-tile `SizedBox(height: 16.0)` → `8.0`; the
+  larger `32.0` gap before the Volume slider → `16.0`; every `Card`'s `EdgeInsets.all(16.0)` →
+  `12.0`.
+- **Manual-alarm dialog** (`screen_alarms.dart`): the 7 inter-`Card` `SizedBox(height: 16)` gaps →
+  `8`; every `Card`'s `EdgeInsets.all(16.0)` → `12.0`.
+- **No new tests:** a pure visual-density change with no behavioral contract to write a failing
+  test against - confirmed first, by grep, that no existing test asserts any of these exact
+  numeric values (a position-ordering test like `sleep_habits_order_test.dart`'s uses
+  `greaterThan`, not an exact-pixel delta, so it is insensitive to the gap actually shrinking).
+- **Verified:** full suite green (every test touching these three screens re-run individually,
+  62/62, plus the full three-group run, 597/597), `flutter analyze` clean.
+- **Requirement:** yes - requested directly by the maintainer.
+
+### T-181 · Regression coverage: a single selected weekday recurs every week, not just once — DONE (2026-09-25)
+
+- [x] Maintainer request, verbatim: "prüfe ob es tests gibt die manuelle alarme darauf prüfen, ob
+  sie bei z. B. Auswahl von Sonntag nur einen, oder alle sonntage klingelt. implementiere diese
+  falls nicht vorhanden."
+- **Gap found:** `test/manual_alarm_repeat_test.dart` (T-14) and
+  `test/handler_manual_alarm_rearm_test.dart` each covered one half of the claim - the first that
+  `nextManualOccurrence` picks the correct SINGLE next matching day, the second that re-arming
+  happens AT ALL on dismiss - but neither proved the two halves compose into actual indefinite
+  weekly recurrence: no test ever called `nextManualOccurrence` (or the real re-arm function,
+  `applyManualAlarmEnabled`) more than once per test case, so a bug that made a Sunday-only alarm
+  ring once and then silently stop repeating would not have been caught by anything in the suite.
+- **Added:** two new cases in `manual_alarm_repeat_test.dart`'s new
+  `a single selected weekday recurs indefinitely, not just once` group. The first chains 5 calls
+  to `nextManualOccurrence` (each one's result feeding the next call's `now`, simulating "rang, was
+  dismissed a minute later"), asserting every occurrence lands on a Sunday exactly 7 days after
+  the last. The second does the same through `applyManualAlarmEnabled` itself (the actual function
+  `Handler.onAlarmHandled`'s re-arm goes through via `AppState.setManualAlarmEnabled`), catching a
+  regression in that function's own wiring that the pure-math test alone would miss.
+- **Confirmed these tests are not tautological:** temporarily changed
+  `nextManualOccurrence`'s day-match check to `if (true) return candidate;` (reverting to the
+  pre-T-14 day-agnostic behaviour) and confirmed both new cases fail, along with three pre-existing
+  ones - then reverted.
+- **E2E impact: none** - no E2E test exercises `repeatOnDays`/`nextManualOccurrence`/
+  `applyManualAlarmEnabled` (confirmed by grep: the one match in `integration_test/app_test.dart`
+  is a comment, not an interaction).
+- **Verified:** full suite green (597/597 across three sequential groups), `flutter analyze` clean.
+- **Requirement:** the existing "repeat on" feature (T-14) already was one; this closes a real gap
+  in verifying it, at the maintainer's direct request.
+
 ### T-178 · Sleep Habits: reordered groups, each independently collapsible — DONE (2026-09-25)
 
 - [x] Maintainer request, verbatim: "Sortiere die Option im sleep habit neu: erst wake up time,

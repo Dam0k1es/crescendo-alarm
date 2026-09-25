@@ -417,7 +417,7 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                   children: [
                     Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Center(
                           child: TextButton(
                             child: Text(
@@ -467,11 +467,11 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     // Edit Title
                     Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: TextField(
                           controller: titleController,
                           decoration: const InputDecoration(
@@ -482,11 +482,11 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     // Gentle Wake Up
                     Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -512,13 +512,13 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     // docs/TODO.md T-176 (maintainer request): per-alarm
                     // Snooze toggle - same Card/Row/Switch pattern as
                     // Gentle Wake Up above.
                     Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -537,7 +537,7 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     // docs/TODO.md T-176: per-alarm override of the
                     // deactivation-code ("guaranteed wake-up") gate - only
                     // takes effect when a code is actually configured
@@ -546,7 +546,7 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                     // setting in this dialog.
                     Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -571,11 +571,11 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     // Set Alarm Tone
                     Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -607,11 +607,11 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     // Set Volume
                     Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -634,7 +634,7 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     // Set repeatOnDays
                     //
                     // docs/TODO.md T-176 (maintainer request): a title
@@ -646,7 +646,7 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                     // seven and can never wrap regardless of screen width.
                     Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [

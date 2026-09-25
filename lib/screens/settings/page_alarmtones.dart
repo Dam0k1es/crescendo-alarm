@@ -185,12 +185,12 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
               // tone names/paths can't quietly drift apart.
               for (final (name, path) in bundledTones) ...[
                 _buildToggle(context, name, path),
-                const SizedBox(height: 16.0),
+                const SizedBox(height: 8.0),
               ],
               _buildCustomToneSection(context),
-              const SizedBox(height: 32.0),
-              _buildVolumeSlider(context),
               const SizedBox(height: 16.0),
+              _buildVolumeSlider(context),
+              const SizedBox(height: 8.0),
               _buildVibrationToggle(context),
             ],
           ),
@@ -206,7 +206,7 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
       },
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(12.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -251,7 +251,7 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
       children: [
         for (final tone in tones) ...[
           _buildCustomToneTile(context, tone),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 8.0),
         ],
         _buildAddCustomToneTile(context),
       ],
@@ -263,7 +263,7 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
       onTap: () => _playOrStopAudio(tone.path),
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(12.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -306,7 +306,7 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
       onTap: _pickCustomTone,
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(12.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -327,7 +327,7 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
   Widget _buildVolumeSlider(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
             const Text(
@@ -365,7 +365,7 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
   Widget _buildVibrationToggle(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(12.0),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [

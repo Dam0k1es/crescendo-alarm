@@ -97,7 +97,7 @@ void main() {
   });
 
   group('FR-20: the process itself', () {
-    late List<({int id, DateTime at})> armed;
+    late List<({int id, DateTime at, bool gentleWakeAllowed})> armed;
     late List<int> stopped;
 
     Future<bool> snooze(AppState appState,
@@ -113,9 +113,9 @@ void main() {
         ringTime: ringTime,
         now: () => now,
         newId: () => 999,
-        setAlarm: (id, at) async {
+        setAlarm: (id, at, gentleWakeAllowed) async {
           if (settingFails) throw StateError('platform gone');
-          armed.add((id: id, at: at));
+          armed.add((id: id, at: at, gentleWakeAllowed: gentleWakeAllowed));
         },
         stopAlarm: (id) async => stopped.add(id),
       );
@@ -196,6 +196,90 @@ void main() {
       expect(ok, isFalse);
       expect(armed, isEmpty);
       expect(stopped, isEmpty);
+    });
+  });
+
+  // docs/TODO.md T-179 (maintainer request): "die gentle wake up option
+  // soll für den finalen alarm im Falle von snooze nicht mehr gelten. der
+  // letzte alarm bei nutzung von snooze soll direkt auf der geplanten
+  // lautstärke starten." - once postponing again would no longer be
+  // allowed, the ring this snooze arms is the FINAL one: no more snoozing
+  // is coming, so it must not be softened by a ramp - it needs to be
+  // maximally effective right now.
+  group('T-179: gentle wake is disabled for the final snoozed ring', () {
+    late List<({int id, DateTime at, bool gentleWakeAllowed})> armed;
+
+    Future<bool> snooze(AppState appState,
+        {required int alarmId,
+        required DateTime ringTime,
+        required DateTime now}) {
+      armed = [];
+      return snoozeRingingAlarm(
+        appState,
+        alarmId: alarmId,
+        ringTime: ringTime,
+        now: () => now,
+        newId: () => 999,
+        setAlarm: (id, at, gentleWakeAllowed) async {
+          armed.add((id: id, at: at, gentleWakeAllowed: gentleWakeAllowed));
+        },
+        stopAlarm: (id) async {},
+      );
+    }
+
+    test('gentle wake stays allowed while another snooze would still fit',
+        () async {
+      final appState = await _fresh();
+      appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 30);
+      appState.snoozeTime = const Duration(minutes: 5);
+      appState.snoozeEnabled = true;
+      final ring = DateTime(2026, 9, 14, 6, 0);
+
+      // First press: 06:00 -> 06:05. A further press from 06:05 (-> 06:10)
+      // still fits inside the 06:00-06:30 budget, so this is not final yet.
+      final ok = await snooze(appState, alarmId: 1, ringTime: ring, now: ring);
+
+      expect(ok, isTrue);
+      expect(armed.single.gentleWakeAllowed, isTrue);
+    });
+
+    test('gentle wake is disabled once this press exhausts the budget',
+        () async {
+      final appState = await _fresh();
+      appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 30);
+      appState.snoozeTime = const Duration(minutes: 5);
+      appState.snoozeEnabled = true;
+      final ring = DateTime(2026, 9, 14, 6, 0);
+
+      // Pressed at 06:25 -> new ring at 06:30, exactly the budget's edge.
+      // A further press from 06:30 (-> 06:35) would exceed it, so 06:30 is
+      // the final ring.
+      final ok = await snooze(appState,
+          alarmId: 1, ringTime: ring, now: DateTime(2026, 9, 14, 6, 25));
+
+      expect(ok, isTrue);
+      expect(armed.single.at, DateTime(2026, 9, 14, 6, 30));
+      expect(armed.single.gentleWakeAllowed, isFalse);
+    });
+
+    test(
+        'still allowed one press before the budget is exhausted (boundary '
+        'check)', () async {
+      final appState = await _fresh();
+      appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 30);
+      appState.snoozeTime = const Duration(minutes: 5);
+      appState.snoozeEnabled = true;
+      final ring = DateTime(2026, 9, 14, 6, 0);
+
+      // Pressed at 06:20 -> new ring at 06:25. A further press from 06:25
+      // (-> 06:30) still lands exactly on the budget's edge, which FR-20
+      // treats as allowed (inclusive) - so 06:25 is NOT yet the final ring.
+      final ok = await snooze(appState,
+          alarmId: 1, ringTime: ring, now: DateTime(2026, 9, 14, 6, 20));
+
+      expect(ok, isTrue);
+      expect(armed.single.at, DateTime(2026, 9, 14, 6, 25));
+      expect(armed.single.gentleWakeAllowed, isTrue);
     });
   });
 }

@@ -1051,14 +1051,20 @@ class AppState extends ChangeNotifier {
   /// doesn't track as its own alarm, by contrast, is left untouched (T-127).
   ///
   /// Tone, volume, and ramp come from the current settings - the postponed
-  /// call should sound like the one it replaces.
-  Future<void> setSnoozeAlarm(int id, DateTime at) async {
+  /// call should sound like the one it replaces. The one exception is
+  /// [gentleWakeAllowed] (docs/TODO.md T-179, maintainer request):
+  /// `snoozeRingingAlarm` computes whether THIS ring is the final one (no
+  /// further snooze would still fit the budget) and passes `false` for it -
+  /// a final ring must start directly at the planned volume, not ease into
+  /// it, since there is no more postponing left to soften the wake-up with.
+  Future<void> setSnoozeAlarm(
+      int id, DateTime at, bool gentleWakeAllowed) async {
     await Alarm.set(
       alarmSettings: buildRingingAlarmSettings(
         id: id,
         dateTime: alarmPlatformTime(at),
         tone: _selectedTone,
-        gentlewake: _gentleWakeUpEnabled,
+        gentlewake: _gentleWakeUpEnabled && gentleWakeAllowed,
         volume: _selectedVolume,
         gentleWakeDuration: _gentleWakeUpDuration,
         title: 'Snoozed alarm',
