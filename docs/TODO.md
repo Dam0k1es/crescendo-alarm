@@ -1316,6 +1316,18 @@ rather than expanded into more scope here: see T-185.
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
 
+### T-195 · R8 release minification ran out of Gradle heap — DONE (2026-09-26)
+
+- [x] Master run 36252759755 (7def40b, a commit changing no Android code) passed E2E, then failed
+  `Build Android (production)` in `:app:minifyReleaseWithR8` with `java.lang.OutOfMemoryError: Java
+  heap space`. The same build had passed on cb18d32 hours earlier, so this is a heap at its limit,
+  not a code defect - intermittent, and equally able to hit `release.yml`'s tag build.
+- **Fix:** `android/gradle.properties` `org.gradle.jvmargs` raised from `-Xmx1536M` (the Flutter
+  template default, unchanged since the initial commit) to `-Xmx3G` - still fits a single build on
+  the 8 GB dev VM, far below a GitHub runner's 16 GB.
+- **Verified:** the failed job was re-run once on 36252759755 to unblock v1.3.0; this change rides
+  along with the next promotion and is confirmed by the first production build after it.
+
 ### T-194 · E2E harness race: the app's own open-sync replanned the injected test week away — DONE (2026-09-26)
 
 - [x] Found while promoting v1.3.0: master run 36249699023 (commit 5af8f23, a version bump only)
