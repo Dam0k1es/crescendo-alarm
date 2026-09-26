@@ -1316,6 +1316,38 @@ rather than expanded into more scope here: see T-185.
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
 
+### T-187 · A fixed, shared debug keystore for every dev build — DONE (2026-09-26)
+
+- [x] Maintainer request: "Verdrahte bitte einen festen key für alle dev versionen und lokalen
+  builds." (Please wire up a fixed key for all dev versions and local builds.) Prompted directly by
+  a real, repeated `INSTALL_FAILED_UPDATE_INCOMPATIBLE` when installing a fresh dev build onto the
+  maintainer's phone: every `flutter build apk --debug` - whether run on a fresh CI runner or the
+  local dev VM - previously fell back to whatever ephemeral `~/.android/debug.keystore` happened to
+  exist (or get auto-generated) on THAT machine, with its own random key material. Two builds from
+  different machines/runs could therefore never update each other in place, forcing an uninstall
+  (and full data loss) before every single dev-build refresh.
+- **Fix:** a single, dedicated debug keystore (`crescendo-alarm-dev.jks`, conventional
+  `androiddebugkey`/"android"/"android" alias/passwords, matching AGP's own debug-signing
+  convention for familiarity) generated once and reused everywhere. `android/app/build.gradle.kts`
+  gained a `dev` `signingConfig` and wired `buildTypes.debug.signingConfig` to it - but only when
+  the keystore file is actually present (`devKeystoreFile.exists()`), so a fresh clone without it
+  still builds fine, falling back to AGP's ordinary per-machine debug signing rather than failing
+  outright. Not a secret in the meaningful sense (only the key MATERIAL needs to stay identical
+  across builds, not the password, which is the well-known Android debug convention), but still
+  gitignored like every other keystore in this repo (`**/*.jks`) and distributed the same way the
+  real release key already is: a GitHub Actions secret (`DEV_KEYSTORE_BASE64`) decoded by
+  `ci.yml`'s `build-dev-apk` job right before `flutter build apk --debug` and deleted again
+  afterward (`if: always()`), and the actual file handed to the maintainer directly for every local
+  worktree/machine that builds a dev APK.
+- **Verified:** a local `flutter build apk --debug` in the `dev` worktree, with the keystore placed
+  at `android/app/keystore/crescendo-alarm-dev.jks`, produces a build whose signing certificate
+  SHA-256 fingerprint (verified independently via a standalone APK-Signing-Block-v2/v3 parser, not
+  just trusted) matches the keystore's own fingerprint exactly. `actionlint` confirmed the modified
+  `ci.yml` is still valid (the only two shellcheck findings it reported are pre-existing, in
+  unrelated steps).
+- **Requirement:** yes - direct maintainer request, following directly from the real
+  `INSTALL_FAILED_UPDATE_INCOMPATIBLE` friction encountered this session.
+
 ### T-186 · Do Not Disturb stayed on after an alarm was stopped — two independent root causes, both fixed — DONE (2026-09-26)
 
 - [x] Maintainer device report, verbatim: "Der Do not distrub modus soll nach einem geklingelten

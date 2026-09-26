@@ -18,6 +18,20 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// docs/TODO.md T-187 (maintainer request): a fixed, shared debug keystore so
+// every dev build - CI's own "Build Android (development)" job and any local
+// `flutter build apk --debug` - carries the SAME signature. Without this,
+// each machine (a fresh CI runner every run included) silently generates its
+// own random debug key the first time one is needed, so no two dev builds
+// from different machines/runs can ever update each other in place -
+// Android refuses the install with INSTALL_FAILED_UPDATE_INCOMPATIBLE. Not a
+// secret in the meaningful sense (its only job is internal consistency, not
+// proving identity), but still gitignored like every other keystore here
+// (`**/*.jks`) and absent on a fresh clone by design: falls back to AGP's
+// own ordinary per-machine debug signing when the file isn't present, so
+// this is additive, never a hard requirement to build at all.
+val devKeystoreFile = rootProject.file("app/keystore/crescendo-alarm-dev.jks")
+
 android {
     namespace = "com.crescendoalarm.crescendoalarm"
     compileSdk = flutter.compileSdkVersion
@@ -68,12 +82,29 @@ android {
             storeFile = (keystoreProperties["storeFile"] as String?)?.let { file(it) }
             storePassword = keystoreProperties["storePassword"] as String?
         }
+        if (devKeystoreFile.exists()) {
+            // Conventional Android debug alias/passwords (matching AGP's own
+            // default debug signing config) - not sensitive on their own,
+            // since the key material in the file itself is what actually
+            // needs to be identical across machines/runs, not the password.
+            create("dev") {
+                storeFile = devKeystoreFile
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
     }
 
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        debug {
+            if (devKeystoreFile.exists()) {
+                signingConfig = signingConfigs.getByName("dev")
+            }
         }
     }
 }

@@ -231,6 +231,15 @@ Four workflows under `.github/workflows/`:
   'pull_request'` (true for *any* PR, which would have made a `dev` PR run the full 45-minute gate
   - the opposite of "dev gets fast feedback only") to `... && github.base_ref == 'master'`, so a
   `dev`-targeted PR now gets exactly `analyze-and-test`, nothing more.
+  **`build-dev-apk`'s debug APK is signed with a fixed, shared keystore** (`docs/TODO.md` T-187,
+  maintainer request), not whatever ephemeral one a fresh runner (or a local machine) would
+  otherwise generate on the fly - decoded from the `DEV_KEYSTORE_BASE64` repo secret right before
+  the build and deleted again afterward, the same pattern the real release key already uses.
+  `android/app/build.gradle.kts` only wires `buildTypes.debug` to it when
+  `android/app/keystore/crescendo-alarm-dev.jks` actually exists locally (gitignored, not on a
+  fresh clone) - ask the maintainer for this file directly when building a dev APK anywhere it
+  needs to install cleanly over a previous one; without it, a local debug build still works, just
+  with a different, machine-local signature that can't update an existing install in place.
 - **`e2e-tests.yml`** (reusable, `workflow_call`) runs `integration_test/` against a real Android
   emulator with KVM acceleration, collecting video, an audio-focus timeline and ActivityManager
   logs as an evidence artifact. Called by both `ci.yml` and `release.yml`.

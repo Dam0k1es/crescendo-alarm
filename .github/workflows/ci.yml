@@ -149,8 +149,28 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-modules-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-modules-
+
+      - name: Decode fixed dev signing key
+        # docs/TODO.md T-187 (maintainer request): without this, a fresh
+        # runner's own ephemeral debug keystore signs every dev build
+        # differently, so no two dev APKs from different runs (or from a
+        # local machine) can ever update each other in place -
+        # INSTALL_FAILED_UPDATE_INCOMPATIBLE. Not a secret in the meaningful
+        # sense (only the key MATERIAL needs to match across builds, not the
+        # password), but kept as a repo secret anyway, same as the real
+        # release key, since a keystore file itself has no place being
+        # committed regardless of what it's used for.
+        run: |
+          mkdir -p android/app/keystore
+          echo "${{ secrets.DEV_KEYSTORE_BASE64 }}" | base64 -d > android/app/keystore/crescendo-alarm-dev.jks
+
       - run: flutter pub get
       - run: flutter build apk --debug
+
+      - name: Clean up signing key
+        if: always()
+        run: rm -f android/app/keystore/crescendo-alarm-dev.jks
+
       - uses: actions/upload-artifact@v4
         with:
           name: app-development-apk
