@@ -56,9 +56,13 @@
 - Duration to get ready (between getting up and setting off)
 - Reminder Feature (Reminders for bedtime to encourage a regular sleep schedule)
 - Gentle Wake Feature
-- Do Not Disturb Feature (**not implemented**)
+- Do Not Disturb Feature (**implemented, docs/TODO.md T-184, 2026-09-25** - maintainer
+  request; see `CLAUDE.md`'s architecture notes for how)
   - Turn off notifications
   - Turn off calls
+  - Both via Android's own Do Not Disturb "Alarms only" filter, which silences everything
+    except this app's own alarm - not a separate, per-channel toggle for notifications vs.
+    calls
 
 
 

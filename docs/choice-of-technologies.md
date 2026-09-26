@@ -20,3 +20,29 @@
 
 # Firebase (Backend Services) - **not used**
 - Originally considered for backend services (user accounts, settings sync, alarm storage). What was actually implemented instead is a fully local, offline-capable app with no network communication at all (see `CLAUDE.md`) - Firebase is not used anywhere.
+
+# The actual "backend": on-device persistence and platform integration
+> **Note (2026-09):** there is no server, no user account, and no data ever leaves the
+> device - "backend" here means whatever plays that role locally. Listed because the
+> original planning above never anticipated it, not because any of this was a later
+> substitute for Firebase specifically.
+
+- **`shared_preferences`** is the only persistence layer: every piece of app state -
+  settings, the scheduled/manual alarm lists, the deactivation code, the diagnostics
+  log's ring buffer - is stored as on-device key-value pairs, read back through
+  `AppState`. No SQL/NoSQL database, no ORM, no schema migrations.
+- **The `alarm` plugin** (a thin wrapper around Android's own `AlarmManager`) is what
+  actually "stores and serves" a wake-up: registering a real platform alarm that
+  survives reboot and force-stop (R3), not an app-level timer.
+- **`awesome_notifications`** schedules the background-isolate hooks this app relies on
+  (FR-16's Checkpoint 2, the bedtime reminder, and - since T-184 - the Do Not Disturb
+  activation trigger) via Android's own local notification/alarm subsystem. No push
+  service, no FCM/APNs, no external server ever involved in triggering one.
+- **Two small custom Kotlin platform channels**, not pub.dev plugins, where a suitable
+  one didn't exist or wasn't worth the dependency for a handful of framework calls:
+  `DirectBootFallback` (the `LOCKED_BOOT_COMPLETED` broadcast) and `DoNotDisturbChannel`
+  (`NotificationManager`'s `getCurrentInterruptionFilter`/`setInterruptionFilter`, T-184)
+  - see `CLAUDE.md`'s architecture notes for both.
+- **`device_calendar`** is the only external data source the app reads from at all, and
+  it's still entirely on-device: the phone's own local calendar provider, not a calendar
+  server or API.
