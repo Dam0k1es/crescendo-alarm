@@ -1316,7 +1316,66 @@ rather than expanded into more scope here: see T-185.
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
 
-### T-188 · Do Not Disturb activated in the middle of the day, not at bedtime — DONE (2026-09-26)
+### T-189 · Sleep time is the live window [bedtime, next alarm) — supersedes T-188's first attempt — DONE (2026-09-26)
+
+- [x] Independent review (Günther, requested by the maintainer specifically to re-check T-188's
+  fix and the T-110 mechanism it copied) found T-188's "skip a missed bedtime entirely" fix was
+  itself incomplete in two real ways: (1) it left Do Not Disturb permanently, silently off for any
+  user whose Sleep Goal is longer than the actual gap to their next wake-up - a short-turnaround/
+  shift-worker schedule, exactly this app's stated audience - since `bedtimeInstant` is *always*
+  computed as already-past for that shape, indefinitely; (2) re-running the function on ANY
+  unrelated checkpoint trigger (a settings change, a calendar resync, the alarm-list sync button -
+  none of which imply the sleep cycle changed) after bedtime had passed would cancel an
+  already-correctly-armed notification and not replace it, silently disarming that night's
+  activation.
+- [x] Maintainer's own clarification, verbatim, once these were explained: "Ich will, dass in der
+  schlafenszeit automatisch aktiviert und danach deaktiviert ist. die schlafenszeit ist die zeit die
+  konfiguriert ist VOR dem nächsten alarm in der zukunft." (I want it automatically activated during
+  sleep time and deactivated afterward. Sleep time is the configured time BEFORE the next alarm in
+  the future.) This is simpler than either T-184's original design or T-188's first fix, and is
+  implemented directly: sleep time is the half-open window `[bedtime, wakeUp)`, evaluated LIVE on
+  every call to `scheduleDoNotDisturbActivation` rather than relying solely on a precisely-timed
+  background notification.
+- **New design, `lib/utils/do_not_disturb_schedule.dart`:**
+  - **Step 1 - has the PREVIOUSLY PERSISTED cycle (if any) already ended?** Checked against the OLD
+    stored target, never a freshly recomputed one - `nextWakeUpTime` only ever returns future
+    candidates, so a fresh target can never itself be "ended". If so, restores Do Not Disturb (if
+    still active from this feature) and clears the stored target - a second, independent,
+    immediate path to the same restore `Handler.handleAlarm`'s final-ring check and
+    `Handler.onAlarmHandled`'s Stop-time check already provide (T-184/T-186), tighter than the
+    18-hour `restoreStaleDoNotDisturb` cap, not a replacement for either.
+  - **Step 2 - the current/next cycle, always freshly recomputed.** Since a fresh wake-up is always
+    genuinely future, "inside the window" reduces to "has this cycle's bedtime arrived yet" - if
+    so, activates immediately, live (idempotent, matching this app's actual audience's
+    short-turnaround case correctly instead of leaving it permanently off).
+  - **Notification scheduling** (for when the app isn't running at bedtime) is now only touched
+    when the target it's actually FOR has changed, or none is armed yet - fixing the "any unrelated
+    retrigger disarms an already-correct night" regression directly.
+- **Tests:** `test/do_not_disturb_schedule_test.dart`'s T-188 case (which had asserted the
+  since-corrected "skip entirely" behavior) was replaced by a T-189 group of 6 cases: inside the
+  window activates live even though bedtime is technically past; already active inside the window
+  doesn't redundantly re-read the real previous state; a previously-armed cycle whose window has
+  ended restores (and doesn't, when nothing was ever active); an unchanged target's notification is
+  left alone; a genuinely changed target (a real replan) still gets re-armed. All existing cases
+  (disabled, the ordinary future-bedtime path, the distinct-id check, the persisted-target-wake-up
+  group) still pass unmodified.
+- **Also fixed while investigating (Günther's finding): `pushIntoFutureIfPast`
+  (`lib/utils/sleep_reminder.dart`) was dead code with a false doc comment** - it claimed being
+  shared by `scheduleSleepReminder` and `scheduleDoNotDisturbActivation`, but `scheduleSleepReminder`
+  has always had its own separately-inlined duplicate of the same logic, and this rewrite means
+  `scheduleDoNotDisturbActivation` no longer needs it either. Removed rather than left to describe a
+  sharing relationship that never existed.
+- **Verified:** `flutter analyze` clean; full suite green (654/654 across three sequential groups).
+- **Not yet addressed, tracked separately:** Günther's observation that `scheduleSleepReminder`'s own
+  missed-bedtime branch (T-110, predates this session) has only ever been unit-tested, never
+  confirmed on a real device specifically for that branch - `integration_test/silent_notification_test.dart`
+  (T-62) calls `Notifications.scheduleNotification` directly, not through this code path. Low risk
+  (identical notification mechanism either way), non-blocking, worth a real-device check next time
+  `docs/device-trial-checklist.md` is walked through rather than a dedicated fix.
+- **Requirement:** yes - direct maintainer clarification of exactly what "sleep time" should mean,
+  following an independent review that found the first attempt incomplete.
+
+### T-188 · Do Not Disturb activated in the middle of the day, not at bedtime — first attempt, superseded by T-189 (2026-09-26)
 
 - [x] Maintainer device report, verbatim: "Habe eben die neue APK installiert. Habe DND aktiviert.
   Aber ich habe jetzt im moment den DND an, obwohl keine schlafenszeit ist." (I just installed the

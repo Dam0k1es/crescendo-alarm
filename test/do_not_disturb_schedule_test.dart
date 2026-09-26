@@ -4,7 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 import 'package:crescendo_alarm/utils/do_not_disturb.dart'
-    show doNotDisturbTargetWakeUpKey;
+    show doNotDisturbPreviousFilterKey, doNotDisturbTargetWakeUpKey;
+import 'package:crescendo_alarm/utils/do_not_disturb_channel.dart'
+    show interruptionFilterAlarms, interruptionFilterAll, interruptionFilterPriority;
 import 'package:crescendo_alarm/utils/do_not_disturb_schedule.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
 import 'package:crescendo_alarm/utils/sleep_reminder.dart' show sleepReminderNotificationId;
@@ -119,34 +121,218 @@ void main() {
     expect(notifications.cancelledIds, [doNotDisturbActivationNotificationId]);
   });
 
-  test(
-      'T-188 (maintainer device report): a bedtime already in the past does '
-      'NOT get caught up immediately - unlike the sleep reminder, activation '
-      'is a real, active effect, not a passive notification', () async {
-    // Regression: this used to mirror scheduleSleepReminder's own T-110
-    // "catch up ASAP" behavior (pushIntoFutureIfPast -> now + 2 minutes),
-    // which is fine for a suppressed, passive reminder notification but
-    // wrong here - it silenced the maintainer's phone within minutes of
-    // turning the toggle on in the middle of the day, nowhere near an
-    // actual bedtime, because the next wake-up happened to be sooner than
-    // the configured sleep goal.
-    final appState = await _freshAppState();
-    appState.doNotDisturbEnabled = true;
-    final now = DateTime.now();
-    // Next wake in 5 hours, sleep goal 9 hours -> bedtime 4 hours ago.
-    appState.pendingDayValues = {
-      isoDate(now.add(const Duration(hours: 5))):
-          now.add(const Duration(hours: 5)).millisecondsSinceEpoch,
-    };
-    appState.sleepGoal = const TimeOfDay(hour: 9, minute: 0);
-    final notifications = _RecordingNotifications();
+  group('T-189 (maintainer request, supersedes T-188): "sleep time" is the '
+      'live window [bedtime, next alarm) - evaluated on every call, not '
+      'only via a precisely-timed background notification', () {
+    // Maintainer's own definition, verbatim: "Ich will, dass in der
+    // schlafenszeit automatisch aktiviert und danach deaktiviert ist. die
+    // schlafenszeit ist die zeit die konfiguriert ist VOR dem nächsten
+    // alarm in der zukunft." T-188's first attempt ("skip a missed bedtime
+    // entirely") got this wrong in two ways an independent review (Günther)
+    // found: it left Do Not Disturb permanently off for any user whose
+    // Sleep Goal is longer than the actual gap to their next wake-up (a
+    // short-turnaround/shift-worker schedule - exactly this app's stated
+    // audience), and a later, unrelated checkpoint trigger (a settings
+    // change, a calendar resync) after bedtime had passed would cancel an
+    // already-correctly-armed notification without replacing it.
 
-    await scheduleDoNotDisturbActivation(appState, notifications: notifications);
+    test('now is inside the window (a short-turnaround schedule): '
+        'activates immediately, live - even though bedtime is already in '
+        'the past', () async {
+      final appState = await _freshAppState();
+      appState.doNotDisturbEnabled = true;
+      final now = DateTime.now();
+      // Next wake in 5 hours, sleep goal 9 hours -> bedtime 4 hours ago,
+      // but "now" is still before the wake-up - we ARE inside the window.
+      appState.pendingDayValues = {
+        isoDate(now.add(const Duration(hours: 5))):
+            now.add(const Duration(hours: 5)).millisecondsSinceEpoch,
+      };
+      appState.sleepGoal = const TimeOfDay(hour: 9, minute: 0);
+      final notifications = _RecordingNotifications();
+      final prefs = await SharedPreferences.getInstance();
+      int? appliedFilter;
 
-    expect(notifications.callCount, 0,
-        reason: 'a missed bedtime must not activate Do Not Disturb right '
-            'now - the next checkpoint trigger recomputes a genuine future '
-            'window once one actually exists');
+      await scheduleDoNotDisturbActivation(
+        appState,
+        notifications: notifications,
+        prefs: prefs,
+        now: () => now,
+        getCurrentFilter: () async => interruptionFilterAll,
+        setFilter: (f) async {
+          appliedFilter = f;
+          return true;
+        },
+      );
+
+      expect(appliedFilter, interruptionFilterAlarms,
+          reason: 'inside the configured sleep window is exactly when Do '
+              'Not Disturb should be on, regardless of how long ago the '
+              'window technically started');
+      expect(notifications.callCount, 0,
+          reason: 'nothing to schedule for an instant already in the past - '
+              'activation already happened live, above');
+      expect(prefs.getInt(doNotDisturbTargetWakeUpKey), isNotNull,
+          reason: 'the target must still be persisted so a later ring can '
+              'be matched against it (isTargetWakeUpRing)');
+    });
+
+    test('already active from this feature, still inside the window: '
+        'does not re-activate or touch anything redundantly', () async {
+      final appState = await _freshAppState();
+      appState.doNotDisturbEnabled = true;
+      final now = DateTime.now();
+      appState.pendingDayValues = {
+        isoDate(now.add(const Duration(hours: 5))):
+            now.add(const Duration(hours: 5)).millisecondsSinceEpoch,
+      };
+      appState.sleepGoal = const TimeOfDay(hour: 9, minute: 0);
+      SharedPreferences.setMockInitialValues(
+          {doNotDisturbPreviousFilterKey: interruptionFilterAll});
+      final prefs = await SharedPreferences.getInstance();
+      var getCurrentFilterCalls = 0;
+
+      await scheduleDoNotDisturbActivation(
+        appState,
+        notifications: _RecordingNotifications(),
+        prefs: prefs,
+        now: () => now,
+        getCurrentFilter: () async {
+          getCurrentFilterCalls++;
+          return interruptionFilterAlarms;
+        },
+        setFilter: (f) async => true,
+      );
+
+      expect(getCurrentFilterCalls, 0,
+          reason: 'already active - activateDoNotDisturb\'s own idempotency '
+              'guard must not re-read/overwrite the real previous state');
+    });
+
+    test('a previously-armed cycle whose window has now ended: restores, '
+        'if still active from this feature', () async {
+      // [nextWakeUpTime] only ever returns future candidates, so a FRESH
+      // recompute can never look "ended" - this can only be detected
+      // against a PREVIOUSLY PERSISTED target from an earlier call, hence
+      // pre-populating it directly here rather than via pendingDayValues.
+      final appState = await _freshAppState();
+      appState.doNotDisturbEnabled = true;
+      final now = DateTime.now();
+      final staleTarget = now.subtract(const Duration(minutes: 1));
+      SharedPreferences.setMockInitialValues({
+        doNotDisturbTargetWakeUpKey: staleTarget.millisecondsSinceEpoch,
+        doNotDisturbPreviousFilterKey: interruptionFilterPriority,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      // An ordinary, unrelated future cycle for the function to also plan -
+      // irrelevant to this assertion, just needs to exist.
+      final nextWakeUp = now.toUtc().add(const Duration(hours: 10));
+      appState.pendingDayValues = {
+        isoDate(nextWakeUp): nextWakeUp.millisecondsSinceEpoch,
+      };
+      appState.sleepGoal = const TimeOfDay(hour: 8, minute: 0);
+      int? restoredTo;
+
+      await scheduleDoNotDisturbActivation(
+        appState,
+        notifications: _RecordingNotifications(),
+        prefs: prefs,
+        now: () => now,
+        setFilter: (f) async {
+          restoredTo = f;
+          return true;
+        },
+      );
+
+      expect(restoredTo, interruptionFilterPriority);
+    });
+
+    test('a stale persisted target with no active previous-filter state: '
+        'no restore attempted', () async {
+      final appState = await _freshAppState();
+      appState.doNotDisturbEnabled = true;
+      final now = DateTime.now();
+      final staleTarget = now.subtract(const Duration(minutes: 1));
+      SharedPreferences.setMockInitialValues(
+          {doNotDisturbTargetWakeUpKey: staleTarget.millisecondsSinceEpoch});
+      final prefs = await SharedPreferences.getInstance();
+      final nextWakeUp = now.toUtc().add(const Duration(hours: 10));
+      appState.pendingDayValues = {
+        isoDate(nextWakeUp): nextWakeUp.millisecondsSinceEpoch,
+      };
+      appState.sleepGoal = const TimeOfDay(hour: 8, minute: 0);
+      var setFilterCalls = 0;
+
+      await scheduleDoNotDisturbActivation(
+        appState,
+        notifications: _RecordingNotifications(),
+        prefs: prefs,
+        now: () => now,
+        setFilter: (f) async {
+          setFilterCalls++;
+          return true;
+        },
+      );
+
+      expect(setFilterCalls, 0);
+    });
+
+    test('still upcoming, target UNCHANGED since the last call: the '
+        'already-armed notification is left alone', () async {
+      // The regression an independent review found in T-188's first
+      // attempt: any unrelated checkpoint trigger (a settings change, a
+      // calendar resync) re-running this must not disturb an
+      // already-correct night's schedule.
+      final appState = await _freshAppState();
+      appState.doNotDisturbEnabled = true;
+      final wakeUp = DateTime.now().toUtc().add(const Duration(hours: 10));
+      appState.pendingDayValues = {
+        isoDate(wakeUp): wakeUp.millisecondsSinceEpoch,
+      };
+      appState.sleepGoal = const TimeOfDay(hour: 8, minute: 0);
+      final prefs = await SharedPreferences.getInstance();
+      final first = _RecordingNotifications();
+      await scheduleDoNotDisturbActivation(appState,
+          notifications: first, prefs: prefs);
+      expect(first.callCount, 1, reason: 'sanity check on the first call');
+
+      final second = _RecordingNotifications();
+      await scheduleDoNotDisturbActivation(appState,
+          notifications: second, prefs: prefs);
+
+      expect(second.callCount, 0);
+      expect(second.cancelledIds, isEmpty,
+          reason: 'nothing about tonight\'s cycle changed - the existing, '
+              'still-correct schedule must not even be cancelled');
+    });
+
+    test('still upcoming, target CHANGED since the last call (a real '
+        'replan moved the wake-up): the notification IS re-armed',
+        () async {
+      final appState = await _freshAppState();
+      appState.doNotDisturbEnabled = true;
+      final firstWakeUp = DateTime.now().toUtc().add(const Duration(hours: 10));
+      appState.pendingDayValues = {
+        isoDate(firstWakeUp): firstWakeUp.millisecondsSinceEpoch,
+      };
+      appState.sleepGoal = const TimeOfDay(hour: 8, minute: 0);
+      final prefs = await SharedPreferences.getInstance();
+      await scheduleDoNotDisturbActivation(appState,
+          notifications: _RecordingNotifications(), prefs: prefs);
+
+      final secondWakeUp = DateTime.now().toUtc().add(const Duration(hours: 11));
+      appState.pendingDayValues = {
+        isoDate(secondWakeUp): secondWakeUp.millisecondsSinceEpoch,
+      };
+      final second = _RecordingNotifications();
+      await scheduleDoNotDisturbActivation(appState,
+          notifications: second, prefs: prefs);
+
+      expect(second.callCount, 1,
+          reason: 'the underlying wake-up genuinely changed - the old '
+              'schedule is now for the wrong instant and must be replaced');
+      expect(second.cancelledIds, [doNotDisturbActivationNotificationId]);
+    });
   });
 
   test('the doNotDisturbActivationNotificationId is a distinct fixed id, '

@@ -83,17 +83,6 @@ DateTime bedtimeInstant(AppState appState, {DateTime Function()? now}) {
   return dateTime;
 }
 
-/// Pushes [dateTime] a couple of minutes into the future if it isn't after
-/// [now] already - shared by [scheduleSleepReminder] and
-/// `scheduleDoNotDisturbActivation` (docs/TODO.md T-110/T-184): a fully
-/// determined date before "now" has no next valid occurrence for
-/// `awesome_notifications`' own scheduler, which silently discards it and
-/// leaves FR-16 Checkpoint 2 (or Do Not Disturb activation) with no hook at
-/// all for that night. Two minutes, not one: `alarmPlatformTime` truncates
-/// to whole minutes, so one minute could shrink down to mere seconds.
-DateTime pushIntoFutureIfPast(DateTime dateTime, DateTime now) =>
-    !dateTime.isAfter(now) ? now.add(const Duration(minutes: 2)) : dateTime;
-
 Future<void> scheduleSleepReminder(
   AppState appState, {
   Notifications? notifications,
