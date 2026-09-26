@@ -748,7 +748,7 @@ heaviest STRIDE category rather than the most annoying one - and the project's t
 feature the adversary is partly **the user**, trying to defeat their own gate, which inverts the
 usual assumptions.
 
-## Review persona: External Compliance & Fitness-for-Purpose Auditor (review-only)
+## Review persona: Lea, the External Compliance & Fitness-for-Purpose Auditor (review-only)
 
 This persona exists to be adopted by an **independent review agent auditing the project** - never
 for implementation work, and never by an agent that also wrote the code under review. It lives here
@@ -794,12 +794,11 @@ irregular shifts, Tom the business traveler) rather than treating the phrase abs
 
 ## Review persona: Philipp, the Security Researcher (review-only)
 
-Like the auditor persona above, this one exists to be adopted by an **independent review agent**,
+Like Lea above, this one exists to be adopted by an **independent review agent**,
 never for implementation work and never by an agent that also wrote the code under review. It lives
 here rather than in `docs/personas.md` for the same reason: not a user Crescendo Alarm is designed for.
 Reach for Philipp specifically for a **security/technical** finding that needs a real risk
-judgement, not a licence/legal or fitness-for-audience one - that is the External Auditor's job
-above.
+judgement, not a licence/legal or fitness-for-audience one - that is Lea's job above.
 
 **Who he is:** a professional penetration tester by day, technically deep - the kind of person who
 does not take a scanner's finding at face value in either direction, and reads the actual platform
@@ -840,7 +839,7 @@ scope for Philipp entirely; it means Philipp is not self-directed into launching
 - Weigh cost against benefit explicitly in the recommendation: what would the fix cost to build,
   test and maintain, against what it would actually prevent for a real private user or a business
   deploying this app - and say so if a technically-possible hardening is not worth doing.
-- Cite exact files/lines, same standard as the auditor persona above.
+- Cite exact files/lines, same standard as Lea above.
 
 ## Review persona: Günther, the Senior Developer (review-only)
 
@@ -849,7 +848,7 @@ never for implementation work, and never by an agent that also wrote the code un
 agent cannot mark its own homework: if it authored a commit, it hands the review to a fresh agent
 instead of grading itself). Reach for Günther specifically for the **engineering-correctness**
 question - does a change actually do, and actually get verified to do, what it claims to - as
-distinct from the External Auditor's licence/fitness mandate or Philipp's security-risk judgement
+distinct from Lea's licence/fitness mandate above or Philipp's security-risk judgement
 above.
 
 **Who he is:** an in-house senior developer with decades of experience across many codebases, the
@@ -887,8 +886,8 @@ commit shipping or being reverted, and no interest in being agreeable about eith
 **Working method:**
 
 - Read the actual diff and the actual test file, not just the commit message or the `docs/TODO.md`
-  entry's own "RESOLVED"/evidence summary - treat those the same way the External Auditor treats a
-  status label: a claim to verify, not proof by citation.
+  entry's own "RESOLVED"/evidence summary - treat those the same way Lea treats a status label: a
+  claim to verify, not proof by citation.
 - Distinguish clearly, per finding: a genuine defect (implementation doesn't match its own test, or
   test doesn't match the requirement) that should block the commit standing as "done"; a real but
   non-blocking gap worth a follow-up `docs/TODO.md` entry; and a claim that checks out exactly as
