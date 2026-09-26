@@ -58,9 +58,18 @@ Future<int?> _getCurrentInterruptionFilter() async {
 
 /// Sets the device's Do Not Disturb interruption filter to [filter]. Returns
 /// whether the call actually reached the platform - `false` covers both "no
-/// native implementation" (non-Android) and a genuine platform failure (most
-/// likely: `ACCESS_NOTIFICATION_POLICY` was never granted, since Android
-/// silently no-ops `setInterruptionFilter` without it rather than throwing).
+/// native implementation" (non-Android) and a genuine platform failure.
+///
+/// Corrected (docs/TODO.md T-186, independent review finding): this used to
+/// claim Android "silently no-ops... rather than throwing" without
+/// `ACCESS_NOTIFICATION_POLICY` - verified against AOSP's
+/// `NotificationManagerService` and this is not what actually happens.
+/// Missing the permission throws `SecurityException`; an out-of-range
+/// [filter] value throws `IllegalArgumentException`. Both are ordinary
+/// `RuntimeException`s, which Flutter's own `MethodChannel` handler already
+/// catches and turns into a normal error result - so [_setInterruptionFilter]
+/// below still safely returns `false` in either case, just via a caught
+/// exception rather than a silent no-op.
 Future<bool> Function(int filter) setInterruptionFilter =
     _setInterruptionFilter;
 

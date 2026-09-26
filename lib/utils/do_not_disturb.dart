@@ -117,7 +117,17 @@ Future<bool> activateDoNotDisturb({
 }) async {
   if (!prefs.containsKey(doNotDisturbPreviousFilterKey)) {
     final current = await getCurrentFilter();
-    if (current == null) return false;
+    // docs/TODO.md T-186 (independent review finding, Philipp): verified
+    // against AOSP's NotificationManagerService - every real filter value
+    // (all/priority/alarms/none) round-trips through setInterruptionFilter,
+    // but interruptionFilterUnknown does not; it throws
+    // IllegalArgumentException every time. getCurrentInterruptionFilter is
+    // documented to return exactly that value "if unavailable for any
+    // reason" (e.g. right after boot). Persisting it here as "the state to
+    // restore to" would mean every later restore attempt - including the
+    // 18-hour safety net - fails forever, with no way to ever recover: the
+    // device stuck silencing everything but its own alarm indefinitely.
+    if (current == null || current == interruptionFilterUnknown) return false;
     await prefs.setInt(doNotDisturbPreviousFilterKey, current);
     // Recorded purely for restoreStaleDoNotDisturb's safety net - only set
     // alongside a genuinely NEW previous-state capture, same reasoning as

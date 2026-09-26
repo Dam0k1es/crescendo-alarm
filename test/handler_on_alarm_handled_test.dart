@@ -1,8 +1,11 @@
+import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/handler.dart';
 import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb.dart';
+import 'package:crescendo_alarm/utils/do_not_disturb_channel.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
 
 // docs/TODO.md T-64 (Phase 6): the most severe finding of the consistency pass.
@@ -107,6 +110,101 @@ void main() {
     }
 
     expect(scheduled, 1);
+  });
+
+  group('T-186: Do Not Disturb is also restored on a genuine Stop, not '
+      'only at a snooze-budget-final ring', () {
+    // Maintainer device report: Do Not Disturb was still active the morning
+    // after an alarm rang. Root cause: Handler.handleAlarm's ring-time
+    // restore only fires when the ring itself is "final" by snooze-budget
+    // math (docs/TODO.md T-184) - but a user who presses Stop before that
+    // budget is exhausted ends the sequence just as definitively, and no
+    // later ring will ever come along to trigger that check at all.
+    // onAlarmHandled is the one place every genuine dismissal (Stop, the QR
+    // gate, T-147's auto-close) already funnels through - and, crucially,
+    // NOT a snooze (screen_active_alarm.dart's `_snoozing` guard skips it).
+
+    test('a Stop with snooze budget still remaining DOES restore', () async {
+      SharedPreferences.setMockInitialValues(
+          {doNotDisturbPreviousFilterKey: interruptionFilterPriority});
+      final appState = AppState();
+      await appState.initialized;
+      appState.snoozeEnabled = true;
+      appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 15);
+      appState.snoozeTime = const Duration(minutes: 5);
+      final ringTime = DateTime.now();
+      appState.rememberSnoozeOrigin(601, ringTime);
+
+      var restoreCalled = false;
+      Handler.onAlarmHandled(
+        appState,
+        601,
+        notifications: _SilentNotifications(),
+        restoreDoNotDisturb: (a) async {
+          restoreCalled = true;
+          return true;
+        },
+      );
+      for (var i = 0; i < 5; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(restoreCalled, isTrue,
+          reason: 'pressing Stop ends the sequence regardless of remaining '
+              'snooze budget - no later ring would ever come along to '
+              'restore this otherwise');
+    });
+
+    test('does not restore an unrelated alarm that is not the target '
+        'wake-up', () async {
+      final target = DateTime.now().add(const Duration(hours: 4));
+      SharedPreferences.setMockInitialValues({
+        doNotDisturbTargetWakeUpKey: target.millisecondsSinceEpoch,
+      });
+      final appState = AppState();
+      await appState.initialized;
+      appState.rememberSnoozeOrigin(602, DateTime.now());
+
+      var restoreCalled = false;
+      Handler.onAlarmHandled(
+        appState,
+        602,
+        notifications: _SilentNotifications(),
+        restoreDoNotDisturb: (a) async {
+          restoreCalled = true;
+          return true;
+        },
+      );
+      for (var i = 0; i < 5; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(restoreCalled, isFalse);
+    });
+
+    test('no origin remembered for this id: does not attempt a restore',
+        () async {
+      SharedPreferences.setMockInitialValues(
+          {doNotDisturbPreviousFilterKey: interruptionFilterPriority});
+      final appState = AppState();
+      await appState.initialized;
+
+      var restoreCalled = false;
+      Handler.onAlarmHandled(
+        appState,
+        603,
+        notifications: _SilentNotifications(),
+        restoreDoNotDisturb: (a) async {
+          restoreCalled = true;
+          return true;
+        },
+      );
+      for (var i = 0; i < 5; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(restoreCalled, isFalse);
+    });
   });
 }
 

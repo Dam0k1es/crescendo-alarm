@@ -121,6 +121,31 @@ class Handler {
     return restoreDoNotDisturb(prefs: prefs, setFilter: setInterruptionFilter);
   }
 
+  /// docs/TODO.md T-186: [onAlarmHandled]'s own restore attempt - looks up
+  /// [alarmID]'s remembered original ring instant (set unconditionally by
+  /// [handleAlarm] before this alarm ever rang) and only calls [restore] if
+  /// it's actually the wake-up Do Not Disturb was scheduled around. No
+  /// remembered origin (should not happen for a real ring, but not worth
+  /// crashing over) means no restore attempt - the same permissive-on-the-
+  /// unknown-side default as everywhere else in this feature.
+  static Future<void> _restoreDoNotDisturbIfTarget(
+    AppState appState,
+    int alarmID,
+    Future<bool> Function(AppState appState) restore,
+  ) async {
+    try {
+      final origin = appState.snoozeOriginFor(alarmID);
+      if (origin == null) return;
+      final prefs = await SharedPreferences.getInstance();
+      if (isTargetWakeUpRing(prefs, origin)) {
+        await restore(appState);
+      }
+    } catch (e) {
+      debugPrint(
+          "=====onAlarmHandled: Do Not Disturb restore check failed: ${e.runtimeType}");
+    }
+  }
+
   /// FR-8: the actual ring is scheduling-v2's daily replanning trigger -
   /// "feuert immer", regardless of how the rest of [handleAlarm] resolves
   /// (dismissed via overlay, via the 3s-timeout fallback, whatever). Fired
@@ -381,6 +406,7 @@ class Handler {
     Notifications? notifications,
     Future<bool> Function(ManualAlarm alarm, bool enabled)?
         setManualAlarmEnabled,
+    Future<bool> Function(AppState appState)? restoreDoNotDisturb,
   }) {
     scheduleSleepReminder(appState, notifications: notifications);
     // docs/TODO.md T-184: symmetric with scheduleSleepReminder above - a
@@ -388,6 +414,22 @@ class Handler {
     // (T-73), so this direct call is the only place its Do Not Disturb
     // activation hook would otherwise get rescheduled at all.
     scheduleDoNotDisturbActivation(appState, notifications: notifications);
+
+    // docs/TODO.md T-186 (maintainer device report, 2026-09-26): "Do Not
+    // Disturb was still on the morning after an alarm rang." Root cause:
+    // handleAlarm's ring-time restore only fires when the ring itself is
+    // "final" by snooze-BUDGET math (T-184) - but a user who presses Stop
+    // before that budget is exhausted ends the sequence just as
+    // definitively, and no later ring will ever come along to trigger that
+    // check. onAlarmHandled is the one place every genuine dismissal (Stop,
+    // the QR gate, T-147's auto-close) already funnels through, and -
+    // critically - NOT a snooze (screen_active_alarm.dart's own `_snoozing`
+    // guard skips calling this for exactly that reason). Still scoped to the
+    // actual target wake-up alarm via isTargetWakeUpRing, for the same
+    // reason handleAlarm's own check is: an unrelated alarm being stopped
+    // must not restore Do Not Disturb hours before the real wake-up.
+    unawaited(_restoreDoNotDisturbIfTarget(
+        appState, alarmID, restoreDoNotDisturb ?? _restoreDoNotDisturbDefault));
 
     final alarm = appState.getAlarm(alarmID);
     if (alarm is ManualAlarm && alarm.enabled) {

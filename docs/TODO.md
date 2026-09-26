@@ -1292,20 +1292,17 @@ level). Full suite re-verified green (645/645), `flutter analyze` clean.
 Two further findings from the same review were judged non-blocking and are tracked separately
 rather than expanded into more scope here: see T-185.
 
-### T-185 · Two non-blocking follow-ups from Günther's T-184 review (P2, OPEN)
+### T-185 · Two non-blocking follow-ups from Günther's T-184 review (P2, one RESOLVED 2026-09-26)
 
-- [ ] **`do_not_disturb_channel.dart`'s own doc comment overstates what a `false` return actually
-  means.** It claims covering "a genuine platform failure (most likely: `ACCESS_NOTIFICATION_POLICY`
-  was never granted)", but the Kotlin side (`DoNotDisturbChannel.kt`) never checks permission state
-  before calling `setInterruptionFilter` - Android's own behavior is to silently no-op without the
-  permission rather than throw, so the Dart wrapper's `invokeMethod` will NOT throw in that case and
-  will return `true` regardless, permission or not. Harmless in practice (a permission-denied
-  activation just silently changes nothing on the device, and the persisted "previous filter"
-  bookkeeping stays internally consistent either way - nothing gets "stuck"), but the comment's
-  claim about what `false` means is simply wrong given the code's own logic. *Done when:* either the
-  comment is corrected to describe the real (harmless) behavior, or an actual permission check is
-  added before recording activation and the comment is left as originally written because it would
-  then be true.
+- [x] **`do_not_disturb_channel.dart`'s own doc comment overstates what a `false` return actually
+  means — RESOLVED as part of T-186's investigation.** The original guess here ("Android silently
+  no-ops without the permission") was itself wrong: Philipp's independent security review of the
+  same code (2026-09-26), verified directly against AOSP's `NotificationManagerService` source,
+  found that missing `ACCESS_NOTIFICATION_POLICY` actually throws `SecurityException`, and an
+  out-of-range filter value throws `IllegalArgumentException` - both ordinary `RuntimeException`s
+  that Flutter's own `MethodChannel` handler already catches and turns into a normal error result, so
+  `_setInterruptionFilter` still safely returns `false` either way. The comment now states this
+  verified behavior instead of the earlier guess.
 - [ ] **`restoreStaleDoNotDisturb`'s safety net has no wiring-level test through
   `runSchedulingCheckpoint`.** The function itself is well covered in isolation
   (`do_not_disturb_test.dart`), and T-184's own fix (above) closed the *scheduling* half of the
@@ -1318,6 +1315,62 @@ rather than expanded into more scope here: see T-185.
   (matching `fetchEvents`/`notifications`/`now` already are), and a test confirms a stale Do Not
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
+
+### T-186 · Do Not Disturb stayed on after an alarm was stopped — two independent root causes, both fixed — DONE (2026-09-26)
+
+- [x] Maintainer device report, verbatim: "Der Do not distrub modus soll nach einem geklingelten
+  alarm logischerweise auch wieder deaktiviert werden, das war heute morgen nicht der fall." (Do Not
+  Disturb should logically also be deactivated again after an alarm has rung - that was not the case
+  this morning.)
+- **Root cause 1 (the one that actually explains a real morning): `Handler.handleAlarm`'s ring-time
+  restore only fires when the ring is "final" by snooze-BUDGET math (T-184), never when the user
+  simply presses Stop.** If the user stops the alarm on its very first ring while the snooze budget
+  theoretically still had room left, `canSnooze()` returns `true`, `isFinalRing` is `false`, and
+  nothing restores Do Not Disturb - regardless of what the user actually does next. Pressing Stop
+  ends the sequence just as definitively as exhausting the budget would have, but no later ring will
+  ever come along to trigger the existing check. Fixed by also restoring from
+  `Handler.onAlarmHandled` - the one place every genuine dismissal (Stop, the QR gate, T-147's
+  auto-close) already funnels through, and - checked directly against
+  `screen_active_alarm.dart`'s own `_snoozing` guard - critically NOT a snooze, which skips calling
+  this function entirely. Still scoped to the actual target wake-up alarm via the existing
+  `isTargetWakeUpRing` (T-184/T-185), for the same reason `handleAlarm`'s own check is: an unrelated
+  alarm being stopped must not restore Do Not Disturb hours before the real wake-up. Looks up the
+  stopped alarm's remembered origin via `AppState.snoozeOriginFor` (set unconditionally by
+  `handleAlarm` at ring time, never cleared on a plain Stop - only transferred to a new id on an
+  actual snooze) rather than re-deriving anything.
+- **Root cause 2 (found independently by Philipp's security review of the same feature, same day -
+  see `docs/TODO.md` T-185's now-resolved first bullet): a stray `interruptionFilterUnknown` (0)
+  could permanently poison restoration.** `activateDoNotDisturb` used to persist whatever
+  `getCurrentFilter()` returned as long as it was non-null, with no check that Android would ever
+  accept that value back. Verified against AOSP's `NotificationManagerService` source:
+  `getCurrentInterruptionFilter()` is documented to return `interruptionFilterUnknown` "if the value
+  is unavailable for any reason" (e.g. right after boot), and passing that back to
+  `setInterruptionFilter` always throws `IllegalArgumentException` - unlike a real filter value,
+  which round-trips fine. If `unknown` were ever captured as "the state to restore to," every later
+  restore attempt - including the 18-hour safety net - would keep failing forever, with genuinely no
+  way to recover on its own. Not attacker-reachable (intra-process platform channel only), but a
+  real, verified reliability defect hitting this project's own named primary threat category
+  (availability). Fixed by treating `interruptionFilterUnknown` the same as an unreadable filter:
+  `activateDoNotDisturb` now returns `false` without persisting or activating anything in that case,
+  deferring to the next activation trigger to try again.
+- **Both root causes independently explain the exact reported symptom** - either alone could cause
+  "Do Not Disturb stayed on all morning," and there is no way to know from the report alone which one
+  (or both) actually happened on the maintainer's device, so both were fixed rather than guessing at
+  just one.
+- **Tests:** `test/handler_on_alarm_handled_test.dart` gained a new group (3 cases: a Stop with
+  budget remaining DOES restore; an unrelated alarm's Stop does NOT restore; no remembered origin
+  means no restore attempt at all) - the first case was confirmed to actually reproduce the bug by
+  running it against the unmodified code first (compilation failure, since the new
+  `restoreDoNotDisturb` parameter didn't exist yet - a stronger red-state proof than a runtime
+  assertion failure). `test/do_not_disturb_test.dart` gained one case pinning down the
+  `interruptionFilterUnknown` guard, likewise confirmed red first.
+- **`do_not_disturb_channel.dart`'s doc comment corrected** to describe the AOSP behavior actually
+  verified during this investigation (see T-185's resolved bullet above) rather than the earlier,
+  wrong guess.
+- **Verified:** `flutter analyze` clean; full suite green (649/649 across three sequential groups,
+  up from 645).
+- **Requirement:** yes - direct maintainer bug report on real hardware, the class of finding this
+  project's own device-feedback intake process (see this file's own header) exists for.
 
 ### T-183 · The QR-scan "Cancel" and the AppBar's own close ("X") button — only one worked — DONE (2026-09-25)
 

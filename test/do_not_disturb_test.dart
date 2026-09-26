@@ -88,6 +88,43 @@ void main() {
       expect(ok, isFalse);
       expect(prefs.containsKey(doNotDisturbPreviousFilterKey), isFalse);
     });
+
+    test(
+        'T-186 (Philipp review finding): treats interruptionFilterUnknown '
+        'the same as an unreadable filter - it must never be persisted as '
+        '"the state to restore to"', () async {
+      // Verified against AOSP source (NotificationManagerService): every
+      // real filter value round-trips through setInterruptionFilter, but
+      // interruptionFilterUnknown (0) - exactly what getCurrentInterruptionFilter
+      // is documented to return "if the value is unavailable for any
+      // reason" - is not one of the four values the platform accepts, and
+      // throws IllegalArgumentException every time it's passed back. If it
+      // were ever persisted here, every later restore attempt (including
+      // the 18-hour safety net) would keep failing forever, with no way to
+      // ever recover - the device stuck silencing everything but its own
+      // alarm indefinitely.
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      var setFilterCalls = 0;
+
+      final ok = await activateDoNotDisturb(
+        prefs: prefs,
+        getCurrentFilter: () async => interruptionFilterUnknown,
+        setFilter: (f) async {
+          setFilterCalls++;
+          return true;
+        },
+      );
+
+      expect(ok, isFalse);
+      expect(prefs.containsKey(doNotDisturbPreviousFilterKey), isFalse,
+          reason: 'an unusable filter value must never be stored as the '
+              'state to restore to - it can never be successfully restored '
+              'again');
+      expect(setFilterCalls, 0,
+          reason: 'without a real previous state, activation must not '
+              'proceed either - there is nothing safe to restore to later');
+    });
   });
 
   group('restoreDoNotDisturb', () {
