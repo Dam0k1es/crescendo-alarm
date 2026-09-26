@@ -548,6 +548,13 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                     // (Handler.shouldRequireDeactivationCode), but is shown
                     // unconditionally, matching every other per-alarm
                     // setting in this dialog.
+                    //
+                    // docs/TODO.md T-192 (maintainer request): labeled
+                    // "Deactivation Code Required", not "Guaranteed Wake-Up"
+                    // (the app-wide name for this feature, used in Sleep
+                    // Habits/Scan Code/the User Guide) - read as a plain
+                    // on/off switch in this dialog, the feature's own name
+                    // didn't say what flipping it actually does.
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(12.0),
@@ -559,7 +566,7 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                             // onto a second line on a narrow phone instead
                             // of overflowing the Row.
                             const Expanded(
-                              child: Text('Guaranteed Wake-Up',
+                              child: Text('Deactivation Code Required',
                                   style: TextStyle(fontSize: 20)),
                             ),
                             Switch(

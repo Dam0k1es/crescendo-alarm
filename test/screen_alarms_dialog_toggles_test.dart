@@ -11,8 +11,14 @@
 //    layout would not visibly wrap, masking the bug.
 // 2. A per-alarm Snooze on/off toggle, following the exact Card/Row/Switch
 //    pattern the existing "Gentle Wake Up" toggle already established.
-// 3. A per-alarm "Guaranteed Wake-Up" (the deactivation-code/QR gate)
-//    on/off toggle, same pattern.
+// 3. A per-alarm "Deactivation Code Required" (the deactivation-code/QR
+//    gate) on/off toggle, same pattern. Originally labeled "Guaranteed
+//    Wake-Up" - renamed (docs/TODO.md T-192, maintainer request): that's the
+//    app-wide feature name (Sleep Habits, Scan Code, the User Guide), but
+//    read as a plain on/off switch in this dialog it didn't say what
+//    switching it actually does - it doesn't broadly promise "you will wake
+//    up", it specifically requires a deactivation-code scan to stop this
+//    alarm.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -129,13 +135,15 @@ void main() {
     });
   });
 
-  group('per-alarm Guaranteed Wake-Up toggle', () {
+  group('per-alarm Deactivation Code Required toggle (docs/TODO.md T-192, '
+      'renamed from "Guaranteed Wake-Up" - maintainer request)', () {
     testWidgets('defaults to on for a new alarm', (tester) async {
       await _openAddDialog(tester);
 
       final gateSwitch = tester.widget<Switch>(find.descendant(
         of: find.ancestor(
-            of: find.text('Guaranteed Wake-Up'), matching: find.byType(Card)),
+            of: find.text('Deactivation Code Required'),
+            matching: find.byType(Card)),
         matching: find.byType(Switch),
       ));
       expect(gateSwitch.value, isTrue);
@@ -148,7 +156,8 @@ void main() {
 
       final gateSwitchFinder = find.descendant(
         of: find.ancestor(
-            of: find.text('Guaranteed Wake-Up'), matching: find.byType(Card)),
+            of: find.text('Deactivation Code Required'),
+            matching: find.byType(Card)),
         matching: find.byType(Switch),
       );
       await tester.ensureVisible(gateSwitchFinder);

@@ -1316,6 +1316,33 @@ rather than expanded into more scope here: see T-185.
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
 
+### T-192 · Renamed the manual-alarm dialog's "Guaranteed Wake-Up" toggle to "Deactivation Code Required" — DONE (2026-09-26)
+
+- [x] Maintainer feedback, verbatim: "Bei manuellen Alarmen gibt es die option Guaranteed wakeup.
+  Ich glaube das meint mit welcher methode ein alarm deaktiviert werden kann oder? ich finde die
+  benamung unpassend." (Manual alarms have the "Guaranteed Wake-Up" option. I think that means with
+  which method an alarm can be deactivated, right? I find the naming unfitting.) Confirmed the
+  maintainer's own reading was exactly correct - the toggle is `ManualAlarm.requireDeactivationCode`
+  - and asked whether to keep the app-wide feature name for consistency (used throughout Sleep
+  Habits, Scan Code, and the User Guide) or use something more specific to what flipping a plain
+  on/off switch in this one dialog actually does. Maintainer chose the latter: **"Deactivation Code
+  Required"**.
+- **Scope, deliberately narrow:** only the manual-alarm dialog's own `Text` label changed
+  (`lib/screens/alarms/screen_alarms.dart`). The underlying field name
+  (`ManualAlarm.requireDeactivationCode`), its persisted JSON key, and the app-wide "Guaranteed
+  Wake-Up" feature name everywhere else (Sleep Habits, Scan Code, `docs/USER_GUIDE.md`'s own
+  feature description, `README.md`) are all unchanged - this is a UI wording fix in one specific
+  context, not a rename of the feature itself.
+- **Tests:** `test/screen_alarms_dialog_toggles_test.dart`'s two cases for this toggle updated to
+  find the new label - confirmed they fail against the unrenamed label first (a `find.text(...)`
+  lookup finding nothing raises `Iterable.single` on an empty iterable when
+  `tester.ensureVisible` tries to resolve it), then pass again once the label itself was renamed.
+- **Verified:** `flutter analyze` clean; full suite green (669/669 across three sequential groups -
+  same count as before, since this replaced two existing cases' target string rather than adding
+  new ones).
+- **Requirement:** yes - direct maintainer request following their own observation about the
+  dialog's wording.
+
 ### T-191 · Manual alarms need their own opt-in for the Do Not Disturb window — DONE (2026-09-26)
 
 - [x] Maintainer request, verbatim: "Dann braucht es eine neue option beim anlegen von manuellen

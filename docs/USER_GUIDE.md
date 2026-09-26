@@ -59,9 +59,10 @@ Alarms you create yourself, independent of any calendar.
 - **Volume**.
 - **Snooze** - whether this specific alarm allows postponing, independent of the global Snooze
   setting under Sleep Habits.
-- **Guaranteed Wake-Up** - whether this specific alarm requires a deactivation-code scan to stop it
-  (see "Scan Code" below). Only takes effect once a code is actually configured there; with none
-  set, no alarm requires a scan regardless of this toggle.
+- **Deactivation Code Required** - whether this specific alarm requires a deactivation-code scan to
+  stop it (the app-wide "Guaranteed Wake-Up" feature - see "Scan Code" below). Only takes effect
+  once a code is actually configured there; with none set, no alarm requires a scan regardless of
+  this toggle.
 - **Counts for Do Not Disturb** - whether this specific alarm counts as a "next wake-up" for the Do
   Not Disturb feature (see Sleep Habits below). Off by default: an alarm you set manually could just
   as easily be a medication reminder or a nap as it is your real wake-up, so it takes an explicit
