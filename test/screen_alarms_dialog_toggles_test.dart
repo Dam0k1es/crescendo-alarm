@@ -25,6 +25,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
 import 'package:crescendo_alarm/screens/alarms/screen_alarms.dart';
 
 Future<AppState> _openAddDialog(WidgetTester tester) async {
@@ -137,8 +138,18 @@ void main() {
 
   group('per-alarm Deactivation Code Required toggle (docs/TODO.md T-192, '
       'renamed from "Guaranteed Wake-Up" - maintainer request)', () {
-    testWidgets('defaults to on for a new alarm', (tester) async {
-      await _openAddDialog(tester);
+    testWidgets(
+        'a deactivation code IS configured: defaults to on for a new alarm, '
+        'and can be turned off', (tester) async {
+      final appState = await _openAddDialog(tester);
+      // _openAddDialog already returned appState with the dialog open -
+      // reopen it after configuring a code, since the code has to exist
+      // before the dialog is built to affect its default.
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      appState.deactivationCode = DeactivationCode(payload: 'test-payload');
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
 
       final gateSwitch = tester.widget<Switch>(find.descendant(
         of: find.ancestor(
@@ -147,12 +158,6 @@ void main() {
         matching: find.byType(Switch),
       ));
       expect(gateSwitch.value, isTrue);
-    });
-
-    testWidgets(
-        'turning it off produces a ManualAlarm with requireDeactivationCode '
-        'false', (tester) async {
-      final appState = await _openAddDialog(tester);
 
       final gateSwitchFinder = find.descendant(
         of: find.ancestor(
@@ -163,6 +168,36 @@ void main() {
       await tester.ensureVisible(gateSwitchFinder);
       await tester.tap(gateSwitchFinder);
       await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      final created = appState.manualAlarms.single;
+      expect(created.requireDeactivationCode, isFalse);
+    });
+
+    testWidgets(
+        'docs/TODO.md T-193 (maintainer request): no deactivation code '
+        'configured at all - the toggle shows off and cannot be turned on, '
+        'since it would have no effect either way (Handler.'
+        'shouldRequireDeactivationCode already ignores it without a code)',
+        (tester) async {
+      final appState = await _openAddDialog(tester);
+      expect(appState.deactivationCode, isNull,
+          reason: 'sanity check on this test\'s own premise');
+
+      final gateSwitchFinder = find.descendant(
+        of: find.ancestor(
+            of: find.text('Deactivation Code Required'),
+            matching: find.byType(Card)),
+        matching: find.byType(Switch),
+      );
+      final gateSwitch = tester.widget<Switch>(gateSwitchFinder);
+      expect(gateSwitch.value, isFalse);
+      expect(gateSwitch.onChanged, isNull,
+          reason: 'disabled, not just defaulted off - a Switch with a '
+              'non-null onChanged can still be tapped');
 
       await tester.ensureVisible(find.text('Save'));
       await tester.tap(find.text('Save'));

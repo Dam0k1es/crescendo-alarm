@@ -361,7 +361,18 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     // matching the only behavior that existed before this per-alarm
     // override: every alarm required the deactivation-code scan whenever a
     // code was configured.
-    bool requireDeactivationCode = alarm?.requireDeactivationCode ?? true;
+    //
+    // docs/TODO.md T-193 (maintainer request): "wenn kein code gesetzt ist,
+    // soll auch die Option auf off sein" - with no deactivation code
+    // configured at all, this toggle has no effect whatsoever
+    // (Handler.shouldRequireDeactivationCode already ignores it without a
+    // code), so showing/allowing "on" would be actively misleading. Forced
+    // off (not just displayed off - genuinely stored as `false`) whenever
+    // no code exists, and the Switch below is disabled to match, rather
+    // than defaulting `true` and silently diverging from what's shown.
+    final codeConfigured = _appState.deactivationCode != null;
+    bool requireDeactivationCode =
+        codeConfigured ? (alarm?.requireDeactivationCode ?? true) : false;
     // docs/TODO.md T-191 (maintainer request): defaults to OFF regardless of
     // any existing setting to inherit from - see ManualAlarm.countsForDoNotDisturb's
     // own doc comment for why opt-in is the safe default here specifically.
@@ -571,11 +582,18 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                             ),
                             Switch(
                               value: requireDeactivationCode,
-                              onChanged: (value) {
-                                setState(() {
-                                  requireDeactivationCode = value;
-                                });
-                              },
+                              // docs/TODO.md T-193: disabled (not just
+                              // defaulted off) whenever no code is
+                              // configured - same "greyed out, genuinely
+                              // untappable" pattern as the Dark Mode switch
+                              // while following the system theme (T-51).
+                              onChanged: codeConfigured
+                                  ? (value) {
+                                      setState(() {
+                                        requireDeactivationCode = value;
+                                      });
+                                    }
+                                  : null,
                               activeThumbColor: _appState.accentColor,
                             ),
                           ],

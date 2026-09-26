@@ -1316,6 +1316,32 @@ rather than expanded into more scope here: see T-185.
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
 
+### T-193 · "Deactivation Code Required" is now forced off (and disabled) with no code configured — DONE (2026-09-26)
+
+- [x] Maintainer request, verbatim: "Achja: Wenn kein code gesetzt ist, soll auch die option auf off
+  sein. macht nur sinn so." (Oh right: if no code is set, the option should also be off. Only makes
+  sense that way.) Raised as a direct follow-up to T-192's rename - once the toggle's own label
+  made clear what it actually does, it became obvious that showing/allowing "on" when there is no
+  code to gate against at all is misleading: `Handler.shouldRequireDeactivationCode` already ignores
+  this per-alarm flag entirely whenever `AppState.deactivationCode` is `null`, so the toggle would
+  have silently had zero effect either way.
+- **Fix:** `bool requireDeactivationCode = codeConfigured ? (alarm?.requireDeactivationCode ?? true)
+  : false;` - genuinely stored as `false`, not merely displayed that way, whenever no code is
+  configured (so Save can never silently persist a stale `true` the user never actually saw or
+  chose). The `Switch` itself is disabled (`onChanged: null`) in that case too - the same
+  "genuinely untappable while it would have no effect" pattern already established for the Dark
+  Mode switch while following the system theme (T-51), not merely defaulted off while still
+  interactive.
+- **Tests:** `screen_alarms_dialog_toggles_test.dart`'s toggle group restructured into two cases -
+  "a deactivation code IS configured" (the pre-existing default-on/turn-off behavior, now requiring
+  a code to be set up first) and "no deactivation code configured at all" (new: asserts both
+  `Switch.value == false` and `Switch.onChanged == null`, confirmed to fail against the unfixed
+  code first).
+- **Verified:** `flutter analyze` clean; full suite green (669/669 across three sequential groups -
+  same count as before, since this restructured two existing cases rather than adding new ones).
+- **Requirement:** yes - direct maintainer follow-up to T-192, self-evidently correct once the
+  toggle's own effect was named accurately.
+
 ### T-192 · Renamed the manual-alarm dialog's "Guaranteed Wake-Up" toggle to "Deactivation Code Required" — DONE (2026-09-26)
 
 - [x] Maintainer feedback, verbatim: "Bei manuellen Alarmen gibt es die option Guaranteed wakeup.
