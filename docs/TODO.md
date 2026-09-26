@@ -1316,6 +1316,50 @@ rather than expanded into more scope here: see T-185.
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
 
+### T-188 · Do Not Disturb activated in the middle of the day, not at bedtime — DONE (2026-09-26)
+
+- [x] Maintainer device report, verbatim: "Habe eben die neue APK installiert. Habe DND aktiviert.
+  Aber ich habe jetzt im moment den DND an, obwohl keine schlafenszeit ist." (I just installed the
+  new APK. I enabled DND. But I now have DND on right now, even though it isn't sleep time.)
+- **Root cause: `scheduleDoNotDisturbActivation` copied `scheduleSleepReminder`'s T-110 "missed
+  bedtime -> catch up ASAP" handling verbatim, but the two are not equivalent.** For the sleep
+  reminder, a missed bedtime only suppresses the notification's *visible content*
+  (`missedBedtime` -> `reminderEnabled: false` in `sleepReminderContent`) - the notification still
+  fires "as soon as possible" purely to keep FR-16 Checkpoint 2's background hook alive, which is
+  harmless: nothing user-visible happens. Do Not Disturb activation has no such passive half - it
+  is a real, immediate effect (silencing the phone). `pushIntoFutureIfPast(bedtimeInstant, now)`
+  pushed a missed bedtime to `now + 2 minutes` regardless, so turning the toggle on triggered a real
+  activation within about two minutes whenever the next planned/manual wake-up happened to be
+  sooner than the configured Sleep Goal - which reads as "bedtime already passed" to the algorithm
+  but is not bedtime by any reasonable interpretation; it is just an artifact of enabling the
+  feature outside an actual sleep window. Confirmed by reproducing the exact reported shape in a
+  test first (next wake-up 5h out, Sleep Goal 9h -> computed bedtime 4h in the past): the test
+  asserted the old "still schedules, just soon" behavior explicitly, matching the bug exactly.
+- **Fix:** `scheduleDoNotDisturbActivation` no longer catches up a missed bedtime at all - if
+  `bedtimeInstant` is not after "now", it clears the persisted target wake-up and returns without
+  scheduling anything for this cycle (the notification was already cancelled earlier in the same
+  call). Nothing else depends on this specific notification firing regardless, unlike the
+  reminder's dual purpose, so there is no reason to force one. The next checkpoint trigger (another
+  app open, a setting change, an alarm ring) recomputes a genuine future window naturally, once one
+  actually exists.
+- **Tests:** the existing "a bedtime already in the past is still scheduled, just soon (T-110 same
+  reasoning)" case in `test/do_not_disturb_schedule_test.dart` was rewritten to assert the corrected
+  behavior (`notifications.callCount == 0`) - confirmed to actually flip red against the unmodified
+  code first (asserting the OLD behavior would have passed against the bug, so the assertion itself
+  had to change, not just be added to).
+- **Verified:** `flutter analyze` clean; full suite green (649/649 across three sequential groups -
+  same count as before, since this rewrote one existing case rather than adding a new one).
+- **Requirement:** yes - direct maintainer bug report on real hardware, immediately following T-187
+  making a same-day device reinstall practical enough to actually catch this.
+- **Separately reported by the maintainer in the same message, not yet investigated:** "Außerdem
+  legt es einen neuen Modus an" (it also creates a new mode) - unclear whether this refers to a new
+  entry Android's own Settings > Sound > Modes screen shows for an app that calls
+  `setInterruptionFilter` directly (this app never calls `addAutomaticZenRule`, which is the API
+  that would actually create a named automatic rule/mode, so if Android is showing one anyway that
+  would be platform behavior to understand and document rather than a bug in this codebase to fix),
+  or something else in the app's own UI. Needs a screenshot or more detail from the maintainer
+  before it can be diagnosed - tracked here rather than guessed at.
+
 ### T-187 · A fixed, shared debug keystore for every dev build — DONE (2026-09-26)
 
 - [x] Maintainer request: "Verdrahte bitte einen festen key für alle dev versionen und lokalen

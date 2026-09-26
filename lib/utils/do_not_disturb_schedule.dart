@@ -72,12 +72,35 @@ Future<void> scheduleDoNotDisturbActivation(
     }
 
     final rawBedtime = bedtimeInstant(appState);
+
+    // docs/TODO.md T-188 (maintainer device report): unlike
+    // scheduleSleepReminder's own T-110 "catch up ASAP" handling
+    // (pushIntoFutureIfPast -> now + 2 minutes) - which is harmless there,
+    // since a missed bedtime already suppresses that notification's visible
+    // content and its only job is keeping FR-16 Checkpoint 2's hook alive -
+    // Do Not Disturb activation is a real, immediate effect on the device.
+    // Catching it up "as soon as possible" would silence the phone right
+    // now, mid-day, whenever the checkpoint happens to run with the next
+    // wake-up sooner than the configured sleep goal - not bedtime by any
+    // reasonable reading, just an artifact of the algorithm. So a missed
+    // bedtime is simply skipped for this cycle instead: the notification
+    // was already cancelled above, and the next checkpoint trigger
+    // recomputes a genuine future window once one actually exists. Nothing
+    // else depends on this notification firing regardless (unlike the
+    // reminder's dual Checkpoint-2-hook purpose), so there is no reason to
+    // force one here.
+    if (!rawBedtime.isAfter(DateTime.now())) {
+      await p.remove(doNotDisturbTargetWakeUpKey);
+      debugPrint(
+          "=====scheduleDoNotDisturbActivation: bedtime $rawBedtime already "
+          "passed - not activating Do Not Disturb outside a real sleep window");
+      return;
+    }
+
     final targetWakeUp =
         rawBedtime.add(durationFromTimeOfDay(appState.sleepGoal));
     await p.setInt(
         doNotDisturbTargetWakeUpKey, targetWakeUp.millisecondsSinceEpoch);
-
-    final dateTime = pushIntoFutureIfPast(rawBedtime, DateTime.now());
 
     try {
       // docs/TODO.md T-61: same boundary as the alarm plugin and the sleep
@@ -85,14 +108,14 @@ Future<void> scheduleDoNotDisturbActivation(
       // is a UTC-tagged instant, so it's converted to local wall clock
       // before being handed to the notification scheduler.
       await notifier.scheduleNotification(
-          scheduledDate: alarmPlatformTime(dateTime),
+          scheduledDate: alarmPlatformTime(rawBedtime),
           id: doNotDisturbActivationNotificationId);
     } catch (e) {
       debugPrint(
           "=====scheduleDoNotDisturbActivation: scheduleNotification failed: ${e.runtimeType}");
     }
     debugPrint(
-        "=====scheduleDoNotDisturbActivation: Set Do Not Disturb activation for $dateTime");
+        "=====scheduleDoNotDisturbActivation: Set Do Not Disturb activation for $rawBedtime");
   } catch (e) {
     debugPrint(
         "=====scheduleDoNotDisturbActivation: Error setting Do Not Disturb activation: ${e.runtimeType}");

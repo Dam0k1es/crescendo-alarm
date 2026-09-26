@@ -119,8 +119,17 @@ void main() {
     expect(notifications.cancelledIds, [doNotDisturbActivationNotificationId]);
   });
 
-  test('a bedtime already in the past is still scheduled, just soon (T-110 '
-      'same reasoning)', () async {
+  test(
+      'T-188 (maintainer device report): a bedtime already in the past does '
+      'NOT get caught up immediately - unlike the sleep reminder, activation '
+      'is a real, active effect, not a passive notification', () async {
+    // Regression: this used to mirror scheduleSleepReminder's own T-110
+    // "catch up ASAP" behavior (pushIntoFutureIfPast -> now + 2 minutes),
+    // which is fine for a suppressed, passive reminder notification but
+    // wrong here - it silenced the maintainer's phone within minutes of
+    // turning the toggle on in the middle of the day, nowhere near an
+    // actual bedtime, because the next wake-up happened to be sooner than
+    // the configured sleep goal.
     final appState = await _freshAppState();
     appState.doNotDisturbEnabled = true;
     final now = DateTime.now();
@@ -134,8 +143,10 @@ void main() {
 
     await scheduleDoNotDisturbActivation(appState, notifications: notifications);
 
-    expect(notifications.callCount, 1);
-    expect(notifications.lastScheduledDate!.isAfter(now), isTrue);
+    expect(notifications.callCount, 0,
+        reason: 'a missed bedtime must not activate Do Not Disturb right '
+            'now - the next checkpoint trigger recomputes a genuine future '
+            'window once one actually exists');
   });
 
   test('the doNotDisturbActivationNotificationId is a distinct fixed id, '
