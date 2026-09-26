@@ -1316,6 +1316,25 @@ rather than expanded into more scope here: see T-185.
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
 
+### T-196 · Release v1.3.0 published — DONE (2026-09-26)
+
+- [x] Maintainer request: "wenn das grün ist erstelle einen neuen release als version 1.3. [...]
+  für den release den neuesten main build wenn grün" (once it's green, create a new release as
+  version 1.3 [...] for the release, the newest main build if green). Minor bump per semantic
+  versioning: new user-facing features (Do Not Disturb, per-alarm Snooze / Deactivation Code
+  Required / Counts for Do Not Disturb, QR share/print), no breaking change - `pubspec.yaml`
+  `1.3.0+4`.
+- **Path to green:** the first master gate on the version bump (5af8f23, run 36249699023) failed
+  E2E twice - diagnosed as a harness race, not a product defect, and fixed as T-194. The next gate
+  (7def40b, run 36252759755) passed E2E but hit an R8 heap OOM in the production build; that one
+  job was re-run green (MobSF green after it), and the heap raised on `dev` as T-195. Tag `v1.3.0`
+  on 7def40b only after that master run was green, per T-40's process rule.
+- **Release:** `release.yml` run 36255153019 green (security gate, E2E, signed build). Title
+  "Crescendo Alarm v1.3.0", hand-written notes, assets `app-release.apk` and
+  `crescendo-alarm-v1.3.0.apk` (identical, SHA-256
+  `bd9938e4f07c4f137c619a0b361f4bedd1e0633e786a08b0ddeec9368e4516a1`), `apksigner verify` passes
+  with the same production certificate as v1.2.0, so it installs as an in-place update over it.
+
 ### T-195 · R8 release minification ran out of Gradle heap — DONE (2026-09-26)
 
 - [x] Master run 36252759755 (7def40b, a commit changing no Android code) passed E2E, then failed
