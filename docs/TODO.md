@@ -1316,6 +1316,38 @@ rather than expanded into more scope here: see T-185.
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
 
+### T-194 · E2E harness race: the app's own open-sync replanned the injected test week away — DONE (2026-09-26)
+
+- [x] Found while promoting v1.3.0: master run 36249699023 (commit 5af8f23, a version bump only)
+  failed "T-64: dismissing a ringing alarm leaves the planned week registered" on **both** attempts
+  (`Expected: Set:[<7 ids>]`, `Actual: Set:[]`), although the identical code had passed the full
+  gate an hour earlier (run 36247751213). Two re-runs of the same failure ruled out plain emulator
+  noise.
+- **Cause - the harness, not the product:** `planOneCalendarEvent` passed its injected calendar via
+  `fetchEvents` to exactly **one** checkpoint call. The app under test runs checkpoints of its own
+  that never see it: `main.dart`'s `_syncCalendarAndAlarmsOnOpen` queues its `manualSync` only
+  *after* `resyncCalendarData`'s calendar I/O, so it can land after the test's own plan; and a
+  ringing alarm's full-screen intent triggers a resume. Those read the emulator's real, empty
+  calendar and correctly replan the week to nothing. The device log shows it directly:
+  `applyPlannedAlarms: removed 0, added 7` (the test's plan) followed ~1.3 s later by
+  `removed 7, added 0`. T-63/T-61/T-84 assert immediately and win the race; T-64 waits about a
+  minute for its alarm to ring and loses whenever the open-sync lands second - a timing race, which
+  is why it passed on cb18d32 and failed twice on 5af8f23.
+- **Fix:** `debugFetchEventsOverride` (`@visibleForTesting`, null in production) in
+  `lib/models/scheduling/replan.dart` - a fallback for `replan()`'s *default* calendar source,
+  never overriding an explicit `fetchEvents`. `planOneCalendarEvent` installs the injected calendar
+  there, so every checkpoint in the scenario sees the same calendar a real device would; the
+  suite's `tearDown` clears it.
+- **Tests:** `test/replan_fetch_events_override_test.dart` (new, confirmed failing first): the
+  override is read when no `fetchEvents` is passed; an explicit `fetchEvents` still wins
+  (counter-test); null by default.
+- **Verified:** `flutter analyze` clean; full suite green (672/672 in three groups). The E2E fix
+  itself can only be confirmed by the next master gate run.
+- **Not addressed here:** the same run's first attempt also hit T-23's known minute-boundary flake
+  in "manual alarm fires and is dismissed via the default overlay"; and
+  `silent_notification_test.dart` fails on every run including green ones (`isAllowed: false` on
+  the CI emulator) - it is the non-gating T-62 leg.
+
 ### T-193 · "Deactivation Code Required" is now forced off (and disabled) with no code configured — DONE (2026-09-26)
 
 - [x] Maintainer request, verbatim: "Achja: Wenn kein code gesetzt ist, soll auch die option auf off

@@ -35,6 +35,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/main.dart';
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
+import 'package:crescendo_alarm/models/scheduling/replan.dart' show debugFetchEventsOverride;
 import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
 import 'package:crescendo_alarm/screens/alarms/screen_active_alarm.dart';
 import 'package:crescendo_alarm/screens/alarms/screen_alarms.dart';
@@ -224,19 +225,27 @@ Future<DateTime> planOneCalendarEvent(
   // after an injected "now".
   final eventStart = DateTime.now().toUtc().add(leadTime);
 
+  // docs/TODO.md T-194: installed process-wide, not just passed to this one
+  // call - the app under test runs checkpoints of its own (main.dart's
+  // open-sync, whose manualSync is queued only after its calendar I/O and so
+  // can land AFTER this plan; the resume a ringing alarm's full-screen intent
+  // triggers). Without the override those read the emulator's real, empty
+  // calendar and replan this week away ("removed 7, added 0"), which failed
+  // the T-64 scenario below twice on master run 36249699023.
+  debugFetchEventsOverride = (start, end) async => <Meeting>[
+        Meeting(
+          from: eventStart,
+          to: eventStart.add(const Duration(hours: 1)),
+          isAllDay: false,
+          startTimeZone: 'Etc/UTC',
+          endTimeZone: 'Etc/UTC',
+        ),
+      ];
+
   await runSchedulingCheckpoint(
     appState,
     trigger: CheckpointTrigger.manualSync,
     notifications: _SilentNotifications(),
-    fetchEvents: (start, end) async => <Meeting>[
-      Meeting(
-        from: eventStart,
-        to: eventStart.add(const Duration(hours: 1)),
-        isAllDay: false,
-        startTimeZone: 'Etc/UTC',
-        endTimeZone: 'Etc/UTC',
-      ),
-    ],
   );
 
   return eventStart;
@@ -258,6 +267,7 @@ void main() {
 
   tearDown(() async {
     QrScanner.debugScanStreamOverride = null;
+    debugFetchEventsOverride = null;
     await Alarm.stopAll();
   });
 

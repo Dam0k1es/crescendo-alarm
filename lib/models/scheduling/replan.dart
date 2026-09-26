@@ -38,6 +38,16 @@ import 'package:crescendo_alarm/utils/utils.dart';
 
 typedef FetchEvents = Future<List<Meeting>> Function(DateTime start, DateTime end);
 
+/// docs/TODO.md T-194: test seam for the E2E suite - when set, it replaces the
+/// real calendar read for every [replan] that is not given its own
+/// `fetchEvents`. Passing `fetchEvents` to one checkpoint only reaches that
+/// one call; the app under test also starts checkpoints of its own (the
+/// open-sync in `main.dart`, the resume a ringing alarm's full-screen intent
+/// triggers), and those read the emulator's real, empty calendar and replan
+/// an injected week away. Null in production.
+@visibleForTesting
+FetchEvents? debugFetchEventsOverride;
+
 /// FR-6/FR-9/FR-12's respective notification flags, bubbled up from a single
 /// `replan()` call - plain data, no side effect: actually showing a
 /// notification for any of these is Phase 5's job (platform wiring).
@@ -85,6 +95,7 @@ Future<ReplanResult> replan(
 
   final nowFn = now ?? DateTime.now;
   final fetch = fetchEvents ??
+      debugFetchEventsOverride ??
       (DateTime start, DateTime end) =>
           fetchMeetingsUncached(appState, start, end);
   final currentTime = nowFn();
