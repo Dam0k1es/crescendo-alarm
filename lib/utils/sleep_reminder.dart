@@ -17,6 +17,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 import 'package:crescendo_alarm/models/scheduling/next_wake_up.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
@@ -55,7 +56,11 @@ const int sleepReminderNotificationId = 100000001;
 /// three independent failure modes already handled below, exactly the kind
 /// of logic this project has hit real bugs from re-deriving twice before
 /// (`nextManualOccurrence`, `canSnooze`).
-DateTime bedtimeInstant(AppState appState, {DateTime Function()? now}) {
+DateTime bedtimeInstant(
+  AppState appState, {
+  DateTime Function()? now,
+  bool Function(ManualAlarm alarm)? manualAlarmFilter,
+}) {
   final nowFn = now ?? DateTime.now;
   DateTime dateTime;
   try {
@@ -68,6 +73,7 @@ DateTime bedtimeInstant(AppState appState, {DateTime Function()? now}) {
           pendingDayValues: appState.pendingDayValues,
           manualAlarms: appState.manualAlarms,
           now: nowFn(),
+          manualAlarmFilter: manualAlarmFilter,
         ) ??
         nowFn().add(const Duration(days: 7));
   } catch (e) {

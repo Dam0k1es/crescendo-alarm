@@ -53,10 +53,24 @@ import 'package:crescendo_alarm/models/scheduling/stored_values.dart';
 ///
 /// Returns `null` when neither source yields a future wake-up time; callers
 /// decide what to do with that (see `scheduleSleepReminder`'s fallback).
+///
+/// [manualAlarmFilter] (docs/TODO.md T-191, maintainer request), when given,
+/// additionally excludes a manual alarm this function would otherwise
+/// consider - used by the Do Not Disturb window (T-189,
+/// `do_not_disturb_schedule.dart`) to only count manual alarms explicitly
+/// marked `countsForDoNotDisturb`, since an arbitrary manual alarm (a
+/// medication reminder, a nap, anything unrelated to sleep) is not
+/// necessarily a real wake-up. Left `null` (the default) for every other
+/// caller, in particular the bedtime reminder above, which still considers
+/// every enabled manual alarm exactly as it always has - deliberately NOT
+/// the same filtering, since opting an alarm out of Do Not Disturb says
+/// nothing about whether it should still shift when you're told to go to
+/// bed.
 DateTime? nextWakeUpTime({
   required Map<String, int?> pendingDayValues,
   required List<ManualAlarm> manualAlarms,
   required DateTime now,
+  bool Function(ManualAlarm alarm)? manualAlarmFilter,
 }) {
   DateTime? earliest;
 
@@ -78,6 +92,7 @@ DateTime? nextWakeUpTime({
 
   for (final alarm in manualAlarms) {
     if (!alarm.enabled) continue;
+    if (manualAlarmFilter != null && !manualAlarmFilter(alarm)) continue;
     // `MyAlarm.time` is declared `dynamic` (a `DateTime` for `ScheduledAlarm`,
     // a `TimeOfDay` for `ManualAlarm`) - hence the cast.
     final time = alarm.time as TimeOfDay;

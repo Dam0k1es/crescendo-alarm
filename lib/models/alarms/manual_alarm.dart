@@ -46,6 +46,20 @@ class ManualAlarm extends MyAlarm {
   /// every alarm required the scan whenever a code was set at all.
   bool requireDeactivationCode;
 
+  /// docs/TODO.md T-191 (maintainer request): whether this alarm counts as a
+  /// "next wake-up" for the Do Not Disturb window (T-189,
+  /// `next_wake_up.dart`'s `manualAlarmFilter`) - **not** for the separate
+  /// bedtime-reminder feature, which still considers every manual alarm
+  /// exactly as it always has (that call site passes no filter at all).
+  /// Defaults to `false`: an arbitrary manual alarm is just as likely to be
+  /// a medication reminder, a nap, or anything else entirely unrelated to
+  /// sleep as it is to be a real wake-up, and Do Not Disturb activating
+  /// around the wrong one is a real, reported problem (docs/TODO.md T-190's
+  /// own follow-up) - opt-in is the safe default, unlike
+  /// `requireDeactivationCode`/`snoozeEnabled` above, which default to
+  /// preserving pre-existing behavior instead.
+  bool countsForDoNotDisturb;
+
   ManualAlarm({
     required TimeOfDay super.time,
     super.title,
@@ -62,9 +76,11 @@ class ManualAlarm extends MyAlarm {
     super.vibrate,
     bool? snoozeEnabled,
     bool? requireDeactivationCode,
+    bool? countsForDoNotDisturb,
     Map<DayOfWeek, bool>? repeatOnDays,
   })  : snoozeEnabled = snoozeEnabled ?? true,
         requireDeactivationCode = requireDeactivationCode ?? true,
+        countsForDoNotDisturb = countsForDoNotDisturb ?? false,
         repeatOnDays =
             repeatOnDays ?? {for (var day in DayOfWeek.values) day: true};
 
@@ -98,6 +114,9 @@ class ManualAlarm extends MyAlarm {
       // doc comments above for why that's the right migration behavior.
       snoozeEnabled: data['snoozeEnabled'] as bool?,
       requireDeactivationCode: data['requireDeactivationCode'] as bool?,
+      // Missing for alarms stored before T-191 - then this constructor's
+      // own default (false) applies.
+      countsForDoNotDisturb: data['countsForDoNotDisturb'] as bool?,
       repeatOnDays: repeatOnDays,
       id: data['id'],
     );
@@ -116,6 +135,7 @@ class ManualAlarm extends MyAlarm {
       'vibrate': vibrate,
       'snoozeEnabled': snoozeEnabled,
       'requireDeactivationCode': requireDeactivationCode,
+      'countsForDoNotDisturb': countsForDoNotDisturb,
       'repeatOnDays':
           repeatOnDays.map((day, value) => MapEntry(day.toString(), value)),
       'id': id,
@@ -140,6 +160,7 @@ class ManualAlarm extends MyAlarm {
           vibrate == other.vibrate &&
           snoozeEnabled == other.snoozeEnabled &&
           requireDeactivationCode == other.requireDeactivationCode &&
+          countsForDoNotDisturb == other.countsForDoNotDisturb &&
           id == other.id &&
           compareRepeatDays(repeatOnDays, other.repeatOnDays);
     } else {

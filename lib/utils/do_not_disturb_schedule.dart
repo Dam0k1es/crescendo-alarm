@@ -140,7 +140,19 @@ Future<void> scheduleDoNotDisturbActivation(
     // Step 2: the current/next cycle, always freshly recomputed and always
     // a genuinely future wake-up (see above) - so "inside the window"
     // reduces to "has this cycle's bedtime arrived yet".
-    final rawBedtime = bedtimeInstant(appState, now: nowFn);
+    //
+    // docs/TODO.md T-191 (maintainer request): only manual alarms explicitly
+    // opted in count toward Do Not Disturb's own notion of "next wake-up" -
+    // an arbitrary manual alarm (a medication reminder, a nap, anything else
+    // unrelated to sleep) is not necessarily a real wake-up, and T-190's own
+    // follow-up already showed the cost of Do Not Disturb reacting to the
+    // wrong event. The bedtime reminder's own call to bedtimeInstant
+    // (sleep_reminder.dart) passes no filter and is deliberately unaffected.
+    final rawBedtime = bedtimeInstant(
+      appState,
+      now: nowFn,
+      manualAlarmFilter: (alarm) => alarm.countsForDoNotDisturb,
+    );
     final targetWakeUp =
         rawBedtime.add(durationFromTimeOfDay(appState.sleepGoal));
     final targetMillis = targetWakeUp.millisecondsSinceEpoch;

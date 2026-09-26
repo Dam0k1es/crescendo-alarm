@@ -1316,6 +1316,53 @@ rather than expanded into more scope here: see T-185.
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
 
+### T-191 · Manual alarms need their own opt-in for the Do Not Disturb window — DONE (2026-09-26)
+
+- [x] Maintainer request, verbatim: "Dann braucht es eine neue option beim anlegen von manuellen
+  Alarmen die sagt, ob ein alarm für DND berücksichtigt wird, oder nicht. Die soll im default aus
+  sein." (Then a new option is needed when creating manual alarms, saying whether an alarm counts
+  for DND or not. It should default to off.) Raised after diagnosing a real device report (T-189's
+  own live-window fix correctly identified "now" as inside the sleep window - but the "next alarm"
+  driving that window was a real Scheduled alarm, and the maintainer separately observed that an
+  arbitrary Manual alarm counting equally toward the same computation would be "Quatsch" - a
+  medication reminder, a nap, or any other Manual alarm unrelated to sleep could otherwise make Do
+  Not Disturb activate around the wrong event.
+- **Design: a new `ManualAlarm.countsForDoNotDisturb` field (default `false`)**, and a
+  `manualAlarmFilter` parameter threaded through `next_wake_up.dart`'s `nextWakeUpTime` and
+  `sleep_reminder.dart`'s `bedtimeInstant` - **only** `do_not_disturb_schedule.dart`'s own call
+  passes `(alarm) => alarm.countsForDoNotDisturb`; the bedtime reminder's own call passes no filter
+  at all and still considers every enabled Manual alarm exactly as it always has (T-66's original
+  design intent - a user with no Scheduled alarms still needs a sensible bedtime reminder).
+  Deliberately NOT filtering inside `nextWakeUpTime` unconditionally: that would have silently
+  changed the reminder's own behavior too, which nobody asked for.
+- **A real bug found and fixed along the way, not by review this time but by the test itself
+  failing unexpectedly:** `AppState.addAlarm` reconstructs a brand-new `ManualAlarm` from the one
+  passed in, explicitly listing which fields to carry over - `countsForDoNotDisturb` was missing
+  from that list, so every newly-created alarm silently reset it to `false` regardless of what the
+  dialog actually saved, discovered by comparing the dialog widget's own in-tree Switch value
+  (`true`, immediately after tapping) against what ended up in `AppState.manualAlarms` (`false`).
+  This is the exact "a setting with a UI that never reaches the alarm" bug class `docs/TODO.md`
+  T-84 and T-176 already hit twice in this same function - the comment already sitting there
+  warning about T-176's own instance of it did not, by itself, prevent a third occurrence. Fixed by
+  adding the missing field to the reconstruction; `updateAlarm` (the edit path) was checked too and
+  does not have this problem, since it assigns the new alarm object directly rather than
+  reconstructing one.
+- **UI:** a new "Counts for Do Not Disturb" toggle in the manual-alarm add/edit dialog, same
+  Card/Row/Switch pattern as the existing Snooze/Guaranteed Wake-Up toggles, defaulting to off
+  regardless of any existing setting to inherit from (unlike those two, which default to preserving
+  pre-existing behavior).
+- **Tests:** `manual_alarm_per_alarm_toggles_test.dart` (+5: model defaults/serialization/equality,
+  plus the `AppState.addAlarm` regression - confirmed to actually reproduce the bug via `git stash`
+  against the unmodified `addAlarm`, not just a new assertion added alongside the fix in the same
+  commit), `next_wake_up_test.dart` (+4: the filter parameter's own behavior, independent of any
+  particular caller), `do_not_disturb_schedule_test.dart` (+2: an un-opted-in Manual alarm is
+  ignored even when earlier than the real Scheduled wake-up; an opted-in one is used when it is the
+  earliest), `screen_alarms_dialog_toggles_test.dart` (+2: the new toggle's default and its effect
+  on save).
+- **Verified:** `flutter analyze` clean; full suite green (669/669 across three sequential groups).
+- **Requirement:** yes - direct maintainer request, refining T-189's own window definition rather
+  than reopening it.
+
 ### T-190 · Turning the Do Not Disturb toggle off could be a no-op after data loss — DONE (2026-09-26)
 
 - [x] Maintainer device report, verbatim: "hatte in der alten version dnd deaktiviert, apk

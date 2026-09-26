@@ -141,5 +141,83 @@ void main() {
       expect(result, DateTime(2026, 3, 13, 7, 0),
           reason: '2026-03-13 is the next Friday, not "tomorrow"');
     });
+
+    group('manualAlarmFilter (docs/TODO.md T-191, maintainer request)', () {
+      // Used by Do Not Disturb's own "next wake-up" computation
+      // (do_not_disturb_schedule.dart) so an arbitrary manual alarm
+      // (a medication reminder, a nap) doesn't count as a wake-up unless
+      // explicitly marked - never applied to the bedtime reminder's own
+      // call, which passes no filter and still considers every alarm.
+
+      test('with no filter given, every enabled manual alarm still counts '
+          '(unaffected default)', () {
+        final result = nextWakeUpTime(
+          pendingDayValues: const {},
+          manualAlarms: [
+            ManualAlarm(time: const TimeOfDay(hour: 6, minute: 30)),
+          ],
+          now: now,
+        );
+
+        expect(result, DateTime(2026, 3, 10, 6, 30));
+      });
+
+      test('a filtered-out manual alarm is excluded even if it would '
+          'otherwise be earliest', () {
+        final excluded = ManualAlarm(
+          time: const TimeOfDay(hour: 6, minute: 30),
+          countsForDoNotDisturb: false,
+        );
+        final included = ManualAlarm(
+          time: const TimeOfDay(hour: 9, minute: 0),
+          countsForDoNotDisturb: true,
+        );
+
+        final result = nextWakeUpTime(
+          pendingDayValues: const {},
+          manualAlarms: [excluded, included],
+          now: now,
+          manualAlarmFilter: (alarm) => alarm.countsForDoNotDisturb,
+        );
+
+        expect(result, DateTime(2026, 3, 10, 9, 0),
+            reason: 'the earlier alarm was filtered out - the later, '
+                'opted-in one must win instead');
+      });
+
+      test('a scheduled-plan value is never affected by the manual-alarm '
+          'filter', () {
+        final planned = DateTime(2026, 3, 10, 7, 0);
+        final excludedManual = ManualAlarm(
+          time: const TimeOfDay(hour: 6, minute: 30),
+          countsForDoNotDisturb: false,
+        );
+
+        final result = nextWakeUpTime(
+          pendingDayValues: {_iso(planned): planned.millisecondsSinceEpoch},
+          manualAlarms: [excludedManual],
+          now: now,
+          manualAlarmFilter: (alarm) => alarm.countsForDoNotDisturb,
+        );
+
+        expect(result, planned);
+      });
+
+      test('all manual alarms filtered out, nothing planned -> null', () {
+        final result = nextWakeUpTime(
+          pendingDayValues: const {},
+          manualAlarms: [
+            ManualAlarm(
+              time: const TimeOfDay(hour: 6, minute: 30),
+              countsForDoNotDisturb: false,
+            ),
+          ],
+          now: now,
+          manualAlarmFilter: (alarm) => alarm.countsForDoNotDisturb,
+        );
+
+        expect(result, isNull);
+      });
+    });
   });
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 import 'package:crescendo_alarm/utils/do_not_disturb.dart'
     show doNotDisturbPreviousFilterKey, doNotDisturbTargetWakeUpKey;
@@ -332,6 +333,70 @@ void main() {
           reason: 'the underlying wake-up genuinely changed - the old '
               'schedule is now for the wrong instant and must be replaced');
       expect(second.cancelledIds, [doNotDisturbActivationNotificationId]);
+    });
+  });
+
+  group('T-191 (maintainer request): only manual alarms explicitly opted '
+      'in count toward the Do Not Disturb window', () {
+    test('a manual alarm that has NOT opted in is ignored, even though it '
+        'is earlier than the real Scheduled wake-up', () async {
+      final appState = await _freshAppState();
+      appState.doNotDisturbEnabled = true;
+      appState.sleepGoal = const TimeOfDay(hour: 8, minute: 0);
+      final soonReminder = DateTime.now().add(const Duration(hours: 2));
+      final realWakeUp = DateTime.now().toUtc().add(const Duration(hours: 10));
+      appState.manualAlarms.add(ManualAlarm(
+        time: TimeOfDay(hour: soonReminder.hour, minute: soonReminder.minute),
+        countsForDoNotDisturb: false,
+      ));
+      appState.pendingDayValues = {
+        isoDate(realWakeUp): realWakeUp.millisecondsSinceEpoch,
+      };
+      final notifications = _RecordingNotifications();
+
+      await scheduleDoNotDisturbActivation(appState, notifications: notifications);
+
+      expect(notifications.callCount, 1,
+          reason: 'if the un-opted-in manual alarm had wrongly been used as '
+              '"the" wake-up, its own bedtime would already be in the past '
+              '(now - 6h), which activates live and schedules nothing at '
+              'all instead - a callCount of 0 here would itself already be '
+              'a symptom of the bug');
+      final expectedBedtime = realWakeUp.toLocal().subtract(const Duration(hours: 8));
+      expect(
+        notifications.lastScheduledDate!.difference(expectedBedtime).abs().inMinutes,
+        lessThanOrEqualTo(1),
+        reason: 'the un-opted-in manual alarm must not influence the '
+            'computed bedtime at all - only the real Scheduled wake-up may',
+      );
+    });
+
+    test('a manual alarm that HAS opted in is used when it is the earliest '
+        'wake-up', () async {
+      final appState = await _freshAppState();
+      appState.doNotDisturbEnabled = true;
+      appState.sleepGoal = const TimeOfDay(hour: 1, minute: 0);
+      final now = DateTime.now();
+      final soonManual = now.add(const Duration(hours: 2));
+      final laterScheduled = now.toUtc().add(const Duration(hours: 10));
+      appState.manualAlarms.add(ManualAlarm(
+        time: TimeOfDay(hour: soonManual.hour, minute: soonManual.minute),
+        countsForDoNotDisturb: true,
+      ));
+      appState.pendingDayValues = {
+        isoDate(laterScheduled): laterScheduled.millisecondsSinceEpoch,
+      };
+      final notifications = _RecordingNotifications();
+
+      await scheduleDoNotDisturbActivation(appState, notifications: notifications);
+
+      final expectedBedtime = soonManual.subtract(const Duration(hours: 1));
+      expect(
+        notifications.lastScheduledDate!.difference(expectedBedtime).abs().inMinutes,
+        lessThanOrEqualTo(1),
+        reason: 'the opted-in manual alarm is the earliest wake-up and '
+            'must be what the bedtime is computed from',
+      );
     });
   });
 

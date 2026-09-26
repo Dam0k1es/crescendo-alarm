@@ -864,6 +864,12 @@ class AppState extends ChangeNotifier {
           // that never reaches the alarm" bug class as T-84.
           snoozeEnabled: alarm.snoozeEnabled,
           requireDeactivationCode: alarm.requireDeactivationCode,
+          // docs/TODO.md T-191: same bug class again, caught this time by a
+          // widget test before it ever shipped - found by comparing the
+          // Switch's own in-tree value (true, right after tapping) against
+          // the ManualAlarm actually saved (false), which could only mean
+          // the value was lost somewhere between the dialog and AppState.
+          countsForDoNotDisturb: alarm.countsForDoNotDisturb,
           repeatOnDays: alarm.repeatOnDays);
       if (_manualAlarms.contains(alarm)) {
         debugPrint(

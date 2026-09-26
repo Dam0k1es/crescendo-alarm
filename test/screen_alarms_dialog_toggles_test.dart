@@ -163,4 +163,43 @@ void main() {
       expect(created.requireDeactivationCode, isFalse);
     });
   });
+
+  group('per-alarm "Counts for Do Not Disturb" toggle (docs/TODO.md T-191, '
+      'maintainer request)', () {
+    testWidgets('defaults to off for a new alarm - opt-in, unlike the '
+        'other two toggles above', (tester) async {
+      await _openAddDialog(tester);
+
+      final dndSwitch = tester.widget<Switch>(find.descendant(
+        of: find.ancestor(
+            of: find.text('Counts for Do Not Disturb'),
+            matching: find.byType(Card)),
+        matching: find.byType(Switch),
+      ));
+      expect(dndSwitch.value, isFalse);
+    });
+
+    testWidgets(
+        'turning it on produces a ManualAlarm with countsForDoNotDisturb '
+        'true', (tester) async {
+      final appState = await _openAddDialog(tester);
+
+      final dndSwitchFinder = find.descendant(
+        of: find.ancestor(
+            of: find.text('Counts for Do Not Disturb'),
+            matching: find.byType(Card)),
+        matching: find.byType(Switch),
+      );
+      await tester.ensureVisible(dndSwitchFinder);
+      await tester.tap(dndSwitchFinder);
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      final created = appState.manualAlarms.single;
+      expect(created.countsForDoNotDisturb, isTrue);
+    });
+  });
 }
