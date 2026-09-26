@@ -1316,6 +1316,45 @@ rather than expanded into more scope here: see T-185.
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
 
+### T-190 · Turning the Do Not Disturb toggle off could be a no-op after data loss — DONE (2026-09-26)
+
+- [x] Maintainer device report, verbatim: "hatte in der alten version dnd deaktiviert, apk
+  installiert, dann weider installiert. ist jetzt aktiv. aber eigentlich keine schlafenszeit." (I had
+  DND disabled in the old version, installed the APK, then installed it again. It's active now, but
+  it isn't actually sleep time.)
+- **Root cause: `_handleDoNotDisturbToggle`'s OFF branch only ever restored the device's Do Not
+  Disturb state IF something was still remembered to restore it TO** (`doNotDisturbPreviousFilterKey`
+  present in `SharedPreferences`) - a silent no-op otherwise. An app reinstall wipes `SharedPreferences`
+  entirely, but the device's actual Do Not Disturb state lives entirely outside app data and is
+  completely untouched by that - so after a reinstall, the app has no memory left of ever having
+  activated anything, while the real device can still be sitting in whatever state a previous
+  install's activation left it in, with the toggle's own OFF path now powerless to fix it (confirmed
+  by the maintainer's own follow-up: "Wenn ich den Toggle aus mache ist der Zustand weg. Wenn ich ihn
+  an mache, ist der Zustand wieder da" - the live-window logic (T-189) was working correctly, but
+  the OFF path's dependence on remembered bookkeeping was the actual gap).
+- **Fix:** a manual "turn this whole feature off" tap is an unambiguous signal the user wants Do Not
+  Disturb to stop interfering right now - `_handleDoNotDisturbToggle`'s OFF branch now falls back to
+  forcing `interruptionFilterAll` (Do Not Disturb off, unconditionally) whenever there is nothing
+  recorded to restore to instead, rather than doing nothing. When a previous state genuinely IS
+  remembered, that is still restored exactly as before (respects a separate, legitimate manual Do Not
+  Disturb configuration the user may have set themselves) - the force-off is specifically the
+  fallback for the "nothing to restore to" case, not a replacement for the restore path in general.
+- **Tests:** `test/screen_sleephabits_do_not_disturb_toggle_test.dart` (new, 2 cases) - the "nothing
+  remembered" case was confirmed to actually reproduce the bug by reverting the production change via
+  `git stash` and re-running it (a genuine failure against the unmodified code, not just a new
+  assertion added alongside a fix).
+- **Verified:** `flutter analyze` clean; full suite green (656/656 across three sequential groups).
+- **Still open, tracked separately (not yet diagnosed):** the maintainer's report that turning the
+  toggle ON immediately re-activates Do Not Disturb "obwohl eigentlich keine Schlafenszeit ist" - per
+  T-189's own live-window design this is only possible when `bedtimeInstant`'s underlying
+  `nextWakeUpTime` result currently produces `now` inside `[bedtime, wakeUp)` for the maintainer's
+  real device data, which is either genuinely correct (an actual short-turnaround shape, matching
+  T-189's own design intent) or points at the wake-up/Sleep-Goal computation resolving to something
+  the maintainer does not expect. Needs the maintainer's actual configured Sleep Goal and real next
+  wake-up/alarm time to diagnose further, rather than guessing - not yet followed up on.
+- **Requirement:** yes - direct maintainer bug report following the T-189 fix, plus an explicit
+  request ("Ich sehe Do not Disturb aus forcieren auch als sinnvoll") to add the force-off fallback.
+
 ### T-189 · Sleep time is the live window [bedtime, next alarm) — supersedes T-188's first attempt — DONE (2026-09-26)
 
 - [x] Independent review (Günther, requested by the maintainer specifically to re-check T-188's

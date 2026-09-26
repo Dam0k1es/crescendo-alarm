@@ -515,6 +515,18 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
   /// immediately: if Do Not Disturb is currently active because of this
   /// feature, it is restored right away rather than left silenced until
   /// whatever alarm eventually rings next.
+  ///
+  /// docs/TODO.md T-190 (maintainer device report): restoring used to be a
+  /// no-op whenever nothing was remembered to restore TO
+  /// (`doNotDisturbPreviousFilterKey` absent) - reachable in practice after
+  /// an app reinstall wipes all `SharedPreferences` (the maintainer's own
+  /// real case) while the device's actual Do Not Disturb state, which lives
+  /// entirely outside app data, is untouched by that. A manual "turn this
+  /// whole feature off" tap is an unambiguous signal the user wants it to
+  /// stop interfering right now - rather than leave the device silently
+  /// stuck because the bookkeeping needed to "restore" is gone, this now
+  /// force-turns Do Not Disturb off entirely (`interruptionFilterAll`) as a
+  /// fallback whenever there is nothing recorded to restore to instead.
   Future<void> _handleDoNotDisturbToggle(bool value) async {
     if (value) {
       final granted = await requestDoNotDisturbPermission();
@@ -531,6 +543,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
         if (prefs.containsKey(doNotDisturbPreviousFilterKey)) {
           await restoreDoNotDisturb(
               prefs: prefs, setFilter: setInterruptionFilter);
+        } else {
+          await setInterruptionFilter(interruptionFilterAll);
         }
       } catch (e) {
         debugPrint(
