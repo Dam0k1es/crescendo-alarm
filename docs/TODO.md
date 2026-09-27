@@ -1340,19 +1340,35 @@ rather than expanded into more scope here: see T-185.
   permission prompt, `AppState.doNotDisturbEnabled`, the checkpoint/handler/notification hooks, the
   per-alarm `ManualAlarm.countsForDoNotDisturb` option and `nextWakeUpTime`'s `manualAlarmFilter`,
   plus their tests. `lib/utils/sleep_reminder.dart` is byte-identical to its pre-T-184 state again.
-  Also removed: `ACCESS_NOTIFICATION_POLICY` from the manifest - it dated from the initial commit's
-  never-built DND plan, and nothing else uses it (alarms play on the alarm stream without it).
-  T-192/T-193 ("Deactivation Code Required") are unaffected.
+  Also removed: `ACCESS_NOTIFICATION_POLICY`. The app's own declaration dated from the initial
+  commit's never-built DND plan - but deleting it was not enough (Günther's review of 967f98f,
+  confirmed with `aapt2 dump permissions` on that commit's CI APK): the `alarm` plugin declares the
+  permission in its own manifest and manifest merging put it straight back. The app manifest now
+  strips it with `tools:node="remove"`, like the other unused plugin permissions. The plugin's own
+  code never calls a notification-policy, interruption-filter or zen API, and alarms play on the
+  alarm stream without it. T-192/T-193 ("Deactivation Code Required") are unaffected.
 - **Kept on purpose:** `DiagSleepHabitSetting` code 14 stays reserved (a comment in
   `diag_log.dart`) so logs exported before the removal are never misread.
 - **Leftovers on an existing install (accepted, test phase):** stale `SharedPreferences` keys of
   the feature are simply never read again. If Do Not Disturb is still switched on by the old build
   at the moment of the update, the new build cannot switch it off - it has to be turned off once in
   Android's own quick settings, and the "Do Not Disturb (Crescendo Alarm)" mode Android 15+ created
-  may need deleting there too.
+  may need deleting there too. v1.3.0 may also still have its one-shot, silent DND activation
+  notification (id `100000002`) scheduled; nothing cancels it, and if it fires it only runs one extra
+  FR-16 Checkpoint 2 (`onNotificationCreatedMethod` routes every notification there) - harmless.
+  **A re-implementation must not reuse the old preference keys or that notification id without
+  clearing them first.**
 - **Tests:** new `test/do_not_disturb_removed_test.dart` (a source-reading guard: no manifest
   permission, no interruption-filter access in Dart/Kotlin, no DND setting in `lib/`), confirmed
-  failing first on the manifest permission. Delete it when a re-implementation is requested.
+  failing first on the manifest permission. Delete it when a re-implementation is requested. Its
+  first version only checked that the app's own manifest no longer mentions the permission - an
+  easy, adjacent property that stayed green while the APK still carried it; it now requires the
+  explicit `tools:node="remove"`, and the source checks also cover `accessNotificationPolicy`,
+  `ZenRule`, `setZenMode`, `NotificationManager.Policy` and `.java` files.
+- **Independent review (Günther, 2026-09-27):** removal otherwise complete - every file the feature
+  touched is byte-identical to its pre-T-184 state apart from T-192/T-193/T-194; no non-DND
+  behaviour or test coverage lost; a `ManualAlarm` persisted by v1.3.0 (still carrying a
+  `countsForDoNotDisturb` key) parses, compares equal and re-serialises without it.
 
 ### T-196 · Release v1.3.0 published — DONE (2026-09-26)
 

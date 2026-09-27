@@ -40,8 +40,7 @@
   service, no FCM/APNs, no external server ever involved in triggering one.
 - **One small custom Kotlin platform channel**, not a pub.dev plugin, where a suitable
   one didn't exist or wasn't worth the dependency for a handful of framework calls:
-  `DirectBootFallback` (the `LOCKED_BOOT_COMPLETED` broadcast) - see `CLAUDE.md`'s
-  architecture notes. (A second one, `DoNotDisturbChannel`, existed from T-184 until the
+  `DirectBootFallback` (the `LOCKED_BOOT_COMPLETED` broadcast). (A second one, `DoNotDisturbChannel`, existed from T-184 until the
   Do Not Disturb feature was removed again in T-197.)
 - **`device_calendar`** is the only external data source the app reads from at all, and
   it's still entirely on-device: the phone's own local calendar provider, not a calendar

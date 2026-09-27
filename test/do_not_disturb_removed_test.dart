@@ -9,6 +9,10 @@
 // the app could still read or change the phone's interruption filter, and no
 // permission that would keep it listed under Android's "Do Not Disturb
 // access". Delete this file when the maintainer asks for a re-implementation.
+//
+// A tripwire, not a proof: the actual evidence that the removal is complete
+// is that every file the feature touched is byte-identical to its pre-T-184
+// state again (Günther's review of 967f98f). This file keeps it that way.
 
 import 'dart:io';
 
@@ -21,20 +25,42 @@ Iterable<File> _sourceFiles(String root, String extension) =>
         .where((f) => f.path.endsWith(extension));
 
 void main() {
-  test('the manifest no longer requests ACCESS_NOTIFICATION_POLICY', () {
+  test('ACCESS_NOTIFICATION_POLICY is stripped from the merged manifest', () {
+    // Deleting the app's own declaration is not enough: the `alarm` plugin
+    // declares the permission in its own manifest (without ever using it),
+    // and manifest merging puts it back into the APK - Günther's review of
+    // 967f98f found exactly that. Only an explicit tools:node="remove" keeps
+    // it out, the same way the other unused plugin permissions are stripped.
     final manifest =
         File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
-    expect(manifest, isNot(contains('ACCESS_NOTIFICATION_POLICY')));
+    final declarations = RegExp(
+            r'<uses-permission[^>]*ACCESS_NOTIFICATION_POLICY[^>]*>')
+        .allMatches(manifest)
+        .map((m) => m.group(0)!)
+        .toList();
+    expect(declarations, isNotEmpty,
+        reason: 'without an explicit removal, the alarm plugin\'s own '
+            'declaration is merged into the APK');
+    for (final declaration in declarations) {
+      expect(declaration, contains('tools:node="remove"'));
+    }
   });
 
   test('no Dart or Kotlin source touches the interruption filter', () {
     final offenders = [
       ..._sourceFiles('lib', '.dart'),
       ..._sourceFiles('android/app/src', '.kt'),
+      ..._sourceFiles('android/app/src', '.java'),
     ].where((f) {
       final source = f.readAsStringSync();
-      return source.contains('InterruptionFilter') ||
-          source.contains('isNotificationPolicyAccessGranted');
+      return const [
+        'InterruptionFilter',
+        'isNotificationPolicyAccessGranted',
+        'accessNotificationPolicy',
+        'ZenRule',
+        'setZenMode',
+        'NotificationManager.Policy',
+      ].any(source.contains);
     }).map((f) => f.path);
     expect(offenders, isEmpty);
   });
