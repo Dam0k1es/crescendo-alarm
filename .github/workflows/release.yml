@@ -124,11 +124,21 @@ jobs:
           # storage for 90 days.
           retention-days: 30
 
+      # Maintainer request (2026-09-27): a release carries exactly ONE APK,
+      # named after the app and the tag (crescendo-alarm-v1.3.0.apk) - never
+      # Flutter's generic app-release.apk. Until v1.3.0 the named copy was
+      # uploaded by hand next to it, leaving two identical assets.
+      - name: Name the APK after the app and tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "build/app/outputs/flutter-apk/crescendo-alarm-${GITHUB_REF_NAME}.apk"
+
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: build/app/outputs/flutter-apk/crescendo-alarm-${{ github.ref_name }}.apk
           generate_release_notes: true
 
   cleanup-old-artifacts:
