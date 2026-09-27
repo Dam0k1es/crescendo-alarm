@@ -149,11 +149,12 @@ T-198 records why, from primary sources. Rules that are load-bearing:
 - Persisted keys are new (`sleepTimeDndEnabled`; native device-protected prefs `sleep_time_dnd`);
   the removed feature's keys are cleared at load, and `DiagSleepHabitSetting` 14 stays reserved.
 - `integration_test/sleep_time_dnd_test.dart` reads the real interruption filter on the CI emulator
-  (non-gating, API 34 - the legacy global-DND model, not Android 15's implicit mode).
-- **The two Android models have to be verified separately.** The maintainer's real test phone runs
-  **Android 16** (implicit app-owned mode), while the CI emulator is API 34 (global DND). A green E2E
-  leg therefore says nothing about the phone's model, and a phone test says nothing about Android
-  14 and older - never report one as covering the other.
+  (non-gating). Since 2026-09-27 the emulator is **API 36** (Android 16, implicit app-owned mode),
+  matching the maintainer's phone; the legacy global-DND model (API 34 and older) has no automated
+  coverage any more.
+- **The two Android models have to be verified separately.** The maintainer's real test phone and
+  the CI emulator both run **Android 16** (implicit app-owned mode) now; nothing covers Android 14
+  and older (global DND). Never report a result from one model as covering the other.
 
 License: GNU GPLv3 (see `LICENSE`). Copyright holders named in tracked files: Dam0k1es, centron5961
 - two of the three original developers of the project this repository grew from. All three have

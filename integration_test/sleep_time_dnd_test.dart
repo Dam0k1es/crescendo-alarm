@@ -38,10 +38,12 @@
 // Disturb access", which the script grants with
 // `adb shell cmd notification allow_dnd` while this runs.
 //
-// What this does NOT cover, stated plainly: the CI emulator is API 34, i.e.
-// the legacy global-Do-Not-Disturb model, not Android 15's per-app implicit
-// rule the maintainer's phone uses (SleepTimeDndPolicy's API >= 35 branch);
-// and the app process stays alive throughout, so "the end fires with the app
+// Since 2026-09-27 the CI emulator is API 36 (Android 16), the same model as
+// the maintainer's phone: Android 15+'s per-app implicit rule
+// (SleepTimeDndPolicy's API >= 35 branch). The legacy global-Do-Not-Disturb
+// model (API 34 and older) is no longer exercised by any automated run.
+// What this does NOT cover, stated plainly: the app process stays alive
+// throughout, so "the end fires with the app
 // process dead" rests on the receiver path being engine-free by
 // construction, not on this run.
 

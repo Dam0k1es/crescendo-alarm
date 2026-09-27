@@ -1615,8 +1615,14 @@ defects found and fixed in the follow-up commit:**
 - T-199: FR-16's Checkpoint 2 has the same "created fires at scheduling" problem as the removed DND
   code; it is harmless there but means that checkpoint does not do its job.
 - **Device model (maintainer, 2026-09-27):** the maintainer's test phone runs **Android 16**, i.e.
-  the implicit app-owned mode (H4), not global Do Not Disturb. The CI emulator (API 34) only covers
-  the legacy global model, so each model needs its own evidence.
+  the implicit app-owned mode (H4), not global Do Not Disturb. The CI emulator was API 34 (legacy
+  global model) and was moved to **API 36** on the maintainer's request, so the E2E leg now sees
+  the phone's model; Android 14 and older lose automated coverage in exchange.
+- **Second phone check (maintainer, 2026-09-27):** after creating a manual alarm within the 8 h
+  Sleep Goal, the app's Do Not Disturb mode was found **on after about 25 minutes** of waiting. The
+  catch-up is designed for ~2 minutes (T-110); whether it actually took that long, or was only
+  noticed then (on Android 16 the quick-settings DND tile does not show the app's mode), is not yet
+  established. The API 36 E2E leg asserts the catch-up timing and will answer this for the emulator.
 - **First phone check (maintainer, 2026-09-27, brief install-and-click-through, no Diagnostics
   export):** feature on with no alarm inside one Sleep Goal (8 h) - Do Not Disturb stayed off, as
   intended (symptom 1 of T-184 not reproduced). Creating a manual alarm without the exclusion did

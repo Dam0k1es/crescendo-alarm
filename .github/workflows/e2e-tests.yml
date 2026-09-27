@@ -84,7 +84,14 @@ jobs:
       - name: Run E2E tests on a real emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          # Android 16 (API 36), the Android version of the maintainer's real
+          # test phone (maintainer request, 2026-09-27). Until then this was
+          # API 34 (Android 14), which exercises the legacy global Do Not
+          # Disturb model rather than the app-owned implicit mode Android 15+
+          # uses (docs/TODO.md T-198, H4) - so the sleep-time DND scenario
+          # never saw the model the phone actually has. Trade-off: Android 14
+          # and older are no longer covered by any automated run.
+          api-level: 36
           target: google_apis
           arch: x86_64
           profile: pixel_6
