@@ -254,6 +254,80 @@ kill "$DND_GRANT_PID" 2>/dev/null || true
 wait "$DND_GRANT_PID" 2>/dev/null || true
 adb shell cmd notification set_dnd off >/dev/null 2>&1 || true
 
+# docs/TODO.md T-200 (maintainer request): the sleep-time Do Not Disturb
+# catch-up under the maintainer's PHONE conditions, not the ideal ones the
+# leg above runs under. On the Android 16 phone the catch-up (designed for
+# ~2 minutes) came on after ~10-15 minutes. Three differences are removed
+# here: SCHEDULE_EXACT_ALARM is reset to the platform default (this script
+# grants it explicitly further up), the screen goes off and Doze is forced
+# once the window is armed, and the delay is measured from OUTSIDE the app by
+# polling the platform's own zen mode. The pending alarm entry is recorded
+# too - exact, or with a delivery window? - which is the actual diagnosis.
+# Non-gating evidence (the question is "how late, and why").
+IDLE_LOG="$EVIDENCE_DIR/sleep_time_dnd_idle.log"
+IDLE_ALARMS="$EVIDENCE_DIR/sleep_time_dnd_idle_alarms.log"
+IDLE_TIMELINE="$EVIDENCE_DIR/sleep_time_dnd_idle_timeline.log"
+(
+  while :; do
+    adb shell cmd notification allow_dnd "$PACKAGE" >/dev/null 2>&1 || true
+    adb shell appops set "$PACKAGE" SCHEDULE_EXACT_ALARM default >/dev/null 2>&1 || true
+    sleep 2
+  done
+) &
+IDLE_GRANT_PID=$!
+flutter test integration_test/sleep_time_dnd_catch_up_idle_test.dart -d emulator-5554 \
+  > "$IDLE_LOG" 2>&1 &
+IDLE_TEST_PID=$!
+PUSHED_AT=""
+for _ in $(seq 1 600); do
+  if grep -q "CATCHUP_PUSHED" "$IDLE_LOG" 2>/dev/null; then
+    PUSHED_AT=$(date +%s)
+    break
+  fi
+  kill -0 "$IDLE_TEST_PID" 2>/dev/null || break
+  sleep 1
+done
+# Stop re-granting before the device idles: a stream of adb commands every
+# two seconds is not what an idle phone sees.
+kill "$IDLE_GRANT_PID" 2>/dev/null || true
+wait "$IDLE_GRANT_PID" 2>/dev/null || true
+ACTIVE_AFTER=""
+if [ -n "$PUSHED_AT" ]; then
+  {
+    echo "== window pushed at $(date -u +%FT%TZ)"
+    echo "== appops SCHEDULE_EXACT_ALARM:"
+    adb shell appops get "$PACKAGE" SCHEDULE_EXACT_ALARM
+    echo "== exact-alarm permissions in the package state:"
+    adb shell dumpsys package "$PACKAGE" | grep -E "USE_EXACT_ALARM|SCHEDULE_EXACT_ALARM"
+    echo "== pending alarms of the package (dumpsys alarm):"
+    adb shell dumpsys alarm | grep -B2 -A10 "$PACKAGE" | head -200
+  } > "$IDLE_ALARMS" 2>&1
+  adb shell input keyevent KEYCODE_SLEEP || true
+  adb shell dumpsys deviceidle force-idle || true
+  while :; do
+    ELAPSED=$(( $(date +%s) - PUSHED_AT ))
+    ZEN=$(adb shell settings get global zen_mode | tr -d '\r')
+    echo "t+${ELAPSED}s zen_mode=$ZEN" >> "$IDLE_TIMELINE"
+    if [ -n "$ZEN" ] && [ "$ZEN" != "0" ] && [ "$ZEN" != "null" ]; then
+      ACTIVE_AFTER=$ELAPSED
+      break
+    fi
+    [ "$ELAPSED" -ge 960 ] && break
+    kill -0 "$IDLE_TEST_PID" 2>/dev/null || break
+    sleep 5
+  done
+  adb shell dumpsys deviceidle unforce || true
+  adb shell input keyevent KEYCODE_WAKEUP || true
+  adb shell wm dismiss-keyguard || true
+fi
+wait "$IDLE_TEST_PID" 2>/dev/null || true
+adb shell cmd notification set_dnd off >/dev/null 2>&1 || true
+# Back to the state the later legs were written against.
+adb shell appops set "$PACKAGE" SCHEDULE_EXACT_ALARM allow || true
+echo "catch-up under idle (T-200): activated after ${ACTIVE_AFTER:-never (or not measured)}s" \
+  | tee -a "$EVIDENCE_DIR/manifest.log"
+echo "::notice::Sleep-time DND catch-up under Doze with default exact-alarm permission: activated after ${ACTIVE_AFTER:-never (or not measured)}s (designed ~120s)"
+
 # docs/TODO.md T-93 / docs/REQUIREMENTS.md R3: does a set alarm survive a
 # reboot? Unverified to this day - and it's the last open question of the
 # "guaranteed wake-up" product promise.

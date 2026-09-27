@@ -1349,6 +1349,34 @@ rather than expanded into more scope here: see T-185.
   can be started), or FR-16 is formally re-scoped to "checked at every checkpoint" - and the T-62
   leg is changed to assert the callback does NOT fire before the due time.
 
+### T-200 · Sleep-time DND catch-up takes ~10-15 minutes on the phone instead of ~2 — IN PROGRESS (2026-09-27)
+
+- [ ] Maintainer phone report (Android 16), verbatim: "Ich hatte nach 1 minute gecheckt, da war
+  nichts. aber nach 25 minuten schon. nach 15 minuten hatte ich eine signal nachricht gekriegt und
+  die auch gelesen (keine vibration oder so). Den Wecker nachträglich aus der sleep time zu
+  exludieren tat übrigens sofort. ihn wieder zu inkludieren triggert nach 10 minuten oder so."
+  (I checked after 1 minute, nothing. But after 25 minutes it was on. After 15 minutes a Signal
+  message arrived silently. Excluding the alarm afterwards worked immediately; re-including it
+  triggers after 10 minutes or so.) Then: "bitte richte einen gh e2e testcase dafür ein und lass
+  den laufen" (please set up a GitHub E2E test case for it and run it).
+- **Reading:** everything that goes through the native catch-up alarm (T-198's "now + 2 minutes",
+  T-110) is late by roughly 10-15 minutes; everything decided directly on a push (excluding the
+  target alarm → no window → off at once) is immediate. The existing E2E leg
+  (`sleep_time_dnd_test.dart`) measures the catch-up at ~2 minutes on the API 36 emulator - but
+  `run_e2e_tests.sh` grants `SCHEDULE_EXACT_ALARM` explicitly, keeps the screen on, never dozes,
+  and reads the timing from inside the app.
+- **Leading hypothesis (unconfirmed):** on the phone the catch-up alarm is not delivered exactly -
+  either `canScheduleExactAlarms()` is false there and `SleepTimeDnd.armOrCancel` falls back to the
+  inexact `setAndAllowWhileIdle` (which the `alarm` plugin's own ring would then share), or Doze
+  defers it. Diagnosis pending evidence, not assumed.
+- **Evidence leg (non-gating):** `integration_test/sleep_time_dnd_catch_up_idle_test.dart` plus a
+  "catch-up under idle" section in `.github/scripts/run_e2e_tests.sh` - exact-alarm app op reset to
+  the platform default, screen off and forced Doze after the push, the delay measured from outside
+  by polling `settings get global zen_mode`, and the pending alarm entry (`dumpsys alarm`: exact or
+  windowed) plus the permission state recorded to `e2e_evidence/sleep_time_dnd_idle_*.log`.
+- **Acceptance:** the cause is identified from that evidence (or the phone's own `dumpsys alarm`),
+  and the catch-up activates within ~2-3 minutes under phone conditions.
+
 ### T-198 · Sleep-time Do Not Disturb, re-implemented natively — IMPLEMENTED (2026-09-27), device confirmation pending
 
 - [x] Maintainer request, verbatim: "Bitte implementiere eine Funktionalität, um während der
