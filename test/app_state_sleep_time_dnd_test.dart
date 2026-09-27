@@ -197,6 +197,102 @@ void main() {
     });
   });
 
+  group('the FR-21 on/off switch (independent review of 201b740, A2)', () {
+    // applyManualAlarmEnabled flips `alarm.enabled` only AFTER the platform
+    // call, and the push inside _setAlarm/_stopAlarm computed the window
+    // before that - switching the target alarm off left its window armed.
+    test('switching the target alarm off re-arms the window for the next one',
+        () async {
+      final appState = await freshAppState({'sleepTimeDndEnabled': true});
+      final target = ManualAlarm(time: const TimeOfDay(hour: 6, minute: 0), id: 1);
+      final later = ManualAlarm(time: const TimeOfDay(hour: 7, minute: 30), id: 2);
+      appState.manualAlarms
+        ..add(target)
+        ..add(later);
+
+      final applied = await appState.setManualAlarmEnabled(target, false,
+          armAlarm: (alarm, at) async {}, stopAlarm: (id) async {});
+      await Future<void>.delayed(Duration.zero);
+
+      expect(applied, isTrue);
+      expect(pushes, isNotEmpty);
+      final window = pushes.last.window!;
+      expect(window.end.hour, 7);
+      expect(window.end.minute, 30);
+    });
+
+    test('switching an earlier alarm on makes it the window\'s end', () async {
+      final appState = await freshAppState({'sleepTimeDndEnabled': true});
+      final earlier = ManualAlarm(
+          time: const TimeOfDay(hour: 5, minute: 0), enabled: false, id: 1);
+      final later = ManualAlarm(time: const TimeOfDay(hour: 7, minute: 30), id: 2);
+      appState.manualAlarms
+        ..add(earlier)
+        ..add(later);
+
+      await appState.setManualAlarmEnabled(earlier, true,
+          armAlarm: (alarm, at) async {}, stopAlarm: (id) async {});
+      await Future<void>.delayed(Duration.zero);
+
+      expect(pushes.last.window!.end.hour, 5);
+    });
+  });
+
+  group('pushes when the feature is off', () {
+    test(
+        'off and already delivered as off: arm/cancel-driven refreshes do not '
+        'reach the channel again (the default for every user)', () async {
+      final appState = await freshAppState();
+      // The cold-start push (off) was delivered - see freshAppState.
+
+      await appState.refreshSleepTimeDnd();
+      await appState.refreshSleepTimeDnd();
+
+      expect(pushes, isEmpty);
+    });
+
+    test('an undelivered "off" is retried on the next refresh', () async {
+      nextReport = sleep_time_dnd.SleepTimeDndReport.notDelivered;
+      final appState = await freshAppState();
+      nextReport = const sleep_time_dnd.SleepTimeDndReport(
+          decision: sleep_time_dnd.SleepTimeDndDecision.disabled);
+
+      await appState.refreshSleepTimeDnd();
+
+      expect(pushes, hasLength(1));
+      expect(pushes.single.enabled, isFalse);
+    });
+  });
+
+  group('v1.3.0 leftover (independent review of 201b740, B3)', () {
+    test('the removed feature\'s keys on load trigger a one-time cleanup of '
+        'its old Do Not Disturb mode', () async {
+      var cleanups = 0;
+      sleep_time_dnd.clearLegacyDoNotDisturb = () async => cleanups++;
+      addTearDown(() => sleep_time_dnd.clearLegacyDoNotDisturb =
+          sleep_time_dnd.defaultClearLegacyDoNotDisturb);
+
+      await freshAppState({'doNotDisturbEnabled': true});
+      expect(cleanups, 1);
+
+      // Keys are gone after that load, so a second start does not repeat it.
+      final reloaded = AppState(
+          getPrefsInstance: () async => SharedPreferences.getInstance());
+      await reloaded.initialized;
+      expect(cleanups, 1);
+    });
+
+    test('no removed keys -> no cleanup call', () async {
+      var cleanups = 0;
+      sleep_time_dnd.clearLegacyDoNotDisturb = () async => cleanups++;
+      addTearDown(() => sleep_time_dnd.clearLegacyDoNotDisturb =
+          sleep_time_dnd.defaultClearLegacyDoNotDisturb);
+
+      await freshAppState();
+      expect(cleanups, 0);
+    });
+  });
+
   group('diagnostics (no clock values, no strings)', () {
     test('a sync is logged with the native decision and what fired', () async {
       final appState = await freshAppState({'sleepTimeDndEnabled': true});

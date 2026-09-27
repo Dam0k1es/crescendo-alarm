@@ -103,14 +103,22 @@ void main() {
       expect(mainActivity, contains('SleepTimeDnd.CHANNEL'));
     });
 
-    test('the native side exposes exactly the three methods Dart calls - '
-        'none of which switches Do Not Disturb directly', () {
+    test('the native side exposes exactly the methods Dart calls - none of '
+        'which switches Do Not Disturb on', () {
       final methods = RegExp(r'"(\w+)" ->')
           .allMatches(mainActivity)
           .map((m) => m.group(1)!)
           .where((m) => m != 'setNextAlarm')
           .toSet();
-      expect(methods, {'setWindow', 'currentInterruptionFilter', 'isAccessGranted'});
+      expect(methods, {
+        'setWindow',
+        'currentInterruptionFilter',
+        'isAccessGranted',
+        // One-shot: ends the removed v1.3.0 feature's own mode (API 35+
+        // only, never the user's Do Not Disturb) - see
+        // SleepTimeDndPolicy.legacyCleanupFilter.
+        'clearLegacy',
+      });
     });
 
     test('every decision code Dart understands has the same value in Kotlin',
@@ -186,5 +194,10 @@ void main() {
       expect(_functionBody(appState, '_stopAlarm'),
           contains('refreshSleepTimeDnd()'));
     });
+
+    // The FR-21 switch is covered behaviourally in
+    // test/app_state_sleep_time_dnd_test.dart ("the FR-21 on/off switch"):
+    // the two hooks above run BEFORE applyManualAlarmEnabled flips
+    // `enabled`, so setManualAlarmEnabled must push again afterwards.
   });
 }

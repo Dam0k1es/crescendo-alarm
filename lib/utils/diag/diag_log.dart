@@ -373,7 +373,8 @@ enum DiagDndDecision {
   catchUp(4),
   alreadyActive(5),
   ended(6),
-  tooLate(7);
+  tooLate(7),
+  afterWakeUp(10);
 
   const DiagDndDecision(this.code);
   final int code;

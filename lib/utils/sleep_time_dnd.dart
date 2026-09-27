@@ -52,6 +52,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter/services.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 import 'package:crescendo_alarm/models/scheduling/next_wake_up.dart';
+import 'package:crescendo_alarm/models/scheduling/stored_values.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
@@ -80,6 +81,12 @@ typedef SleepTimeWindow = ({DateTime start, DateTime end});
 /// - manual alarms with [ManualAlarm.excludeFromSleepTime] are left out (R5).
 ///   `nextWakeUpTime` already ignores switched-off manual alarms.
 ///
+/// Planned values are compared at the whole minute the ring is armed for
+/// ([alarmPlatformTime]), not at their raw instant: a value planned for
+/// 06:30:42 rings at 06:30:00, and between those two moments it must
+/// already count as rung - otherwise the window would end in the past and
+/// the native side would clear it instead of arming the next night.
+///
 /// [start] is the next alarm minus [sleepGoal] - WITHOUT the reminder's own
 /// lead time, which only moves the notification earlier. A start already in
 /// the past is returned as is; catching it up (T-110's "now + 2 minutes",
@@ -95,7 +102,8 @@ SleepTimeWindow? sleepTimeWindow({
   final target = nextWakeUpTime(
     pendingDayValues: {
       for (final entry in pendingDayValues.entries)
-        if (!disabledDays.contains(entry.key)) entry.key: entry.value,
+        if (!disabledDays.contains(entry.key))
+          entry.key: _ringMinuteMillis(entry.value),
     },
     manualAlarms: [
       for (final alarm in manualAlarms)
@@ -112,6 +120,14 @@ SleepTimeWindow? sleepTimeWindow({
   final start = alarmPlatformTime(target.subtract(durationFromTimeOfDay(sleepGoal)));
   if (!start.isBefore(end)) return null;
   return (start: start, end: end);
+}
+
+/// [stored] (a `pendingDayValues` entry) read as the local whole minute the
+/// `alarm` plugin rings at, back in the same stored form.
+int? _ringMinuteMillis(int? stored) {
+  final local = localFromStored(stored);
+  if (local == null) return null;
+  return alarmPlatformTime(local).millisecondsSinceEpoch;
 }
 
 /// What the native side decided on a push. The codes are shared with
@@ -144,7 +160,12 @@ enum SleepTimeDndDecision {
 
   /// Inside sleep time, but the alarm is less than the catch-up delay away -
   /// nothing is activated for such a short stretch.
-  tooLate(7);
+  tooLate(7),
+
+  /// Inside a window that began before the last ring (a backup alarm, or a
+  /// daytime alarm less than a Sleep Goal away): not entered - sleep time
+  /// ended at that ring (R4). Only its end stays armed.
+  afterWakeUp(10);
 
   const SleepTimeDndDecision(this.code);
   final int code;
@@ -234,6 +255,21 @@ Future<SleepTimeDndReport> defaultPushSleepTimeWindow({
   }
 }
 
+/// One-shot cleanup of the removed v1.3.0 Do Not Disturb feature's leftover
+/// (docs/TODO.md T-197): the native side ends it on API 35+ only, where it
+/// can be nothing but this app's own mode. Called by AppState when it finds
+/// that feature's old preference keys. An injectable seam like
+/// [pushSleepTimeWindow].
+Future<void> Function() clearLegacyDoNotDisturb = defaultClearLegacyDoNotDisturb;
+
+Future<void> defaultClearLegacyDoNotDisturb() async {
+  try {
+    await _channel.invokeMethod<bool>('clearLegacy');
+  } catch (e) {
+    // No native side (Linux dev loop, flutter test) - nothing to clean.
+  }
+}
+
 /// The phone's current, effective interruption filter
 /// (`NotificationManager.getCurrentInterruptionFilter()`: 1 = all, 2 =
 /// priority, 3 = none, 4 = alarms), or `null` off Android. Read-only; used
@@ -269,4 +305,5 @@ DiagDndDecision diagDndDecisionOf(SleepTimeDndDecision decision) =>
       SleepTimeDndDecision.alreadyActive => DiagDndDecision.alreadyActive,
       SleepTimeDndDecision.ended => DiagDndDecision.ended,
       SleepTimeDndDecision.tooLate => DiagDndDecision.tooLate,
+      SleepTimeDndDecision.afterWakeUp => DiagDndDecision.afterWakeUp,
     };

@@ -71,6 +71,7 @@ object SleepTimeDnd {
     private const val KEY_END = "end_millis"
     private const val KEY_ACTIVE_BY_US = "active_by_us"
     private const val KEY_PENDING_START = "pending_start_millis"
+    private const val KEY_LAST_END = "last_end_millis"
     private const val KEY_REPORT_START_FIRED = "report_start_fired"
     private const val KEY_REPORT_END_FIRED = "report_end_fired"
     private const val KEY_REPORT_APPLY_FAILED = "report_apply_failed"
@@ -89,6 +90,12 @@ object SleepTimeDnd {
      * Dart's push. Returns the report `SleepTimeDndReport` in Dart parses -
      * the decision plus what happened natively since the previous push
      * (booleans only), then resets those flags.
+     *
+     * Runs on the main thread with the app process alive, so its writes use
+     * `apply()` (in memory at once, on disk shortly after) - a replan pushes
+     * once per armed or cancelled alarm, and synchronous `commit()`s there
+     * would stall the UI. The receiver and boot paths, whose process may die
+     * right after `onReceive`, keep `commit()`.
      */
     @Synchronized
     fun sync(context: Context, enabled: Boolean, startMillis: Long?, endMillis: Long?): Map<String, Any> {
@@ -98,9 +105,9 @@ object SleepTimeDnd {
             .putBoolean(KEY_ENABLED, enabled)
             .putOrRemove(KEY_START, startMillis)
             .putOrRemove(KEY_END, endMillis)
-            .commit()
+            .apply()
 
-        val decision = run(context, SleepTimeDndPolicy.Trigger.SYNC, wasEnabled)
+        val decision = run(context, SleepTimeDndPolicy.Trigger.SYNC, wasEnabled, durable = false)
 
         val report = hashMapOf<String, Any>(
             "decision" to decision.code,
@@ -113,8 +120,24 @@ object SleepTimeDnd {
             .remove(KEY_REPORT_START_FIRED)
             .remove(KEY_REPORT_END_FIRED)
             .remove(KEY_REPORT_APPLY_FAILED)
-            .commit()
+            .apply()
         return report
+    }
+
+    /**
+     * One-shot, called by Dart when it finds the removed v1.3.0 feature's
+     * preference keys (docs/TODO.md T-197/T-198): ends that feature's
+     * leftover Do Not Disturb on API 35+ - see
+     * [SleepTimeDndPolicy.legacyCleanupFilter] for why only there. Returns
+     * whether a call was made and accepted.
+     */
+    @Synchronized
+    fun clearLegacy(context: Context): Boolean {
+        val nm = context.getSystemService(NotificationManager::class.java) ?: return false
+        val filter = SleepTimeDndPolicy.legacyCleanupFilter(
+            Build.VERSION.SDK_INT, prefs(context).getBoolean(KEY_ACTIVE_BY_US, false)
+        ) ?: return false
+        return setFilter(context, nm, filter)
     }
 
     /** [SleepTimeDndReceiver]: the window's start or end alarm fired. */
@@ -145,6 +168,7 @@ object SleepTimeDnd {
         context: Context,
         trigger: SleepTimeDndPolicy.Trigger,
         wasEnabled: Boolean,
+        durable: Boolean = true,
     ): SleepTimeDndPolicy.Decision {
         val stored = prefs(context)
         val decision = SleepTimeDndPolicy.decide(
@@ -157,6 +181,7 @@ object SleepTimeDnd {
                 endMillis = stored.longOrNull(KEY_END),
                 activeByUs = stored.getBoolean(KEY_ACTIVE_BY_US, false),
                 pendingStartAt = stored.longOrNull(KEY_PENDING_START),
+                lastEndAt = stored.longOrNull(KEY_LAST_END),
             )
         )
         Log.i(TAG, "trigger=$trigger decision=${decision.code} action=${decision.action}")
@@ -176,7 +201,11 @@ object SleepTimeDnd {
             .putBoolean(KEY_ACTIVE_BY_US, nowActive)
             .putOrRemove(KEY_PENDING_START, decision.startAlarmAt)
         if (!decision.keepWindow) editor.remove(KEY_START).remove(KEY_END)
-        editor.commit()
+        val recordEnd = decision.recordEndAt
+        if (recordEnd != null && recordEnd > (stored.longOrNull(KEY_LAST_END) ?: Long.MIN_VALUE)) {
+            editor.putLong(KEY_LAST_END, recordEnd)
+        }
+        if (durable) editor.commit() else editor.apply()
         return decision
     }
 
@@ -219,6 +248,7 @@ object SleepTimeDnd {
     }
 
     private fun markApplyFailed(context: Context) {
+        // commit(): may run in a receiver whose process ends right after.
         prefs(context).edit().putBoolean(KEY_REPORT_APPLY_FAILED, true).commit()
     }
 

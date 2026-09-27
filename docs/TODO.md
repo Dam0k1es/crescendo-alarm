@@ -1448,8 +1448,11 @@ rather than expanded into more scope here: see T-185.
 - **The end is the first ring, by construction (R4).** The end alarm is at the target alarm's
   `alarmPlatformTime`, the instant the ring is armed for. A snooze re-ring is a separate, later alarm;
   an excluded or other alarm in between is not the end alarm. After the ring every push computes the
-  *next* window (the rung alarm is no longer "after now"), so nothing re-activates until the next
-  bedtime (the removed code's symptom 2).
+  *next* window (the rung alarm is no longer "after now"). If that next alarm is less than one Sleep
+  Goal away (a backup alarm, a daytime alarm), its window has already "begun" - the native side
+  remembers the ring (`last_end_millis`) and does not enter a window that started before it
+  (`Code.AFTER_WAKE_UP`); see the review addendum below, finding A1, for how the first version got
+  this wrong.
 - **Per platform (H4):** API 35+: activate = `setInterruptionFilter(ALARMS)` (the app's own mode),
   deactivate = `ALL` whenever the app activated it or the end/switch-off forces it - it can only end
   the app's own mode. Below 35 (one global DND): activate only if DND is currently off, and switch
@@ -1498,7 +1501,11 @@ rather than expanded into more scope here: see T-185.
 4. **Past start:** switching on, or any push, while already inside sleep time → DND comes on about two
    minutes later (T-110's "now + 2 minutes", as instructed), and a catch-up already armed is kept so
    repeated pushes cannot keep postponing it. If the alarm is less than two minutes away, nothing is
-   activated. Alarm days away → nothing happens until bedtime.
+   activated. Alarm days away → nothing happens until bedtime. **Exception (added after review,
+   A1):** a window that started before the last first ring the app recorded is not entered - you
+   have just woken from that stretch. So after the 06:00 ring, a 06:15 backup alarm or a 13:00
+   alarm (Sleep Goal 8 h) does not silence the phone again. With no ring on record (feature only
+   just switched on, app data cleared), the plain catch-up applies.
 5. **Old keys and id:** the four v1.3.0 preference keys (`doNotDisturbEnabled`,
    `doNotDisturbPreviousFilter`, `doNotDisturbActivatedAt`, `doNotDisturbTargetWakeUp`) are actively
    removed at load, so a stale `doNotDisturbEnabled=true` can never be read as consent. The new
@@ -1528,7 +1535,7 @@ rather than expanded into more scope here: see T-185.
   `_stopAlarm` pushing, the reminder untouched); two new cases in `screen_alarms_dialog_toggles_
   test.dart`; help-button count 9 → 10 and the Diag enum 13 → 14 (plus the new setting's own case).
   `test/do_not_disturb_removed_test.dart` deleted, as its header asked.
-- JVM: `android/app/src/test/.../SleepTimeDndPolicyTest.kt` (22), run by `ci.yml`'s
+- JVM: `android/app/src/test/.../SleepTimeDndPolicyTest.kt` (22, 29 after the review round below), run by `ci.yml`'s
   `build-dev-apk` job right after the APK build (new step "Android unit tests (JVM)"; same job name,
   so the master ruleset is unaffected; `testImplementation` JUnit only, outside
   `releaseRuntimeClasspath`). **Mutation check:** re-introducing symptom 1 (a push before the window
@@ -1540,7 +1547,8 @@ rather than expanded into more scope here: see T-185.
   off leaves DND. `.github/scripts/run_e2e_tests.sh` grants access in a loop with `cmd notification
   allow_dnd` (a grant survives the reinstall `flutter test` does, not an uninstall) and forces DND off
   afterwards. Runs only in master's E2E job - **it has never run yet.**
-- `flutter analyze` clean; full suite 662/662 in three groups (was 614).
+- `flutter analyze` clean; full suite 662/662 in three groups (was 614) - see the review addendum
+  for the count after the fixes.
 
 **What is verified, and what is not:**
 
@@ -1555,8 +1563,52 @@ rather than expanded into more scope here: see T-185.
   measurement) or Android 15's implicit rule. The Diag flags above are there to make the first real
   night's result readable from an exported log.
 
+**Independent review (Günther persona, fresh agent, 2026-09-27) of 201b740/a39f0b1 - two blocking
+defects found and fixed in the follow-up commit:**
+
+- **A1 (blocking) - DND came back on ~2 minutes after the first ring** whenever another counted
+  alarm was less than one Sleep Goal away: after the ring, every push carried the next alarm's
+  window, whose start already lay in the past, and the catch-up activated it. Backup alarm 06:15
+  after a 06:00 ring → DND 06:02-06:15; a 13:00 "leave for shift" alarm → DND 06:02-13:00. The
+  original tests missed it because every fixture put the next alarm 24 h later (the window test's
+  own reason text claimed a guarantee the code did not give). **Fix:** the native side records the
+  end of every window that ends (`Decision.recordEndAt` → `last_end_millis`) and never enters a window
+  whose start lies before it (`SleepTimeDndPolicy`, `Code.AFTER_WAKE_UP` = 10, also a Dart/Diag
+  decision) - only its end stays armed. Six JVM cases (backup alarm, daytime alarm, start/boot/
+  stale-end triggers, a window starting after the ring still caught up, no ring on record still
+  caught up, ENDED records the ring); disabling the rule fails the three A1 cases. The E2E leg gained
+  a "backup alarm right after the ring" step.
+- **A2 (blocking) - the alarm-list on/off switch (FR-21) pushed the window from the OLD state:**
+  `applyManualAlarmEnabled` flips `alarm.enabled` after the platform call, while the push inside
+  `_setAlarm`/`_stopAlarm` computed the window before it. Switching the target alarm off left its
+  window armed (DND for an alarm that will not ring); switching an earlier one on did not move the
+  end. **Fix:** `setManualAlarmEnabled` pushes again once the flag is final (two behavioural tests,
+  via a new `@visibleForTesting` arm/stop seam). `refreshDirectBootFallback` (T-158) had the identical
+  ordering bug and is re-run at the same place - a one-line fix outside T-198 proper, mentioned here
+  so it is not a silent change.
+- **Non-blocking findings, and what was done:** B1 a planned value with seconds (06:30:42) rang at
+  06:30:00 but still counted as "next" for 42 s, so a push in between ended the window instead of
+  arming the next night - fixed: planned values are compared at their ring minute (window test
+  added). B3 a v1.3.0 leftover DND could make the first device test look like symptom 1 - fixed: when
+  the old keys are found at load, a one-shot `clearLegacy` ends the old mode on API 35+ only
+  (`SleepTimeDndPolicy.legacyCleanupFilter`; below 35 the global DND may be the user's own). B6
+  every arm/cancel pushed even with the feature off (the default), with three synchronous
+  `commit()`s each - fixed: an "off" already delivered in this process is not pushed again, and the
+  main-thread push path uses `apply()` (receiver and boot paths keep `commit()`). B2/B5 the User
+  Guide now says plainly that a force-stop during sleep time leaves DND on until the app is opened,
+  and that closed-app/reboot behaviour is the design, not yet confirmed on a phone. B4 the E2E leg's
+  limits are stated above and unchanged in kind (hand-built windows, API 34, process alive).
+  **Left as is:** on API 35+ a reboot inside the window re-applies DND even if the user had ended
+  the app's mode by hand that night; `IMPLICIT_RULE_SDK = 35` stands in for AOSP's real gate
+  (`modesApi` flag plus the compat change) - a build with that flag off would get the forced `ALL`
+  on the global DND. Both judged too unlikely to be worth more code now.
+- **After the fixes:** `flutter analyze` clean; full suite 669/669 in three groups; 29/29 JVM tests.
+
 **Open questions:**
 
+- Is the A1 rule what you want? After a ring, a window that began before it is skipped. The
+  alternative - the literal "next alarm minus Sleep Goal" - silences the phone again right after
+  waking whenever a backup or daytime alarm is closer than the Sleep Goal.
 - Should the manual-alarm switch be hidden while the Sleep Habits trigger is off? (Shown always now,
   like every other per-alarm setting.)
 - Should disabled planned days also stop counting for the bedtime reminder, for consistency with 3.?

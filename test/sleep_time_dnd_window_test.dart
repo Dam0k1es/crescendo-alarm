@@ -252,10 +252,33 @@ void main() {
 
         expect(window.end.millisecondsSinceEpoch,
             following.millisecondsSinceEpoch);
-        expect(window.start.isAfter(ringing), isTrue,
-            reason: 'right after the first ring, the next sleep time must '
-                'not already have begun (T-197 symptom 2 was DND switched '
-                'straight back on after the ring)');
+        // Only the window moves here. Whether a next window that has
+        // ALREADY begun gets entered after a ring (a backup alarm, or a
+        // daytime alarm less than a Sleep Goal away) is the native side's
+        // decision - SleepTimeDndPolicyTest's "A1" cases pin down that it is
+        // not (independent review of 201b740).
+      });
+
+      test(
+          'a planned value with seconds: once its whole-minute ring has '
+          'passed, it is no longer "the next alarm" (the window must not end '
+          'in the past and so clear itself)', () {
+        final planned = DateTime(2026, 3, 11, 6, 30, 42);
+        final following = DateTime(2026, 3, 12, 6, 30);
+        final window = sleepTimeWindow(
+          pendingDayValues: {
+            _iso(planned): planned.millisecondsSinceEpoch,
+            _iso(following): following.millisecondsSinceEpoch,
+          },
+          disabledDays: const {},
+          manualAlarms: const [],
+          sleepGoal: _eightHours,
+          // Rang at 06:30:00, the planned value itself is still 22 s ahead.
+          now: DateTime(2026, 3, 11, 6, 30, 20),
+        )!;
+
+        expect(window.end.millisecondsSinceEpoch,
+            following.millisecondsSinceEpoch);
       });
     });
   });

@@ -123,6 +123,11 @@ class AppState extends ChangeNotifier {
   /// fired) is worth a record.
   (sleep_time_dnd.SleepTimeDndDecision, bool)? _lastLoggedDndState;
 
+  /// Whether the native side has confirmed "feature off" - while that
+  /// stays true, further "off" pushes are skipped (see
+  /// [refreshSleepTimeDnd]). Not persisted: every process start pushes once.
+  bool _dndOffDelivered = false;
+
   /// The v1.3.0 Do Not Disturb feature's preference keys (docs/TODO.md
   /// T-184 ... T-191, removed in T-197). Cleared on load so no future code
   /// can ever read a stale `doNotDisturbEnabled=true` as consent.
@@ -1048,18 +1053,36 @@ class AppState extends ChangeNotifier {
   /// Returns `false` when the platform refused; nothing is then changed or
   /// persisted, because the flag has to keep describing what the device will
   /// actually do.
-  Future<bool> setManualAlarmEnabled(ManualAlarm alarm, bool enabled) async {
+  ///
+  /// [armAlarm]/[stopAlarm] default to the real platform calls; injectable
+  /// purely for testability (the real `alarm` plugin has no channel in
+  /// `flutter test`).
+  Future<bool> setManualAlarmEnabled(
+    ManualAlarm alarm,
+    bool enabled, {
+    @visibleForTesting Future<void> Function(MyAlarm alarm, DateTime at)? armAlarm,
+    @visibleForTesting Future<void> Function(int id)? stopAlarm,
+  }) async {
     final applied = await applyManualAlarmEnabled(
       alarm: alarm,
       enabled: enabled,
       now: DateTime.now(),
-      armAlarm: _setAlarm,
-      stopAlarm: _stopAlarm,
+      armAlarm: armAlarm ?? _setAlarm,
+      stopAlarm: stopAlarm ?? _stopAlarm,
     );
     if (!applied) return false;
 
     _saveManualAlarms();
     notifyListeners();
+    // docs/TODO.md T-198 (independent review of 201b740, finding A2):
+    // applyManualAlarmEnabled flips `alarm.enabled` only AFTER the platform
+    // call, so the push inside _setAlarm/_stopAlarm still saw the old state
+    // - switching the target alarm off left its window armed, switching an
+    // earlier one on did not move the end. Pushed again now that the flag
+    // is final. (refreshDirectBootFallback has the same ordering and is
+    // re-run for the same reason.)
+    refreshDirectBootFallback();
+    unawaited(refreshSleepTimeDnd());
     return true;
   }
 
@@ -1181,7 +1204,13 @@ class AppState extends ChangeNotifier {
   ///
   /// Never throws; the push swallows its own failures. [now] is injectable
   /// purely for testability.
+  ///
+  /// While the feature is off and the native side has already confirmed
+  /// "off" in this process, further pushes are skipped - most users never
+  /// switch it on, and every alarm arm/cancel would otherwise still reach
+  /// the channel.
   Future<void> refreshSleepTimeDnd({DateTime Function()? now}) async {
+    if (!_sleepTimeDndEnabled && _dndOffDelivered) return;
     try {
       final window = _sleepTimeDndEnabled
           ? sleep_time_dnd.sleepTimeWindow(
@@ -1192,10 +1221,13 @@ class AppState extends ChangeNotifier {
               now: (now ?? DateTime.now)(),
             )
           : null;
+      final enabled = _sleepTimeDndEnabled;
       final report = await sleep_time_dnd.pushSleepTimeWindow(
-        enabled: _sleepTimeDndEnabled,
+        enabled: enabled,
         window: window,
       );
+      _dndOffDelivered = !enabled &&
+          report.decision != sleep_time_dnd.SleepTimeDndDecision.channelFailed;
       final state = (report.decision, report.accessMissing);
       if (state != _lastLoggedDndState || report.eventful) {
         _lastLoggedDndState = state;
@@ -1506,8 +1538,22 @@ class AppState extends ChangeNotifier {
       _reminderEnabled = _prefs.getBool('reminderEnabled') ?? _reminderEnabled;
       _sleepTimeDndEnabled =
           _prefs.getBool('sleepTimeDndEnabled') ?? _sleepTimeDndEnabled;
+      var removedDoNotDisturbKeysFound = false;
       for (final key in _removedDoNotDisturbKeys) {
-        if (_prefs.containsKey(key)) _prefs.remove(key);
+        if (_prefs.containsKey(key)) {
+          removedDoNotDisturbKeysFound = true;
+          _prefs.remove(key);
+        }
+      }
+      // docs/TODO.md T-198 (independent review, B3): this install ran the
+      // removed v1.3.0 feature, which could leave its Do Not Disturb on
+      // across the update (T-197). End that leftover once - native, API 35+
+      // only, where it can only be this app's own mode - so a first device
+      // test of the new trigger does not start from a phone that is still
+      // silenced by the old one. The keys are gone after this load, so it
+      // never repeats.
+      if (removedDoNotDisturbKeysFound) {
+        unawaited(sleep_time_dnd.clearLegacyDoNotDisturb());
       }
       _gentleWakeUpEnabled =
           _prefs.getBool('gentleWakeUpEnabled') ?? _gentleWakeUpEnabled;

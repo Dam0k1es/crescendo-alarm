@@ -28,7 +28,10 @@
 //
 // 1. pushing a window whose start lies ahead changes NOTHING at that moment;
 // 2. Do Not Disturb comes on at the window's start and goes off at its end,
-//    each from the native alarm, with no Dart call in between.
+//    each from the native alarm, with no Dart call in between;
+// 3. right after that end (a "ring"), a window that began before it is not
+//    entered (a backup alarm minutes later), while a genuinely past start is
+//    caught up about two minutes later.
 //
 // NON-GATING (like silent_notification_test.dart): run by
 // .github/scripts/run_e2e_tests.sh with `|| true`. It needs Android's "Do Not
@@ -129,12 +132,32 @@ void main() {
         reason: 'Do Not Disturb went off at $wentOff, before the window end '
             '$end');
 
+    // --- Right after that "ring": a backup alarm minutes later. ---------
+    // Its window (Sleep Goal 1 h) began before the ring that just ended the
+    // previous one - it must not be entered (independent review of 201b740,
+    // finding A1: DND used to come back on two minutes after waking).
+    final afterWakeAt = DateTime.now();
+    report = await pushSleepTimeWindow(
+      enabled: true,
+      window: (
+        start: afterWakeAt.subtract(const Duration(hours: 1)),
+        end: afterWakeAt.add(const Duration(minutes: 3)),
+      ),
+    );
+    expect(report.decision, SleepTimeDndDecision.afterWakeUp);
+    await tester.pump(const Duration(seconds: 5));
+    expect(await readCurrentInterruptionFilter(), _filterAll,
+        reason: 'a window that began before the last ring is the stretch '
+            'the user just woke from');
+
     // --- Past start: inside sleep time already (T-110's catch-up). -------
+    // Its start lies after the ring recorded above (the previous window's
+    // end), so this is a genuine "switched on during sleep time".
     final catchUpPushedAt = DateTime.now();
     report = await pushSleepTimeWindow(
       enabled: true,
       window: (
-        start: catchUpPushedAt.subtract(const Duration(hours: 1)),
+        start: catchUpPushedAt.subtract(const Duration(seconds: 1)),
         end: catchUpPushedAt.add(const Duration(minutes: 4)),
       ),
     );

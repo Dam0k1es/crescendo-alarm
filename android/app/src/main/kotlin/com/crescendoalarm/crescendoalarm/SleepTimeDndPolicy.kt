@@ -35,6 +35,12 @@ package com.crescendoalarm.crescendoalarm
  * - The end deactivates unconditionally when its alarm fires, and any later
  *   push or boot that finds the window over deactivates too (symptom 2:
  *   "DND not off after the alarm rang").
+ * - After a ring, a window that would have started BEFORE that ring is not
+ *   entered: it is the stretch the user has just woken from (R4, "Das Ende
+ *   der Schlafenszeit ist exakt das allererste Klingeln"). Without this, a
+ *   backup alarm 15 minutes later - or a daytime alarm less than one Sleep
+ *   Goal away - made the catch-up switch Do Not Disturb back on two minutes
+ *   after waking (independent review of 201b740, finding A1).
  */
 object SleepTimeDndPolicy {
     /**
@@ -79,6 +85,11 @@ object SleepTimeDndPolicy {
         const val ACTIVATED = 8
         /** An alarm fired for a window that has since moved. Native-only. */
         const val STALE_ALARM = 9
+        /**
+         * Inside a window that began before the last ring - not entered;
+         * only its end stays armed.
+         */
+        const val AFTER_WAKE_UP = 10
     }
 
     enum class Trigger {
@@ -106,6 +117,12 @@ object SleepTimeDndPolicy {
         val activeByUs: Boolean,
         /** When the start alarm is currently armed for, if at all. */
         val pendingStartAt: Long?,
+        /**
+         * The end of the last window that ended - i.e. the last first ring
+         * this trigger saw. Null when none is on record (the feature was
+         * only just switched on, or the app data was cleared).
+         */
+        val lastEndAt: Long? = null,
     )
 
     data class Decision(
@@ -123,6 +140,8 @@ object SleepTimeDndPolicy {
         val endAlarmAt: Long?,
         /** Keep the stored window; false clears it. */
         val keepWindow: Boolean,
+        /** Remember this instant as [Input.lastEndAt] from now on, if set. */
+        val recordEndAt: Long? = null,
     )
 
     fun decide(i: Input): Decision {
@@ -166,6 +185,7 @@ object SleepTimeDndPolicy {
                 startAlarmAt = null,
                 endAlarmAt = null,
                 keepWindow = false,
+                recordEndAt = end,
             )
         }
 
@@ -187,6 +207,15 @@ object SleepTimeDndPolicy {
         }
 
         // Inside sleep time: start <= now < end.
+
+        val lastEnd = i.lastEndAt
+        if (!i.activeByUs && lastEnd != null && start < lastEnd) {
+            // This window began before the last ring (A1): whatever
+            // triggered this, it is not entered. Its end stays armed, so the
+            // ring that ends it is recorded as a wake-up in turn.
+            return Decision(Code.AFTER_WAKE_UP, Action.NONE, false, null, end, true)
+        }
+
         return when (i.trigger) {
             Trigger.START_ALARM -> Decision(
                 code = Code.ACTIVATED,
@@ -244,6 +273,19 @@ object SleepTimeDndPolicy {
             Decision(Code.CATCH_UP, Action.NONE, false, at, end, true)
         }
     }
+
+    /**
+     * The removed v1.3.0 feature (docs/TODO.md T-184 ... T-191) could leave
+     * its Do Not Disturb on when the app was updated (T-197). Called once,
+     * when Dart finds that feature's old preference keys: the filter to set,
+     * or null. Only on API 35+, where [FILTER_ALL] can end nothing but this
+     * app's own implicit rule - which the old feature used too, since the
+     * rule is per package - and only when the new feature has not switched
+     * it on itself. Below 35 there is only one, global Do Not Disturb, and
+     * it may well be the user's own.
+     */
+    fun legacyCleanupFilter(sdkInt: Int, activeByUs: Boolean): Int? =
+        if (sdkInt >= IMPLICIT_RULE_SDK && !activeByUs) FILTER_ALL else null
 
     /**
      * The filter to set for [Action.ACTIVATE], or null for no call.

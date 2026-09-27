@@ -132,6 +132,11 @@ T-198 records why, from primary sources. Rules that are load-bearing:
 - **Never end sleep time from Dart's ring handling.** The `alarm` plugin tells Dart about a ring only
   if an engine happens to be attached (H3). The end is the native end alarm at the target alarm's
   `alarmPlatformTime`.
+- **After a ring, a window that began before it is not entered** (`Code.AFTER_WAKE_UP`, the native
+  `last_end_millis`). The literal "next alarm minus Sleep Goal" otherwise re-activates DND minutes
+  after waking whenever a backup or daytime alarm is closer than the Sleep Goal - the first T-198
+  commit shipped exactly that, and its tests missed it because every fixture put the next alarm a
+  day later. Test such rules with a next alarm *less* than one Sleep Goal away.
 - **On Android 15+ (this app targets 36), `setInterruptionFilter` controls an app-owned implicit
   mode, not global Do Not Disturb** (H4). Deactivate with `INTERRUPTION_FILTER_ALL`; never "restore a
   remembered previous filter" - `getCurrentInterruptionFilter` is the effective filter across all
@@ -483,9 +488,9 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **662 tests across 106 files** (2026-09-27), and CI runs them six times over -
+`flutter test` currently runs **669 tests across 106 files** (2026-09-27), and CI runs them six times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
-tests for native code (22 as of T-198, `SleepTimeDndPolicyTest`), run with
+tests for native code (29 as of T-198, `SleepTimeDndPolicyTest`), run with
 `cd android && ./gradlew :app:testDebugUnitTest` (locally from the native-filesystem worktree, and in
 `ci.yml`'s `build-dev-apk` job).
 

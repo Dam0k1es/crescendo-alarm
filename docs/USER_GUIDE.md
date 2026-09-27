@@ -169,6 +169,9 @@ below, never the alarm itself:
   - If you switch it on (or change an alarm) while you are already inside your sleep time, Do Not
     Disturb starts about two minutes later. If the next alarm is further away than your Sleep Goal,
     nothing happens until bedtime.
+  - Once an alarm has rung, you are awake: if your *next* alarm is closer than your Sleep Goal (a
+    backup alarm a few minutes later, or an alarm later that day), Do Not Disturb does not come back
+    on for it.
   - Switching it off takes the phone out of Do Not Disturb right away, if the app had put it in.
   - **On Android 15 and newer** the app gets its own Do Not Disturb mode, listed under Settings >
     Modes (shown as "Do Not Disturb (Crescendo Alarm)" or just "Crescendo Alarm", depending on the
@@ -177,9 +180,11 @@ below, never the alarm itself:
   - **On older Android versions** there is only one Do Not Disturb: if it is already on at bedtime
     (you switched it on yourself, or a schedule did), the app leaves it alone and does not switch it
     off in the morning either.
-  - It works with the app closed and after a restart of the phone. After **Force stop** (Android's
-    app settings), Android removes everything the app had scheduled, alarms included; open the app
-    once to set it up again.
+  - It is designed to work with the app closed and after a restart of the phone (this is still
+    being confirmed on real phones). After **Force stop** (Android's app settings), Android removes
+    everything the app had scheduled, alarms included, and the app cannot run again until you open
+    it: if you force-stop it during your sleep time, Do Not Disturb stays on until you open the app
+    (or switch Do Not Disturb off yourself).
 
 ## Settings
 

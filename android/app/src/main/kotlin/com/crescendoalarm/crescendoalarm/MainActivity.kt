@@ -75,6 +75,8 @@ class MainActivity: FlutterActivity() {
                         result.success(SleepTimeDnd.currentFilter(applicationContext))
                     "isAccessGranted" ->
                         result.success(SleepTimeDnd.isAccessGranted(applicationContext))
+                    "clearLegacy" ->
+                        result.success(SleepTimeDnd.clearLegacy(applicationContext))
                     else -> result.notImplemented()
                 }
             }
