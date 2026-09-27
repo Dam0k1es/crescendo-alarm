@@ -83,8 +83,11 @@ void main() {
         seenAfter = DateTime.now().difference(pushedAt);
         // ignore: avoid_print
         print('CATCHUP_SEEN_IN_APP afterSeconds=${seenAfter.inSeconds}');
-        // The script has its own timestamp by now (it polls every 5 s);
-        // no reason to hold the job for the rest of the observation.
+        // Hold on a little so the script's outside poll (every 5 s) sees it
+        // too - `flutter test` uninstalls the app when this ends, which
+        // removes the app's Do Not Disturb mode with it - then stop: no
+        // reason to hold the job for the rest of the observation.
+        await tester.pump(const Duration(seconds: 30));
         break;
       }
       await tester.pump(const Duration(seconds: 5));

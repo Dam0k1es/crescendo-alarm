@@ -275,12 +275,16 @@ IDLE_TIMELINE="$EVIDENCE_DIR/sleep_time_dnd_idle_timeline.log"
   done
 ) &
 IDLE_GRANT_PID=$!
+# The marker is read live from logcat: `flutter test` writes a test's output
+# to its own log only when the test ENDS (the first run of this leg waited
+# for the marker there and started Doze only after the catch-up was over).
+adb logcat -c || true
 flutter test integration_test/sleep_time_dnd_catch_up_idle_test.dart -d emulator-5554 \
   > "$IDLE_LOG" 2>&1 &
 IDLE_TEST_PID=$!
 PUSHED_AT=""
 for _ in $(seq 1 600); do
-  if grep -q "CATCHUP_PUSHED" "$IDLE_LOG" 2>/dev/null; then
+  if adb logcat -d -s flutter 2>/dev/null | grep -q "CATCHUP_PUSHED"; then
     PUSHED_AT=$(date +%s)
     break
   fi
@@ -300,7 +304,7 @@ if [ -n "$PUSHED_AT" ]; then
     echo "== exact-alarm permissions in the package state:"
     adb shell dumpsys package "$PACKAGE" | grep -E "USE_EXACT_ALARM|SCHEDULE_EXACT_ALARM"
     echo "== pending alarms of the package (dumpsys alarm):"
-    adb shell dumpsys alarm | grep -B2 -A10 "$PACKAGE" | head -200
+    adb shell dumpsys alarm | grep -B3 -A14 "SLEEP_TIME_START" | head -200
   } > "$IDLE_ALARMS" 2>&1
   adb shell input keyevent KEYCODE_SLEEP || true
   adb shell dumpsys deviceidle force-idle || true
