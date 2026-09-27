@@ -373,6 +373,12 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     final codeConfigured = _appState.deactivationCode != null;
     bool requireDeactivationCode =
         codeConfigured ? (alarm?.requireDeactivationCode ?? true) : false;
+    // docs/TODO.md T-198 (R5, maintainer request): "Ein manueller Alarm soll
+    // durch einen Schalter von der Schlafenszeit ausgenommen werden
+    // können." Off by default - a manual alarm counts for the Do Not
+    // Disturb sleep time unless the user excludes it. No AppState default to
+    // inherit from, like requireDeactivationCode above.
+    bool excludeFromSleepTime = alarm?.excludeFromSleepTime ?? false;
     // A stored tone path (an existing alarm's, or AppState's own default)
     // that matches neither a bundled tone nor a current custom tone would
     // leave the dropdown below with a `value` none of its `items` match -
@@ -597,6 +603,34 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                       ),
                     ),
                     const SizedBox(height: 8),
+                    // docs/TODO.md T-198 (R5): same Card/Row/Switch pattern.
+                    // Shown regardless of whether the Sleep Habits Do Not
+                    // Disturb trigger is on, like every other per-alarm
+                    // setting here - it only takes effect while it is.
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Expanded(
+                              child: Text('Exclude from Sleep Time',
+                                  style: TextStyle(fontSize: 20)),
+                            ),
+                            Switch(
+                              value: excludeFromSleepTime,
+                              onChanged: (value) {
+                                setState(() {
+                                  excludeFromSleepTime = value;
+                                });
+                              },
+                              activeThumbColor: _appState.accentColor,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     // Set Alarm Tone
                     Card(
                       child: Padding(
@@ -717,6 +751,7 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                       vibrate: vibrate,
                       snoozeEnabled: snoozeEnabled,
                       requireDeactivationCode: requireDeactivationCode,
+                      excludeFromSleepTime: excludeFromSleepTime,
                     ));
                   },
                 ),

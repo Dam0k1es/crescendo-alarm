@@ -21,6 +21,7 @@ import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart' show DayOfWeek;
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/utils/permissions.dart' as permissions;
 import 'package:crescendo_alarm/utils/sleep_reminder.dart';
 
 class ScreenSleephabits extends StatefulWidget {
@@ -443,12 +444,14 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
   /// The sleep goal defines the bedtime (wake time - sleepGoal -
   /// reminderDuration, see lib/utils/sleep_reminder.dart) and does NOT
   /// touch the alarm time - a separate concern from the two groups above,
-  /// so it comes last (docs/TODO.md T-178).
+  /// so it comes last (docs/TODO.md T-178). Since T-198 it also defines the
+  /// start of the Do Not Disturb sleep time (wake time - sleepGoal, without
+  /// the reminder's lead time), whose switch closes the group.
   List<Widget> _buildBedtimeReminderTiles() {
     return [
       _buildTile(
-        help: 'How much sleep you\'re aiming for. Shifts the '
-            'bedtime reminder below, not the alarm itself.',
+        help: 'How much sleep you\'re aiming for. Sets the bedtime used '
+            'by the reminder and Do Not Disturb below, not the alarm itself.',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -484,7 +487,46 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           ],
         ),
       ),
+      const SizedBox(height: 8.0),
+      // docs/TODO.md T-198 (R6, maintainer request): "Der DND Trigger soll
+      // in den Sleep Habits aktiviert und deaktiviert werden können
+      // (default off)." Independent of "Enable Reminder" above (R3) - it
+      // shares the reminder's bedtime computation, not its switch.
+      _buildTile(
+        help: 'Silences the phone from bedtime (next alarm minus Sleep '
+            'Goal) until that alarm first rings. Alarms still sound. '
+            'Needs DND access.',
+        child: _buildToggle(
+          "Do Not Disturb",
+          _appState.sleepTimeDndEnabled,
+          _handleSleepTimeDndToggle,
+        ),
+      ),
     ];
+  }
+
+  /// Turning the trigger on needs Android's "Do Not Disturb access" first:
+  /// without it the native side cannot switch anything, and a switch showing
+  /// "on" for a feature that cannot act would be the T-03 kind of broken
+  /// promise. Turning it off needs nothing - AppState pushes "disabled" and
+  /// the native side leaves Do Not Disturb if this app had switched it on.
+  Future<void> _handleSleepTimeDndToggle(bool value) async {
+    if (value) {
+      final messenger = ScaffoldMessenger.of(context);
+      final granted = await permissions.requestDoNotDisturbAccess();
+      if (!mounted) return;
+      if (!granted) {
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(const SnackBar(
+          content: Text('Crescendo Alarm needs "Do Not Disturb" access for '
+              'this. Allow it in the Android screen that opens, then switch '
+              'this on again.'),
+        ));
+        return;
+      }
+    }
+    _appState.sleepTimeDndEnabled = value;
+    Diag.sleepHabitChanged(setting: DiagSleepHabitSetting.sleepTimeDndEnabled);
   }
 
   /// docs/TODO.md T-20: [help], when given, renders as a "?" button pinned

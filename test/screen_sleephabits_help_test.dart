@@ -38,9 +38,10 @@ void main() {
     await _pumpScreen(tester, appState);
 
     // One per option tile: preferred wake-up time, gap-day scheduling, max
-    // daily shift, duration to wake up, duration to get ready, sleep goal,
-    // reminder, gentle wake-up, snooze.
-    expect(find.byIcon(Icons.help_outline), findsNWidgets(9));
+    // daily shift, duration to wake up, duration to get ready, gentle
+    // wake-up, snooze, sleep goal, reminder, and (docs/TODO.md T-198) the
+    // Do Not Disturb trigger.
+    expect(find.byIcon(Icons.help_outline), findsNWidgets(10));
   });
 
   testWidgets('tapping a help button shows a concise, on-screen explanation',
@@ -75,7 +76,7 @@ void main() {
     // the screen scrolls, so their help icons exist in the tree but start
     // outside the visible viewport, where a tap can't land on them.
     final messages = <String>{};
-    for (var i = 0; i < 9; i++) {
+    for (var i = 0; i < 10; i++) {
       await tester.pumpWidget(const SizedBox.shrink());
       final appState = await _freshAppState();
       await _pumpScreen(tester, appState);
@@ -97,7 +98,7 @@ void main() {
           reason: 'help text too long for a phone: "$text"');
       messages.add(text);
     }
-    expect(messages.length, 9,
+    expect(messages.length, 10,
         reason: 'every option should have its own explanation, not a '
             'copy-pasted shared one');
   });

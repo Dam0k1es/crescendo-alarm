@@ -57,6 +57,29 @@ Future<void> requestCalendarPermissionDefault() async {
 Future<void> Function() requestCalendarPermission =
     requestCalendarPermissionDefault;
 
+/// docs/TODO.md T-198: Android's "Do Not Disturb access" (the special
+/// `ACCESS_NOTIFICATION_POLICY` grant - a Settings screen, not a runtime
+/// dialog). Requested only when the user switches the Sleep Habits Do Not
+/// Disturb trigger on, never at startup - the same "only when actually
+/// needed" rule as camera and calendar above. `permission_handler` opens the
+/// system screen with `startActivityForResult` and resolves once the user
+/// comes back, so the returned value is the real state after that visit.
+/// `false` off Android: there is no Do Not Disturb to control on the Linux
+/// dev loop.
+Future<bool> requestDoNotDisturbAccessDefault() async {
+  if (!Platform.isAndroid) return false;
+  try {
+    if (await Permission.accessNotificationPolicy.isGranted) return true;
+    return (await Permission.accessNotificationPolicy.request()).isGranted;
+  } catch (e) {
+    debugPrint('=====requestDoNotDisturbAccess: ${e.runtimeType}');
+    return false;
+  }
+}
+
+Future<bool> Function() requestDoNotDisturbAccess =
+    requestDoNotDisturbAccessDefault;
+
 class PermissionsManager {
   /// docs/TODO.md T-41-adjacent (maintainer request, 2026-09-20): camera and
   /// calendar access moved out of this upfront batch - see

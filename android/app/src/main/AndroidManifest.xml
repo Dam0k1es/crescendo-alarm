@@ -58,11 +58,6 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
-    <!-- docs/TODO.md T-197: declared (never used) by the `alarm` plugin's own
-         manifest; without this removal, merging puts it back into the APK and the
-         app stays listed under Android's "Do Not Disturb access" even though the
-         Do Not Disturb feature is gone. -->
-    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" tools:node="remove" />
 
     <application
         android:name="${applicationName}"
@@ -185,6 +180,20 @@
             android:name="com.gdelataillade.alarm.alarm.AlarmReceiver"
             android:exported="false"
             tools:replace="android:exported" />
+
+        <!-- docs/TODO.md T-198: the sleep-time Do Not Disturb window's start
+             and end alarms (SleepTimeDnd.kt). Not exported - only this app's
+             own AlarmManager PendingIntents reach it, so no other app can
+             switch the phone into or out of Do Not Disturb through it.
+             Direct-boot-aware so an end falling before the first unlock
+             after a reboot is still delivered; re-arming after a reboot is
+             done by the existing DirectBootReceiver, not a new exported
+             BOOT_COMPLETED receiver. -->
+        <receiver
+            android:name=".SleepTimeDndReceiver"
+            android:enabled="true"
+            android:exported="false"
+            android:directBootAware="true" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility?hl=en and
@@ -210,4 +219,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!-- docs/TODO.md T-198: the Sleep Habits Do Not Disturb trigger. A
+         special permission ("Do Not Disturb access"): declaring it only lists
+         the app in that Settings screen; the user grants it there when
+         switching the trigger on. The `alarm` plugin also declares it (never
+         using it), which T-197 had stripped while no feature needed it. -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 </manifest>

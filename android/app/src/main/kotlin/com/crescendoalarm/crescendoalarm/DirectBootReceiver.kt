@@ -54,6 +54,15 @@ class DirectBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_LOCKED_BOOT_COMPLETED) return
 
+        // docs/TODO.md T-198: a reboot wiped the sleep-time Do Not Disturb
+        // window's AlarmManager alarms too. Re-armed here - before the
+        // fallback's own early return below - rather than from a new
+        // BOOT_COMPLETED receiver: that would be a second exported component
+        // (see T-160 for the review this one already had), and it would only
+        // run after the first unlock, too late for an end that falls before
+        // it. Reads nothing from the Intent; swallows its own failures.
+        SleepTimeDnd.onBoot(context)
+
         val dueAtMillis = DirectBootFallback.getDueAt(context)
         if (dueAtMillis == null) {
             Log.d(TAG, "No mirrored alarm to arm a fallback for.")

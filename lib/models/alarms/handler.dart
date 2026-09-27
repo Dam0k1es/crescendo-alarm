@@ -331,6 +331,12 @@ class Handler {
         setManualAlarmEnabled,
   }) {
     scheduleSleepReminder(appState, notifications: notifications);
+    // docs/TODO.md T-198 (R2): the sleep-time window follows the reminder's
+    // scheduling here too - the only rescheduling a ManualAlarm dismiss gets
+    // (T-73). By now the handled alarm is in the past, so the window moves
+    // on to the NEXT alarm; Do Not Disturb itself already ended natively at
+    // the first ring, not here at the dismiss (R4).
+    unawaited(appState.refreshSleepTimeDnd());
 
     final alarm = appState.getAlarm(alarmID);
     if (alarm is ManualAlarm && alarm.enabled) {

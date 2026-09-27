@@ -167,6 +167,18 @@ jobs:
       - run: flutter pub get
       - run: flutter build apk --debug
 
+      # docs/TODO.md T-198: JVM unit tests for the native half of the
+      # sleep-time Do Not Disturb trigger (android/app/src/test,
+      # SleepTimeDndPolicyTest) - the decisions that run with no Flutter
+      # engine at all, which `flutter test` cannot reach. Right after the
+      # APK build, so Gradle and every plugin module are already compiled;
+      # a failure fails this job (a required check for promoting to master)
+      # and withholds the artifact below. Same job, same `name:`, so the
+      # master ruleset's required-check list needs no change.
+      - name: Android unit tests (JVM)
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --console=plain
+
       - name: Clean up signing key
         if: always()
         run: rm -f android/app/keystore/crescendo-alarm-dev.jks

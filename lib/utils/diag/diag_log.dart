@@ -76,6 +76,9 @@ enum DiagEvent {
   // changing, regardless of which - see Diag.sleepHabitChanged's own doc
   // comment for why WHICH setting is carried but never the new value.
   sleepHabitChanged(17),
+  // docs/TODO.md T-198: the sleep-time Do Not Disturb window was pushed to
+  // the native side - see Diag.sleepTimeDnd.
+  sleepTimeDnd(18),
   alarmSync(20),
   alarmRang(30),
   alarmDismissed(31),
@@ -178,6 +181,13 @@ enum DiagField {
   // T-173: which Sleep Habits setting changed - never the value it changed
   // to or from (see Diag.sleepHabitChanged's own doc comment).
   sleepHabitSetting(130),
+  // T-198: the sleep-time Do Not Disturb trigger - a decision code and four
+  // flags, never a window instant (see Diag.sleepTimeDnd).
+  dndDecision(131),
+  dndStartFired(132),
+  dndEndFired(133),
+  dndApplyFailed(134),
+  dndAccessMissing(135),
   // Errors
   site(110),
   errorKind(111),
@@ -339,12 +349,33 @@ enum DiagSleepHabitSetting {
   scheduleOnGapDays(10),
   reminderEnabled(11),
   gentleWakeUpEnabled(12),
-  snoozeEnabled(13);
+  snoozeEnabled(13),
   // 14 was the Do Not Disturb toggle until that feature was
   // removed (docs/TODO.md T-197). Never reuse it: logs exported before the
   // removal carry 14 with that meaning.
+  // docs/TODO.md T-198: the re-implemented Do Not Disturb trigger - a new
+  // code, for exactly that reason.
+  sleepTimeDndEnabled(15);
 
   const DiagSleepHabitSetting(this.code);
+  final int code;
+}
+
+/// What the native side decided when the sleep-time window was pushed
+/// (docs/TODO.md T-198). Deliberately the logger's own enum, like
+/// [DiagTrigger] - the codes equal `SleepTimeDndDecision` in
+/// lib/utils/sleep_time_dnd.dart and `SleepTimeDndPolicy.Code` in Kotlin.
+enum DiagDndDecision {
+  channelFailed(0),
+  disabled(1),
+  noWindow(2),
+  scheduled(3),
+  catchUp(4),
+  alreadyActive(5),
+  ended(6),
+  tooLate(7);
+
+  const DiagDndDecision(this.code);
   final int code;
 }
 
@@ -951,6 +982,32 @@ abstract final class Diag {
   static void sleepHabitChanged({required DiagSleepHabitSetting setting}) {
     _record(DiagEvent.sleepHabitChanged, <DiagField, int>{
       DiagField.sleepHabitSetting: setting.code,
+    });
+  }
+
+  /// The sleep-time Do Not Disturb window was pushed to the native side
+  /// (docs/TODO.md T-198): what it decided, and whether its start/end alarm
+  /// fired, a switch was refused, or Do Not Disturb access is missing since
+  /// the previous push.
+  ///
+  /// No clock value: the window itself (a bedtime and a wake-up instant) is
+  /// exactly the sleep pattern this log structurally excludes. The flags are
+  /// what a device test needs instead - after a night, the first push
+  /// reports whether the start and the end actually fired, which is the one
+  /// question T-197's six rounds of green unit tests never answered.
+  static void sleepTimeDnd({
+    required DiagDndDecision decision,
+    required bool startFired,
+    required bool endFired,
+    required bool applyFailed,
+    required bool accessMissing,
+  }) {
+    _record(DiagEvent.sleepTimeDnd, <DiagField, int>{
+      DiagField.dndDecision: decision.code,
+      DiagField.dndStartFired: startFired ? 1 : 0,
+      DiagField.dndEndFired: endFired ? 1 : 0,
+      DiagField.dndApplyFailed: applyFailed ? 1 : 0,
+      DiagField.dndAccessMissing: accessMissing ? 1 : 0,
     });
   }
 

@@ -150,4 +150,8 @@ dependencies {
     // Belongs to isCoreLibraryDesugaringEnabled above (docs/TODO.md T-90):
     // supplies the `java.time` replacement classes (`Lj$/...`) for API < 26.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    // docs/TODO.md T-198: JVM unit tests for SleepTimeDndPolicy
+    // (src/test/kotlin), run by ci.yml's build-dev-apk job. Test classpath
+    // only - never part of releaseRuntimeClasspath, the SBOM, or the APK.
+    testImplementation("junit:junit:4.13.2")
 }

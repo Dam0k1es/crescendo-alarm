@@ -46,6 +46,22 @@ class ManualAlarm extends MyAlarm {
   /// every alarm required the scan whenever a code was set at all.
   bool requireDeactivationCode;
 
+  /// docs/TODO.md T-198 (R5, maintainer request): "Ein manueller Alarm soll
+  /// durch einen Schalter von der Schlafenszeit ausgenommen werden können."
+  /// When `true`, this alarm is ignored when deciding which alarm ends the
+  /// Do Not Disturb sleep time (`sleepTimeWindow` in
+  /// `lib/utils/sleep_time_dnd.dart`) - e.g. a medication reminder in the
+  /// middle of the night must neither end sleep time early nor define it.
+  /// Defaults to `false`: a manual alarm counts unless switched off. Scoped
+  /// to the Do Not Disturb trigger only; the bedtime reminder still
+  /// considers every enabled manual alarm, as it always has.
+  ///
+  /// Deliberately a NEW key with the opposite polarity to the removed
+  /// T-191 field `countsForDoNotDisturb`, which a v1.3.0 install may still
+  /// have stored - that key is simply never read again, so it can neither
+  /// switch this on nor off.
+  bool excludeFromSleepTime;
+
   ManualAlarm({
     required TimeOfDay super.time,
     super.title,
@@ -62,9 +78,11 @@ class ManualAlarm extends MyAlarm {
     super.vibrate,
     bool? snoozeEnabled,
     bool? requireDeactivationCode,
+    bool? excludeFromSleepTime,
     Map<DayOfWeek, bool>? repeatOnDays,
   })  : snoozeEnabled = snoozeEnabled ?? true,
         requireDeactivationCode = requireDeactivationCode ?? true,
+        excludeFromSleepTime = excludeFromSleepTime ?? false,
         repeatOnDays =
             repeatOnDays ?? {for (var day in DayOfWeek.values) day: true};
 
@@ -98,6 +116,9 @@ class ManualAlarm extends MyAlarm {
       // doc comments above for why that's the right migration behavior.
       snoozeEnabled: data['snoozeEnabled'] as bool?,
       requireDeactivationCode: data['requireDeactivationCode'] as bool?,
+      // Missing for alarms stored before T-198 - then the constructor's
+      // default (false: the alarm counts) applies.
+      excludeFromSleepTime: data['excludeFromSleepTime'] as bool?,
       repeatOnDays: repeatOnDays,
       id: data['id'],
     );
@@ -116,6 +137,7 @@ class ManualAlarm extends MyAlarm {
       'vibrate': vibrate,
       'snoozeEnabled': snoozeEnabled,
       'requireDeactivationCode': requireDeactivationCode,
+      'excludeFromSleepTime': excludeFromSleepTime,
       'repeatOnDays':
           repeatOnDays.map((day, value) => MapEntry(day.toString(), value)),
       'id': id,
@@ -140,6 +162,7 @@ class ManualAlarm extends MyAlarm {
           vibrate == other.vibrate &&
           snoozeEnabled == other.snoozeEnabled &&
           requireDeactivationCode == other.requireDeactivationCode &&
+          excludeFromSleepTime == other.excludeFromSleepTime &&
           id == other.id &&
           compareRepeatDays(repeatOnDays, other.repeatOnDays);
     } else {

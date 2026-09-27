@@ -51,5 +51,32 @@ class MainActivity: FlutterActivity() {
                     result.notImplemented()
                 }
             }
+
+        // docs/TODO.md T-198: the sleep-time Do Not Disturb window. Dart
+        // only ever pushes the window here; Do Not Disturb itself is
+        // switched by SleepTimeDnd when its own alarms fire. Reachable from
+        // every place the window is pushed from, because all of them run in
+        // this activity's engine - T-198's H2 finding: the only other engine
+        // anything in this app creates is awesome_notifications'
+        // DartBackgroundExecutor, which is used solely for silent notification
+        // ACTIONS (none here) and never calls configureFlutterEngine.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SleepTimeDnd.CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "setWindow" -> result.success(
+                        SleepTimeDnd.sync(
+                            applicationContext,
+                            call.argument<Boolean>("enabled") ?: false,
+                            call.argument<Number>("startMillis")?.toLong(),
+                            call.argument<Number>("endMillis")?.toLong(),
+                        )
+                    )
+                    "currentInterruptionFilter" ->
+                        result.success(SleepTimeDnd.currentFilter(applicationContext))
+                    "isAccessGranted" ->
+                        result.success(SleepTimeDnd.isAccessGranted(applicationContext))
+                    else -> result.notImplemented()
+                }
+            }
     }
 }

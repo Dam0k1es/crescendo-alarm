@@ -207,4 +207,38 @@ void main() {
       expect(created.requireDeactivationCode, isFalse);
     });
   });
+
+  group('per-alarm Exclude from Sleep Time toggle (docs/TODO.md T-198, R5 - '
+      'maintainer request)', () {
+    Finder switchIn(String label) => find.descendant(
+          of: find.ancestor(of: find.text(label), matching: find.byType(Card)),
+          matching: find.byType(Switch),
+        );
+
+    testWidgets('defaults to off - a manual alarm counts for sleep time '
+        'unless the user excludes it', (tester) async {
+      await _openAddDialog(tester);
+
+      final excludeSwitch =
+          tester.widget<Switch>(switchIn('Exclude from Sleep Time'));
+      expect(excludeSwitch.value, isFalse);
+      expect(excludeSwitch.onChanged, isNotNull);
+    });
+
+    testWidgets('turning it on produces a ManualAlarm with '
+        'excludeFromSleepTime true', (tester) async {
+      final appState = await _openAddDialog(tester);
+
+      final finder = switchIn('Exclude from Sleep Time');
+      await tester.ensureVisible(finder);
+      await tester.tap(finder);
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(appState.manualAlarms.single.excludeFromSleepTime, isTrue);
+    });
+  });
 }

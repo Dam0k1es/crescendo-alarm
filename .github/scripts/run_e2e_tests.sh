@@ -231,6 +231,29 @@ TEST_EXIT_CODE=${PIPESTATUS[0]}
 flutter test integration_test/silent_notification_test.dart -d emulator-5554 \
   2>&1 | tee "$EVIDENCE_DIR/silent_notification.log" || true
 
+# docs/TODO.md T-198: the sleep-time Do Not Disturb trigger against the real
+# NotificationManager/AlarmManager - the device-level check T-197 said the
+# removed T-184 feature never had. Needs "Do Not Disturb access", a special
+# grant with no runtime dialog; `cmd notification allow_dnd` grants it, but
+# only for an installed package, and `flutter test` reinstalls the app
+# itself - so the grant is re-applied in a loop for as long as the leg runs
+# (a grant survives a package REPLACE, not an uninstall). Non-gating on its
+# first runs, like the legs around it: it has never run on this emulator
+# image. Afterwards Do Not Disturb is forced off so nothing later in this
+# job runs silenced.
+(
+  while :; do
+    adb shell cmd notification allow_dnd "$PACKAGE" >/dev/null 2>&1 || true
+    sleep 2
+  done
+) &
+DND_GRANT_PID=$!
+flutter test integration_test/sleep_time_dnd_test.dart -d emulator-5554 \
+  2>&1 | tee "$EVIDENCE_DIR/sleep_time_dnd.log" || true
+kill "$DND_GRANT_PID" 2>/dev/null || true
+wait "$DND_GRANT_PID" 2>/dev/null || true
+adb shell cmd notification set_dnd off >/dev/null 2>&1 || true
+
 # docs/TODO.md T-93 / docs/REQUIREMENTS.md R3: does a set alarm survive a
 # reboot? Unverified to this day - and it's the last open question of the
 # "guaranteed wake-up" product promise.

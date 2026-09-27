@@ -116,7 +116,9 @@ Future<T> _serialized<T>(Future<T> Function() body) {
 /// 4. [replan] - including FR-18's alarm reconciliation, which `replan()`
 ///    itself triggers,
 /// 5. report FR-6/FR-9/FR-12 ([reportReplanNotifications]),
-/// 6. replan the bedtime notification ([scheduleSleepReminder], T-80).
+/// 6. replan the bedtime notification ([scheduleSleepReminder], T-80),
+/// 7. re-arm the sleep-time Do Not Disturb window
+///    ([AppState.refreshSleepTimeDnd], T-198) - derived from step 6's inputs.
 ///
 /// | Trigger | today concluded (FR-11) | daily lock (FR-17) |
 /// |---|---|---|
@@ -235,6 +237,13 @@ Future<ReplanResult?> runSchedulingCheckpoint(
       // lacks its entry point. `scheduleSleepReminder` swallows its own
       // errors, so it cannot additionally break this path.
       await scheduleSleepReminder(appState, notifications: notifications);
+
+      // docs/TODO.md T-198 (R2): the sleep-time Do Not Disturb window hooks
+      // into the reminder's scheduling - same place, same freshly planned
+      // values, same `finally` (a failed calendar read must not leave a
+      // stale window armed either). Only COMPUTES and pushes the window; the
+      // native side switches Do Not Disturb when its own alarms fire.
+      await appState.refreshSleepTimeDnd(now: nowFn);
 
       Diag.checkpointFinished(
         trigger: diagTriggerOf(trigger),

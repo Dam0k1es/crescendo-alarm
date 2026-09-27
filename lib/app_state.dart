@@ -35,6 +35,7 @@ import 'package:crescendo_alarm/models/scheduling/next_wake_up.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/utils/direct_boot_mirror.dart' as direct_boot_mirror;
+import 'package:crescendo_alarm/utils/sleep_time_dnd.dart' as sleep_time_dnd;
 import 'package:crescendo_alarm/utils/utils.dart';
 
 class AppState extends ChangeNotifier {
@@ -109,6 +110,28 @@ class AppState extends ChangeNotifier {
 
   bool _reminderEnabled = false;
   TimeOfDay _reminderDuration = const TimeOfDay(hour: 0, minute: 30);
+
+  /// docs/TODO.md T-198 (R6): the Sleep Habits Do Not Disturb trigger,
+  /// default off. Persisted under a NEW key, `sleepTimeDndEnabled` - never
+  /// the removed T-184 feature's `doNotDisturbEnabled`, which a v1.3.0
+  /// install may still hold as `true` (see [_removedDoNotDisturbKeys]).
+  bool _sleepTimeDndEnabled = false;
+
+  /// The last (decision, access missing) pair written to the diagnostics
+  /// log by [refreshSleepTimeDnd] - one replan arms and cancels several
+  /// alarms, and each of those pushes, so only a change (or something that
+  /// fired) is worth a record.
+  (sleep_time_dnd.SleepTimeDndDecision, bool)? _lastLoggedDndState;
+
+  /// The v1.3.0 Do Not Disturb feature's preference keys (docs/TODO.md
+  /// T-184 ... T-191, removed in T-197). Cleared on load so no future code
+  /// can ever read a stale `doNotDisturbEnabled=true` as consent.
+  static const _removedDoNotDisturbKeys = [
+    'doNotDisturbEnabled',
+    'doNotDisturbPreviousFilter',
+    'doNotDisturbActivatedAt',
+    'doNotDisturbTargetWakeUp',
+  ];
   // Default on with a 5-minute ramp, per maintainer request.
   bool _gentleWakeUpEnabled = true;
   Duration _gentleWakeUpDuration = const Duration(minutes: 5);
@@ -196,6 +219,8 @@ class AppState extends ChangeNotifier {
   DeactivationCode? get deactivationCode => _deactivationCode;
 
   bool get reminderEnabled => _reminderEnabled;
+
+  bool get sleepTimeDndEnabled => _sleepTimeDndEnabled;
 
   bool get gentleWakeUpEnabled => _gentleWakeUpEnabled;
 
@@ -475,6 +500,18 @@ class AppState extends ChangeNotifier {
     _reminderEnabled = value;
     _prefs.setBool('reminderEnabled', _reminderEnabled);
     notifyListeners();
+  }
+
+  /// docs/TODO.md T-198: switching it on or off pushes to the native side
+  /// right away - on, so a window already under way is caught up; off, so
+  /// the phone leaves Do Not Disturb if this app switched it on (R6). The
+  /// caller (Sleep Habits) has already obtained Do Not Disturb access
+  /// before switching it on.
+  set sleepTimeDndEnabled(bool value) {
+    _sleepTimeDndEnabled = value;
+    _prefs.setBool('sleepTimeDndEnabled', _sleepTimeDndEnabled);
+    notifyListeners();
+    unawaited(refreshSleepTimeDnd());
   }
 
   set gentleWakeUpEnabled(bool value) {
@@ -851,6 +888,9 @@ class AppState extends ChangeNotifier {
           // that never reaches the alarm" bug class as T-84.
           snoozeEnabled: alarm.snoozeEnabled,
           requireDeactivationCode: alarm.requireDeactivationCode,
+          // docs/TODO.md T-198: the same trap once more - T-191's
+          // predecessor of this field was dropped right here.
+          excludeFromSleepTime: alarm.excludeFromSleepTime,
           repeatOnDays: alarm.repeatOnDays);
       if (_manualAlarms.contains(alarm)) {
         debugPrint(
@@ -1041,6 +1081,9 @@ class AppState extends ChangeNotifier {
     // Set the alarm
     await Alarm.set(alarmSettings: alarmSettings);
     refreshDirectBootFallback();
+    // docs/TODO.md T-198: the same "every real arm/cancel" hook - see
+    // refreshSleepTimeDnd.
+    unawaited(refreshSleepTimeDnd());
   }
 
   /// FR-20: arms the **postponed** wake call as a plain platform alarm.
@@ -1079,6 +1122,7 @@ class AppState extends ChangeNotifier {
   Future<void> _stopAlarm(int id) async {
     await Alarm.stop(id);
     refreshDirectBootFallback();
+    unawaited(refreshSleepTimeDnd());
   }
 
   /// docs/TODO.md T-158: recomputes the next moment a real alarm is
@@ -1111,6 +1155,61 @@ class AppState extends ChangeNotifier {
       manualAlarms: _manualAlarms,
       now: nowFn(),
     )));
+  }
+
+  /// docs/TODO.md T-198: recomputes the sleep-time window
+  /// (`sleep_time_dnd.sleepTimeWindow`) and pushes it, together with
+  /// whether the feature is on at all, to the native side, which arms the
+  /// window's start and end as exact AlarmManager alarms and switches Do Not
+  /// Disturb itself when they fire. Nothing here switches Do Not Disturb.
+  ///
+  /// Call sites - the reminder's own ones first (R2: "Die Zeitplanung ist
+  /// bzgl des Starts daher zu übernehmen"):
+  /// - the end of every scheduling checkpoint, right after
+  ///   `scheduleSleepReminder` (`checkpoint.dart`), and
+  /// - every handled alarm (`Handler.onAlarmHandled`), likewise;
+  /// and, because a trigger that ACTS cannot afford the reminder's
+  /// staleness (a manual-alarm edit reschedules no reminder until the next
+  /// checkpoint - for a notification a cosmetic delay, for Do Not Disturb a
+  /// phone silenced at the wrong time):
+  /// - after every real arm/cancel ([_setAlarm]/[_stopAlarm], the same hook
+  ///   as [refreshDirectBootFallback]),
+  /// - once at cold start (so a force-stop, which wipes AlarmManager, is
+  ///   recovered on the next open even when FR-17's daily lock skips the
+  ///   checkpoint), and
+  /// - when [sleepTimeDndEnabled] changes.
+  ///
+  /// Never throws; the push swallows its own failures. [now] is injectable
+  /// purely for testability.
+  Future<void> refreshSleepTimeDnd({DateTime Function()? now}) async {
+    try {
+      final window = _sleepTimeDndEnabled
+          ? sleep_time_dnd.sleepTimeWindow(
+              pendingDayValues: _pendingDayValues,
+              disabledDays: _disabledDays,
+              manualAlarms: _manualAlarms,
+              sleepGoal: _sleepGoal,
+              now: (now ?? DateTime.now)(),
+            )
+          : null;
+      final report = await sleep_time_dnd.pushSleepTimeWindow(
+        enabled: _sleepTimeDndEnabled,
+        window: window,
+      );
+      final state = (report.decision, report.accessMissing);
+      if (state != _lastLoggedDndState || report.eventful) {
+        _lastLoggedDndState = state;
+        Diag.sleepTimeDnd(
+          decision: sleep_time_dnd.diagDndDecisionOf(report.decision),
+          startFired: report.startFired,
+          endFired: report.endFired,
+          applyFailed: report.applyFailed,
+          accessMissing: report.accessMissing,
+        );
+      }
+    } catch (e) {
+      debugPrint("=====refreshSleepTimeDnd: ${e.runtimeType}");
+    }
   }
 
   void _saveScheduledAlarms() {
@@ -1405,6 +1504,11 @@ class AppState extends ChangeNotifier {
       _permissionsGranted =
           _prefs.getBool('permissionsGranted') ?? _permissionsGranted;
       _reminderEnabled = _prefs.getBool('reminderEnabled') ?? _reminderEnabled;
+      _sleepTimeDndEnabled =
+          _prefs.getBool('sleepTimeDndEnabled') ?? _sleepTimeDndEnabled;
+      for (final key in _removedDoNotDisturbKeys) {
+        if (_prefs.containsKey(key)) _prefs.remove(key);
+      }
       _gentleWakeUpEnabled =
           _prefs.getBool('gentleWakeUpEnabled') ?? _gentleWakeUpEnabled;
       final gentleWakeUpSeconds = _prefs.getInt('gentleWakeUpSeconds');
@@ -1477,5 +1581,8 @@ class AppState extends ChangeNotifier {
     // install that upgrades from a version predating this mirror would have
     // nothing armed for it until the user happens to touch an alarm.
     refreshDirectBootFallback();
+    // docs/TODO.md T-198: likewise for the sleep-time window - see
+    // refreshSleepTimeDnd's list of call sites.
+    unawaited(refreshSleepTimeDnd());
   }
 }

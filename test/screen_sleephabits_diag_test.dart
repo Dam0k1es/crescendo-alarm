@@ -6,6 +6,8 @@ import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart' show DayOfWeek;
 import 'package:crescendo_alarm/screens/sleep_habits/screen_sleephabits.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/utils/permissions.dart' as permissions;
+import 'package:crescendo_alarm/utils/sleep_time_dnd.dart' as sleep_time_dnd;
 
 // docs/TODO.md T-173 (maintainer request): "the logs should be extended
 // whenever any Sleep Habits setting changes, no matter which". Diag.
@@ -217,6 +219,25 @@ void main() {
       await _tapToggle(tester, 'Snooze');
       expect(_settingsLogged(), [DiagSleepHabitSetting.snoozeEnabled.code]);
     });
+
+    // docs/TODO.md T-198: a new code (15), never the reserved 14 - logs
+    // exported before T-197 carry 14 for the removed T-184 toggle.
+    testWidgets('sleepTimeDndEnabled', (tester) async {
+      permissions.requestDoNotDisturbAccess = () async => true;
+      addTearDown(() => permissions.requestDoNotDisturbAccess =
+          permissions.requestDoNotDisturbAccessDefault);
+      sleep_time_dnd.pushSleepTimeWindow = ({required bool enabled,
+              required sleep_time_dnd.SleepTimeWindow? window}) async =>
+          const sleep_time_dnd.SleepTimeDndReport(
+              decision: sleep_time_dnd.SleepTimeDndDecision.scheduled);
+      addTearDown(() => sleep_time_dnd.pushSleepTimeWindow =
+          sleep_time_dnd.defaultPushSleepTimeWindow);
+      await _pumpScreen(tester);
+      await _tapToggle(tester, 'Do Not Disturb');
+      expect(
+          _settingsLogged(), [DiagSleepHabitSetting.sleepTimeDndEnabled.code]);
+      expect(DiagSleepHabitSetting.sleepTimeDndEnabled.code, 15);
+    });
   });
 
   testWidgets(
@@ -224,7 +245,10 @@ void main() {
       'a new setting added here without a matching Diag call would leave '
       'this list stale, not the enum wrong', (tester) async {
     // Not a functional test - documents the enum's completeness against
-    // the 13 real controls above, so the two can't silently drift apart.
-    expect(DiagSleepHabitSetting.values.length, 13);
+    // the 14 real controls above, so the two can't silently drift apart.
+    expect(DiagSleepHabitSetting.values.length, 14);
+    expect(DiagSleepHabitSetting.values.map((s) => s.code),
+        isNot(contains(14)),
+        reason: '14 stays reserved for the removed T-184 toggle (T-197)');
   });
 }
