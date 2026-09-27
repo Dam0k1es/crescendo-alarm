@@ -373,10 +373,6 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     final codeConfigured = _appState.deactivationCode != null;
     bool requireDeactivationCode =
         codeConfigured ? (alarm?.requireDeactivationCode ?? true) : false;
-    // docs/TODO.md T-191 (maintainer request): defaults to OFF regardless of
-    // any existing setting to inherit from - see ManualAlarm.countsForDoNotDisturb's
-    // own doc comment for why opt-in is the safe default here specifically.
-    bool countsForDoNotDisturb = alarm?.countsForDoNotDisturb ?? false;
     // A stored tone path (an existing alarm's, or AppState's own default)
     // that matches neither a bundled tone nor a current custom tone would
     // leave the dropdown below with a `value` none of its `items` match -
@@ -601,37 +597,6 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // docs/TODO.md T-191 (maintainer request): whether this
-                    // alarm counts as a "next wake-up" for the Do Not
-                    // Disturb window - off by default, since an arbitrary
-                    // manual alarm is just as likely to be unrelated to
-                    // sleep (a medication reminder, a nap) as it is to be a
-                    // real wake-up. Same Card/Row/Switch pattern as the
-                    // other per-alarm toggles above.
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Expanded(
-                              child: Text('Counts for Do Not Disturb',
-                                  style: TextStyle(fontSize: 20)),
-                            ),
-                            Switch(
-                              value: countsForDoNotDisturb,
-                              onChanged: (value) {
-                                setState(() {
-                                  countsForDoNotDisturb = value;
-                                });
-                              },
-                              activeThumbColor: _appState.accentColor,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     // Set Alarm Tone
                     Card(
                       child: Padding(
@@ -752,7 +717,6 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                       vibrate: vibrate,
                       snoozeEnabled: snoozeEnabled,
                       requireDeactivationCode: requireDeactivationCode,
-                      countsForDoNotDisturb: countsForDoNotDisturb,
                     ));
                   },
                 ),

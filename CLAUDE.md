@@ -729,10 +729,11 @@ result field per line), `scheduling-v2-spec.md` (FR-1 … FR-21), plus `personas
 and `choice-of-technologies.md` from the original project planning. Those three markdown documents
 predate the finished app and have been annotated inline where they describe features that were
 planned but never implemented (e.g. NFC-tag deactivation) or claims that no longer hold - don't
-assume everything in them shipped as described. (Do Not Disturb was one such "planned but never
-implemented" item until 2026-09-25 - `docs/TODO.md` T-184 shipped it; `docs/use-cases.md`'s own
-annotation was updated accordingly, worth remembering as an example of why these three documents
-need re-checking rather than trusted from an old annotation.)
+assume everything in them shipped as described. (Do Not Disturb is the cautionary example in both
+directions: planned but never implemented until `docs/TODO.md` T-184 shipped it on 2026-09-25, then
+removed again completely in T-197 on 2026-09-27 after it still misbehaved on a real phone -
+`docs/use-cases.md`'s annotation followed both changes. Do not re-implement it until the maintainer
+explicitly asks; see T-197.)
 
 **There is currently no UML diagram.** `UML_WakeyWakey.drawio` modelled the original
 planning-phase design (including the removed old scheduling engine) with no way to annotate a

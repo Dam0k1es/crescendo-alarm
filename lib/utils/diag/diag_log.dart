@@ -339,8 +339,10 @@ enum DiagSleepHabitSetting {
   scheduleOnGapDays(10),
   reminderEnabled(11),
   gentleWakeUpEnabled(12),
-  snoozeEnabled(13),
-  doNotDisturbEnabled(14);
+  snoozeEnabled(13);
+  // 14 was the Do Not Disturb toggle until that feature was
+  // removed (docs/TODO.md T-197). Never reuse it: logs exported before the
+  // removal carry 14 with that meaning.
 
   const DiagSleepHabitSetting(this.code);
   final int code;

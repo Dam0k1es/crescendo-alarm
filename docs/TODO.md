@@ -1172,7 +1172,7 @@ that is the basis a decision can be formulated against.
 - **Requirement:** yes - requested directly by the maintainer, with an explicit constraint
   (OS components only) that was verified to actually hold, not assumed.
 
-### T-184 · A Do Not Disturb toggle: silences notifications for sleep time, restores at the final ring — DONE (2026-09-25)
+### T-184 · A Do Not Disturb toggle: silences notifications for sleep time, restores at the final ring — DONE (2026-09-25) — REMOVED with the whole feature (2026-09-27, T-197)
 
 - [x] Maintainer request, verbatim: "Implementiere einen toggle do not disturb. dieser soll in der
   schlafenszeit (sleep goal) vor dem wecker (ohne reminder zeit) benachrichtigungen deaktivieren
@@ -1292,7 +1292,7 @@ level). Full suite re-verified green (645/645), `flutter analyze` clean.
 Two further findings from the same review were judged non-blocking and are tracked separately
 rather than expanded into more scope here: see T-185.
 
-### T-185 · Two non-blocking follow-ups from Günther's T-184 review (P2, one RESOLVED 2026-09-26)
+### T-185 · Two non-blocking follow-ups from Günther's T-184 review (P2, one RESOLVED 2026-09-26) — REMOVED with the whole feature (2026-09-27, T-197)
 
 - [x] **`do_not_disturb_channel.dart`'s own doc comment overstates what a `false` return actually
   means — RESOLVED as part of T-186's investigation.** The original guess here ("Android silently
@@ -1315,6 +1315,44 @@ rather than expanded into more scope here: see T-185.
   (matching `fetchEvents`/`notifications`/`now` already are), and a test confirms a stale Do Not
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
+
+### T-197 · Do Not Disturb removed completely, pending a fresh design — DONE (2026-09-27)
+
+- [x] Maintainer report from live testing on the real phone, after v1.3.0: "Beim live testen kam
+  auf, dass das DND problem nach wie vor besteht. beim aktivieren des schalters wird entgegen der
+  zeitlogik sofort dnd aktiviert und nach dem klingeln des weckers wird es nicht deaktiviert. bitte
+  entferne erstmal die funktion vollständig, bevor wir sie danach versuchen neu zu implementieren -
+  erst nach meiner aufforderung" (Live testing showed the DND problem still exists: switching the
+  toggle on activates DND immediately, against the time logic, and it is not deactivated after the
+  alarm rings. Please first remove the feature completely, before we then try to re-implement it -
+  only once I ask.)
+- **What that says about T-184 … T-191:** six rounds of fixes, each green in `flutter test` and
+  several reviewed by Günther, and the two core behaviours - activate only inside
+  [bedtime, next alarm), restore after the ring - still failed on the device. Every one of those
+  tests drove the logic through injected `getCurrentFilter`/`setFilter`/`now` fakes; none observed
+  the real Android interruption filter (or the per-app `AutomaticZenRule` Android 15+ creates for
+  `setInterruptionFilter`, see T-189's notes) end to end. A re-implementation should start from a
+  device-level check of both symptoms, not from more unit tests against the same fakes.
+- **Removed:** the seven feature commits reverted as one change (92eead1, 1931743, aa169fc,
+  293fc03, 738f387, 25420ad, 00f8ded - their `docs/TODO.md` entries kept and marked REMOVED, the
+  unrelated T-187 keystore commit between them untouched): `lib/utils/do_not_disturb*.dart`, the
+  Kotlin `DoNotDisturbChannel` and its `MainActivity` wiring, the Sleep Habits toggle and its
+  permission prompt, `AppState.doNotDisturbEnabled`, the checkpoint/handler/notification hooks, the
+  per-alarm `ManualAlarm.countsForDoNotDisturb` option and `nextWakeUpTime`'s `manualAlarmFilter`,
+  plus their tests. `lib/utils/sleep_reminder.dart` is byte-identical to its pre-T-184 state again.
+  Also removed: `ACCESS_NOTIFICATION_POLICY` from the manifest - it dated from the initial commit's
+  never-built DND plan, and nothing else uses it (alarms play on the alarm stream without it).
+  T-192/T-193 ("Deactivation Code Required") are unaffected.
+- **Kept on purpose:** `DiagSleepHabitSetting` code 14 stays reserved (a comment in
+  `diag_log.dart`) so logs exported before the removal are never misread.
+- **Leftovers on an existing install (accepted, test phase):** stale `SharedPreferences` keys of
+  the feature are simply never read again. If Do Not Disturb is still switched on by the old build
+  at the moment of the update, the new build cannot switch it off - it has to be turned off once in
+  Android's own quick settings, and the "Do Not Disturb (Crescendo Alarm)" mode Android 15+ created
+  may need deleting there too.
+- **Tests:** new `test/do_not_disturb_removed_test.dart` (a source-reading guard: no manifest
+  permission, no interruption-filter access in Dart/Kotlin, no DND setting in `lib/`), confirmed
+  failing first on the manifest permission. Delete it when a re-implementation is requested.
 
 ### T-196 · Release v1.3.0 published — DONE (2026-09-26)
 
@@ -1432,7 +1470,7 @@ rather than expanded into more scope here: see T-185.
 - **Requirement:** yes - direct maintainer request following their own observation about the
   dialog's wording.
 
-### T-191 · Manual alarms need their own opt-in for the Do Not Disturb window — DONE (2026-09-26)
+### T-191 · Manual alarms need their own opt-in for the Do Not Disturb window — DONE (2026-09-26) — REMOVED with the whole feature (2026-09-27, T-197)
 
 - [x] Maintainer request, verbatim: "Dann braucht es eine neue option beim anlegen von manuellen
   Alarmen die sagt, ob ein alarm für DND berücksichtigt wird, oder nicht. Die soll im default aus
@@ -1479,7 +1517,7 @@ rather than expanded into more scope here: see T-185.
 - **Requirement:** yes - direct maintainer request, refining T-189's own window definition rather
   than reopening it.
 
-### T-190 · Turning the Do Not Disturb toggle off could be a no-op after data loss — DONE (2026-09-26)
+### T-190 · Turning the Do Not Disturb toggle off could be a no-op after data loss — DONE (2026-09-26) — REMOVED with the whole feature (2026-09-27, T-197)
 
 - [x] Maintainer device report, verbatim: "hatte in der alten version dnd deaktiviert, apk
   installiert, dann weider installiert. ist jetzt aktiv. aber eigentlich keine schlafenszeit." (I had
@@ -1518,7 +1556,7 @@ rather than expanded into more scope here: see T-185.
 - **Requirement:** yes - direct maintainer bug report following the T-189 fix, plus an explicit
   request ("Ich sehe Do not Disturb aus forcieren auch als sinnvoll") to add the force-off fallback.
 
-### T-189 · Sleep time is the live window [bedtime, next alarm) — supersedes T-188's first attempt — DONE (2026-09-26)
+### T-189 · Sleep time is the live window [bedtime, next alarm) — supersedes T-188's first attempt — DONE (2026-09-26) — REMOVED with the whole feature (2026-09-27, T-197)
 
 - [x] Independent review (Günther, requested by the maintainer specifically to re-check T-188's
   fix and the T-110 mechanism it copied) found T-188's "skip a missed bedtime entirely" fix was
@@ -1577,7 +1615,7 @@ rather than expanded into more scope here: see T-185.
 - **Requirement:** yes - direct maintainer clarification of exactly what "sleep time" should mean,
   following an independent review that found the first attempt incomplete.
 
-### T-188 · Do Not Disturb activated in the middle of the day, not at bedtime — first attempt, superseded by T-189 (2026-09-26)
+### T-188 · Do Not Disturb activated in the middle of the day, not at bedtime — first attempt, superseded by T-189 (2026-09-26) — REMOVED with the whole feature (2026-09-27, T-197)
 
 - [x] Maintainer device report, verbatim: "Habe eben die neue APK installiert. Habe DND aktiviert.
   Aber ich habe jetzt im moment den DND an, obwohl keine schlafenszeit ist." (I just installed the
@@ -1653,7 +1691,7 @@ rather than expanded into more scope here: see T-185.
 - **Requirement:** yes - direct maintainer request, following directly from the real
   `INSTALL_FAILED_UPDATE_INCOMPATIBLE` friction encountered this session.
 
-### T-186 · Do Not Disturb stayed on after an alarm was stopped — two independent root causes, both fixed — DONE (2026-09-26)
+### T-186 · Do Not Disturb stayed on after an alarm was stopped — two independent root causes, both fixed — DONE (2026-09-26) — REMOVED with the whole feature (2026-09-27, T-197)
 
 - [x] Maintainer device report, verbatim: "Der Do not distrub modus soll nach einem geklingelten
   alarm logischerweise auch wieder deaktiviert werden, das war heute morgen nicht der fall." (Do Not

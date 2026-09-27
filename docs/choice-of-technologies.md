@@ -35,14 +35,14 @@
   actually "stores and serves" a wake-up: registering a real platform alarm that
   survives reboot and force-stop (R3), not an app-level timer.
 - **`awesome_notifications`** schedules the background-isolate hooks this app relies on
-  (FR-16's Checkpoint 2, the bedtime reminder, and - since T-184 - the Do Not Disturb
-  activation trigger) via Android's own local notification/alarm subsystem. No push
+  (FR-16's Checkpoint 2 and the bedtime reminder) via Android's own local
+  notification/alarm subsystem. No push
   service, no FCM/APNs, no external server ever involved in triggering one.
-- **Two small custom Kotlin platform channels**, not pub.dev plugins, where a suitable
+- **One small custom Kotlin platform channel**, not a pub.dev plugin, where a suitable
   one didn't exist or wasn't worth the dependency for a handful of framework calls:
-  `DirectBootFallback` (the `LOCKED_BOOT_COMPLETED` broadcast) and `DoNotDisturbChannel`
-  (`NotificationManager`'s `getCurrentInterruptionFilter`/`setInterruptionFilter`, T-184)
-  - see `CLAUDE.md`'s architecture notes for both.
+  `DirectBootFallback` (the `LOCKED_BOOT_COMPLETED` broadcast) - see `CLAUDE.md`'s
+  architecture notes. (A second one, `DoNotDisturbChannel`, existed from T-184 until the
+  Do Not Disturb feature was removed again in T-197.)
 - **`device_calendar`** is the only external data source the app reads from at all, and
   it's still entirely on-device: the phone's own local calendar provider, not a calendar
   server or API.

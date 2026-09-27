@@ -17,16 +17,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart' show DayOfWeek;
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
-import 'package:crescendo_alarm/utils/do_not_disturb.dart';
-import 'package:crescendo_alarm/utils/do_not_disturb_channel.dart';
-import 'package:crescendo_alarm/utils/permissions.dart';
 import 'package:crescendo_alarm/utils/sleep_reminder.dart';
-import 'package:crescendo_alarm/utils/utils.dart';
 
 class ScreenSleephabits extends StatefulWidget {
   const ScreenSleephabits({super.key});
@@ -489,76 +484,7 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           ],
         ),
       ),
-      const SizedBox(height: 8.0),
-      // docs/TODO.md T-184 (maintainer request): a separate concern from
-      // the reminder above, even though both live in this group - the
-      // reminder tells you to go to bed, this silences the phone once
-      // you're actually there.
-      _buildTile(
-        help: 'Silences notifications from bedtime to the final ring, then '
-            'restores your settings. Needs Do Not Disturb access, granted '
-            'in Settings.',
-        child: _buildToggle(
-          "Do Not Disturb",
-          _appState.doNotDisturbEnabled,
-          _handleDoNotDisturbToggle,
-        ),
-      ),
     ];
-  }
-
-  /// docs/TODO.md T-184: `accessNotificationPolicy` is one of Android's
-  /// "special" permissions - there is no runtime dialog, only a Settings
-  /// screen the user has to act on themselves, so switching this ON cannot
-  /// be confirmed synchronously (see `requestDoNotDisturbPermission`'s own
-  /// doc comment). Switching OFF, by contrast, can and does take effect
-  /// immediately: if Do Not Disturb is currently active because of this
-  /// feature, it is restored right away rather than left silenced until
-  /// whatever alarm eventually rings next.
-  ///
-  /// docs/TODO.md T-190 (maintainer device report): restoring used to be a
-  /// no-op whenever nothing was remembered to restore TO
-  /// (`doNotDisturbPreviousFilterKey` absent) - reachable in practice after
-  /// an app reinstall wipes all `SharedPreferences` (the maintainer's own
-  /// real case) while the device's actual Do Not Disturb state, which lives
-  /// entirely outside app data, is untouched by that. A manual "turn this
-  /// whole feature off" tap is an unambiguous signal the user wants it to
-  /// stop interfering right now - rather than leave the device silently
-  /// stuck because the bookkeeping needed to "restore" is gone, this now
-  /// force-turns Do Not Disturb off entirely (`interruptionFilterAll`) as a
-  /// fallback whenever there is nothing recorded to restore to instead.
-  Future<void> _handleDoNotDisturbToggle(bool value) async {
-    if (value) {
-      final granted = await requestDoNotDisturbPermission();
-      if (!granted) {
-        if (mounted) {
-          displayToast(context,
-              'Do Not Disturb access is needed - grant it in Settings, then turn this on again.');
-        }
-        return;
-      }
-    } else {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        if (prefs.containsKey(doNotDisturbPreviousFilterKey)) {
-          await restoreDoNotDisturb(
-              prefs: prefs, setFilter: setInterruptionFilter);
-        } else {
-          await setInterruptionFilter(interruptionFilterAll);
-        }
-      } catch (e) {
-        debugPrint(
-            "=====_handleDoNotDisturbToggle: immediate restore failed: ${e.runtimeType}");
-      }
-    }
-    if (!mounted) return;
-    setState(() {
-      _appState.doNotDisturbEnabled = value;
-    });
-    Diag.sleepHabitChanged(setting: DiagSleepHabitSetting.doNotDisturbEnabled);
-    // Reschedules (or cancels) the activation hook for the new state - the
-    // same trigger every other Sleep Habits toggle already uses.
-    runCheckpointSafely(_appState, trigger: CheckpointTrigger.settingsChanged);
   }
 
   /// docs/TODO.md T-20: [help], when given, renders as a "?" button pinned

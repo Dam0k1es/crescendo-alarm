@@ -63,10 +63,6 @@ Alarms you create yourself, independent of any calendar.
   stop it (the app-wide "Guaranteed Wake-Up" feature - see "Scan Code" below). Greyed out and
   switched off whenever no code is configured at all there, since it would have no effect either
   way; becomes available once you generate or import one.
-- **Counts for Do Not Disturb** - whether this specific alarm counts as a "next wake-up" for the Do
-  Not Disturb feature (see Sleep Habits below). Off by default: an alarm you set manually could just
-  as easily be a medication reminder or a nap as it is your real wake-up, so it takes an explicit
-  opt-in before Do Not Disturb pays attention to it.
 - **Repeat on** - a day-of-week picker. Defaults to just today, so a one-off alarm needs no
   interaction here at all; check more days for a recurring alarm. Repeating alarms re-arm themselves
   automatically each time you dismiss them.
@@ -151,14 +147,6 @@ small chevron on its right to hide or show that group's options.
   alarm itself.
 - **Enable Reminder** - a notification reminding you to go to bed, timed this far before your Sleep
   Goal's bedtime.
-- **Do Not Disturb** - silences notifications during your configured sleep time: from your Sleep
-  Goal's bedtime (not the earlier reminder above) until your next alarm, then restores your phone's
-  notification settings exactly as they were. Evaluated live, so it activates immediately if you're
-  already inside that window when you turn it on, and restores immediately once the window ends -
-  not only at a scheduled instant. Needs Android's own Do Not Disturb access, granted from Settings
-  the first time you turn this on. A Manual alarm only counts as the "next alarm" here if its own
-  "Counts for Do Not Disturb" toggle is on (off by default - see "Alarms" above); Scheduled alarms
-  always count.
 
 ## Settings
 

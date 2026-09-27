@@ -20,8 +20,6 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
-import 'package:crescendo_alarm/utils/do_not_disturb.dart';
-import 'package:crescendo_alarm/utils/do_not_disturb_schedule.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
 /// FR-16 Checkpoint 2 / Phase 5 step 22 (docs/scheduling-v2-spec.md): fires
@@ -33,12 +31,6 @@ import 'package:crescendo_alarm/utils/utils.dart';
 /// [runTimezoneCheckpoint2] (not [runAlarmRingCheckpoint]) - see that
 /// function's own doc comment for why it talks to `SharedPreferences`
 /// directly instead.
-///
-/// docs/TODO.md T-184: a second silent notification
-/// (`doNotDisturbActivationNotificationId`) now also fires this same
-/// callback, at a different, independently-scheduled instant - routed to
-/// [runDoNotDisturbActivation] instead by its id, since the two hooks do
-/// unrelated things and neither needs the other to also run.
 ///
 /// `@pragma('vm:entry-point')` is required by `awesome_notifications` itself
 /// for any listener that must survive being invoked from a fresh background
@@ -57,11 +49,7 @@ Future<void> onNotificationCreatedMethod(
     // Without the logger the checkpoint still runs - that's the main job.
     debugPrint("=====onNotificationCreatedMethod: Diag.init failed: ${e.runtimeType}");
   }
-  if (receivedNotification.id == doNotDisturbActivationNotificationId) {
-    await runDoNotDisturbActivation();
-  } else {
-    await runTimezoneCheckpoint2();
-  }
+  await runTimezoneCheckpoint2();
 }
 
 /// Required by `AwesomeNotifications().setListeners` (`onActionReceivedMethod`
