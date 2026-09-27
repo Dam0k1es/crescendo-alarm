@@ -103,10 +103,48 @@ Consequences to respect when adding an event:
   .init()` is therefore idempotent per isolate (a no-op once `_boot != 0`), or a second, in-process
   call silently mislabels every later event `(bg)` and double-bumps the persisted boot counter -
   found by reading a real exported log, not by code review, and easy to reintroduce by "simplifying"
-  that guard away.
+  that guard away. (`docs/TODO.md` T-199, read from the plugin's own bytecode/source since: for this
+  callback `awesome_notifications` never spins up a separate isolate at all - "created" events reach
+  Dart only through the main engine's channel, or are stored and replayed at the next
+  `setListeners` - and "created" fires when a notification is *scheduled*, not when it comes due.
+  The idempotency guard stays necessary either way.)
 - Persisted via `shared_preferences`, not a file via `path_provider`, precisely because that
   isolate already talks to it directly - a file logger would depend on plugin-channel availability
   there, which is the failure class T-79 was.
+
+## Sleep-time Do Not Disturb (`lib/utils/sleep_time_dnd.dart`, `SleepTimeDnd*.kt`)
+
+The Sleep Habits "Do Not Disturb" switch (`docs/TODO.md` T-198) puts the phone into "alarms only"
+Do Not Disturb from the next alarm minus the Sleep Goal until that alarm's first ring. A first
+version (T-184 … T-191) failed on a real phone with every unit test green and was removed (T-197);
+T-198 records why, from primary sources. Rules that are load-bearing:
+
+- **Dart computes, native switches.** Dart only computes the window (`sleepTimeWindow`) and pushes
+  it (`AppState.refreshSleepTimeDnd` → channel `.../sleep_time_dnd`, method `setWindow`).
+  `SleepTimeDnd.kt` arms an exact AlarmManager alarm at the window's start and one at its end, and
+  `SleepTimeDndReceiver` switches the interruption filter when they fire - no Flutter engine
+  needed, so both happen with the app process dead. `SleepTimeDnd.kt` is the only caller of
+  `setInterruptionFilter` in the app; every decision is the pure, JVM-tested
+  `SleepTimeDndPolicy.decide` (`android/app/src/test`, run by `ci.yml`'s `build-dev-apk` job).
+- **Never switch Do Not Disturb from an `awesome_notifications` callback.** `onNotificationCreatedMethod`
+  fires when a notification is scheduled, and a silent scheduled notification produces no callback
+  when due (T-198 H1 / T-199). That is exactly what produced both T-197 symptoms.
+- **Never end sleep time from Dart's ring handling.** The `alarm` plugin tells Dart about a ring only
+  if an engine happens to be attached (H3). The end is the native end alarm at the target alarm's
+  `alarmPlatformTime`.
+- **On Android 15+ (this app targets 36), `setInterruptionFilter` controls an app-owned implicit
+  mode, not global Do Not Disturb** (H4). Deactivate with `INTERRUPTION_FILTER_ALL`; never "restore a
+  remembered previous filter" - `getCurrentInterruptionFilter` is the effective filter across all
+  modes, and handing a non-ALL value back *activates* the app's mode.
+- The window is pushed at the bedtime reminder's own call sites (checkpoint `finally`,
+  `Handler.onAlarmHandled` - R2 adopts its scheduling) and additionally after every
+  `_setAlarm`/`_stopAlarm`, at cold start and on the switch. It is step 7 of the one checkpoint
+  sequence - not a second entry point, no own `CheckpointTrigger`. Reboot re-arming goes through
+  the existing `DirectBootReceiver` (no new exported component).
+- Persisted keys are new (`sleepTimeDndEnabled`; native device-protected prefs `sleep_time_dnd`);
+  the removed feature's keys are cleared at load, and `DiagSleepHabitSetting` 14 stays reserved.
+- `integration_test/sleep_time_dnd_test.dart` reads the real interruption filter on the CI emulator
+  (non-gating, API 34 - the legacy global-DND model, not Android 15's implicit mode).
 
 License: GNU GPLv3 (see `LICENSE`). Copyright holders named in tracked files: Dam0k1es, centron5961
 - two of the three original developers of the project this repository grew from. All three have
@@ -218,7 +256,8 @@ have made a bad day worse, not better.
 Four workflows under `.github/workflows/`:
 
 - **`ci.yml`** runs on every push and PR, scaled by branch. `dev` gets fast feedback only
-  (analyze + tests, plus a debug development APK as an artifact). `master` (and PRs into it)
+  (analyze + tests, plus a debug development APK as an artifact; since `docs/TODO.md` T-198 the APK
+  job also runs the app module's JVM unit tests, `./gradlew :app:testDebugUnitTest`). `master` (and PRs into it)
   additionally runs the security gate and the E2E suite, and builds a signed production release
   APK - **gated**: `build-android-release` has
   `needs: [analyze-and-test, security-gate, e2e-tests]`.
@@ -444,8 +483,11 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **543 tests across 89 files** (2026-09-24), and CI runs them six times over -
-once per timezone in the matrix described above.
+`flutter test` currently runs **662 tests across 106 files** (2026-09-27), and CI runs them six times over -
+once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
+tests for native code (22 as of T-198, `SleepTimeDndPolicyTest`), run with
+`cd android && ./gradlew :app:testDebugUnitTest` (locally from the native-filesystem worktree, and in
+`ci.yml`'s `build-dev-apk` job).
 
 A note on running them locally on the dev VM: the full suite in one invocation is memory-hungry
 (each test file spawns its own `flutter_tester`, and an interrupted run leaves a ~500 MB
@@ -729,11 +771,12 @@ result field per line), `scheduling-v2-spec.md` (FR-1 … FR-21), plus `personas
 and `choice-of-technologies.md` from the original project planning. Those three markdown documents
 predate the finished app and have been annotated inline where they describe features that were
 planned but never implemented (e.g. NFC-tag deactivation) or claims that no longer hold - don't
-assume everything in them shipped as described. (Do Not Disturb is the cautionary example in both
-directions: planned but never implemented until `docs/TODO.md` T-184 shipped it on 2026-09-25, then
-removed again completely in T-197 on 2026-09-27 after it still misbehaved on a real phone -
-`docs/use-cases.md`'s annotation followed both changes. Do not re-implement it until the maintainer
-explicitly asks; see T-197.)
+assume everything in them shipped as described. (Do Not Disturb is the cautionary example in every
+direction: planned but never implemented until `docs/TODO.md` T-184 shipped it on 2026-09-25,
+removed again completely in T-197 on 2026-09-27 after it still misbehaved on a real phone, then
+re-implemented with a new, native design as T-198 the same day at the maintainer's request -
+`docs/use-cases.md`'s annotation followed each change. See "Sleep-time Do Not Disturb" above before
+touching it.)
 
 **There is currently no UML diagram.** `UML_WakeyWakey.drawio` modelled the original
 planning-phase design (including the removed old scheduling engine) with no way to annotate a

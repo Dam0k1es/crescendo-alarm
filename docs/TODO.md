@@ -1316,6 +1316,253 @@ rather than expanded into more scope here: see T-185.
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
 
+### T-199 · FR-16's Checkpoint 2 never runs at bedtime — it runs when the reminder is *scheduled* (P2, open)
+
+- [ ] Found while verifying T-198's H1 (below), from the same primary source: AndroidAwnCore 0.12.1's
+  bytecode (the `me.carda:AndroidAwnCore` AAR `awesome_notifications` 0.12.1 depends on). For a
+  *scheduled* notification, `onNotificationCreatedMethod` fires from
+  `NotificationScheduler.onPostExecute` → `BroadcastSender.sendBroadcastNotificationCreated` (logged
+  "Scheduled created") - i.e. at the moment `scheduleSleepReminder()` schedules it, in the main
+  isolate. When the notification comes due, `ScheduledNotificationReceiver` → `NotificationSender`
+  calls `NotificationContentModel.registerCreatedEvent`, which returns `false` because `createdDate`
+  was already set at scheduling time and travels in the alarm intent's `notificationJson` extra - so
+  no second "created" event. For the title/body-less notification `sleepReminderContent(reminderEnabled:
+  false)` produces, `NotificationSender.doInBackground` also skips `registerDisplayedEvent` and
+  `showNotification` - no "displayed" event either. **A silent scheduled notification produces no
+  Dart callback at all when it comes due.**
+- **Consequence:** `runTimezoneCheckpoint2()` (FR-16's second checkpoint) runs every time the
+  reminder is (re)scheduled - at the end of every checkpoint and every handled alarm - and never at
+  bedtime. The scenario it exists for (a time zone change during the day, noticed before the next
+  ring) is therefore covered only by whatever else happens to run a checkpoint that day (app open,
+  a ring). Also: `onNotificationCreatedMethod` never runs in a background isolate for this event -
+  `DartBackgroundExecutor` (the plugin's only separate engine) is enqueued solely for silent
+  notification *actions*; with no engine attached, a created event is stored as a lost event
+  (`LostEventsManager.saveCreated`) and replayed at the next `setListeners` (`setEventsHandle` →
+  `recoverLostNotificationEvents`), again in the main isolate. CLAUDE.md's T-162 note ("only spins
+  one up when the app process wasn't already running") does not match that source.
+- **Why nobody saw it:** `integration_test/silent_notification_test.dart` (T-62) schedules a silent
+  notification 15 s ahead and waits for `lastCheckedUtcOffsetMinutes` to change - which the
+  scheduling-time event already does. It cannot tell "fires at scheduling" from "fires when due".
+- **Not fixed here** - T-198 only needed the finding to avoid building on it. *Done when:* either
+  FR-16 Checkpoint 2 is triggered by a mechanism that verifiably fires at the bedtime instant (for
+  example the same native exact-alarm path T-198 uses, calling back into Dart only when an engine
+  can be started), or FR-16 is formally re-scoped to "checked at every checkpoint" - and the T-62
+  leg is changed to assert the callback does NOT fire before the due time.
+
+### T-198 · Sleep-time Do Not Disturb, re-implemented natively — IMPLEMENTED (2026-09-27), device confirmation pending
+
+- [x] Maintainer request, verbatim: "Bitte implementiere eine Funktionalität, um während der
+  Schlafenszeit den Do not Disturb Modus zu aktivieren und beim ersten klingeln des nächsten Weckers
+  zu deaktivieren. Die Schlafenszeit berechnet sich aus dem Datum des nächsten Weckers minus dem
+  Schlafensziel - der Mechanismus knüpft an die Benachrichtigung zur Schlafenszeit, welche bereits
+  erfolgreich funktioniert. Die Zeitplanung ist bzgl des Starts daher zu übernehmen. Dies ist
+  unabhängig davon, ob die Benachrichtigung aktiviert ist. Das Ende der Schlafenszeit ist exakt das
+  allererste Klingeln, nicht deaktivieren des Alarms. Ein manueller Alarm soll durch einen Schalter
+  von der Schlafenszeit ausgenommen werden können. Der DND Trigger soll in den SLeep Habits aktiviert
+  und deaktiviertr werden können (default off)." (Please implement a way to turn Do Not Disturb on
+  during sleep time and off at the first ring of the next alarm. Sleep time is the date of the next
+  alarm minus the Sleep Goal - the mechanism hooks into the bedtime notification, which already works;
+  its scheduling is therefore to be adopted for the start. This applies whether or not the notification
+  is enabled. The end of sleep time is exactly the very first ring, not the dismissal of the alarm. A
+  manual alarm should be excludable from sleep time by a switch. The DND trigger should be switchable
+  on and off in Sleep Habits (default off).)
+- **Requirements as implemented:** R1 DND on during sleep time, off at the first ring; R2 start =
+  next alarm − Sleep Goal, adopting the reminder's scheduling; R3 independent of
+  `reminderEnabled`; R4 end = exactly the first ring (not the dismissal; a snooze re-ring and an
+  unrelated alarm do not end it); R5 per-manual-alarm exclusion switch; R6 Sleep Habits switch,
+  default off, needing "Do Not Disturb access", and switching it off leaves DND if the app put the
+  phone there.
+
+**Why T-184 … T-191 failed on the device - four hypotheses checked against primary sources first:**
+
+- **H1 - when do awesome_notifications callbacks fire? At scheduling, not when due.** See T-199
+  above for the bytecode trail (`NotificationScheduler.onPostExecute` →
+  `sendBroadcastNotificationCreated`; `registerCreatedEvent` false when due; silent notifications
+  skip the displayed event). Delivery to Dart is only via the plugin's main `MethodChannel`
+  (`AwesomeNotificationsPlugin.awesomeEventListener` → `pluginChannel.invokeMethod` → Dart
+  `handleMethod` → `createdHandler`, `awesome_notifications_method_channel.dart:544`). **This
+  explains both device symptoms deterministically**, read from the removed code (`git show
+  00f8ded:lib/utils/do_not_disturb*.dart`): `onNotificationCreatedMethod` routed the DND
+  notification id to `runDoNotDisturbActivation`, which called `activateDoNotDisturb` with **no time
+  check at all**. (1) Switching the toggle on ran a checkpoint → `scheduleDoNotDisturbActivation`
+  scheduled the notification for bedtime → "created" fired right then → DND on immediately, days
+  before the alarm. (2) After the ring, the ring checkpoint and `Handler.onAlarmHandled` both
+  re-ran `scheduleDoNotDisturbActivation` for the *next* night (a new target, so the notification
+  was re-created) → "created" fired → DND switched straight back on, whether or not the ring-time
+  restore had worked. No amount of fake-driven unit testing could see this: the fakes replaced
+  exactly the plugin whose timing was wrong.
+- **H2 - is a `MainActivity`-registered channel reachable wherever the Dart side runs? Yes, for
+  everything this app does.** Every Dart path that pushes the window (checkpoint, handled alarm,
+  arm/cancel, cold start, the toggle) runs in the activity's engine; the only other engine anything
+  here creates is awesome_notifications' `DartBackgroundExecutor` (`new FlutterEngine(context)`,
+  `DartBackgroundExecutor.java:126/141`), which never calls `configureFlutterEngine` and is enqueued
+  only for silent notification actions (`BroadcastSender.enqueueSilentAction`/
+  `enqueueSilentBackgroundAction`) - none exist here. The removed channel was therefore reachable
+  (which is why the premature activation worked all too well); H2 was not the cause. T-198 still
+  makes the channel irrelevant at the two moments that matter: start and end run natively.
+- **H3 - does Dart run at the first ring when the process is dead? No.** The `alarm` plugin (5.12.0)
+  rings natively: `AlarmReceiver` → `AlarmService.ringAlarm`, which notifies Dart only through
+  `AlarmPlugin.alarmTriggerApi?.alarmRang(...)` (`AlarmService.kt:214`); `alarmTriggerApi` is set in
+  `onAttachedToEngine` and cleared in `onDetachedFromEngine` (`AlarmPlugin.kt:25-35`), and the plugin
+  never starts an engine. With the process dead, Dart learns of the ring only once the full-screen
+  intent (or the user) launches the activity - seconds later, and not at all if the phone is in use
+  and the intent is shown as a heads-up notification. "Exactly the very first ring" cannot be
+  observed from Dart; the end has to be native. The ring itself is armed with
+  `setExactAndAllowWhileIdle(RTC_WAKEUP, …)` (`AlarmScheduler.kt:139-186`) at
+  `alarmPlatformTime(...)` (whole local minute), and plays with `USAGE_ALARM` (`AudioService.kt:79-89`,
+  `preferConnectedAudioDevice` is never set in `lib/`), which "alarms only" DND lets through.
+- **H4 - Android 15+ `setInterruptionFilter` semantics: an app-owned implicit rule.** AOSP
+  android15-release: `NotificationManager.setInterruptionFilter`'s javadoc ("Apps targeting
+  VANILLA_ICE_CREAM and above … cannot modify the global interruption filter. Calling this method will
+  instead activate or deactivate an AutomaticZenRule associated to the app"); gated in
+  `NotificationManagerService.setInterruptionFilter` by `android.app.Flags.modesApi() &&
+  !canManageGlobalZenPolicy(...)`, i.e. the compat change `MANAGE_GLOBAL_ZEN_VIA_IMPLICIT_RULES`
+  (`@EnabledSince(targetSdkVersion = VANILLA_ICE_CREAM)`, NMS:591-593); `ZenModeHelper
+  .applyGlobalZenModeAsImplicitZenRule` (:605-653) creates/activates the rule `implicitRuleId(pkg)`,
+  named after the app label (:747-756), for any filter but ALL, and for ALL "Deactivate implicit rule
+  if it exists and is active; otherwise ignore" (:616-624) - it never touches the user's manual DND or
+  other modes. It does not overwrite a filter the user changed on that rule (`userModifiedFields`,
+  :641). `getCurrentInterruptionFilter()` returns the *effective* mode (`computeZenMode`, :2026-2046:
+  the manual rule if active, else the most severe active automatic rule). **So "remember the previous
+  filter and restore it" no longer makes sense:** the remembered value is the effective one, and
+  handing a non-ALL value back *activates* the app's rule instead of ending it. Deactivating is
+  simply `setInterruptionFilter(ALL)`. (This app targets 36; the CI emulator is API 34, where the
+  call still changes the global DND.)
+
+**Design - both symptoms structurally impossible, not merely untested:**
+
+- **Dart computes, native switches.** `lib/utils/sleep_time_dnd.dart`'s pure `sleepTimeWindow()`
+  computes `[start, end)`; `AppState.refreshSleepTimeDnd()` pushes it with the feature state through
+  the channel `com.crescendoalarm.crescendoalarm/sleep_time_dnd` (method `setWindow`). No Dart code
+  switches the interruption filter, and nothing is hung on an awesome_notifications callback.
+- **Native: two exact AlarmManager alarms and a receiver.** `SleepTimeDnd.kt` stores the window in
+  device-protected storage and arms a start and an end alarm (`setExactAndAllowWhileIdle(RTC_WAKEUP)`,
+  the ring's own call; inexact fallback without the exact-alarm grant, like the plugin);
+  `SleepTimeDndReceiver` (not exported, direct-boot-aware) calls back into it when they fire - no
+  Flutter engine, so start and end happen at their instant with the app process dead. Every decision
+  is the pure `SleepTimeDndPolicy.decide()`: nothing is activated outside `[start, end)` - a push with
+  the start ahead only arms (symptom 1); the end alarm deactivates unconditionally, and any later push
+  or boot that finds the window over deactivates too (symptom 2). A second exact alarm at the ring's
+  instant does not delay the ring: an S+ app with USE_EXACT_ALARM keeps `FLAG_ALLOW_WHILE_IDLE`, quota
+  72 per hour (`AlarmManagerService.java:761-765`, `:2783-2843`).
+- **The end is the first ring, by construction (R4).** The end alarm is at the target alarm's
+  `alarmPlatformTime`, the instant the ring is armed for. A snooze re-ring is a separate, later alarm;
+  an excluded or other alarm in between is not the end alarm. After the ring every push computes the
+  *next* window (the rung alarm is no longer "after now"), so nothing re-activates until the next
+  bedtime (the removed code's symptom 2).
+- **Per platform (H4):** API 35+: activate = `setInterruptionFilter(ALARMS)` (the app's own mode),
+  deactivate = `ALL` whenever the app activated it or the end/switch-off forces it - it can only end
+  the app's own mode. Below 35 (one global DND): activate only if DND is currently off, and switch
+  off only what the app switched on and is still unchanged - the user's own DND is never claimed or
+  cleared. Never `INTERRUPTION_FILTER_NONE` (that would silence the alarm).
+- **Reboot:** the existing `DirectBootReceiver` (`LOCKED_BOOT_COMPLETED`) calls `SleepTimeDnd
+  .onBoot()` first thing, which re-arms the window, catches up a start that passed while the phone
+  was off, or ends a window that is over. No new exported component (T-160's accepted-risk review
+  covers the only exported receiver involved; its source guard still passes). App updates keep
+  AlarmManager alarms (`AlarmManagerService.java:4996-5001`); **force-stop wipes them**, like the
+  alarms themselves (T-04) - recovered at the next app open by the cold-start push.
+- **How R2 ("die Zeitplanung ist bzgl des Starts zu übernehmen") is honoured:** the same computation
+  (`nextWakeUpTime` − `sleepGoal`, without the reminder's lead time), from the same inputs, pushed from
+  the same two call sites that reschedule the reminder (the checkpoint's `finally`, right after
+  `scheduleSleepReminder`, and `Handler.onAlarmHandled`), with the same missed-bedtime rule (T-110:
+  "now + 2 minutes", applied natively as the catch-up) and the same `alarmPlatformTime` boundary. What
+  is *not* adopted is the OS mechanism: an awesome_notifications notification cannot deliver the start
+  instant to any code (H1), so the start is a native exact alarm instead. Extra call sites (every real
+  arm/cancel via `_setAlarm`/`_stopAlarm`, cold start, the switch itself) exist because a trigger that
+  acts cannot afford the reminder's staleness - a manual-alarm edit reschedules no reminder until the
+  next checkpoint. `lib/utils/sleep_reminder.dart` is unchanged. No new `CheckpointTrigger`, no second
+  entry point: the push is step 7 of the one checkpoint sequence.
+- **R3:** the window never reads `reminderEnabled` (tested). **R5:** `ManualAlarm
+  .excludeFromSleepTime`, carried by `fromJson`/`toJson`/`==`/`hashCode` and `AppState.addAlarm`'s
+  reconstruction (tested - T-191's predecessor was dropped exactly there). **R6:** a "Do Not Disturb"
+  switch closing Sleep Habits' bedtime group; switching on first requests access via
+  `permission_handler`'s `Permission.accessNotificationPolicy` (opens Android's screen, resolves on
+  return) and stays off without it, with a SnackBar saying why.
+- **Diagnostics:** `DiagSleepHabitSetting.sleepTimeDndEnabled` is **15** (14 stays reserved for the
+  removed toggle). A new event `Diag.sleepTimeDnd` records the native decision code and four flags -
+  start fired, end fired, a switch refused (each reset once reported), access missing - never a
+  window instant; logged only when the decision or the access state changes, or one of the three
+  one-shot flags is set. After a night, the first push (the
+  morning ring's checkpoint, or opening the app) says whether the start and the end actually fired.
+
+**Decisions taken on ambiguous points - for the maintainer to confirm:**
+
+1. **R5 default and polarity:** a manual alarm counts by default; the switch ("Exclude from Sleep
+   Time") excludes it. (T-191's removed option was the opposite, opt-in, default off.)
+2. **R5 scope:** the exclusion affects only the Do Not Disturb window. The bedtime reminder still
+   counts every enabled manual alarm, unchanged.
+3. **Disabled planned days:** a planned day switched off in the alarm list (FR-21 `disabledDays`) is
+   not "the next alarm" for the window - nothing rings then, so it cannot be the first ring. The
+   reminder (unchanged) still counts such days; that inconsistency predates this entry and is left as
+   is.
+4. **Past start:** switching on, or any push, while already inside sleep time → DND comes on about two
+   minutes later (T-110's "now + 2 minutes", as instructed), and a catch-up already armed is kept so
+   repeated pushes cannot keep postponing it. If the alarm is less than two minutes away, nothing is
+   activated. Alarm days away → nothing happens until bedtime.
+5. **Old keys and id:** the four v1.3.0 preference keys (`doNotDisturbEnabled`,
+   `doNotDisturbPreviousFilter`, `doNotDisturbActivatedAt`, `doNotDisturbTargetWakeUp`) are actively
+   removed at load, so a stale `doNotDisturbEnabled=true` can never be read as consent. The new
+   feature uses `sleepTimeDndEnabled` and native device-protected prefs (`sleep_time_dnd`). The old
+   notification id `100000002` is *not* cancelled: per H1, if a v1.3.0 instance is still armed and
+   fires, a silent notification produces no display and no Dart callback, and every created event now
+   routes only to FR-16's Checkpoint 2 - harmless. On Android 15+ the app's implicit rule is per
+   package, so the new feature reuses the same "Crescendo Alarm" mode the maintainer saw; a leftover
+   active one is ended by the first end/switch-off.
+
+**Tests:**
+
+- Dart (all written first and confirmed failing - compile errors / count mismatches - before the
+  implementation): `sleep_time_dnd_window_test.dart` (12: incl. "next alarm days away → start in the
+  future", end on the ring's whole-minute boundary, exclusion, switched-off and disabled-day alarms,
+  "right after the ring the window moves to the next alarm"), `manual_alarm_exclude_from_sleep_time_
+  test.dart` (6: default, round trip, pre-T-198 JSON, a v1.3.0 `countsForDoNotDisturb` of either value
+  not mistaken for the new field and dropped on re-serialise, `==`/`hashCode`, `addAlarm` + reload),
+  `app_state_sleep_time_dnd_test.dart` (11: default off, new key, stale v1.3.0 keys ignored and
+  cleared, cold-start push, on/off pushes, R3, excluded alarm, diagnostics incl. de-duplication),
+  `sleep_time_dnd_wiring_test.dart` (3: checkpoint pushes the freshly planned window, also when the
+  replan throws; `onAlarmHandled` pushes), `screen_sleephabits_sleep_time_dnd_test.dart` (4: default
+  off, on with/without access, off needs no access), `sleep_time_dnd_platform_contract_test.dart`
+  (12 source-reading: manifest permission and receiver attributes, channel name/methods and decision
+  codes equal on both sides, no Dart code switching the filter, no awesome_notifications callback
+  reaching the feature, `SleepTimeDnd.kt` the only `setInterruptionFilter` caller, `_setAlarm`/
+  `_stopAlarm` pushing, the reminder untouched); two new cases in `screen_alarms_dialog_toggles_
+  test.dart`; help-button count 9 → 10 and the Diag enum 13 → 14 (plus the new setting's own case).
+  `test/do_not_disturb_removed_test.dart` deleted, as its header asked.
+- JVM: `android/app/src/test/.../SleepTimeDndPolicyTest.kt` (22), run by `ci.yml`'s
+  `build-dev-apk` job right after the APK build (new step "Android unit tests (JVM)"; same job name,
+  so the master ruleset is unaffected; `testImplementation` JUnit only, outside
+  `releaseRuntimeClasspath`). **Mutation check:** re-introducing symptom 1 (a push before the window
+  activates) and symptom 2 (the end alarm not forcing the deactivation) made 6 of the 22 fail; restored.
+- Device-level, non-gating: `integration_test/sleep_time_dnd_test.dart` drives the real channel,
+  AlarmManager, receiver and `NotificationManager` and reads the real filter back: a window days away
+  changes nothing; arming `[now+20 s, now+50 s)` changes nothing at arming, DND comes on no earlier than
+  the start and goes off no earlier than the end; a past start is caught up after ~2 minutes; switching
+  off leaves DND. `.github/scripts/run_e2e_tests.sh` grants access in a loop with `cmd notification
+  allow_dnd` (a grant survives the reinstall `flutter test` does, not an uninstall) and forces DND off
+  afterwards. Runs only in master's E2E job - **it has never run yet.**
+- `flutter analyze` clean; full suite 662/662 in three groups (was 614).
+
+**What is verified, and what is not:**
+
+- Verified: the policy and the Dart computation (unit tests), the Kotlin compiles and its JVM tests
+  pass (local `./gradlew :app:testDebugUnitTest`, and the dev CI run), the cross-language contract
+  (source-reading), and the platform behaviour H1-H4 rest on (read from the plugin bytecode/source and
+  AOSP android15-release, cited above).
+- **Not verified on any device yet:** that DND actually comes on at bedtime and off at the first ring
+  on the maintainer's Android 15+ phone (the implicit-rule path), with the app closed overnight. The
+  E2E leg will cover the API 34 global-DND path with the app process alive, once master's gate runs;
+  it cannot cover the process-dead case (the receiver path is engine-free by construction, not by
+  measurement) or Android 15's implicit rule. The Diag flags above are there to make the first real
+  night's result readable from an exported log.
+
+**Open questions:**
+
+- Should the manual-alarm switch be hidden while the Sleep Habits trigger is off? (Shown always now,
+  like every other per-alarm setting.)
+- Should disabled planned days also stop counting for the bedtime reminder, for consistency with 3.?
+- T-199: FR-16's Checkpoint 2 has the same "created fires at scheduling" problem as the removed DND
+  code; it is harmless there but means that checkpoint does not do its job.
+
 ### T-197 · Do Not Disturb removed completely, pending a fresh design — DONE (2026-09-27)
 
 - [x] Maintainer report from live testing on the real phone, after v1.3.0: "Beim live testen kam
@@ -1369,6 +1616,9 @@ rather than expanded into more scope here: see T-185.
   touched is byte-identical to its pre-T-184 state apart from T-192/T-193/T-194; no non-DND
   behaviour or test coverage lost; a `ManualAlarm` persisted by v1.3.0 (still carrying a
   `countsForDoNotDisturb` key) parses, compares equal and re-serialises without it.
+- **Follow-up (2026-09-27):** the maintainer asked for the re-implementation the same day; it is
+  T-198 above - a new, native design built on a root-cause analysis of both symptoms, not this code
+  restored.
 
 ### T-196 · Release v1.3.0 published — DONE (2026-09-26)
 

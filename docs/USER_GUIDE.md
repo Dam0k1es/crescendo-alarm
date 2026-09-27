@@ -63,6 +63,11 @@ Alarms you create yourself, independent of any calendar.
   stop it (the app-wide "Guaranteed Wake-Up" feature - see "Scan Code" below). Greyed out and
   switched off whenever no code is configured at all there, since it would have no effect either
   way; becomes available once you generate or import one.
+- **Exclude from Sleep Time** - off by default. Switch it on for an alarm that should not count as
+  "the next alarm" for the Sleep Habits **Do Not Disturb** trigger (see below) - for example a
+  medication reminder in the middle of the night: it neither ends the Do Not Disturb sleep time early
+  nor defines when it starts. It has no effect on anything else (the bedtime reminder still counts
+  every enabled manual alarm), and none at all while the Do Not Disturb trigger is off.
 - **Repeat on** - a day-of-week picker. Defaults to just today, so a one-off alarm needs no
   interaction here at all; check more days for a recurring alarm. Repeating alarms re-arm themselves
   automatically each time you dismiss them.
@@ -141,12 +146,40 @@ small chevron on its right to hide or show that group's options.
   straight at full planned volume, even with Gentle WakeUp on: it's your last call, so it isn't
   eased into.
 
-**Bedtime reminder** - a separate concern: shifts only the reminder below, never the alarm itself:
+**Bedtime reminder** - a separate concern: sets your bedtime for the reminder and Do Not Disturb
+below, never the alarm itself:
 
-- **Sleep Goal** - how much sleep you're aiming for; shifts the bedtime reminder below, not the
-  alarm itself.
+- **Sleep Goal** - how much sleep you're aiming for; sets the bedtime used by the reminder and by
+  Do Not Disturb below, not the alarm itself.
 - **Enable Reminder** - a notification reminding you to go to bed, timed this far before your Sleep
   Goal's bedtime.
+- **Do Not Disturb** - off by default. When on, the app puts the phone into Do Not Disturb for your
+  sleep time and takes it out again when you wake up:
+  - **Sleep time starts** at your next alarm minus your Sleep Goal (not minus the reminder's lead
+    time - the reminder comes earlier, Do Not Disturb when you should actually be asleep). It starts
+    whether or not **Enable Reminder** is on.
+  - **Sleep time ends** at the very first ring of that alarm - the moment it starts ringing, not
+    when you stop it. A snooze does not start sleep time again.
+  - "Your next alarm" is the next alarm that will actually ring: a planned day you switched off in
+    the alarm list and a manual alarm with **Exclude from Sleep Time** on are skipped.
+  - **Alarms still ring** - Do Not Disturb is set to "alarms only", so this app's alarms (and any
+    other alarm clock's) sound as usual; notifications and calls are held back.
+  - Switching it on the first time opens Android's **Do Not Disturb access** screen - allow
+    Crescendo Alarm there and come back. Without that access the switch stays off.
+  - If you switch it on (or change an alarm) while you are already inside your sleep time, Do Not
+    Disturb starts about two minutes later. If the next alarm is further away than your Sleep Goal,
+    nothing happens until bedtime.
+  - Switching it off takes the phone out of Do Not Disturb right away, if the app had put it in.
+  - **On Android 15 and newer** the app gets its own Do Not Disturb mode, listed under Settings >
+    Modes (shown as "Do Not Disturb (Crescendo Alarm)" or just "Crescendo Alarm", depending on the
+    phone). The app only ever switches that mode on and off - never your own Do Not Disturb or your
+    other modes. You can change what the mode lets through there; the app then keeps your choice.
+  - **On older Android versions** there is only one Do Not Disturb: if it is already on at bedtime
+    (you switched it on yourself, or a schedule did), the app leaves it alone and does not switch it
+    off in the morning either.
+  - It works with the app closed and after a restart of the phone. After **Force stop** (Android's
+    app settings), Android removes everything the app had scheduled, alarms included; open the app
+    once to set it up again.
 
 ## Settings
 

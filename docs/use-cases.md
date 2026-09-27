@@ -56,11 +56,15 @@
 - Duration to get ready (between getting up and setting off)
 - Reminder Feature (Reminders for bedtime to encourage a regular sleep schedule)
 - Gentle Wake Feature
-- Do Not Disturb Feature (**not implemented** - it shipped once, docs/TODO.md T-184 on
-  2026-09-25, but still misbehaved on a real phone after several fixes and was removed
-  completely in T-197 on 2026-09-27, pending a fresh design at the maintainer's request)
-  - Turn off notifications
-  - Turn off calls
+- Do Not Disturb Feature (**implemented again**, docs/TODO.md T-198, 2026-09-27: a Sleep Habits
+  switch, default off, that puts the phone into "alarms only" Do Not Disturb from the next alarm
+  minus the Sleep Goal until that alarm's first ring. History: a first version shipped as T-184 on
+  2026-09-25, misbehaved on a real phone after several fixes and was removed completely in T-197;
+  T-198 is a new design, not that code restored. Device confirmation of T-198 is still pending -
+  see that entry.)
+  - Turn off notifications - yes (held back during sleep time)
+  - Turn off calls - yes, as part of the same "alarms only" Do Not Disturb (there is no separate
+    calls-only option)
 
 
 
