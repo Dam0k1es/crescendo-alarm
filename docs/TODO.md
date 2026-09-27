@@ -1651,6 +1651,12 @@ defects found and fixed in the follow-up commit:**
   catch-up is designed for ~2 minutes (T-110); whether it actually took that long, or was only
   noticed then (on Android 16 the quick-settings DND tile does not show the app's mode), is not yet
   established. The API 36 E2E leg asserts the catch-up timing and will answer this for the emulator.
+- **Third phone check (maintainer, 2026-09-27):** "Das klingeln des alarms hat übrigens den dnd
+  erfolgreich deaktiviert." (The alarm's ring successfully deactivated Do Not Disturb.) First device
+  confirmation of R4 on Android 16's implicit mode - the original symptom 2 of T-184 ("not switched
+  off after the ring") does not recur. Not established by this report: whether the app process was
+  alive at that moment (the native end alarm is designed not to need it), and the exact moment
+  relative to the first ring. The catch-up delay is tracked separately as T-200.
 - **First phone check (maintainer, 2026-09-27, brief install-and-click-through, no Diagnostics
   export):** feature on with no alarm inside one Sleep Goal (8 h) - Do Not Disturb stayed off, as
   intended (symptom 1 of T-184 not reproduced). Creating a manual alarm without the exclusion did
