@@ -277,14 +277,16 @@ IDLE_TIMELINE="$EVIDENCE_DIR/sleep_time_dnd_idle_timeline.log"
 IDLE_GRANT_PID=$!
 # The marker is read live from logcat: `flutter test` writes a test's output
 # to its own log only when the test ENDS (the first run of this leg waited
-# for the marker there and started Doze only after the catch-up was over).
+# for the marker there and started Doze only after the catch-up was over),
+# and the test writes it via stdout, which - unlike `print` inside
+# testWidgets - is not held back by the test zone (see _mark there).
 adb logcat -c || true
 flutter test integration_test/sleep_time_dnd_catch_up_idle_test.dart -d emulator-5554 \
   > "$IDLE_LOG" 2>&1 &
 IDLE_TEST_PID=$!
 PUSHED_AT=""
 for _ in $(seq 1 600); do
-  if adb logcat -d -s flutter 2>/dev/null | grep -q "CATCHUP_PUSHED"; then
+  if adb logcat -d 2>/dev/null | grep -q "CATCHUP_PUSHED"; then
     PUSHED_AT=$(date +%s)
     break
   fi

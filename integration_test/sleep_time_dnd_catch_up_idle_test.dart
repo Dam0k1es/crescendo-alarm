@@ -37,11 +37,24 @@
 // NON-GATING evidence, like the legs around it: the question is "how late,
 // and why", which a pass/fail alone would not answer.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:crescendo_alarm/utils/sleep_time_dnd.dart';
 
 const _filterAlarms = 4;
+
+/// Emits a marker the script can see WHILE the test runs. `print` inside
+/// `testWidgets` is captured by the test zone and only reaches `flutter
+/// test`'s output (and logcat) when the test ends - the second run of this
+/// leg (36333862160) therefore never saw CATCHUP_PUSHED in logcat at all.
+/// `stdout` bypasses that zone; on Android it goes straight to logcat.
+void _mark(String line) {
+  stdout.writeln(line);
+  // ignore: avoid_print
+  print(line);
+}
 
 /// How long the app stays alive for the script's measurement. The phone
 /// report was ~10-15 minutes; 16 leaves room to see a delay of that size
@@ -66,8 +79,7 @@ void main() {
         end: pushedAt.add(_observation + const Duration(minutes: 4)),
       ),
     );
-    // ignore: avoid_print
-    print('CATCHUP_PUSHED decision=${report.decision.name} '
+    _mark('CATCHUP_PUSHED decision=${report.decision.name} '
         'accessMissing=${report.accessMissing}');
     expect(report.decision, SleepTimeDndDecision.catchUp,
         reason: 'without a catch-up decision there is nothing to measure');
@@ -81,8 +93,7 @@ void main() {
       if (seenAfter == null &&
           await readCurrentInterruptionFilter() == _filterAlarms) {
         seenAfter = DateTime.now().difference(pushedAt);
-        // ignore: avoid_print
-        print('CATCHUP_SEEN_IN_APP afterSeconds=${seenAfter.inSeconds}');
+        _mark('CATCHUP_SEEN_IN_APP afterSeconds=${seenAfter.inSeconds}');
         // Hold on a little so the script's outside poll (every 5 s) sees it
         // too - `flutter test` uninstalls the app when this ends, which
         // removes the app's Do Not Disturb mode with it - then stop: no
