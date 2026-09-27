@@ -150,6 +150,10 @@ T-198 records why, from primary sources. Rules that are load-bearing:
   the removed feature's keys are cleared at load, and `DiagSleepHabitSetting` 14 stays reserved.
 - `integration_test/sleep_time_dnd_test.dart` reads the real interruption filter on the CI emulator
   (non-gating, API 34 - the legacy global-DND model, not Android 15's implicit mode).
+- **The two Android models have to be verified separately.** The maintainer's real test phone runs
+  **Android 16** (implicit app-owned mode), while the CI emulator is API 34 (global DND). A green E2E
+  leg therefore says nothing about the phone's model, and a phone test says nothing about Android
+  14 and older - never report one as covering the other.
 
 License: GNU GPLv3 (see `LICENSE`). Copyright holders named in tracked files: Dam0k1es, centron5961
 - two of the three original developers of the project this repository grew from. All three have

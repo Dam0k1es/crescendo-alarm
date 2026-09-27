@@ -1614,6 +1614,16 @@ defects found and fixed in the follow-up commit:**
 - Should disabled planned days also stop counting for the bedtime reminder, for consistency with 3.?
 - T-199: FR-16's Checkpoint 2 has the same "created fires at scheduling" problem as the removed DND
   code; it is harmless there but means that checkpoint does not do its job.
+- **Device model (maintainer, 2026-09-27):** the maintainer's test phone runs **Android 16**, i.e.
+  the implicit app-owned mode (H4), not global Do Not Disturb. The CI emulator (API 34) only covers
+  the legacy global model, so each model needs its own evidence.
+- **First phone check (maintainer, 2026-09-27, brief install-and-click-through, no Diagnostics
+  export):** feature on with no alarm inside one Sleep Goal (8 h) - Do Not Disturb stayed off, as
+  intended (symptom 1 of T-184 not reproduced). Creating a manual alarm without the exclusion did
+  not visibly switch Do Not Disturb on either; not yet conclusive, since the click-through did not
+  establish whether that alarm was within the 8 h Sleep Goal or whether the ~2-minute catch-up
+  (T-110) was waited out. No alarm had rung that day, so the after-wake-up rule (A1) cannot have
+  suppressed it. Excluded-alarm, scheduled-alarm and ring cases not yet checked.
 
 ### T-197 · Do Not Disturb removed completely, pending a fresh design — DONE (2026-09-27)
 

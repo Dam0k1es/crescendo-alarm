@@ -173,10 +173,13 @@ below, never the alarm itself:
     backup alarm a few minutes later, or an alarm later that day), Do Not Disturb does not come back
     on for it.
   - Switching it off takes the phone out of Do Not Disturb right away, if the app had put it in.
-  - **On Android 15 and newer** the app gets its own Do Not Disturb mode, listed under Settings >
+  - **On Android 15 and newer (including Android 16)** the app gets its own Do Not Disturb mode, listed under Settings >
     Modes (shown as "Do Not Disturb (Crescendo Alarm)" or just "Crescendo Alarm", depending on the
     phone). The app only ever switches that mode on and off - never your own Do Not Disturb or your
     other modes. You can change what the mode lets through there; the app then keeps your choice.
+  - So the quick-settings Do Not Disturb tile does **not** show the app's sleep time on Android 15+:
+    look for the app's own mode instead. On Android 14 and older, sleep time switches the one,
+    system-wide Do Not Disturb, and the tile does show it.
   - **On older Android versions** there is only one Do Not Disturb: if it is already on at bedtime
     (you switched it on yourself, or a schedule did), the app leaves it alone and does not switch it
     off in the morning either.
