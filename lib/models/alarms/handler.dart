@@ -38,13 +38,15 @@ import 'package:crescendo_alarm/utils/utils.dart';
 /// a stale alarm from a previous day/month/year is correctly detected too;
 /// both are truncated to minute precision, as the alarm plugin may trigger
 /// an alarm a few milliseconds before or after the scheduled time.
-bool isAlarmStale(DateTime eventDateTime, DateTime now) {
-  final eventMinute = DateTime(eventDateTime.year, eventDateTime.month,
-      eventDateTime.day, eventDateTime.hour, eventDateTime.minute);
-  final nowMinute =
-      DateTime(now.year, now.month, now.day, now.hour, now.minute);
-  return eventMinute.isBefore(nowMinute);
-}
+///
+/// docs/TODO.md T-202: truncated on the instant ([alarmPlatformTime]), not
+/// by rebuilding local fields. The plugin reports [eventDateTime] UTC-tagged
+/// (see `buildRingingAlarmSettings`), whose fields rebuilt as local time
+/// would be off by the device offset; and inside a repeated fall-back hour
+/// two different instants share one local reading, so a first-pass alarm
+/// ringing late in the second pass looked "not stale".
+bool isAlarmStale(DateTime eventDateTime, DateTime now) =>
+    alarmPlatformTime(eventDateTime).isBefore(alarmPlatformTime(now));
 
 /// docs/TODO.md T-176 (maintainer request): whether the QR/deactivation-code
 /// gate should be shown for this specific ringing alarm. A global code must

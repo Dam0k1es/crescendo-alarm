@@ -251,8 +251,15 @@ Future<DateTime> planOneCalendarEvent(
   return eventStart;
 }
 
+/// The platform's alarm times as local readings. docs/TODO.md T-202: the
+/// app hands the plugin UTC-tagged instants (`buildRingingAlarmSettings`,
+/// so its own ISO-string storage keeps the second pass of a repeated hour),
+/// and `DateTime ==` compares the frame as well as the instant - so they are
+/// brought into the local frame `alarmPlatformTime` returns before any
+/// comparison. A T-61 regression (UTC digits read as local) still shows up
+/// as an instant off by the device offset.
 Set<DateTime> platformAlarmTimes(List<AlarmSettings> alarms) =>
-    alarms.map((a) => a.dateTime).toSet();
+    alarms.map((a) => a.dateTime.toLocal()).toSet();
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

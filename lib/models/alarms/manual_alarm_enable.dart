@@ -19,6 +19,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // FR-21 (docs/scheduling-v2-spec.md), "Manual alarms" - docs/TODO.md T-03.
 //
@@ -69,27 +70,37 @@ import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 /// straddle a transition and silently corrupt every subsequent candidate's
 /// calendar day, making the loop miss its target and fall through to the
 /// wrong weekday entirely.
+///
+/// docs/TODO.md T-202 (TZ-1): each candidate day's reading is turned into an
+/// instant by [localWallClockInstant], not by `DateTime(...)`. On a
+/// daylight-saving change day that is the difference between the app's rule
+/// and Dart's default: a reading in the repeated hour rings at its LATER
+/// occurrence (Dart: the first), a reading in the skipped hour at the first
+/// valid instant after the gap, 03:00 in Europe/Berlin (Dart: shifted by
+/// the gap, 03:30). A skipped reading therefore rings at the change itself,
+/// never at the next day's reading - where the gap ends at midnight
+/// (America/Nuuk: 23:00 -> 00:00) that instant carries the next date.
 DateTime nextManualOccurrence(
   TimeOfDay time,
   DateTime now,
   Map<DayOfWeek, bool> repeatOnDays,
 ) {
   final today = DateTime(now.year, now.month, now.day);
+  DateTime onDay(DateTime day) => localWallClockInstant(
+      day.year, day.month, day.day, time.hour, time.minute);
   for (var offset = 0; offset <= 7; offset++) {
     final day = dayMarker(today, offset);
-    final candidate =
-        DateTime(day.year, day.month, day.day, time.hour, time.minute);
+    final candidate = onDay(day);
     if (!candidate.isAfter(now)) continue;
-    final dayOfWeek = DayOfWeek.values[candidate.weekday - 1];
+    // The candidate DAY's weekday, not the resolved instant's: the same in
+    // every real case, but the day is what `repeatOnDays` selects.
+    final dayOfWeek = DayOfWeek.values[day.weekday - 1];
     if (repeatOnDays[dayOfWeek] ?? false) return candidate;
   }
   // No day selected at all: the old, day-agnostic behaviour.
-  final todayAtTime =
-      DateTime(now.year, now.month, now.day, time.hour, time.minute);
+  final todayAtTime = onDay(today);
   if (todayAtTime.isAfter(now)) return todayAtTime;
-  final tomorrow = dayMarker(today, 1);
-  return DateTime(tomorrow.year, tomorrow.month, tomorrow.day, time.hour,
-      time.minute);
+  return onDay(dayMarker(today, 1));
 }
 
 /// Makes the alarm-list toggle of a [ManualAlarm] real (FR-21).

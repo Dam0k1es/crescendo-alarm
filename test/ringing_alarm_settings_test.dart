@@ -146,7 +146,11 @@ void main() {
     );
 
     expect(settings.id, 42);
-    expect(settings.dateTime, DateTime(2026, 3, 10, 7, 30));
+    // docs/TODO.md T-202: the same instant, handed over UTC-tagged so the
+    // plugin's own ISO-string storage cannot re-resolve it.
+    expect(settings.dateTime.millisecondsSinceEpoch,
+        DateTime(2026, 3, 10, 7, 30).millisecondsSinceEpoch);
+    expect(settings.dateTime.isUtc, isTrue);
     expect(settings.assetAudioPath, 'assets/sounds/wake_up.mp3');
     expect(settings.notificationSettings.title, 'Wake up');
     expect(settings.notificationSettings.body, 'Time to go');

@@ -45,7 +45,14 @@ class ScheduledAlarm extends MyAlarm {
   factory ScheduledAlarm.fromJson(String jsonString) {
     final data = jsonDecode(jsonString);
     final timeString = data['time'];
-    DateTime time = DateTime.parse(timeString);
+    // docs/TODO.md T-202: written as a UTC instant ("...Z", see toJson) and
+    // read back into the local reading everything else here expects (the
+    // title, the alarm list, pruneScheduledAlarms' day). An entry written
+    // before T-202 has no offset and is still read as a local reading, as
+    // it always was - exact on every day but inside a repeated fall-back
+    // hour, where it names the first pass; there is no way to recover which
+    // pass such an entry meant, and the next replan rewrites it anyway.
+    DateTime time = DateTime.parse(timeString).toLocal();
 
     return ScheduledAlarm(
       time: time,
@@ -71,7 +78,11 @@ class ScheduledAlarm extends MyAlarm {
   @override
   String toJson() {
     return jsonEncode({
-      'time': time.toIso8601String(),
+      // docs/TODO.md T-202: the INSTANT, UTC with its "Z". The local
+      // reading this used to write carries no offset, so an alarm in the
+      // second pass of a repeated fall-back hour (02:30 CET) came back as
+      // the first pass (02:30 CEST) after every restart - an hour early.
+      'time': (time as DateTime).toUtc().toIso8601String(),
       'title': title,
       'enabled': enabled,
       'gentlewake': gentlewake,

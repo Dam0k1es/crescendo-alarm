@@ -52,8 +52,9 @@ class AlarmSyncPlan {
 ///
 /// The `.toUtc()` matters (docs/TODO.md T-61): the values being compared come
 /// from two different frames - planned values are UTC-tagged instants, while
-/// `AlarmSettings.dateTime` from `Alarm.getAlarms()` is a local wall-clock
-/// time. Comparing their raw digits would treat a correctly-scheduled alarm as
+/// `AlarmSettings.dateTime` from `Alarm.getAlarms()` came back local-tagged
+/// before T-202 (UTC-tagged since, see `buildRingingAlarmSettings`) - only the
+/// instant is meaningful. Comparing their raw digits would treat a correctly-scheduled alarm as
 /// "missing from the platform" on every device outside UTC+0, re-setting it on
 /// every replan.
 DateTime _toMinute(DateTime t) {
@@ -338,7 +339,9 @@ Future<void> applyPlannedAlarms(
 /// `plannedVsPlatformBucket` bucket field (docs/TODO.md T-89).
 ///
 /// This is exactly the frame boundary T-61 sat on: a planned value is a
-/// UTC-tagged instant, `AlarmSettings.dateTime` a local wall-clock time. A
+/// UTC-tagged instant, `AlarmSettings.dateTime` a local wall-clock time
+/// (UTC-tagged since docs/TODO.md T-202, see `buildRingingAlarmSettings` -
+/// `difference` compares instants, so the frame does not matter here). A
 /// deviation of exactly one hour, or exactly one device offset, is that
 /// bug's signature - and it's visible in the log without any instant itself
 /// ever being recorded.

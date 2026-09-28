@@ -55,6 +55,19 @@ import 'package:alarm/alarm.dart';
 /// exponential curve at a fixed number of points and hands the plugin the
 /// result - quiet for longer, then catching up toward the end, rather than
 /// climbing at a constant rate the whole time.
+///
+/// docs/TODO.md T-202: [dateTime] is handed to the plugin **UTC-tagged**
+/// (the same instant). The plugin arms natively from the epoch
+/// milliseconds, but it also persists every `AlarmSettings` on the Dart side
+/// as `dateTime.toIso8601String()` (alarm 5.12.0, `AlarmStorage.saveAlarm`)
+/// and re-arms every stored alarm from that string at each `Alarm.init`
+/// (`_checkAlarm` -> `set`). A local value is written without an offset
+/// ("2026-10-25T02:30:00.000"), which `DateTime.parse` reads back as the
+/// FIRST 02:30 - an alarm armed for the second pass of a repeated hour would
+/// be re-armed an hour early by the next app start. A UTC value is written
+/// with its "Z" and reads back as exactly itself. Consequently every
+/// `AlarmSettings.dateTime` the plugin reports back (`Alarm.getAlarms`, a
+/// ring event) is UTC-tagged: compare it as an instant, never by its fields.
 AlarmSettings buildRingingAlarmSettings({
   required int id,
   required DateTime dateTime,
@@ -71,7 +84,7 @@ AlarmSettings buildRingingAlarmSettings({
 }) {
   return AlarmSettings(
     id: id,
-    dateTime: dateTime,
+    dateTime: dateTime.toUtc(),
     assetAudioPath: tone,
     // docs/TODO.md T-96: the ramp duration used to come from here as a
     // hardcoded Duration(seconds: 60). Now the alarm carries it itself, so

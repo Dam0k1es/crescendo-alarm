@@ -33,6 +33,15 @@ Two rules that are load-bearing and easy to break by "cleaning up":
   device-local `TimeOfDay` and everything leaving the layer (alarm plugin, notifications, UI, alarm
   titles) is read as **local wall clock**. Use `instantFromStored`/`localFromStored` and
   `alarmPlatformTime` at those boundaries; don't "unify" them.
+- **Never rebuild an instant from wall-clock fields at a hand-off** (`docs/TODO.md` T-202). In the
+  repeated DST hour, `DateTime(y, m, d, h, min)` resolves to the FIRST occurrence and a skipped time
+  to +gap length - both an hour off. Instants cross every boundary as instants
+  (`alarmPlatformTime` floors epoch millis); the alarm plugin and `awesome_notifications` are
+  handed them **UTC-tagged** (the plugin persists `toIso8601String()` and re-arms from it; the
+  notification plugin re-resolves fields natively), so values the alarm plugin reports back are
+  UTC-tagged too - compare instants, never digits or `==` across frames. The one place a local
+  reading becomes an instant is `localWallClockInstant` (`lib/utils/wall_clock.dart`): repeated
+  time → later occurrence, skipped time → the transition instant (the maintainer's TZ-1 rule).
 
 ## Diagnostics log (`lib/utils/diag/diag_log.dart`)
 

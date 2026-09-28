@@ -1370,7 +1370,8 @@ rather than expanded into more scope here: see T-185.
 - **Related, same fix area:** T-202 also hits real appointment alarms (an alarm due in the second
   pass of the repeated hour is armed at the first pass); `ScheduledAlarm.time` is persisted as a
   local wall-clock string without offset (`lib/models/alarms/scheduled_alarm.dart:48`, `:74`), so a
-  second-pass instant comes back as the first pass after a restart. None of Dart `DateTime`,
+  second-pass instant comes back as the first pass after a restart. *(Both fixed by T-202,
+  2026-09-28; this entry's per-day offset is still open.)* None of Dart `DateTime`,
   `package:timezone` or `java.time`'s default matches TZ-1's decisions; `java.time` with
   `withLaterOffsetAtOverlap()` / the transition instant does.
 - **Acceptance:** per TZ-2/TZ-9 - a failing regression test per transition direction (spring and
@@ -1435,9 +1436,9 @@ rather than expanded into more scope here: see T-185.
   just-simulated ring.
 - **Ships after v1.4.0**, which still has the A1 rule (its release notes describe it).
 
-### T-202 · `alarmPlatformTime` picks the FIRST occurrence of a repeated fall-back hour (P1, open)
+### T-202 · Alarms in the DST change hour: exact instants, TZ-1 resolution for manual alarms — DONE (2026-09-28, uncommitted, pending independent review)
 
-- [ ] Found by Günther's all-timezone review of T-201 (2026-09-28), pre-existing, outside T-201.
+- [x] Found by Günther's all-timezone review of T-201 (2026-09-28), pre-existing, outside T-201.
   `alarmPlatformTime` (`lib/utils/utils.dart:199-202`) rebuilds a local `DateTime` from wall-clock
   fields. For a local time that occurs twice (DST fall-back), that always resolves to the **first**
   occurrence.
@@ -1459,6 +1460,87 @@ rather than expanded into more scope here: see T-185.
   the gap), never skipped. Holds in every IANA region, transition rules from the device's database;
   the resolution of those two hours is the app's own rule (platform defaults differ). Sweep tests
   over all zones and 2026/27 transitions (TZ-9).
+- **Scope of the fix:** the change hour itself (TZ-1, TZ-8's DST part). How `replan` resolves
+  planned wall-clock values and its one offset per window (T-206) is untouched; the scheduling
+  engine's planning did not change.
+- **Hand-offs found and fixed** (each rebuilt or re-resolved a local reading, so a second-pass
+  instant came back as the first pass, one hour early):
+  - (a) `alarmPlatformTime` (`lib/utils/utils.dart`) now floors the epoch milliseconds to the
+    minute instead of rebuilding `DateTime(y, m, d, h, min)`; still local-tagged. Feeds
+    `_setAlarm`/`setSnoozeAlarm`, `apply_alarms`' drift check, `scheduleSleepReminder` and
+    `sleepTimeWindow` (so (d), the Do Not Disturb window's epoch millis, is fixed with it).
+  - (e) **Found in addition: the `alarm` plugin's own storage.** `AlarmStorage.saveAlarm` (alarm
+    5.12.0) persists `AlarmSettings.dateTime.toIso8601String()` and `Alarm.init` → `_checkAlarm`
+    re-arms every stored alarm from that string - a local value has no offset and came back as
+    the first pass at every app start. `buildRingingAlarmSettings` now hands the plugin the
+    instant UTC-tagged ("...Z" in storage). Consequence: every `AlarmSettings.dateTime` the plugin
+    reports (`getAlarms`, ring events) is UTC-tagged, so:
+  - `isAlarmStale` (`handler.dart`) compares instants (via `alarmPlatformTime`) instead of rebuilt
+    local fields - which would have read those UTC digits as local (T-61's class), and inside the
+    repeated hour treated a first-pass alarm ringing late in the second pass as "not stale";
+  - `integration_test/app_test.dart`'s `platformAlarmTimes` compares `.toLocal()` values
+    (`DateTime ==` also compares the frame). Not run here - it needs the CI emulator.
+  - (b) `ScheduledAlarm.toJson` writes the instant as UTC ISO-8601 with `Z`; `fromJson` reads it
+    back `.toLocal()` (title, alarm list and `pruneScheduledAlarms` still read local digits). A
+    legacy entry without offset is still read as a local reading, as before.
+  - (c) **awesome_notifications cannot take an instant**: `NotificationCalendar.fromDate` copies
+    the fields plus a zone NAME (device zone for a local value, "UTC" for a UTC-tagged one), and
+    AndroidAwnCore 0.12.1's `NotificationCalendarModel.getNextValidDate` turns them into a cron
+    expression evaluated with `CronExpression.setTimeZone` (read from its bytecode). A local
+    reading in the repeated hour is ambiguous there; the same reading in UTC is not. The schedule
+    is now built in one place, `notificationCalendarAt` (`lib/utils/notifications.dart`), from the
+    UTC fields with the "UTC" zone. No remaining error from the plugin for a one-shot schedule
+    (the stored model keeps "UTC", so a reboot reschedule is exact too).
+- **Manual alarms (TZ-1):** `localWallClockInstant` (`lib/utils/wall_clock.dart`) is the one place
+  a local reading becomes an instant: later occurrence of a repeated reading, the transition instant
+  for a skipped one (03:00 in Berlin; where a gap ends at midnight - America/Nuuk 23:00 → 00:00 -
+  that instant carries the next date), `DateTime(...)` otherwise. It probes the offsets the device
+  zone uses around the reading (Dart local `DateTime`, i.e. the OS tz database - TZ-3) and bisects
+  for a gap's transition. `nextManualOccurrence` uses it, which covers add, edit, the FR-21 toggle,
+  `Handler.onAlarmHandled`'s re-arm, repeat days, and `nextWakeUpTime` (reminder, Do Not Disturb).
+- **Found in addition: `AppState.addAlarm` rewrote a manual alarm's reading** from the resolved
+  instant (`TimeOfDay(hour: alarmDateTime.hour, ...)`): a 02:30 alarm added on a spring-forward day
+  was saved as 03:30 for good (03:00 with the new resolution). It now keeps `alarm.time`. `addAlarm`
+  takes a `@visibleForTesting now` for this (T-201's pattern).
+- **Tests, each confirmed failing first against the old code** (under `TZ=Europe/Berlin`; the three
+  files for new API failed to compile first):
+  - `test/dst_manual_alarm_resolution_test.dart` - repeated → later (middle, first/last minute,
+    armed between the passes, no second ring after the second pass), skipped → transition (middle,
+    first/last minute, not pushed to the next day's reading, `repeatOnDays` on the change day),
+    `nextWakeUpTime`, `applyManualAlarmEnabled`; counter-tests for the minutes around the change
+    hour and ordinary days. 8 of 13 failed first.
+  - `test/dst_platform_handoff_test.dart` - `alarmPlatformTime` (second pass kept, first pass kept,
+    seconds truncated), the plugin's JSON storage round trip, `ScheduledAlarm` round trip and
+    legacy format, `sleepTimeWindow` (planned value and manual alarm in the repeated hour),
+    `isAlarmStale` (UTC-tagged plugin value, across the repeated hour). 9 of 12 failed first.
+  - `test/dst_notification_schedule_test.dart`, `test/local_wall_clock_test.dart` (every minute
+    around each transition, every ordinary reading of 2026/27), and
+    `test/dst_add_manual_alarm_keeps_time_test.dart`.
+  - Fixtures: `tz.TZDateTime` second passes in Europe/Berlin and Australia/Lord_Howe, plus the
+    process zone's own 2026/27 transitions found at runtime (`test/support/local_zone_transitions
+    .dart`, hourly scan + bisection - a different algorithm from the resolver's). Transition cases
+    skip under a zone without DST (UTC, Tokyo); counter-tests run everywhere.
+  - Changed existing test: `test/ringing_alarm_settings_test.dart` now expects the same instant,
+    UTC-tagged, instead of the local value.
+- **Evidence:** `flutter analyze` clean. Full suite 703 tests (670 + 33 new): all green under the
+  six CI zones (UTC and Tokyo 685 + 18 skipped). New tests additionally green under
+  America/Santiago, Asia/Beirut, Africa/Cairo, America/Havana, America/Nuuk, Antarctica/Troll,
+  America/New_York, Asia/Tehran, Europe/London. Temporary all-zone sweep (not in the repository),
+  expectations from Python `zoneinfo`, one process per zone: `localWallClockInstant` over all 597
+  zones, 787 transitions in 2026/27, 141,660 readings around them plus 2.6 M ordinary readings - 0
+  mismatches; the production chain (`nextManualOccurrence`, `alarmPlatformTime`, plugin storage
+  round trip, `ScheduledAlarm` round trip, `notificationCalendarAt`, `sleepTimeWindow`) over all
+  201 zones with a transition, 849,960 checks - 0 failures. Negative control: the same sweep
+  against the old code failed 598/3,600 checks in Berlin, 298/3,000 on Lord Howe.
+- **Not verified / residual:**
+  - nothing ran on a device; the E2E helper change above is unexercised until CI's emulator run;
+  - the `alarm` plugin itself, for its own deferrals (native snooze, `PLATFORM_REFUSAL` retry),
+    stores `copyWith(dateTime: nextRingAt)` with a local value from epoch millis - such a deferred
+    alarm re-armed after an app restart inside a repeated hour could still land on the first
+    pass. The app uses neither native snooze nor expects refusals; not fixable without patching
+    the plugin;
+  - the resolver assumes no zone changes its offset twice within ~30 h of a reading (true for all
+    current tz rules, per the sweep).
 
 ### T-201 · A T-198 test depended on the local time of day it ran at — DONE (2026-09-28)
 

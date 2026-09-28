@@ -9,7 +9,7 @@ for all further work on the topic; the simulation of the persona Tom's world tri
 
 | Area | Status |
 |---|---|
-| **Daylight saving changes while staying in one region** - any region, not only Germany (TZ-1, TZ-2, TZ-3, and TZ-8/TZ-9 as far as they concern DST) | **Committed.** Being fixed now (`docs/TODO.md` T-202). |
+| **Daylight saving changes while staying in one region** - any region, not only Germany (TZ-1, TZ-2, TZ-3, and TZ-8/TZ-9 as far as they concern DST) | **Committed.** The change hour itself is fixed (`docs/TODO.md` T-202); scheduled wall-clock values around a change are still open (T-206). |
 | **Travelling across time zones** (TZ-4, TZ-6, TZ-7, TZ-8/TZ-9 as far as they concern travel) | **Provisional - not promised.** Requirements recorded so work can resume here; the app makes no claim to support world travel reliably yet. |
 | **Travelling combined with daylight saving changes in several regions** (TZ-5) | **Provisional - explicitly not promised as functional.** |
 
@@ -69,8 +69,23 @@ stay as they are. What changes is only what the app promises (`README.md`, `docs
   T-201 review); time zone fixtures are `tz.TZDateTime`, never `DateTime.utc` (maintainer: "klingt
   gut").
 
-Known current violation: `docs/TODO.md` T-202 (`alarmPlatformTime` resolves the repeated hour to
-its first occurrence - an instant in the second pass comes out an hour early).
+State (2026-09-28):
+
+- **TZ-1 - met** (`docs/TODO.md` T-202). Appointment/planned alarms keep their exact instant through
+  every hand-off to the platform (the alarm plugin, including its own persisted copy; the app's
+  alarm list; the Do Not Disturb window; the bedtime reminder). Manual alarms resolve the repeated
+  and the skipped hour by the rule above, in one place (`lib/utils/wall_clock.dart`,
+  `localWallClockInstant`), using the device's zone rules.
+- **TZ-8 (DST part) - met for the change hour** (same fix): the window and the reminder are derived
+  from the same instants as the alarms.
+- **TZ-2 - still violated for scheduled wall-clock values** (`docs/TODO.md` T-206: `replan` plans
+  the whole window with one offset, so a gap-day / `preferredWakeUpTime` alarm is an hour off on
+  the change day and drifts back over the following days). Manual alarms and appointment alarms
+  meet TZ-2.
+- **TZ-9 (DST part) - partly.** In the repository: tests derive the process zone's own 2026/27
+  transitions at runtime and run under all six CI zones; fixtures are `tz.TZDateTime`. An all-zone
+  sweep (every IANA zone, every 2026/27 transition, expectations from Python `zoneinfo`) was run for
+  T-202 outside the repository (result recorded in T-202); it is not part of CI.
 
 ## Provisional - travelling (not promised)
 

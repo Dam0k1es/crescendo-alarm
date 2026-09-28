@@ -866,7 +866,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>> addAlarm(MyAlarm alarm) async {
+  Future<Map<String, dynamic>> addAlarm(
+    MyAlarm alarm, {
+    // docs/TODO.md T-202: injectable like setManualAlarmEnabled's own `now`
+    // (T-201) - which instant a reading resolves to depends on the day it
+    // is added on, and a daylight-saving change day cannot be waited for.
+    @visibleForTesting DateTime Function()? now,
+  }) async {
     var retVal = {
       'success': false,
       'errMsg': 'Default Error Message. This should not happen!',
@@ -874,12 +880,16 @@ class AppState extends ChangeNotifier {
 
     if (alarm is ManualAlarm) {
       // Fetch a DateTime, as ManualAlarms use TimeOfDay
-      DateTime alarmDateTime = _getAlarmTime(alarm);
+      DateTime alarmDateTime = _getAlarmTime(alarm, now: now);
       // Create a new alarm in case it was set to a DayTime in the past
       ManualAlarm newAlarm = ManualAlarm(
           id: alarm.id,
-          time:
-              TimeOfDay(hour: alarmDateTime.hour, minute: alarmDateTime.minute),
+          // docs/TODO.md T-202: the alarm's own reading, NOT the resolved
+          // occurrence's. On a spring-forward day a reading in the skipped
+          // hour (02:30) rings at 03:00 (TZ-1) - rebuilding the TimeOfDay
+          // from that instant saved the alarm as 03:00 for every later day
+          // (as 03:30 before TZ-1's resolution existed).
+          time: alarm.time,
           title: alarm.title,
           enabled: alarm.enabled,
           gentlewake: alarm.gentlewake,
@@ -1038,13 +1048,14 @@ class AppState extends ChangeNotifier {
   /// latent T-61 trap: it rebuilt `DateTime(alarm.time.year, ...)` from the
   /// instant's raw fields, reinterpreting UTC digits as device-local time.
   /// Deleted rather than fixed (docs/TODO.md T-86).
-  DateTime _getAlarmTime(ManualAlarm alarm) {
+  DateTime _getAlarmTime(ManualAlarm alarm, {DateTime Function()? now}) {
     debugPrint(
         "=====getAlarmTime: ${alarm.id} is a manual alarm set on ${alarm.time}");
     // The resolution itself lives in manual_alarm_enable.dart, so that
     // re-arming through the FR-21 toggle uses exactly this rule and cannot
     // drift away from it (a duplicate would be a silent off-by-one-day).
-    return nextManualOccurrence(alarm.time, DateTime.now(), alarm.repeatOnDays);
+    return nextManualOccurrence(
+        alarm.time, (now ?? DateTime.now)(), alarm.repeatOnDays);
   }
 
   /// FR-21 (docs/TODO.md T-03): makes the alarm-list toggle of a manual alarm

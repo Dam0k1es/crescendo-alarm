@@ -190,15 +190,32 @@ DateTime getStartOfWeek(DateTime dateTime) {
 }
 
 /// docs/TODO.md T-61 (FR-18's boundary to the alarm plugin): a planned value
-/// is an absolute **instant** (FR-1, typically UTC-tagged), while
-/// `Alarm.set`/`AlarmSettings.dateTime` is handed a plain local wall-clock
-/// `DateTime`. Building that from the instant's raw fields reinterpreted UTC
+/// is an absolute **instant** (FR-1, typically UTC-tagged), while the alarm
+/// plugin's `AlarmSettings.dateTime` is read as local wall-clock time on the
+/// device (since T-202 it is HANDED the same instant UTC-tagged, see
+/// `buildRingingAlarmSettings`, so the plugin's own storage cannot re-resolve
+/// a repeated hour). Building that from the instant's raw fields reinterpreted UTC
 /// digits as device-local time, so on any device outside UTC+0 the alarm rang
 /// off by the offset. Converting first keeps the real moment; the truncation
 /// to whole minutes matches what the plugin schedules anyway.
+///
+/// docs/TODO.md T-202: the truncation works on the INSTANT, never by
+/// rebuilding a `DateTime` from the local fields. Around a fall-back change
+/// a local reading names two instants, and `DateTime(y, m, d, h, min)`
+/// always picks the first - so an instant in the second pass of the repeated
+/// hour (02:30 CET on 25 Oct 2026 in Berlin) came out as the first (02:30
+/// CEST), and the alarm, the Do Not Disturb window and the bedtime reminder
+/// were all an hour early. Every UTC offset in use today is a whole number
+/// of minutes, so flooring the epoch milliseconds to a minute is the same
+/// as truncating the local reading - on every day, not only on change days.
+/// The result is still local-tagged: the same instant, read as local wall
+/// clock like everything else leaving the scheduling layer.
 DateTime alarmPlatformTime(DateTime instant) {
-  final local = instant.toLocal();
-  return DateTime(local.year, local.month, local.day, local.hour, local.minute);
+  const minuteMs = 60 * 1000;
+  final ms = instant.millisecondsSinceEpoch;
+  // Dart's `%` is never negative for a positive divisor, so this floors
+  // pre-1970 values too.
+  return DateTime.fromMillisecondsSinceEpoch(ms - ms % minuteMs);
 }
 
 Duration durationFromTimeOfDay(TimeOfDay time) {

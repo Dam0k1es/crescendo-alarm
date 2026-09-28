@@ -125,7 +125,10 @@ Future<void> scheduleSleepReminder(
           // NotificationCalendar.fromDate reads the DateTime's own fields as a
           // local wall clock, and the bedtime is derived from a planned value
           // that is a UTC-tagged instant. Without converting first, FR-16's
-          // Checkpoint 2 would fire at the wrong local time.
+          // Checkpoint 2 would fire at the wrong local time. docs/TODO.md
+          // T-202: alarmPlatformTime keeps the instant (also in the second
+          // pass of a repeated hour), and scheduleNotification hands it on
+          // as UTC fields (`notificationCalendarAt`).
           scheduledDate: alarmPlatformTime(dateTime),
           id: sleepReminderNotificationId);
     } catch (e) {

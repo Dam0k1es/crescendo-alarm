@@ -241,10 +241,17 @@ then included in anything you copy and share from this screen.
 
 - **Daylight saving changes** where you are - in any region - are meant to be handled (an alarm
   keeps its clock time on the day of the change and afterwards), and are being fixed right now.
-  Until then, two known issues: a planned (Scheduled) alarm can be an hour off on the day of the
-  change and the day after (`docs/TODO.md` T-206), and an alarm due in the hour that repeats when
-  the clocks go back can ring an hour early (T-202). Manual alarms keep their clock time. Check your
-  Scheduled alarms around a change until this is fixed.
+  - **During the change hour itself** (`docs/TODO.md` T-202, fixed): an alarm derived from an
+    appointment rings at its exact moment, even when that falls into the hour that repeats when the
+    clocks go back. A manual alarm set to a time in that repeated hour (e.g. 02:30 when 02:00-03:00
+    happens twice) rings **once, at the second 02:30**. One set to a time that is skipped when the
+    clocks go forward (02:30 when 02:00 jumps to 03:00) rings **as soon as the time exists** - at
+    03:00 - and is never skipped; the alarm itself stays set to 02:30 for the following days. The
+    Do Not Disturb sleep time and the bedtime reminder follow the same moments.
+  - **Still open:** a planned (Scheduled) wake-up time that is not tied to an appointment (a gap day
+    or your preferred wake-up time) can be an hour off on the day of the change and the day after
+    (T-206). Manual alarms keep their clock time. Check your Scheduled alarms around a change until
+    this is fixed.
 - **Travelling across time zones is not yet reliably supported.** In particular, the first manual
   alarm after a flight can still ring at the time it was set for in the old zone, and travel
   combined with daylight saving changes in several regions is not supported yet. Until that is

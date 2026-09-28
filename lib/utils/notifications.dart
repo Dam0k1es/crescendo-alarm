@@ -135,10 +135,7 @@ class Notifications {
           body: body,
           notificationLayout: NotificationLayout.Default,
         ),
-        schedule: NotificationCalendar.fromDate(
-          date: scheduledDate.add(const Duration(seconds: 1)),
-          preciseAlarm: true,
-        ),
+        schedule: notificationCalendarAt(scheduledDate),
       );
     } else {
       returnValue = await AwesomeNotifications().createNotification(
@@ -171,3 +168,24 @@ class Notifications {
     return AwesomeNotifications().cancelAll();
   }
 }
+
+/// The schedule [Notifications.scheduleNotification] hands to
+/// awesome_notifications for [scheduledDate] (plus the one second of lead
+/// it always had).
+///
+/// docs/TODO.md T-202 (TZ-8): `NotificationCalendar.fromDate` carries no
+/// instant - it copies the DateTime's year/month/day/hour/minute/second
+/// fields and a zone NAME: the device zone for a local value, "UTC" for a
+/// UTC-tagged one (awesome_notifications 0.12.1,
+/// `notification_calendar.dart`). The native side (AndroidAwnCore 0.12.1,
+/// `NotificationCalendarModel.getNextValidDate`) builds a cron expression
+/// from those fields and evaluates it via `CronExpression.setTimeZone` -
+/// it re-resolves a wall-clock reading, and inside a repeated fall-back hour
+/// a local reading names two instants. The same reading in UTC names
+/// exactly one, and it is also what the plugin stores and re-schedules
+/// after a reboot. So the fields are always taken in UTC.
+NotificationCalendar notificationCalendarAt(DateTime scheduledDate) =>
+    NotificationCalendar.fromDate(
+      date: scheduledDate.toUtc().add(const Duration(seconds: 1)),
+      preciseAlarm: true,
+    );
