@@ -1353,6 +1353,31 @@ rather than expanded into more scope here: see T-185.
   can be started), or FR-16 is formally re-scoped to "checked at every checkpoint" - and the T-62
   leg is changed to assert the callback does NOT fire before the due time.
 
+### T-206 · Scheduled wall-clock alarms are an hour off around a DST change, for ~2 days (P1, open)
+
+- [ ] Found by the persona-Tom simulation (2026-09-28, `docs/timezone-travel-analysis.md` Part I,
+  real `replan()`/`applyPlannedAlarms` run per `TZ`, expectations from Python zoneinfo). In the
+  **committed** scope of `docs/timezone-requirements.md` (TZ-2): daylight saving within one region,
+  Germany included.
+- **Observed:** around a transition the plan gives a wall-clock (gap-day / `preferredWakeUpTime`)
+  alarm one hour off - spring: 08:00 on the change day (an hour late → oversleeping), 07:30 the day
+  after; autumn: 06:00, then 06:30.
+- **Cause (as reported, to be re-verified test-first):** `replan` computes the whole 7-day window
+  with ONE device offset (`lib/models/scheduling/replan.dart:102`), so every day after a transition
+  inside the window is planned with the wrong offset, and FR-4's `maxDailyDelta` (< 1 h) then drifts
+  it back only gradually. FR-16's accepted transition-day limitation (T-85e, "corrected by the
+  following day") is therefore wrong whenever `maxDailyDelta` is below one hour.
+- **Related, same fix area:** T-202 also hits real appointment alarms (an alarm due in the second
+  pass of the repeated hour is armed at the first pass); `ScheduledAlarm.time` is persisted as a
+  local wall-clock string without offset (`lib/models/alarms/scheduled_alarm.dart:48`, `:74`), so a
+  second-pass instant comes back as the first pass after a restart. None of Dart `DateTime`,
+  `package:timezone` or `java.time`'s default matches TZ-1's decisions; `java.time` with
+  `withLaterOffsetAtOverlap()` / the transition instant does.
+- **Acceptance:** per TZ-2/TZ-9 - a failing regression test per transition direction (spring and
+  autumn, `tz.TZDateTime`, a window that contains the transition), then a per-day offset (from the
+  zone's rules for that day, not the current offset), swept over all IANA zones and 2026/27
+  transitions.
+
 ### T-205 · Travelling across time zones: requirements recorded, provisional, not promised (P2, open)
 
 - [ ] Maintainer decision (2026-09-28): "noch geben wir kein versprechen zu reisenden die um die
