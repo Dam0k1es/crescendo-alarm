@@ -1435,7 +1435,7 @@ rather than expanded into more scope here: see T-185.
   not receive `nowFn`; no test checks the `at` passed to `armAlarm`; `screen_alarms_weekday_pills_test
   .dart:80` uses a now-past fixture date. Pre-existing DST defect found along the way: T-202.
 
-### T-200 · Sleep-time DND catch-up takes ~10-15 minutes on the phone instead of ~2 — IN PROGRESS (2026-09-27)
+### T-200 · Sleep-time DND catch-up takes ~10-15 minutes on the phone instead of ~2 — RESOLVED by device evidence: no delay (2026-09-28)
 
 - [ ] Maintainer phone report (Android 16), verbatim: "Ich hatte nach 1 minute gecheckt, da war
   nichts. aber nach 25 minuten schon. nach 15 minuten hatte ich eine signal nachricht gekriegt und
@@ -1470,6 +1470,20 @@ rather than expanded into more scope here: see T-185.
   The re-include test that morning could not reproduce the delay: the A1 rule suppressed the
   catch-up entirely (T-203). Still open: why the catch-up took ~10-15 min on 2026-09-27; retest
   after T-203 with a dump right after the change.
+- **Resolution (maintainer's phone, 2026-09-28, T-203 dev build, 10-minute watch script: `zen_mode`
+  every 10 s + `adb logcat -s SleepTimeDnd` + `dumpsys notification`):** both catch-ups in the run
+  fired exactly two minutes after their push - `SYNC decision=4` at 13:42:51 → `START_ALARM
+  decision=8 action=ACTIVATE` at 13:44:51.242; again 13:46:19 → 13:48:19.900 - and the platform
+  followed within a second (`zen_mode` 0 → 3 = `ZEN_MODE_ALARMS` at 13:48:21; the implicit rule
+  "Bitte nicht stören (Crescendo Alarm)" `STATE_TRUE`, `lastActivation` 11:48:19.91Z). The same
+  dump's zen history covers the 2026-09-27 report: `set_zen_mode: off` (the exclusion) at 17:33:49,
+  `set_zen_mode: alarms` at 17:35:53 - 2:04 later. Nothing measured fits 10-15 minutes; the
+  report was most likely an observation effect (on Android 15+ the quick-settings Do Not Disturb
+  tile does not show the app's implicit mode, T-198), not a delivery delay. Also settled: on Android
+  16 the global `zen_mode` setting DOES reflect the app's implicit mode, so it is a valid outside
+  measure. The non-gating CI "catch-up under idle" leg (whose marker detection never worked in
+  three runs) is no longer needed to answer this; remove it or keep it only if its marker problem
+  is fixed.
 
 ### T-198 · Sleep-time Do Not Disturb, re-implemented natively — IMPLEMENTED (2026-09-27), device confirmation pending
 
