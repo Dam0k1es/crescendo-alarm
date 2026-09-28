@@ -52,8 +52,7 @@ class SleepTimeDndPolicyTest {
         endMillis: Long? = end,
         activeByUs: Boolean = false,
         pendingStartAt: Long? = null,
-        lastEndAt: Long? = null,
-    ) = Input(now, trigger, enabled, wasEnabled, startMillis, endMillis, activeByUs, pendingStartAt, lastEndAt)
+    ) = Input(now, trigger, enabled, wasEnabled, startMillis, endMillis, activeByUs, pendingStartAt)
 
     // ---------------------------------------------------------- symptom 1
 
@@ -160,7 +159,6 @@ class SleepTimeDndPolicyTest {
         assertNull(d.startAlarmAt)
         assertNull(d.endAlarmAt)
         assertFalse(d.keepWindow)
-        assertEquals("the ring is remembered as the last wake-up", end, d.recordEndAt)
     }
 
     @Test
@@ -222,100 +220,70 @@ class SleepTimeDndPolicyTest {
 
     // ------------------------------------------ after the first ring (R4)
     //
-    // Independent review of 201b740 (docs/TODO.md T-198, finding A1): after
-    // the ring every push carries the NEXT alarm's window, and when that
-    // alarm is less than one Sleep Goal away its start already lies in the
-    // past - the catch-up switched Do Not Disturb back on two minutes after
-    // waking. Sleep time ends at the first ring; a window that would have
-    // started before that ring is the stretch the user just woke from.
+    // docs/TODO.md T-203 (maintainer decision, 2026-09-28): a window whose
+    // start already passed is caught up even right after a ring. T-198's A1
+    // rule skipped any window that began before the last ring; on the phone
+    // that kept Do Not Disturb off for an alarm the maintainer had just
+    // included on purpose - "Ich inkludiere ihn ja absichtlich. Ich kann ja
+    // auch nachts um 2:00 morgens einen wecker auf 08:00 stellen, dann bin
+    // ich bei 08:00 stunden schlafziel ja nie in dem fall, dass DND angeht."
+    // Keeping a backup alarm out of sleep time is what "Exclude from Sleep
+    // Time" is for. (These cases failed against the A1 rule with the
+    // last-ring record set, as on the device after a ring; the record itself
+    // is gone now - there is no input left through which a ring could
+    // suppress a later window.)
 
     @Test
-    fun `A1 - a backup alarm 15 minutes after the ring does not bring Do Not Disturb back`() {
-        val ring = end // 06:00, the END just fired and was recorded
+    fun `T-203 - a backup alarm 15 minutes after the ring is caught up like any past start`() {
+        val ring = end // 06:00, the END just fired
         val backup = ring + 15 * minute // 06:15, Sleep Goal 8 h -> start 22:15
+        val now = ring + 5_000L
         val d = SleepTimeDndPolicy.decide(
-            input(
-                now = ring + 5_000L,
-                startMillis = backup - 8 * hour,
-                endMillis = backup,
-                lastEndAt = ring,
-            )
+            input(now = now, startMillis = backup - 8 * hour, endMillis = backup)
         )
 
-        assertEquals(Code.AFTER_WAKE_UP, d.code)
-        assertEquals(Action.NONE, d.action)
-        assertNull("no catch-up start", d.startAlarmAt)
-        assertEquals("the backup's ring still ends it", backup, d.endAlarmAt)
+        assertEquals(Code.CATCH_UP, d.code)
+        assertEquals(now + SleepTimeDndPolicy.CATCH_UP_MILLIS, d.startAlarmAt)
+        assertEquals(backup, d.endAlarmAt)
     }
 
     @Test
-    fun `A1 - a daytime alarm less than a Sleep Goal after the ring does not silence the morning`() {
+    fun `T-203 - a daytime alarm included after the morning ring gets its sleep time`() {
         val ring = end // 06:00
-        val shift = ring + 7 * hour // 13:00 -> window [05:00, 13:00)
+        val shift = ring + 6 * hour // 12:00 -> window [04:00, 12:00)
+        val now = ring + 4 * hour // 10:00, the maintainer's phone test
+        val d = SleepTimeDndPolicy.decide(
+            input(now = now, startMillis = shift - 8 * hour, endMillis = shift)
+        )
+
+        assertEquals(Code.CATCH_UP, d.code)
+        assertEquals(now + SleepTimeDndPolicy.CATCH_UP_MILLIS, d.startAlarmAt)
+    }
+
+    @Test
+    fun `T-203 - the catch-up's own start alarm then activates`() {
+        val ring = end
+        val backup = ring + 15 * minute
         val d = SleepTimeDndPolicy.decide(
             input(
                 now = ring + 2 * minute,
-                startMillis = shift - 8 * hour,
-                endMillis = shift,
-                lastEndAt = ring,
+                trigger = Trigger.START_ALARM,
+                startMillis = backup - 8 * hour,
+                endMillis = backup,
             )
         )
 
-        assertEquals(Code.AFTER_WAKE_UP, d.code)
-        assertEquals(Action.NONE, d.action)
-        assertNull(d.startAlarmAt)
+        assertEquals(Code.ACTIVATED, d.code)
+        assertEquals(Action.ACTIVATE, d.action)
     }
 
     @Test
-    fun `A1 - neither a start alarm nor a boot enters a window that began before the last ring`() {
-        val ring = end
-        val backup = ring + 15 * minute
-        for (trigger in listOf(Trigger.START_ALARM, Trigger.BOOT, Trigger.END_ALARM)) {
-            val d = SleepTimeDndPolicy.decide(
-                input(
-                    now = ring + minute,
-                    trigger = trigger,
-                    startMillis = backup - 8 * hour,
-                    endMillis = backup,
-                    lastEndAt = ring,
-                )
-            )
-            assertEquals("$trigger", Action.NONE, d.action)
-            assertNull("$trigger", d.startAlarmAt)
-        }
-    }
-
-    @Test
-    fun `A1 - a window that starts after the last ring is caught up as usual`() {
-        val ring = end // this morning, 06:00
-        val evening = ring + 14 * hour // 20:00, alarm at 23:00 with a 3 h goal
-        val d = SleepTimeDndPolicy.decide(
-            input(
-                now = evening,
-                startMillis = evening - hour,
-                endMillis = evening + 3 * hour,
-                lastEndAt = ring,
-            )
-        )
-
-        assertEquals(Code.CATCH_UP, d.code)
-        assertEquals(evening + SleepTimeDndPolicy.CATCH_UP_MILLIS, d.startAlarmAt)
-    }
-
-    @Test
-    fun `A1 - with no ring on record (feature just switched on) the past start is caught up (T-110)`() {
-        val d = SleepTimeDndPolicy.decide(input(now = start + hour, lastEndAt = null))
-
-        assertEquals(Code.CATCH_UP, d.code)
-    }
-
-    @Test
-    fun `A1 - a push finding the window over also records the end as the last wake-up`() {
+    fun `T-203 - a push finding the window over still ends it, and records nothing else`() {
         val d = SleepTimeDndPolicy.decide(input(now = end + minute, activeByUs = true))
 
         assertEquals(Code.ENDED, d.code)
-        assertEquals(end, d.recordEndAt)
-        assertNull(SleepTimeDndPolicy.decide(input(now = start - hour)).recordEndAt)
+        assertEquals(Action.DEACTIVATE, d.action)
+        assertFalse(d.keepWindow)
     }
 
     // ----------------------------------------------------- switching off

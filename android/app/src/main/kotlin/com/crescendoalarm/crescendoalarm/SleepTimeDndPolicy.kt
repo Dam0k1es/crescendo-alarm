@@ -35,12 +35,12 @@ package com.crescendoalarm.crescendoalarm
  * - The end deactivates unconditionally when its alarm fires, and any later
  *   push or boot that finds the window over deactivates too (symptom 2:
  *   "DND not off after the alarm rang").
- * - After a ring, a window that would have started BEFORE that ring is not
- *   entered: it is the stretch the user has just woken from (R4, "Das Ende
- *   der Schlafenszeit ist exakt das allererste Klingeln"). Without this, a
- *   backup alarm 15 minutes later - or a daytime alarm less than one Sleep
- *   Goal away - made the catch-up switch Do Not Disturb back on two minutes
- *   after waking (independent review of 201b740, finding A1).
+ * - A window whose start already passed is caught up (T-110) even right after
+ *   a ring (docs/TODO.md T-203, maintainer decision): T-198's A1 rule skipped
+ *   windows that began before the last ring, which kept Do Not Disturb off
+ *   for an alarm the user had included on purpose. A backup alarm that
+ *   should not bring sleep time back is excluded with "Exclude from Sleep
+ *   Time" instead.
  */
 object SleepTimeDndPolicy {
     /**
@@ -86,8 +86,9 @@ object SleepTimeDndPolicy {
         /** An alarm fired for a window that has since moved. Native-only. */
         const val STALE_ALARM = 9
         /**
-         * Inside a window that began before the last ring - not entered;
-         * only its end stays armed.
+         * No longer produced (docs/TODO.md T-203 removed T-198's A1 rule).
+         * Kept, like Dart's `SleepTimeDndDecision.afterWakeUp`, so the code
+         * stays reserved: v1.4.0 reports and exported logs carry it.
          */
         const val AFTER_WAKE_UP = 10
     }
@@ -117,12 +118,6 @@ object SleepTimeDndPolicy {
         val activeByUs: Boolean,
         /** When the start alarm is currently armed for, if at all. */
         val pendingStartAt: Long?,
-        /**
-         * The end of the last window that ended - i.e. the last first ring
-         * this trigger saw. Null when none is on record (the feature was
-         * only just switched on, or the app data was cleared).
-         */
-        val lastEndAt: Long? = null,
     )
 
     data class Decision(
@@ -140,8 +135,6 @@ object SleepTimeDndPolicy {
         val endAlarmAt: Long?,
         /** Keep the stored window; false clears it. */
         val keepWindow: Boolean,
-        /** Remember this instant as [Input.lastEndAt] from now on, if set. */
-        val recordEndAt: Long? = null,
     )
 
     fun decide(i: Input): Decision {
@@ -185,7 +178,6 @@ object SleepTimeDndPolicy {
                 startAlarmAt = null,
                 endAlarmAt = null,
                 keepWindow = false,
-                recordEndAt = end,
             )
         }
 
@@ -207,14 +199,6 @@ object SleepTimeDndPolicy {
         }
 
         // Inside sleep time: start <= now < end.
-
-        val lastEnd = i.lastEndAt
-        if (!i.activeByUs && lastEnd != null && start < lastEnd) {
-            // This window began before the last ring (A1): whatever
-            // triggered this, it is not entered. Its end stays armed, so the
-            // ring that ends it is recorded as a wake-up in turn.
-            return Decision(Code.AFTER_WAKE_UP, Action.NONE, false, null, end, true)
-        }
 
         return when (i.trigger) {
             Trigger.START_ALARM -> Decision(

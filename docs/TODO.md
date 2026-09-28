@@ -1349,6 +1349,31 @@ rather than expanded into more scope here: see T-185.
   can be started), or FR-16 is formally re-scoped to "checked at every checkpoint" - and the T-62
   leg is changed to assert the callback does NOT fire before the due time.
 
+### T-203 · A past sleep-time start is caught up even right after a ring (A1 rule removed) — DONE (2026-09-28)
+
+- [x] Maintainer decision, verbatim: "Ja, auch dann. Ich inkludiere ihn ja absichtlich. Ich kann ja
+  auch nachts um 2:00 morgens einen wecker auf 08:00 stellen, dann bin ich bei 08:00 stunden
+  schlafziel ja nie in dem fall, dass DND angeht." (Yes, then too. I include it on purpose. I can
+  also set an alarm for 08:00 at 2:00 at night - with an 8-hour sleep goal I would then never get Do
+  Not Disturb.)
+- **Trigger:** the maintainer's phone logs (2026-09-28, `dumpsys alarm`, Android 16). After this
+  morning's 07:30 ring, re-including a 12:00 manual alarm (window 04:00-12:00 at an 8 h Sleep Goal)
+  moved `SLEEP_TIME_END` to 12:00 but cancelled `SLEEP_TIME_START` and set none: T-198's A1 rule
+  (`Code.AFTER_WAKE_UP`) skips a window that began before the last ring. Working as designed - and
+  not what the maintainer wants.
+- **Change:** the A1 branch is gone from `SleepTimeDndPolicy.decide`, along with the last-ring record
+  it needed (`Input.lastEndAt`, `Decision.recordEndAt`, native key `last_end_millis` - the key is
+  now only removed on every push, since a v1.4.0 install still holds it). A past start is caught up
+  ~2 minutes later (T-110) in every case. Code 10 stays reserved in `SleepTimeDndPolicy.Code`,
+  `SleepTimeDndDecision` and `DiagDndDecision`, so v1.4.0 logs still decode. Backup alarms are kept
+  out of sleep time with **Exclude from Sleep Time** (USER_GUIDE says so now).
+- **Tests:** `SleepTimeDndPolicyTest`'s A1 cases became T-203 cases (a backup 15 min after the ring,
+  the maintainer's 12:00 case at 10:00, the catch-up's own start alarm activating), confirmed failing
+  first with the last-ring record set as on the device (3 of 27 red), then the record removed. The
+  E2E leg's A1 step is merged into its catch-up step, whose window now starts an hour before the
+  just-simulated ring.
+- **Ships after v1.4.0**, which still has the A1 rule (its release notes describe it).
+
 ### T-202 · `alarmPlatformTime` picks the FIRST occurrence of a repeated fall-back hour (P1, open)
 
 - [ ] Found by Günther's all-timezone review of T-201 (2026-09-28), pre-existing, outside T-201.
@@ -1420,6 +1445,14 @@ rather than expanded into more scope here: see T-185.
   windowed) plus the permission state recorded to `e2e_evidence/sleep_time_dnd_idle_*.log`.
 - **Acceptance:** the cause is identified from that evidence (or the phone's own `dumpsys alarm`),
   and the catch-up activates within ~2-3 minutes under phone conditions.
+- **Phone evidence (maintainer, 2026-09-28, `dumpsys alarm` on Android 16):** every app alarm is
+  exact - `window=0 exactAllowReason=policy_permission` (granted via `USE_EXACT_ALARM`), no inexact
+  fallback. The inexact-fallback hypothesis is ruled out on the real device. The same dump shows
+  last night's real cycle on time with the app closed: `SLEEP_TIME_START` fired ~23:30 and
+  `SLEEP_TIME_END` ~07:30 (maintainer confirmed Do Not Disturb on at night and off after the ring).
+  The re-include test that morning could not reproduce the delay: the A1 rule suppressed the
+  catch-up entirely (T-203). Still open: why the catch-up took ~10-15 min on 2026-09-27; retest
+  after T-203 with a dump right after the change.
 
 ### T-198 · Sleep-time Do Not Disturb, re-implemented natively — IMPLEMENTED (2026-09-27), device confirmation pending
 

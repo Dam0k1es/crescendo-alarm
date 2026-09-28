@@ -162,9 +162,10 @@ enum SleepTimeDndDecision {
   /// nothing is activated for such a short stretch.
   tooLate(7),
 
-  /// Inside a window that began before the last ring (a backup alarm, or a
-  /// daytime alarm less than a Sleep Goal away): not entered - sleep time
-  /// ended at that ring (R4). Only its end stays armed.
+  /// No longer produced (docs/TODO.md T-203 removed T-198's A1 rule, which
+  /// skipped a window that began before the last ring). Kept so a report
+  /// from a native side still on v1.4.0 - or code 10 in an exported log -
+  /// still decodes.
   afterWakeUp(10);
 
   const SleepTimeDndDecision(this.code);

@@ -71,7 +71,9 @@ object SleepTimeDnd {
     private const val KEY_END = "end_millis"
     private const val KEY_ACTIVE_BY_US = "active_by_us"
     private const val KEY_PENDING_START = "pending_start_millis"
-    private const val KEY_LAST_END = "last_end_millis"
+    // "last_end_millis" held T-198's last-ring record for the A1 rule, removed
+    // in T-203. Never reuse the key: a v1.4.0 install still has it stored.
+    private const val KEY_LAST_END_REMOVED = "last_end_millis"
     private const val KEY_REPORT_START_FIRED = "report_start_fired"
     private const val KEY_REPORT_END_FIRED = "report_end_fired"
     private const val KEY_REPORT_APPLY_FAILED = "report_apply_failed"
@@ -181,7 +183,6 @@ object SleepTimeDnd {
                 endMillis = stored.longOrNull(KEY_END),
                 activeByUs = stored.getBoolean(KEY_ACTIVE_BY_US, false),
                 pendingStartAt = stored.longOrNull(KEY_PENDING_START),
-                lastEndAt = stored.longOrNull(KEY_LAST_END),
             )
         )
         Log.i(TAG, "trigger=$trigger decision=${decision.code} action=${decision.action}")
@@ -201,10 +202,8 @@ object SleepTimeDnd {
             .putBoolean(KEY_ACTIVE_BY_US, nowActive)
             .putOrRemove(KEY_PENDING_START, decision.startAlarmAt)
         if (!decision.keepWindow) editor.remove(KEY_START).remove(KEY_END)
-        val recordEnd = decision.recordEndAt
-        if (recordEnd != null && recordEnd > (stored.longOrNull(KEY_LAST_END) ?: Long.MIN_VALUE)) {
-            editor.putLong(KEY_LAST_END, recordEnd)
-        }
+        // T-203: drop v1.4.0's leftover last-ring record; nothing reads it.
+        editor.remove(KEY_LAST_END_REMOVED)
         if (durable) editor.commit() else editor.apply()
         return decision
     }

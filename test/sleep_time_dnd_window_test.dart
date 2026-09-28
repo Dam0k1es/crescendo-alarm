@@ -255,8 +255,8 @@ void main() {
         // Only the window moves here. Whether a next window that has
         // ALREADY begun gets entered after a ring (a backup alarm, or a
         // daytime alarm less than a Sleep Goal away) is the native side's
-        // decision - SleepTimeDndPolicyTest's "A1" cases pin down that it is
-        // not (independent review of 201b740).
+        // decision - SleepTimeDndPolicyTest's "T-203" cases pin down that it
+        // is (maintainer decision; T-198's A1 rule used to skip it).
       });
 
       test(

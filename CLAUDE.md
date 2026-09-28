@@ -132,11 +132,14 @@ T-198 records why, from primary sources. Rules that are load-bearing:
 - **Never end sleep time from Dart's ring handling.** The `alarm` plugin tells Dart about a ring only
   if an engine happens to be attached (H3). The end is the native end alarm at the target alarm's
   `alarmPlatformTime`.
-- **After a ring, a window that began before it is not entered** (`Code.AFTER_WAKE_UP`, the native
-  `last_end_millis`). The literal "next alarm minus Sleep Goal" otherwise re-activates DND minutes
-  after waking whenever a backup or daytime alarm is closer than the Sleep Goal - the first T-198
-  commit shipped exactly that, and its tests missed it because every fixture put the next alarm a
-  day later. Test such rules with a next alarm *less* than one Sleep Goal away.
+- **A past start is always caught up, even right after a ring** (`docs/TODO.md` T-203, maintainer
+  decision). T-198 had added the opposite rule (A1: skip any window that began before the last
+  ring), so a backup alarm would not silence the phone again minutes after waking - but on the
+  device it kept DND off for a daytime alarm the maintainer had included on purpose. The
+  maintainer's call: an included alarm gets its sleep time; keeping a backup alarm out of it is what
+  the per-alarm **Exclude from Sleep Time** switch is for. Don't reintroduce a ring-based
+  suppression. Test such rules with a next alarm *less* than one Sleep Goal away - that is where
+  both versions differ.
 - **On Android 15+ (this app targets 36), `setInterruptionFilter` controls an app-owned implicit
   mode, not global Do Not Disturb** (H4). Deactivate with `INTERRUPTION_FILTER_ALL`; never "restore a
   remembered previous filter" - `getCurrentInterruptionFilter` is the effective filter across all
