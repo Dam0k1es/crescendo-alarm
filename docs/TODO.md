@@ -1349,6 +1349,24 @@ rather than expanded into more scope here: see T-185.
   can be started), or FR-16 is formally re-scoped to "checked at every checkpoint" - and the T-62
   leg is changed to assert the callback does NOT fire before the due time.
 
+### T-201 · A T-198 test depended on the local time of day it ran at — DONE (2026-09-28)
+
+- [x] `ci.yml`'s `Analyze & Test (TZ=Pacific/Chatham)` leg failed on four consecutive `dev` pushes
+  (f8ac3f5 … 89bd0a3, 2026-09-27 ~15:56–17:21 UTC) in `test/app_state_sleep_time_dnd_test.dart`,
+  "switching an earlier alarm on makes it the window's end" (`Expected: <5>`, `Actual: <7>`),
+  although none of those commits touched the code under test. It blocked `master` (the ruleset
+  requires all six timezone legs).
+- **Cause - the test, not the app:** `setManualAlarmEnabled` had no injectable `now`, so the case
+  ran on the real clock. With alarms at 05:00 (switched on) and 07:30, the next one is 07:30 today
+  whenever local time is between 05:00 and 07:30 - correctly. A sweep of 50 local times under
+  `TZ=Pacific/Chatham` (temporary test outside the repo) failed at exactly those six slots, and at
+  none else, including both sides of Chatham's DST start (2026-09-27 02:45). CI ran at a UTC hour
+  where only Chatham's local time fell into that window; any zone fails there at the right hour.
+- **Fix:** `setManualAlarmEnabled` takes a `@visibleForTesting DateTime Function()? now`, used for
+  `applyManualAlarmEnabled` and passed on to `refreshSleepTimeDnd`. Both FR-21 cases pin "now"
+  (02:00); a new counter-test pins 06:00 and expects 07:30 today. Confirmed failing first (the
+  parameter did not exist). `flutter analyze` clean; full suite 670/670.
+
 ### T-200 · Sleep-time DND catch-up takes ~10-15 minutes on the phone instead of ~2 — IN PROGRESS (2026-09-27)
 
 - [ ] Maintainer phone report (Android 16), verbatim: "Ich hatte nach 1 minute gecheckt, da war

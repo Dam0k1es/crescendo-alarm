@@ -1062,11 +1062,16 @@ class AppState extends ChangeNotifier {
     bool enabled, {
     @visibleForTesting Future<void> Function(MyAlarm alarm, DateTime at)? armAlarm,
     @visibleForTesting Future<void> Function(int id)? stopAlarm,
+    // docs/TODO.md T-201: injectable like refreshSleepTimeDnd's own `now` -
+    // which alarm is "next" depends on the local time of day, so a test on
+    // the real clock passes or fails with the hour the suite runs at.
+    @visibleForTesting DateTime Function()? now,
   }) async {
+    final nowFn = now ?? DateTime.now;
     final applied = await applyManualAlarmEnabled(
       alarm: alarm,
       enabled: enabled,
-      now: DateTime.now(),
+      now: nowFn(),
       armAlarm: armAlarm ?? _setAlarm,
       stopAlarm: stopAlarm ?? _stopAlarm,
     );
@@ -1082,7 +1087,7 @@ class AppState extends ChangeNotifier {
     // is final. (refreshDirectBootFallback has the same ordering and is
     // re-run for the same reason.)
     refreshDirectBootFallback();
-    unawaited(refreshSleepTimeDnd());
+    unawaited(refreshSleepTimeDnd(now: nowFn));
     return true;
   }
 

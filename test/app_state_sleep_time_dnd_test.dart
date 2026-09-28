@@ -210,7 +210,10 @@ void main() {
         ..add(target)
         ..add(later);
 
+      // Pinned "now" (docs/TODO.md T-201): on the real clock this case
+      // depended on the local time of day the suite happened to run at.
       final applied = await appState.setManualAlarmEnabled(target, false,
+          now: () => DateTime(2026, 9, 28, 2, 0),
           armAlarm: (alarm, at) async {}, stopAlarm: (id) async {});
       await Future<void>.delayed(Duration.zero);
 
@@ -230,11 +233,35 @@ void main() {
         ..add(earlier)
         ..add(later);
 
+      // docs/TODO.md T-201: pinned before 05:00. On the real clock this
+      // failed whenever the suite ran between 05:00 and 07:30 LOCAL time -
+      // then the next 05:00 is tomorrow and 07:30 today correctly wins (CI's
+      // Pacific/Chatham leg, which hit that window on 2026-09-27).
       await appState.setManualAlarmEnabled(earlier, true,
+          now: () => DateTime(2026, 9, 28, 2, 0),
           armAlarm: (alarm, at) async {}, stopAlarm: (id) async {});
       await Future<void>.delayed(Duration.zero);
 
       expect(pushes.last.window!.end.hour, 5);
+    });
+
+    test('...but between 05:00 and 07:30 the later alarm today comes first '
+        '(docs/TODO.md T-201 counter-test)', () async {
+      final appState = await freshAppState({'sleepTimeDndEnabled': true});
+      final earlier = ManualAlarm(
+          time: const TimeOfDay(hour: 5, minute: 0), enabled: false, id: 1);
+      final later = ManualAlarm(time: const TimeOfDay(hour: 7, minute: 30), id: 2);
+      appState.manualAlarms
+        ..add(earlier)
+        ..add(later);
+
+      await appState.setManualAlarmEnabled(earlier, true,
+          now: () => DateTime(2026, 9, 28, 6, 0),
+          armAlarm: (alarm, at) async {}, stopAlarm: (id) async {});
+      await Future<void>.delayed(Duration.zero);
+
+      final end = pushes.last.window!.end.toLocal();
+      expect((end.day, end.hour, end.minute), (28, 7, 30));
     });
   });
 
