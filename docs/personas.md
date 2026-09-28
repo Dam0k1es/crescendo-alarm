@@ -48,6 +48,12 @@ Tom wants to use an alarm app that helps him adjust his sleep schedule and adapt
 > app, not a dedicated jet-lag feature. There is no algorithm that actively helps users adjust
 > to a new time zone (e.g. gradual wake-time shifting, warnings on time zone change). Tom's
 > need for active jet-lag support is therefore only partially covered.
+>
+> **Status (2026-09-28): provisional.** Tom's travel requirements are recorded in
+> [`timezone-requirements.md`](timezone-requirements.md) (TZ-4 … TZ-7) but are **not promised**
+> yet - travelling across time zones, and especially travel combined with daylight saving changes
+> in several regions, is not claimed to work reliably. Daylight saving changes within one region
+> (TZ-1 … TZ-3) are committed.
 
 
 # Emma, the Student

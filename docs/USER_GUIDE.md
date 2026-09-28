@@ -237,6 +237,18 @@ a daily routine - that is exactly why the switch is off by default and separate 
 diagnostics. Turn it on only while actively investigating a scheduling problem, and remember it is
 then included in anything you copy and share from this screen.
 
+## Time zones and daylight saving
+
+- **Daylight saving changes** where you are - in any region - are handled: an alarm keeps its
+  clock time on the day of the change and afterwards. (Being hardened right now: an alarm set for
+  the hour that repeats when the clocks go back can currently ring an hour early -
+  `docs/TODO.md` T-202.)
+- **Travelling across time zones is not yet reliably supported.** In particular, the first manual
+  alarm after a flight can still ring at the time it was set for in the old zone, and travel
+  combined with daylight saving changes in several regions is not supported yet. Until that is
+  solved, check your alarms after arriving in another time zone. Details:
+  `docs/timezone-requirements.md`.
+
 ## When an alarm rings
 
 A full-screen ringing display shows the alarm's title, the current time, and:

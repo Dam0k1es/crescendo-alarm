@@ -1353,6 +1353,21 @@ rather than expanded into more scope here: see T-185.
   can be started), or FR-16 is formally re-scoped to "checked at every checkpoint" - and the T-62
   leg is changed to assert the callback does NOT fire before the due time.
 
+### T-205 · Travelling across time zones: requirements recorded, provisional, not promised (P2, open)
+
+- [ ] Maintainer decision (2026-09-28): "noch geben wir kein versprechen zu reisenden die um die
+  ganze welt fliegen … es geht nur darum, dass kein versprechen gemacht wird, das noch nicht
+  gehalten werden kann." (No promise yet to travellers flying around the world; it is only about
+  not making a promise that cannot be kept yet.)
+- **Recorded:** TZ-4 … TZ-7 (and the travel parts of TZ-8/TZ-9) in `docs/timezone-requirements.md`,
+  status *provisional*; the persona Tom simulation in `docs/timezone-travel-analysis.md` (in
+  progress). The promise was taken out of `README.md`, and `docs/USER_GUIDE.md` / `docs/personas.md`
+  now state the limit plainly. FR-16's code and all existing tests stay unchanged.
+- **Known gaps to resume from:** manual alarms are never re-armed on a zone change (FR-15); no
+  `ACTION_TIMEZONE_CHANGED` receiver; FR-16 Checkpoint 2 re-arms nothing (T-113) and does not run at
+  bedtime (T-199); FR-16's accepted transition-day limitation (T-85e).
+- **Not in scope of this entry:** daylight saving within one region - committed, T-202.
+
 ### T-204 · Release v1.4.0 published — DONE (2026-09-28)
 
 - [x] Maintainer request: "bewege den stand auf master und baue einen neuen release mit bugfixes
@@ -1413,6 +1428,12 @@ rather than expanded into more scope here: see T-185.
 - **Acceptance:** a regression test with a `tz.TZDateTime` fixture in the second pass of a
   fall-back hour (per CLAUDE.md: not `DateTime.utc`), failing first; then a fix that preserves the
   instant rather than the wall-clock fields.
+- **Requirements (2026-09-28): `docs/timezone-requirements.md` TZ-1, TZ-2, TZ-3 (committed).**
+  Maintainer decisions: a wall-clock alarm in the repeated hour rings once, at the **later**
+  occurrence; one in the skipped hour rings as soon as the time exists (first valid instant after
+  the gap), never skipped. Holds in every IANA region, transition rules from the device's database;
+  the resolution of those two hours is the app's own rule (platform defaults differ). Sweep tests
+  over all zones and 2026/27 transitions (TZ-9).
 
 ### T-201 · A T-198 test depended on the local time of day it ran at — DONE (2026-09-28)
 
