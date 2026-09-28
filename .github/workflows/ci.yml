@@ -42,6 +42,14 @@ jobs:
         #   America/St_Johns   -03:30 and daylight saving
         #   Pacific/Chatham    +12:45, beyond the date line
         #   Australia/Lord_Howe +10:30 with a half-hour transition
+        # Added for T-202's DST resolver (Markus's review, maintainer request
+        # 2026-09-28) - the odd transition shapes the six above do not have:
+        #   America/Nuuk       gap ending at midnight (resolves onto the next date)
+        #   America/Santiago   southern hemisphere, transition at midnight
+        #   Antarctica/Troll   2-hour DST change
+        #   Europe/Dublin      negative DST (winter is the "DST" period)
+        # Not listed in the master ruleset's required checks (the six above
+        # are); adding them there is a separate, deliberate step.
         # Digit arithmetic fails first at the half- and three-quarter-hour
         # marks. Verified (2026-09-10) that the TZ variable really reaches
         # Dart's DateTime inside the flutter-test process - the matrix is
@@ -53,6 +61,10 @@ jobs:
           - America/St_Johns
           - Pacific/Chatham
           - Australia/Lord_Howe
+          - America/Nuuk
+          - America/Santiago
+          - Antarctica/Troll
+          - Europe/Dublin
     env:
       TZ: ${{ matrix.tz }}
     steps:

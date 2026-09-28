@@ -258,7 +258,7 @@ on `dev` (already complete by promotion time, since promoting is a later, separa
 `dev` push) rather than `master`'s own checks, which cannot possibly exist before the push that would
 trigger them - see the ruleset's own history/T-40 for why that distinction is load-bearing, not
 incidental. Practical consequence: `git -C /mnt/wakeywakey merge --ff-only dev && git push` can now
-be rejected if attempted before `dev`'s CI (roughly 8 minutes, six timezones in parallel) has
+be rejected if attempted before `dev`'s CI (roughly 8 minutes, ten timezones in parallel) has
 actually finished - check `gh api repos/Dam0k1es/crescendo-alarm/commits/<sha>/check-runs` first, or just
 expect to wait. Same protection also blocks deleting or force-pushing/rewriting `master`
 (`deletion`/`non_fast_forward` rules, same ruleset).
@@ -354,12 +354,16 @@ Four workflows under `.github/workflows/`:
 
 Two things about the test job that are easy to undo by accident:
 
-- It is a **matrix over six timezones** (`docs/TODO.md` T-92), not a single run. The dominant bug
+- It is a **matrix over ten timezones** (`docs/TODO.md` T-92; four added for T-202, see below), not a single run. The dominant bug
   class in this project is frame confusion, and three real bugs (T-61, T-74d, T-76) were
   *structurally invisible* at UTC+0 - which is where both the dev machine and GitHub's runners sit.
   The half- and three-quarter-hour offsets (St. John's, Chatham, Lord Howe) are deliberate: digit
   arithmetic fails there first. `fail-fast: false`, because with a frame bug the *pattern* across
-  zones is the diagnosis.
+  zones is the diagnosis. America/Nuuk (DST gap ending at midnight), America/Santiago (southern
+  hemisphere, midnight transition), Antarctica/Troll (2-hour DST) and Europe/Dublin (negative DST)
+  were added 2026-09-28 for the DST resolver (T-202, Markus's review) - transition shapes the
+  original six do not have. **Only the original six are required checks in the master ruleset**;
+  the four new legs report but do not gate a fast-forward until they are added there deliberately.
 - Coverage runs in the UTC leg only, as an artifact, with **no percentage gate**. An arbitrary
   threshold would reward the wrong thing here: trivial getter tests raise it, while frame and
   structural errors are not captured by line coverage at all.
@@ -505,7 +509,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **669 tests across 106 files** (2026-09-27), and CI runs them six times over -
+`flutter test` currently runs **703 tests across 111 files** (2026-09-28), and CI runs them ten times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
 tests for native code (29 as of T-198, `SleepTimeDndPolicyTest`), run with
 `cd android && ./gradlew :app:testDebugUnitTest` (locally from the native-filesystem worktree, and in

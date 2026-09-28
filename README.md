@@ -98,7 +98,7 @@ when a relevant setting changes - so there is no battery-draining background wor
 
 Every change is automatically checked (static analysis, dependency/secret scanning) and tested,
 including end-to-end tests on a real Android emulator that must pass before a signed release build
-is produced. The unit tests run six times per push, once per timezone, because the dominant bug
+is produced. The unit tests run ten times per push, once per timezone, because the dominant bug
 class in the scheduling engine is only visible away from UTC. See [`CLAUDE.md`](CLAUDE.md) for
 exactly which checks run where, how to run them locally, and the current, honest testing status - and [`docs/TODO.md`](docs/TODO.md) for the known
 gaps in that coverage.

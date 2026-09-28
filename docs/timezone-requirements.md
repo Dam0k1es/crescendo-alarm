@@ -48,6 +48,17 @@ stay as they are. What changes is only what the app promises (`README.md`, `docs
   - Wall-clock alarm in the **skipped** hour (clocks go forward, e.g. 02:30 does not exist): rings
     **as soon as the time exists** - at the first valid instant after the gap (03:00 in
     Europe/Berlin). **No alarm is ever skipped** (maintainer decision).
+  - **As one function** (Markus's formalisation, adopted by the maintainer 2026-09-28): for a
+    wall-clock reading `w`, the alarm instant is
+    **R(w) = min{ t : L(s) ≥ w for every s ≥ t }**, where `L(t)` is the local clock reading at
+    instant `t` - "the first moment from which the clock never again shows a reading earlier than
+    `w`". For a unique reading that is its instant; for a repeated one the second pass; for a
+    skipped one the transition instant. It is monotone (a later reading never rings earlier), never
+    before any occurrence of `w`, and never skips (`L(R(w)) ≥ w`). The transition intervals are
+    half-open: in Europe/Berlin, 02:00 is inside both the spring gap and the autumn overlap, 03:00
+    is outside both. `localWallClockInstant` (`lib/utils/wall_clock.dart`) implements R, correct
+    by proof under one assumption: a zone changes its offset at most once within ±30 h of the
+    reading (tzdata 2026c: the smallest spacing anywhere is 167 h).
   - Note: platform defaults do **not** match these rules (`java.time`: repeated hour → earlier
     occurrence, gap → shifted by the gap length, i.e. 03:30). The app must resolve these cases
     explicitly rather than relying on a default.
@@ -63,7 +74,12 @@ stay as they are. What changes is only what the app promises (`README.md`, `docs
   rule, because the platform defaults differ from it.
 - **TZ-8 (DST part) · Sleep time and bedtime reminder follow the same rules.** The Do Not Disturb
   window and the bedtime reminder are derived from the same instants as the alarms and are not an
-  hour off either (maintainer: "genau").
+  hour off either (maintainer: "genau"). **The Sleep Goal counts real hours, not a clock
+  difference** (Markus's recommendation, maintainer: "ich empfehle das auch"): an 8-hour goal
+  before a 07:00 alarm starts sleep time 8 real hours earlier, so in Europe/Berlin it starts at
+  22:00 by the clock on a spring-forward night (9 hours of clock difference, 8 of sleep) and at
+  00:00 on a fall-back night (7 hours of clock difference, 8 of sleep). This is what `sleepTimeWindow` already does
+  (`target.subtract(sleepGoal)` on the instant).
 - **TZ-9 (DST part) · Verifiability.** Each rule is covered by tests that sweep all IANA zones and
   all 2026/2027 transitions against an independently computed expectation (the pattern of the
   T-201 review); time zone fixtures are `tz.TZDateTime`, never `DateTime.utc` (maintainer: "klingt
