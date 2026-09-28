@@ -641,6 +641,10 @@ that is the basis a decision can be formulated against.
 - **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
   state - the maintainer plans to run it with an idle period longer than the 24h minimum this tool
   was built for.
+- **Scheduled (maintainer, 2026-09-28):** start on **Friday 2026-10-02** (`arm`), read in on
+  **Sunday 2026-10-04** (`check`) - the phone left untouched over the weekend. `arm` sets the alarm
+  ~24 h out, so it is due Saturday; Sunday's `check` asks whether it rang after ~24 h of
+  untouched idle plus another day on top.
 - **Requirement:** R3
 
 ### T-165 · The `alarm` plugin's exported `AlarmReceiver` could silence a ringing alarm without the QR code — FIXED (2026-09-24), build-verified
