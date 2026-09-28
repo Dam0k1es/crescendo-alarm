@@ -1481,9 +1481,11 @@ rather than expanded into more scope here: see T-185.
   report was most likely an observation effect (on Android 15+ the quick-settings Do Not Disturb
   tile does not show the app's implicit mode, T-198), not a delivery delay. Also settled: on Android
   16 the global `zen_mode` setting DOES reflect the app's implicit mode, so it is a valid outside
-  measure. The non-gating CI "catch-up under idle" leg (whose marker detection never worked in
-  three runs) is no longer needed to answer this; remove it or keep it only if its marker problem
-  is fixed.
+  measure. The non-gating CI "catch-up under idle" leg (`integration_test/
+  sleep_time_dnd_catch_up_idle_test.dart` plus its `run_e2e_tests.sh` section) was **removed** on
+  the maintainer's instruction ("Genau mach beides"): the question it was built for is answered, its
+  marker detection never worked in three runs (`flutter test` and the `testWidgets` zone both hold
+  output back until a test ends), and it cost up to ~20 min of every master E2E job.
 
 ### T-198 · Sleep-time Do Not Disturb, re-implemented natively — IMPLEMENTED (2026-09-27), device confirmation pending
 
