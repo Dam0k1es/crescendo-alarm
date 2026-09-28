@@ -1349,6 +1349,25 @@ rather than expanded into more scope here: see T-185.
   can be started), or FR-16 is formally re-scoped to "checked at every checkpoint" - and the T-62
   leg is changed to assert the callback does NOT fire before the due time.
 
+### T-202 · `alarmPlatformTime` picks the FIRST occurrence of a repeated fall-back hour (P1, open)
+
+- [ ] Found by Günther's all-timezone review of T-201 (2026-09-28), pre-existing, outside T-201.
+  `alarmPlatformTime` (`lib/utils/utils.dart:199-202`) rebuilds a local `DateTime` from wall-clock
+  fields. For a local time that occurs twice (DST fall-back), that always resolves to the **first**
+  occurrence.
+- **Reproduced:** `sleepTimeWindow`'s start (`lib/utils/sleep_time_dnd.dart:120`) comes out one hour
+  early when it lies in the second pass - a 9 h instead of 8 h window once a year (Asia/Beirut,
+  America/Santiago, America/Nuuk, America/Scoresbysund, Africa/Cairo; e.g. Santiago 2026-04-04,
+  start 23:30 against an end 07:30 the next day). Under Europe/Berlin the instant 2026-10-25 01:30
+  UTC (the second 02:30, CET) came back as 02:30 CEST, 60 minutes earlier.
+- **Likely impact beyond DND (inferred, not device-verified):** a real alarm armed for an instant in
+  the second pass of a fall-back hour would ring an hour early - the availability failure class
+  (oversleeping's mirror image) this project weights highest. None of CI's six timezone legs hits it
+  with the current fixtures.
+- **Acceptance:** a regression test with a `tz.TZDateTime` fixture in the second pass of a
+  fall-back hour (per CLAUDE.md: not `DateTime.utc`), failing first; then a fix that preserves the
+  instant rather than the wall-clock fields.
+
 ### T-201 · A T-198 test depended on the local time of day it ran at — DONE (2026-09-28)
 
 - [x] `ci.yml`'s `Analyze & Test (TZ=Pacific/Chatham)` leg failed on four consecutive `dev` pushes
@@ -1366,6 +1385,13 @@ rather than expanded into more scope here: see T-185.
   `applyManualAlarmEnabled` and passed on to `refreshSleepTimeDnd`. Both FR-21 cases pin "now"
   (02:00); a new counter-test pins 06:00 and expects 07:30 today. Confirmed failing first (the
   parameter did not exist). `flutter analyze` clean; full suite 670/670.
+- **Independent review (Günther, 2026-09-28):** fix correct for all 598 IANA zones (one process per
+  zone) and all 96 quarter-hour local times of day; the product logic swept with an injected clock
+  over all of 2026 in 49 zones covering every 2026 UTC offset and DST pattern - 0 wrong window ends.
+  No other time-of-day-dependent test in the suite (full suite at 48 local times across midnight and
+  the week boundary). Non-blocking: `refreshDirectBootFallback()` at `lib/app_state.dart:1089` does
+  not receive `nowFn`; no test checks the `at` passed to `armAlarm`; `screen_alarms_weekday_pills_test
+  .dart:80` uses a now-past fixture date. Pre-existing DST defect found along the way: T-202.
 
 ### T-200 · Sleep-time DND catch-up takes ~10-15 minutes on the phone instead of ~2 — IN PROGRESS (2026-09-27)
 
