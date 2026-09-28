@@ -1349,6 +1349,23 @@ rather than expanded into more scope here: see T-185.
   can be started), or FR-16 is formally re-scoped to "checked at every checkpoint" - and the T-62
   leg is changed to assert the callback does NOT fire before the due time.
 
+### T-204 · Release v1.4.0 published — DONE (2026-09-28)
+
+- [x] Maintainer request: "bewege den stand auf master und baue einen neuen release mit bugfixes
+  draus" (move the state to master and build a new release with bug fixes from it). Minor bump per
+  semantic versioning (`1.4.0+5`): besides fixes (T-197, T-201) it re-implements the sleep-time Do
+  Not Disturb trigger (T-198) and replaces "Counts for Do Not Disturb" with "Exclude from Sleep
+  Time".
+- **Path:** dev CI green on 5f576e9 (run 36407574645) → `master` fast-forwarded → master gate green
+  (run 36408813857) → tag `v1.4.0` on 5f576e9 → `release.yml` green (run 36412676680).
+- **Release:** title "Crescendo Alarm v1.4.0", hand-written notes (T-200 catch-up delay and T-202
+  fall-back hour listed as known issues), exactly one asset `crescendo-alarm-v1.4.0.apk` - the
+  first release named by `release.yml` itself (4a4bd78), no hand upload. SHA-256
+  `01bb9fd7697abe448909bf37d054110c0bd807c3449e1e2b239f2a966cc5b005`; `apksigner verify` passes with
+  the same production certificate as v1.3.0, so it installs as an in-place update.
+- **Not in v1.4.0:** T-203 (a past start caught up even right after a ring) landed on `dev` after
+  the tag (023fe1a) - v1.4.0 still has T-198's A1 rule, as its notes describe.
+
 ### T-203 · A past sleep-time start is caught up even right after a ring (A1 rule removed) — DONE (2026-09-28)
 
 - [x] Maintainer decision, verbatim: "Ja, auch dann. Ich inkludiere ihn ja absichtlich. Ich kann ja
