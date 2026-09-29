@@ -7,6 +7,7 @@ import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // docs/TODO.md T-77 + T-80 + T-87: runSchedulingCheckpoint() is the one entry
 // point for every trigger (ring, app foreground, setting change). Previously
@@ -102,7 +103,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => _utc(7, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: slowFetch,
         notifications: _RecordingNotifications(),
       );
@@ -112,7 +113,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => _utc(7, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: slowFetch,
         notifications: _RecordingNotifications(),
       );
@@ -142,7 +143,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.alarmRing,
         now: () => _utc(7, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async {
           order.add('ring-fetch');
           await gate.future;
@@ -156,7 +157,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.settingsChanged,
         now: () => _utc(8, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async {
           order.add('settings-fetch');
           return const [];
@@ -183,7 +184,7 @@ void main() {
           appState,
           trigger: CheckpointTrigger.alarmRing,
           now: () => _utc(7, 0, day: 9),
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           fetchEvents: (start, end) async => throw StateError('calendar broken'),
           notifications: _RecordingNotifications(),
         ),
@@ -194,7 +195,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.alarmRing,
         now: () => _utc(7, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: _RecordingNotifications(),
       );
@@ -213,7 +214,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.alarmRing,
         now: () => _utc(7, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: notifications,
       );
@@ -233,7 +234,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => _utc(3, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: notifications,
       );
@@ -254,7 +255,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.alarmRing,
         now: () => _utc(7, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: notifications,
       );
@@ -275,7 +276,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => _utc(9, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: notifications,
       );
@@ -299,7 +300,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.alarmRing,
         now: () => _utc(0, 0, day: 10),
-        deviceUtcOffset: const Duration(hours: 9),
+        offsetAt: fixedOffset(const Duration(hours: 9)),
         fetchEvents: (start, end) async => const [],
         notifications: _RecordingNotifications(),
       );
@@ -317,7 +318,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.alarmRing,
         now: () => _utc(0, 0, day: 10),
-        deviceUtcOffset: const Duration(hours: 9),
+        offsetAt: fixedOffset(const Duration(hours: 9)),
         fetchEvents: (start, end) async => const [],
         notifications: _RecordingNotifications(),
       );
@@ -341,7 +342,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.alarmRing,
         now: () => _utc(0, 0, day: 9),
-        deviceUtcOffset: const Duration(hours: 1),
+        offsetAt: fixedOffset(const Duration(hours: 1)),
         fetchEvents: (start, end) async => const [],
         notifications: _RecordingNotifications(),
       );
@@ -351,7 +352,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.alarmRing,
         now: () => _utc(0, 0, day: 10),
-        deviceUtcOffset: const Duration(hours: 1),
+        offsetAt: fixedOffset(const Duration(hours: 1)),
         fetchEvents: (start, end) async => const [],
         notifications: _RecordingNotifications(),
       );
@@ -370,7 +371,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => _utc(0, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: _RecordingNotifications(),
       );
@@ -388,7 +389,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => _utc(0, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async =>
             throw StateError('fetchEvents must not be called'),
         notifications: _RecordingNotifications(),
@@ -407,7 +408,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => _utc(0, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: _RecordingNotifications(),
       );
@@ -418,7 +419,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => _utc(0, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async =>
             throw StateError('fetchEvents must not be called'),
         notifications: _RecordingNotifications(),
@@ -439,7 +440,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.settingsChanged,
         now: () => _utc(9, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: _RecordingNotifications(),
       );
@@ -459,7 +460,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.settingsChanged,
         now: () => _utc(9, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: short,
       );
@@ -470,7 +471,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.settingsChanged,
         now: () => _utc(9, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: long,
       );
@@ -490,7 +491,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => _utc(9, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async =>
             throw StateError('calendar plugin unavailable'),
         notifications: _RecordingNotifications(),
@@ -511,7 +512,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.settingsChanged,
         now: () => _utc(9, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => throw StateError('broken'),
         notifications: notifications,
       );
@@ -535,7 +536,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.alarmRing,
         now: () => _utc(7, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: _RecordingNotifications(),
       );
@@ -546,7 +547,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => _utc(9, 0, day: 11),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [
           Meeting(
             from: _utc(5, 0, day: 10),
@@ -575,7 +576,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => _utc(3, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const [],
         notifications: _RecordingNotifications(),
       );
@@ -592,7 +593,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.settingsChanged,
         now: () => _utc(9, 0, day: 9),
-        deviceUtcOffset: const Duration(hours: 2),
+        offsetAt: fixedOffset(const Duration(hours: 2)),
         fetchEvents: (start, end) async => const [],
         notifications: _RecordingNotifications(),
       );

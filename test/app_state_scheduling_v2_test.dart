@@ -319,4 +319,69 @@ void main() {
           reason: 'two separate switches - one does not flip the other');
     });
   });
+
+  // docs/TODO.md T-206 (requirements T33, T206-R11): the planned clock time
+  // per wall-clock-anchored day, paired with the value it resolved to.
+  group('pendingDayClockTimes (T-206, FR-3)', () {
+    // 29 Mar 2026 07:00 as a READING ("wall ms", not an instant) and the
+    // instant it resolved to in Europe/Berlin (07:00 CEST = 05:00 UTC).
+    final clockMs = DateTime.utc(2026, 3, 29, 7, 0).millisecondsSinceEpoch;
+    final valueMs = DateTime.utc(2026, 3, 29, 5, 0).millisecondsSinceEpoch;
+
+    test('stored exactly as {"<iso>": {"c": <wall ms>, "v": <instant ms>}}, '
+        'readable back and after a new AppState load', () async {
+      SharedPreferences.setMockInitialValues({});
+      final first = AppState();
+      await first.initialized;
+      expect(first.pendingDayClockTimes, isEmpty);
+
+      first.pendingDayClockTimes = {
+        '2026-03-29': (clockTime: clockMs, value: valueMs),
+      };
+      expect(first.pendingDayClockTimes,
+          {'2026-03-29': (clockTime: clockMs, value: valueMs)});
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('pendingDayClockTimes'),
+          '{"2026-03-29":{"c":$clockMs,"v":$valueMs}}');
+
+      final second = AppState();
+      await second.initialized;
+      expect(second.pendingDayClockTimes,
+          {'2026-03-29': (clockTime: clockMs, value: valueMs)});
+    });
+
+    test('reloadSchedulingStateFromPreferences picks up an external write '
+        '(checkpoint 2, T-69)', () async {
+      SharedPreferences.setMockInitialValues({});
+      final appState = AppState();
+      await appState.initialized;
+      final prefs = await SharedPreferences.getInstance();
+
+      await prefs.setString('pendingDayClockTimes',
+          jsonEncode({'2026-03-29': {'c': clockMs, 'v': valueMs}}));
+      await appState.reloadSchedulingStateFromPreferences();
+
+      expect(appState.pendingDayClockTimes,
+          {'2026-03-29': (clockTime: clockMs, value: valueMs)});
+    });
+
+    test('unreadable JSON loads as an empty map and does not throw', () async {
+      SharedPreferences.setMockInitialValues(
+          {'pendingDayClockTimes': '{"2026-03-29": {"c": "x"'});
+      final appState = AppState();
+      await appState.initialized;
+      expect(appState.pendingDayClockTimes, isEmpty);
+      await appState.reloadSchedulingStateFromPreferences();
+      expect(appState.pendingDayClockTimes, isEmpty);
+
+      // The loader must still work afterwards (the counter-test: it is not
+      // simply always empty).
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('pendingDayClockTimes',
+          jsonEncode({'2026-03-29': {'c': clockMs, 'v': valueMs}}));
+      await appState.reloadSchedulingStateFromPreferences();
+      expect(appState.pendingDayClockTimes.keys, ['2026-03-29']);
+    });
+  });
 }

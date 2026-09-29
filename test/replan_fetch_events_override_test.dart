@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // docs/TODO.md T-194: the E2E suite (integration_test/app_test.dart) injects
 // its calendar through `fetchEvents` on ONE checkpoint call - but the app
@@ -50,7 +51,7 @@ void main() {
     await replan(
       appState,
       now: () => _utc(0, 0, day: 10),
-      deviceUtcOffset: Duration.zero,
+      offsetAt: fixedOffset(Duration.zero),
     );
 
     expect(appState.pendingDayValues['2026-03-16'],
@@ -72,7 +73,7 @@ void main() {
     await replan(
       appState,
       now: () => _utc(0, 0, day: 10),
-      deviceUtcOffset: Duration.zero,
+      offsetAt: fixedOffset(Duration.zero),
       fetchEvents: (start, end) async => [_meetingAt(explicitDay)],
     );
 

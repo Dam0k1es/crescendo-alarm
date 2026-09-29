@@ -48,6 +48,8 @@ import 'package:crescendo_alarm/models/scheduling/replan_notifications.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
 import 'package:crescendo_alarm/utils/sleep_reminder.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart'
+    show ZoneOffsetAt, deviceOffsetAt;
 
 /// What triggered the checkpoint. The only difference between the flows -
 /// see the table in [runSchedulingCheckpoint].
@@ -137,7 +139,11 @@ Future<ReplanResult?> runSchedulingCheckpoint(
   required CheckpointTrigger trigger,
   FetchEvents? fetchEvents,
   DateTime Function()? now,
-  Duration? deviceUtcOffset,
+  // docs/TODO.md T-206 (T206-R12): the device zone's rules, passed on to
+  // [replan]; checkpoint 1 records them evaluated at its own instant - the
+  // same quantity FR-16's checkpoint 2 compares against. Null in production:
+  // [deviceOffsetAt].
+  ZoneOffsetAt? offsetAt,
   Notifications? notifications,
 }) {
   // Measured before serialization, so the wait behind a running checkpoint
@@ -148,7 +154,7 @@ Future<ReplanResult?> runSchedulingCheckpoint(
   return _serialized(() async {
     final nowFn = now ?? DateTime.now;
     final currentTime = nowFn();
-    final offset = deviceUtcOffset ?? currentTime.timeZoneOffset;
+    final offset = (offsetAt ?? deviceOffsetAt)(currentTime);
 
     Diag.checkpointStarted(
       trigger: diagTriggerOf(trigger),
@@ -206,7 +212,7 @@ Future<ReplanResult?> runSchedulingCheckpoint(
         appState,
         fetchEvents: fetchEvents,
         now: now,
-        deviceUtcOffset: deviceUtcOffset,
+        offsetAt: offsetAt,
         // FR-11: only the value that has actually been triggered is fixed
         // (docs/TODO.md T-71). For recovery and settings changes, today has
         // not rung yet, so it stays revisable and uncounted.
@@ -266,7 +272,7 @@ Future<ReplanResult?> runCheckpointSafely(
   required CheckpointTrigger trigger,
   FetchEvents? fetchEvents,
   DateTime Function()? now,
-  Duration? deviceUtcOffset,
+  ZoneOffsetAt? offsetAt,
   Notifications? notifications,
 }) async {
   try {
@@ -275,7 +281,7 @@ Future<ReplanResult?> runCheckpointSafely(
       trigger: trigger,
       fetchEvents: fetchEvents,
       now: now,
-      deviceUtcOffset: deviceUtcOffset,
+      offsetAt: offsetAt,
       notifications: notifications,
     );
   } catch (e) {

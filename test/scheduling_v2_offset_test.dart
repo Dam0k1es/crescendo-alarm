@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:crescendo_alarm/models/scheduling/scheduling_v2.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // docs/TODO.md T-61, levels 1/2/3 of the planned test structure.
 //
@@ -36,7 +37,7 @@ void main() {
         v: _utc(5, 0, day: 1),
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: berlin,
+        offsetAt: fixedOffset(berlin),
       );
 
       expect(result, _utc(5, 0, day: 2));
@@ -49,7 +50,7 @@ void main() {
         v: _utc(5, 0, day: 1),
         preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: berlin,
+        offsetAt: fixedOffset(berlin),
       );
 
       expect(result, _utc(5, 30, day: 2));
@@ -63,7 +64,7 @@ void main() {
         v: _utc(23, 0, day: 1),
         preferredWakeUpTime: const TimeOfDay(hour: 1, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: berlin,
+        offsetAt: fixedOffset(berlin),
       );
 
       // Locally day 3, 01:00 -> instant 23:00 UTC on day 2.
@@ -75,7 +76,7 @@ void main() {
         v: _utc(7, 0, day: 1),
         preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
 
       expect(result, _utc(7, 30, day: 2));
@@ -92,7 +93,7 @@ void main() {
       final result = coldStart(
         days: days,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
-        deviceUtcOffset: berlin,
+        offsetAt: fixedOffset(berlin),
       );
 
       expect(result[days[0]], _utc(5, 0, day: 1));
@@ -106,7 +107,7 @@ void main() {
       final result = coldStart(
         days: days,
         preferredWakeUpTime: const TimeOfDay(hour: 1, minute: 0),
-        deviceUtcOffset: berlin,
+        offsetAt: fixedOffset(berlin),
       );
 
       expect(result[days[0]], _utc(23, 0, day: 1));
@@ -118,7 +119,7 @@ void main() {
       final result = coldStart(
         days: days,
         preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
 
       expect(result[days[0]], _utc(9, 0, day: 1));
@@ -143,14 +144,14 @@ void main() {
       final berlinValue = hardFloor(
         day: _utc(0, 0, day: 11), // local calendar day in Berlin
         allEvents: [event],
-        deviceUtcOffset: berlin,
+        offsetAt: fixedOffset(berlin),
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
       );
       final utcValue = hardFloor(
         day: _utc(0, 0, day: 10), // same appointment, but a UTC calendar day
         allEvents: [event],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
       );
@@ -168,7 +169,7 @@ void main() {
         hardFloor(
           day: _utc(0, 0, day: 10),
           allEvents: [event],
-          deviceUtcOffset: berlin,
+          offsetAt: fixedOffset(berlin),
           durationToWakeUp: Duration.zero,
           durationToGetReady: Duration.zero,
         ),
@@ -198,7 +199,7 @@ void main() {
             // The appointment is shifted so its LOCAL reading is identical in
             // both runs (05:00 local on day 6).
             allEvents: [meetingAt(_utc(5, 0, day: 6).subtract(eventShift))],
-            deviceUtcOffset: offset,
+            offsetAt: fixedOffset(offset),
             durationToWakeUp: Duration.zero,
             durationToGetReadyForDay: (_) => Duration.zero,
             preferredWakeUpTime: const TimeOfDay(hour: 10, minute: 0),
@@ -225,8 +226,9 @@ void main() {
     });
   });
 
-  group('distribute/groupTarget are frame-invariant (T-61, locked in)', () {
-    test('distribute yields the same instant under any offset', () {
+  group('distribute is frame-invariant under a constant offset (T-61, locked '
+      'in)', () {
+    test('distribute yields the same instant under any constant offset', () {
       final anchor = _utc(5, 0, day: 1);
       final target = _utc(3, 0, day: 3);
 
@@ -235,17 +237,22 @@ void main() {
         target: target,
         n: 2,
         maxDailyDelta: const Duration(hours: 2),
+        offsetAt: fixedOffset(Duration.zero),
       );
       final shifted = distribute(
         anchor: anchor,
         target: target,
         n: 2,
         maxDailyDelta: const Duration(hours: 2),
+        offsetAt: fixedOffset(const Duration(hours: 2)),
       );
 
-      // Deliberately the same signature: distribute gets NO offset, because
-      // it cannot change the result (the difference of two instants in the
-      // same frame, and the day_i placement is offset-neutral).
+      // docs/TODO.md T-206: distribute (and groupTarget) now take the zone's
+      // RULES - they plan on local readings and resolve each day with its own
+      // day's rules, which matters across a daylight-saving change. Under a
+      // CONSTANT offset the result still cannot depend on which one: ΔT of two
+      // readings under the same offset is ΔT of the instants, and the day_i
+      // placement is offset-neutral.
       expect(shifted.valuesByDayOffset[1], zero.valuesByDayOffset[1]);
       expect(shifted.valuesByDayOffset[2], zero.valuesByDayOffset[2]);
       expect(zero.valuesByDayOffset[2], _utc(3, 0, day: 3));

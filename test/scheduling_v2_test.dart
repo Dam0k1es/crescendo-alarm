@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:crescendo_alarm/models/scheduling/scheduling_v2.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
+
+import 'support/zone_rules.dart';
 
 // Phase 1 (docs/scheduling-v2-spec.md, "Implementation order"): the pure
 // segment/distribution core - distribute (FR-6), applyGapDayDrift (FR-4),
@@ -30,23 +35,27 @@ Meeting _meetingAt(DateTime from, {bool isAllDay = false}) {
 
 void main() {
   group('distribute (FR-6)', () {
+    // docs/TODO.md T-206: `_t` builds LOCAL fixtures, so the rules are the
+    // process zone's, and the UTC-tagged result instants are compared in the
+    // fixtures' frame (`.toLocal()`) - a frame-only change, same instants.
     test('normal case, direction "earlier"', () {
       final result = distribute(
         anchor: _t(8, 0),
         target: _t(4, 30),
         n: 5,
         maxDailyDelta: const Duration(minutes: 60),
+        offsetAt: deviceOffsetAt,
       );
 
       expect(result.overrunNotificationNeeded, isFalse);
       // Tag_i lands on anchor.day + i (a genuine calendar-date advance per
       // day) - only the wall-clock reading is interpolated; ΔT itself is
       // wall-clock-only (FR-6/FR-1, see distribute()'s doc comment).
-      expect(result.valuesByDayOffset[1], _t(7, 18, day: 2));
-      expect(result.valuesByDayOffset[2], _t(6, 36, day: 3));
-      expect(result.valuesByDayOffset[3], _t(5, 54, day: 4));
-      expect(result.valuesByDayOffset[4], _t(5, 12, day: 5));
-      expect(result.valuesByDayOffset[5], _t(4, 30, day: 6));
+      expect(result.valuesByDayOffset[1]!.toLocal(), _t(7, 18, day: 2));
+      expect(result.valuesByDayOffset[2]!.toLocal(), _t(6, 36, day: 3));
+      expect(result.valuesByDayOffset[3]!.toLocal(), _t(5, 54, day: 4));
+      expect(result.valuesByDayOffset[4]!.toLocal(), _t(5, 12, day: 5));
+      expect(result.valuesByDayOffset[5]!.toLocal(), _t(4, 30, day: 6));
     });
 
     test('normal case, direction "later"', () {
@@ -55,12 +64,13 @@ void main() {
         target: _t(9, 0),
         n: 3,
         maxDailyDelta: const Duration(minutes: 90),
+        offsetAt: deviceOffsetAt,
       );
 
       expect(result.overrunNotificationNeeded, isFalse);
-      expect(result.valuesByDayOffset[1], _t(7, 0, day: 2));
-      expect(result.valuesByDayOffset[2], _t(8, 0, day: 3));
-      expect(result.valuesByDayOffset[3], _t(9, 0, day: 4));
+      expect(result.valuesByDayOffset[1]!.toLocal(), _t(7, 0, day: 2));
+      expect(result.valuesByDayOffset[2]!.toLocal(), _t(8, 0, day: 3));
+      expect(result.valuesByDayOffset[3]!.toLocal(), _t(9, 0, day: 4));
     });
 
     test('forced overrun, N>1 - distributed over all days, not dumped', () {
@@ -69,12 +79,13 @@ void main() {
         target: _t(4, 30),
         n: 3,
         maxDailyDelta: const Duration(minutes: 60),
+        offsetAt: deviceOffsetAt,
       );
 
       expect(result.overrunNotificationNeeded, isTrue);
-      expect(result.valuesByDayOffset[1], _t(6, 50, day: 2));
-      expect(result.valuesByDayOffset[2], _t(5, 40, day: 3));
-      expect(result.valuesByDayOffset[3], _t(4, 30, day: 4));
+      expect(result.valuesByDayOffset[1]!.toLocal(), _t(6, 50, day: 2));
+      expect(result.valuesByDayOffset[2]!.toLocal(), _t(5, 40, day: 3));
+      expect(result.valuesByDayOffset[3]!.toLocal(), _t(4, 30, day: 4));
     });
 
     test('forced overrun, N=1 - a full jump is not a spec defect', () {
@@ -83,10 +94,11 @@ void main() {
         target: _t(2, 0),
         n: 1,
         maxDailyDelta: const Duration(minutes: 60),
+        offsetAt: deviceOffsetAt,
       );
 
       expect(result.overrunNotificationNeeded, isTrue);
-      expect(result.valuesByDayOffset[1], _t(2, 0, day: 2));
+      expect(result.valuesByDayOffset[1]!.toLocal(), _t(2, 0, day: 2));
     });
   });
 
@@ -102,7 +114,7 @@ void main() {
         v: _utc(7, 0),
         preferredWakeUpTime: null,
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
       expect(result, _utc(7, 0, day: 2));
     });
@@ -112,7 +124,7 @@ void main() {
         v: _utc(7, 0),
         preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
       expect(result, _utc(7, 30, day: 2));
     });
@@ -122,7 +134,7 @@ void main() {
         v: _utc(7, 0),
         preferredWakeUpTime: const TimeOfDay(hour: 5, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
       expect(result, _utc(6, 30, day: 2));
     });
@@ -132,7 +144,7 @@ void main() {
         v: _utc(7, 0),
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 15),
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
       expect(result, _utc(7, 15, day: 2));
     });
@@ -144,7 +156,7 @@ void main() {
         v: _utc(7, 0),
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
       expect(result, _utc(7, 0, day: 2));
     });
@@ -160,7 +172,7 @@ void main() {
       final result = hardFloor(
         day: _utc(0, 0),
         allEvents: events,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: const Duration(minutes: 15),
         durationToGetReady: const Duration(minutes: 15),
       );
@@ -177,7 +189,7 @@ void main() {
       final result = hardFloor(
         day: _utc(0, 0),
         allEvents: events,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: const Duration(minutes: 15),
         durationToGetReady: const Duration(minutes: 15),
       );
@@ -191,7 +203,7 @@ void main() {
       final result = hardFloor(
         day: _utc(0, 0),
         allEvents: events,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: const Duration(minutes: 15),
         durationToGetReady: const Duration(minutes: 15),
       );
@@ -214,14 +226,14 @@ void main() {
       final onDayBefore = eventsForDay(
         _utc(0, 0, day: 1),
         allEvents: [tokyoMeeting],
-        deviceUtcOffset: berlinOffset,
+        offsetAt: fixedOffset(berlinOffset),
       );
       expect(onDayBefore, [tokyoMeeting]);
 
       final onTokyoDate = eventsForDay(
         _utc(0, 0, day: 2),
         allEvents: [tokyoMeeting],
-        deviceUtcOffset: berlinOffset,
+        offsetAt: fixedOffset(berlinOffset),
       );
       expect(onTokyoDate, isEmpty);
     });
@@ -244,6 +256,7 @@ void main() {
         anchor: _t(8, 0, day: 1),
         points: [t1, t2],
         maxDailyDelta: maxDailyDelta,
+        offsetAt: deviceOffsetAt,
       );
 
       expect(result, t2);
@@ -259,6 +272,7 @@ void main() {
         anchor: _t(9, 0, day: 1),
         points: [t1, t2],
         maxDailyDelta: maxDailyDelta,
+        offsetAt: deviceOffsetAt,
       );
 
       expect(result, t1);
@@ -272,6 +286,7 @@ void main() {
         anchor: _t(7, 0, day: 1),
         points: [t1, t2],
         maxDailyDelta: maxDailyDelta,
+        offsetAt: deviceOffsetAt,
       );
 
       expect(result, t1);
@@ -300,7 +315,7 @@ void main() {
         remainingPoints: [HardFloorPoint(dayOffset: 6, value: f)],
         preferredWakeUpTime: preferredWakeUpTime,
         maxDailyDelta: maxDailyDelta,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
       // v is the anchor "yesterday" (Sunday); planGapOrRunStartDay always
       // computes the value for the real following day (see
@@ -315,7 +330,7 @@ void main() {
         remainingPoints: [HardFloorPoint(dayOffset: 5, value: f)],
         preferredWakeUpTime: preferredWakeUpTime,
         maxDailyDelta: maxDailyDelta,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
       expect(tuesday.value, _utc(7, 0, day: 3));
       expect(tuesday.overrunNotificationNeeded, isFalse);
@@ -341,7 +356,7 @@ void main() {
         ],
         preferredWakeUpTime: null,
         maxDailyDelta: maxDailyDelta,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
 
       expect(monday.value, _utc(6, 30, day: 2));
@@ -392,7 +407,7 @@ void main() {
       final result = coldStart(
           days: days,
           preferredWakeUpTime: null,
-          deviceUtcOffset: Duration.zero);
+          offsetAt: fixedOffset(Duration.zero));
 
       expect(result.length, 5);
       expect(result.values.every((v) => v == null), isTrue);
@@ -404,7 +419,7 @@ void main() {
       final result = coldStart(
         days: days,
         preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
 
       expect(result[days[0]], _utc(9, 0, day: 1));
@@ -425,7 +440,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: null,
         allEvents: events,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -455,7 +470,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: null,
         allEvents: events,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         // Day 1 gets a 30-minute lead time, day 2 a full hour - so the same
         // 08:00 appointment produces two different hardFloors.
@@ -480,7 +495,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: null,
         allEvents: const [],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
@@ -506,7 +521,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 0),
         allEvents: events,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 8, minute: 0),
@@ -523,7 +538,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 0),
         allEvents: events,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 8, minute: 0),
@@ -548,7 +563,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 0), // Sun, anchor
         allEvents: events,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 10, minute: 0),
@@ -588,7 +603,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(9, 0, day: 0), // Sun, anchor
         allEvents: events,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -636,7 +651,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 0),
         allEvents: const [],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -663,7 +678,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 0),
         allEvents: const [],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
@@ -702,6 +717,12 @@ void main() {
       expect(result, _utc(0, 0));
     });
 
+    // docs/TODO.md T-206: this is the arithmetic of the WITHDRAWN FR-16
+    // "daylight saving" bullet (shift by the offset difference). The spec
+    // now says a DST change re-resolves planned clock times and changes
+    // nothing; this case stays as the test of the legacy function, which
+    // Checkpoint 2 still uses for a plan stored without planned clock times
+    // (FR-16 step 2, the upgrade window).
     test('daylight saving: 07:00 under CET (+1) stays 07:00 under CEST (+2)',
         () {
       // 07:00 local under +1 = 06:00 UTC.
@@ -713,6 +734,423 @@ void main() {
 
       // 07:00 local under +2 = 05:00 UTC.
       expect(result, _utc(5, 0));
+    });
+  });
+
+  // docs/TODO.md T-206: the daylight-saving "Test:" bullets added to the spec
+  // on 2026-09-28, verbatim (same zones, dates and numbers).
+  _t206SpecBullets();
+}
+
+// ---------------------------------------------------------------------------
+// docs/TODO.md T-206 - daylight saving within one zone. Every case below is
+// one of the spec's new "Test:" bullets (FR-1, FR-2, FR-4, FR-6, FR-10),
+// taken verbatim; the expected instants were computed independently with
+// Python `zoneinfo` (T-206 requirements, section 8). The device zone's RULES
+// are injected (`zoneRules`), never the process zone, so every CI leg checks
+// the same digits. Derived cases live in test/t206_dst_planning_test.dart.
+// ---------------------------------------------------------------------------
+
+late ZoneOffsetAt _berlinRules;
+late ZoneOffsetAt _nuukRules;
+late ZoneOffsetAt _santiagoRules;
+late tz.Location _berlin;
+late tz.Location _nuuk;
+
+List<DateTime> _window(tz.Location loc, int year, int month, int day) =>
+    List.generate(7, (i) => tz.TZDateTime(loc, year, month, day + i));
+
+Meeting _event(DateTime instant, tz.Location loc) => Meeting(
+      from: tz.TZDateTime.from(instant, loc),
+      to: tz.TZDateTime.from(instant.add(const Duration(hours: 1)), loc),
+      isAllDay: false,
+      startTimeZone: loc.name,
+      endTimeZone: loc.name,
+    );
+
+WeekPlanResult _plan({
+  required List<DateTime> window,
+  required DateTime? anchor,
+  required ZoneOffsetAt rules,
+  DateTime? anchorClockTime,
+  List<Meeting> events = const [],
+  Duration wakeUp = Duration.zero,
+  TimeOfDay? preferred,
+  int maxDeltaMinutes = 30,
+}) =>
+    computeWeekPlan(
+      window: window,
+      lastEffectiveWakeTime: anchor,
+      lastEffectiveClockTime: anchorClockTime,
+      allEvents: events,
+      offsetAt: rules,
+      durationToWakeUp: wakeUp,
+      durationToGetReadyForDay: (_) => Duration.zero,
+      preferredWakeUpTime: preferred,
+      maxDailyDelta: Duration(minutes: maxDeltaMinutes),
+      gapDayCounter: 0,
+      scheduleOnGapDays: true,
+    );
+
+/// Asserts every window day's value exactly (microseconds), naming the day.
+void _expectValues(WeekPlanResult result, List<DateTime> window,
+    List<DateTime> expected) {
+  for (var i = 0; i < window.length; i++) {
+    expect(result.valuesByDay[window[i]], expected[i],
+        reason: 'window day ${window[i]}: expected ${expected[i]}, '
+            'got ${result.valuesByDay[window[i]]}');
+  }
+}
+
+void _t206SpecBullets() {
+  setUpAll(() {
+    tzdata.initializeTimeZones();
+    _berlin = tz.getLocation('Europe/Berlin');
+    _nuuk = tz.getLocation('America/Nuuk');
+    _berlinRules = zoneRules(_berlin);
+    _nuukRules = zoneRules(_nuuk);
+    _santiagoRules = zoneRules(tz.getLocation('America/Santiago'));
+  });
+
+  group('FR-1 (T-206: instants for bounds, readings for shifts)', () {
+    // Observable form (requirements b.5): the anchor, the hardFloor on its
+    // day, maxDailyDelta 15, no preferredWakeUpTime. ΔT = 0 means no run
+    // starts (FR-5 step 2's ΔT = 0 point): 07:00 by the clock every day and
+    // the hardFloor day exactly its instant, no notification.
+    test(
+        'Test (DST, spring, T-206): Europe/Berlin, anchor Sat 28 Mar 2026 '
+        '07:00 CET (06:00 UTC), hardFloor Mon 30 Mar 2026 07:00 CEST (05:00 '
+        'UTC) -> ΔT = 0 (same reading), although the instants are 47h apart, '
+        'not 48h', () {
+      final anchor = DateTime.utc(2026, 3, 28, 6, 0);
+      final hardFloorInstant = DateTime.utc(2026, 3, 30, 5, 0);
+      expect(hardFloorInstant.difference(anchor), const Duration(hours: 47));
+      final window = _window(_berlin, 2026, 3, 29);
+      final result = _plan(
+        window: window,
+        anchor: anchor,
+        rules: _berlinRules,
+        events: [_event(hardFloorInstant, _berlin)],
+        maxDeltaMinutes: 15,
+      );
+      _expectValues(result, window, [
+        for (var d = 29; d <= 35; d++) DateTime.utc(2026, 3, d, 5, 0),
+      ]);
+      expect(result.valuesByDay[window[1]], hardFloorInstant);
+      expect(result.overrunNotificationNeeded, isFalse);
+    });
+
+    test(
+        'Test (DST, autumn, T-206): anchor Sat 24 Oct 2026 07:00 CEST (05:00 '
+        'UTC), hardFloor Mon 26 Oct 2026 07:00 CET (06:00 UTC) -> ΔT = 0, '
+        'although the instants are 49h apart', () {
+      final anchor = DateTime.utc(2026, 10, 24, 5, 0);
+      final hardFloorInstant = DateTime.utc(2026, 10, 26, 6, 0);
+      expect(hardFloorInstant.difference(anchor), const Duration(hours: 49));
+      final window = _window(_berlin, 2026, 10, 25);
+      final result = _plan(
+        window: window,
+        anchor: anchor,
+        rules: _berlinRules,
+        events: [_event(hardFloorInstant, _berlin)],
+        maxDeltaMinutes: 15,
+      );
+      _expectValues(result, window, [
+        for (var d = 25; d <= 31; d++) DateTime.utc(2026, 10, d, 6, 0),
+      ]);
+      expect(result.valuesByDay[window[1]], hardFloorInstant);
+      expect(result.overrunNotificationNeeded, isFalse);
+    });
+
+    test(
+        'Test (order, T-206): Europe/Berlin, Sun 25 Oct 2026, a planned '
+        'reading of 02:30 (it occurs at 00:30 UTC and at 01:30 UTC) and a '
+        'hardFloor of 00:45 UTC (the first 02:45) -> the value is 00:45 UTC: '
+        'R_plan first (01:30 UTC, the later occurrence), then the cap on '
+        'instants', () {
+      final window = _window(_berlin, 2026, 10, 25);
+      final result = _plan(
+        window: window,
+        // Sat 24 Oct 02:30 CEST.
+        anchor: DateTime.utc(2026, 10, 24, 0, 30),
+        rules: _berlinRules,
+        preferred: const TimeOfDay(hour: 2, minute: 30),
+        events: [_event(DateTime.utc(2026, 10, 25, 0, 45), _berlin)],
+      );
+      expect(result.valuesByDay[window[0]], DateTime.utc(2026, 10, 25, 0, 45),
+          reason: 'capping on readings (02:30 is before 02:45, keep it) '
+              'would give 01:30 UTC and miss the appointment by 45 minutes');
+      expect(result.instantAnchoredDays, contains(window[0]));
+      expect(result.plannedClockTimes.containsKey(window[0]), isFalse);
+    });
+
+    test(
+        'Test (TZ-2a, America/Nuuk): a planned reading of Sat 28 Mar 2026 '
+        '23:30 (inside the gap 23:00 -> 00:00) -> 29 Mar 00:59 UTC, which '
+        'reads 22:59 on 28 Mar, not 00:00 on 29 Mar; the day\'s planned clock '
+        'time stays 23:30', () {
+      final value = resolvePlannedClockTime(wall(2026, 3, 28, 23, 30), _nuukRules);
+      expect(value, DateTime.utc(2026, 3, 29, 0, 59));
+      expect(value.isUtc, isTrue);
+      expect(readingOf(value, _nuukRules), wall(2026, 3, 28, 22, 59));
+
+      // The planned clock time stays 23:30 (plan form: T-206 test T52).
+      final window = _window(_nuuk, 2026, 3, 28);
+      final result = _plan(
+        window: window,
+        anchor: DateTime.utc(2026, 3, 28, 1, 30), // Fri 27 Mar 23:30 (-2)
+        rules: _nuukRules,
+      );
+      expect(result.valuesByDay[window[0]], DateTime.utc(2026, 3, 29, 0, 59));
+      expect(result.plannedClockTimes[window[0]], wall(2026, 3, 28, 23, 30));
+    });
+
+    test(
+        'Test (TZ-2a) counter-tests, plain R: Europe/Berlin 29 Mar 2026 02:30 '
+        '-> 01:00 UTC (03:00 CEST, same date); America/Santiago 6 Sep 2026 '
+        '00:30 -> 04:00 UTC (01:00, same date); America/Nuuk 24 Oct 2026 '
+        '23:30, a repeated reading -> 25 Oct 01:30 UTC (the later occurrence, '
+        'still 24 Oct 23:30 by the clock)', () {
+      final berlin = resolvePlannedClockTime(wall(2026, 3, 29, 2, 30), _berlinRules);
+      expect(berlin, DateTime.utc(2026, 3, 29, 1, 0));
+      expect(readingOf(berlin, _berlinRules), wall(2026, 3, 29, 3, 0));
+
+      final santiago =
+          resolvePlannedClockTime(wall(2026, 9, 6, 0, 30), _santiagoRules);
+      expect(santiago, DateTime.utc(2026, 9, 6, 4, 0));
+      expect(readingOf(santiago, _santiagoRules), wall(2026, 9, 6, 1, 0));
+
+      final nuuk = resolvePlannedClockTime(wall(2026, 10, 24, 23, 30), _nuukRules);
+      expect(nuuk, DateTime.utc(2026, 10, 25, 1, 30));
+      expect(readingOf(nuuk, _nuukRules), wall(2026, 10, 24, 23, 30));
+    });
+  });
+
+  group('FR-2 (T-206: day assignment by the rules at the appointment)', () {
+    test(
+        'Test (DST inside the window, T-206): device on Europe/Berlin, '
+        'planning on Sat 28 Mar 2026 (CET, +1), an appointment Mon 30 Mar 2026 '
+        '00:30 CEST (29 Mar 22:30 UTC), no lead times -> it belongs to Monday '
+        '30 Mar, and hardFloor(Mon) = 29 Mar 22:30 UTC; not Sunday 29 Mar', () {
+      final event = _event(DateTime.utc(2026, 3, 29, 22, 30), _berlin);
+      final sunday = tz.TZDateTime(_berlin, 2026, 3, 29);
+      final monday = tz.TZDateTime(_berlin, 2026, 3, 30);
+
+      expect(eventsForDay(monday, allEvents: [event], offsetAt: _berlinRules),
+          [event]);
+      expect(eventsForDay(sunday, allEvents: [event], offsetAt: _berlinRules),
+          isEmpty,
+          reason: 'under the planning day\'s +1 it would read Sunday 23:30');
+      DateTime? hf(DateTime day) => hardFloor(
+            day: day,
+            allEvents: [event],
+            offsetAt: _berlinRules,
+            durationToWakeUp: Duration.zero,
+            durationToGetReady: Duration.zero,
+          );
+      expect(hf(monday), DateTime.utc(2026, 3, 29, 22, 30));
+      expect(hf(sunday), isNull);
+
+      // The autumn mirror (requirements T10): Mon 26 Oct 23:30 CET (22:30
+      // UTC) belongs to 26 Oct - under +2 it would read 27 Oct 00:30.
+      final autumn = _event(DateTime.utc(2026, 10, 26, 22, 30), _berlin);
+      expect(
+          eventsForDay(tz.TZDateTime(_berlin, 2026, 10, 26),
+              allEvents: [autumn], offsetAt: _berlinRules),
+          [autumn]);
+      expect(
+          eventsForDay(tz.TZDateTime(_berlin, 2026, 10, 27),
+              allEvents: [autumn], offsetAt: _berlinRules),
+          isEmpty);
+    });
+  });
+
+  group('FR-4 (T-206: daylight saving, no hardFloor in the window)', () {
+    test(
+        'Test (DST, spring): V = Sat 28 Mar 2026 07:00 CET, '
+        'preferredWakeUpTime=null -> Sun 29 Mar 07:00 CEST (05:00 UTC), and '
+        '07:00 on every day after; not 08:00', () {
+      final window = _window(_berlin, 2026, 3, 29);
+      for (final (preferred, md) in [
+        (null, 30),
+        (const TimeOfDay(hour: 7, minute: 0), 15),
+      ]) {
+        final result = _plan(
+          window: window,
+          anchor: DateTime.utc(2026, 3, 28, 6, 0),
+          rules: _berlinRules,
+          preferred: preferred,
+          maxDeltaMinutes: md,
+        );
+        _expectValues(result, window, [
+          for (var d = 29; d <= 35; d++) DateTime.utc(2026, 3, d, 5, 0),
+        ]);
+        for (final day in window) {
+          expect(result.plannedClockTimes[day],
+              wall(day.year, day.month, day.day, 7, 0),
+              reason: 'planned clock time of $day (P $preferred, md $md)');
+        }
+        expect(result.overrunNotificationNeeded, isFalse);
+      }
+    });
+
+    test(
+        'Test (DST, autumn): V = Sat 24 Oct 2026 07:00 CEST, '
+        'preferredWakeUpTime=null -> Sun 25 Oct 07:00 CET (06:00 UTC), and '
+        '07:00 on every day after; not 06:00', () {
+      final window = _window(_berlin, 2026, 10, 25);
+      final result = _plan(
+        window: window,
+        anchor: DateTime.utc(2026, 10, 24, 5, 0),
+        rules: _berlinRules,
+      );
+      _expectValues(result, window, [
+        for (var d = 25; d <= 31; d++) DateTime.utc(2026, 10, d, 6, 0),
+      ]);
+      expect(result.overrunNotificationNeeded, isFalse);
+    });
+
+    test(
+        'Test (DST, held reading in the skipped hour): V = Sat 28 Mar 2026 '
+        '02:30 CET (planned clock time 02:30), preferredWakeUpTime=null -> Sun '
+        '29 Mar 03:00 CEST (01:00 UTC, TZ-1), Mon 30 Mar 02:30 CEST (00:30 '
+        'UTC), and 02:30 on every day after; not 03:00 from Sunday on', () {
+      final window = _window(_berlin, 2026, 3, 29);
+      final result = _plan(
+        window: window,
+        anchor: DateTime.utc(2026, 3, 28, 1, 30),
+        anchorClockTime: wall(2026, 3, 28, 2, 30),
+        rules: _berlinRules,
+      );
+      _expectValues(result, window, [
+        DateTime.utc(2026, 3, 29, 1, 0),
+        for (var d = 30; d <= 35; d++) DateTime.utc(2026, 3, d, 0, 30),
+      ]);
+      for (final day in window) {
+        expect(result.plannedClockTimes[day],
+            wall(day.year, day.month, day.day, 2, 30));
+      }
+    });
+
+    test(
+        'Test (DST, preferredWakeUpTime in the repeated hour): '
+        'preferredWakeUpTime=02:30, V = Sat 24 Oct 2026 02:30 CEST -> Sun 25 '
+        'Oct 02:30 CET (01:30 UTC, the later occurrence)', () {
+      final window = _window(_berlin, 2026, 10, 25);
+      final result = _plan(
+        window: window,
+        anchor: DateTime.utc(2026, 10, 24, 0, 30),
+        rules: _berlinRules,
+        preferred: const TimeOfDay(hour: 2, minute: 30),
+      );
+      expect(result.valuesByDay[window[0]], DateTime.utc(2026, 10, 25, 1, 30));
+      expect(result.valuesByDay[window[1]], DateTime.utc(2026, 10, 26, 1, 30));
+    });
+
+    test(
+        'Test (DST, a real drift stays limited): V = Sat 28 Mar 2026 07:00 '
+        'CET, preferredWakeUpTime=09:00, maxDailyDelta=30min -> Sun 07:30 '
+        'CEST, Mon 08:00, Tue 08:30, Wed 09:00; not 08:30 on Sunday', () {
+      final window = _window(_berlin, 2026, 3, 29);
+      final result = _plan(
+        window: window,
+        anchor: DateTime.utc(2026, 3, 28, 6, 0),
+        rules: _berlinRules,
+        preferred: const TimeOfDay(hour: 9, minute: 0),
+        maxDeltaMinutes: 30,
+      );
+      _expectValues(result, window, [
+        DateTime.utc(2026, 3, 29, 5, 30),
+        DateTime.utc(2026, 3, 30, 6, 0),
+        DateTime.utc(2026, 3, 31, 6, 30),
+        DateTime.utc(2026, 4, 1, 7, 0),
+        DateTime.utc(2026, 4, 2, 7, 0),
+        DateTime.utc(2026, 4, 3, 7, 0),
+        DateTime.utc(2026, 4, 4, 7, 0),
+      ]);
+      expect(result.overrunNotificationNeeded, isFalse);
+    });
+  });
+
+  group('FR-6 (T-206: shifts are measured on readings)', () {
+    test(
+        'Test (DST, no shift across a change, T-206): Europe/Berlin, A = Fri '
+        '27 Mar 2026 07:00 CET, the only hardFloor Tue 31 Mar 07:00 CEST '
+        '(appointment 07:30 CEST, 30 min to wake up, no getting-ready time), '
+        'no preferredWakeUpTime, maxDailyDelta 15 or 30 min -> 07:00 by the '
+        'clock on every day, no notification. The same with the appointment '
+        'on Mon 30 Mar instead', () {
+      final window = _window(_berlin, 2026, 3, 28);
+      for (final appointment in [
+        DateTime.utc(2026, 3, 31, 5, 30), // Tue 07:30 CEST
+        DateTime.utc(2026, 3, 30, 5, 30), // Mon 07:30 CEST
+      ]) {
+        for (final md in [15, 30]) {
+          final result = _plan(
+            window: window,
+            anchor: DateTime.utc(2026, 3, 27, 6, 0),
+            rules: _berlinRules,
+            events: [_event(appointment, _berlin)],
+            wakeUp: const Duration(minutes: 30),
+            maxDeltaMinutes: md,
+          );
+          final label = 'appointment $appointment, md $md';
+          expect(result.valuesByDay[window[0]], DateTime.utc(2026, 3, 28, 6, 0),
+              reason: '$label: Sat 28 Mar stays 07:00 CET, no run starts');
+          for (var i = 1; i < 7; i++) {
+            expect(result.valuesByDay[window[i]],
+                DateTime.utc(2026, 3, 28 + i, 5, 0),
+                reason: '$label: ${window[i]} is 07:00 CEST');
+          }
+          expect(result.overrunNotificationNeeded, isFalse, reason: label);
+        }
+      }
+    });
+
+    test(
+        'Test (DST, a real shift across a change is measured on readings, '
+        'T-206): A = Sat 28 Mar 2026 07:00 CET, F = Sun 29 Mar 06:00 CEST '
+        '(04:00 UTC), N=1 -> ΔT = 60min (not 0, not 120): with '
+        'maxDailyDelta=60min no notification, with 45min a notification. F = '
+        'Sun 29 Mar 05:00 CEST (03:00 UTC), maxDailyDelta=30min -> ΔT = '
+        '120min, notification. In each case the value is exactly F', () {
+      final window = _window(_berlin, 2026, 3, 29);
+      for (final (f, md, notify) in [
+        (DateTime.utc(2026, 3, 29, 4, 0), 60, false),
+        (DateTime.utc(2026, 3, 29, 4, 0), 45, true),
+        (DateTime.utc(2026, 3, 29, 3, 0), 30, true),
+      ]) {
+        final result = _plan(
+          window: window,
+          anchor: DateTime.utc(2026, 3, 28, 6, 0),
+          rules: _berlinRules,
+          events: [_event(f, _berlin)],
+          maxDeltaMinutes: md,
+        );
+        expect(result.valuesByDay[window[0]], f, reason: 'F $f, md $md');
+        expect(result.overrunNotificationNeeded, notify,
+            reason: 'F $f, md $md');
+      }
+    });
+  });
+
+  group('FR-10 (T-206)', () {
+    test(
+        'Test (DST, T-206): Europe/Berlin, window Sat 28 Mar - Fri 3 Apr 2026, '
+        'no appointment, preferredWakeUpTime=07:00, no lastEffectiveWakeTime '
+        '-> 07:00 by the clock every day: 28 Mar 06:00 UTC, from 29 Mar on '
+        '05:00 UTC', () {
+      final window = _window(_berlin, 2026, 3, 28);
+      final result = _plan(
+        window: window,
+        anchor: null,
+        rules: _berlinRules,
+        preferred: const TimeOfDay(hour: 7, minute: 0),
+      );
+      _expectValues(result, window, [
+        DateTime.utc(2026, 3, 28, 6, 0),
+        for (var d = 29; d <= 34; d++) DateTime.utc(2026, 3, d, 5, 0),
+      ]);
     });
   });
 }

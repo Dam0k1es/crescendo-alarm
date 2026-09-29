@@ -32,6 +32,8 @@ import 'package:crescendo_alarm/models/alarms/ringing_alarm_settings.dart';
 import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
 import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
 import 'package:crescendo_alarm/models/scheduling/next_wake_up.dart';
+import 'package:crescendo_alarm/models/scheduling/stored_values.dart'
+    show decodePendingDayClockTimes, encodePendingDayClockTimes;
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/utils/direct_boot_mirror.dart' as direct_boot_mirror;
@@ -148,6 +150,7 @@ class AppState extends ChangeNotifier {
   DateTime? _lastProcessedConcludedDay;
   Map<String, int?> _pendingDayValues = {};
   Map<String, bool> _pendingDayInstantAnchored = {};
+  Map<String, ({int clockTime, int value})> _pendingDayClockTimes = {};
   bool _overrunNotificationSent = false;
   bool _safetyValveNotificationSent = false;
   // T-173 (maintainer request): off by default - all of it, not just the
@@ -422,6 +425,22 @@ class AppState extends ChangeNotifier {
   /// the same directly-decodable shape.
   Map<String, bool> get pendingDayInstantAnchored => _pendingDayInstantAnchored;
 
+  /// docs/TODO.md T-206 (T206-R11, FR-3): per wall-clock-anchored day (ISO
+  /// date), the planned clock time (`clockTime`, "wall milliseconds" - a
+  /// reading's digits read as UTC, **not** an instant; see
+  /// `clockTimeFromStored`) paired with the value it resolved to (`value`,
+  /// epoch ms, a copy of [pendingDayValues]' entry at planning time).
+  /// Persisted under `pendingDayClockTimes` as
+  /// `{"<iso>": {"c": <wall ms>, "v": <instant ms>}}` - directly decodable,
+  /// like its two neighbours, because FR-16's Checkpoint 2 re-resolves it
+  /// from `SharedPreferences` alone.
+  ///
+  /// An entry counts only while it is intact (its `value` equals
+  /// [pendingDayValues]' entry): the pair makes every entry self-validating
+  /// against a torn or stale write, so a mismatch falls back to the value.
+  Map<String, ({int clockTime, int value})> get pendingDayClockTimes =>
+      _pendingDayClockTimes;
+
   /// FR-6 requires the overrun warning "einmalig" - remembers that it was
   /// already sent for the currently running overrun episode
   /// (`docs/TODO.md` T-74a).
@@ -581,6 +600,12 @@ class AppState extends ChangeNotifier {
   set pendingDayInstantAnchored(Map<String, bool> value) {
     _pendingDayInstantAnchored = value;
     _prefs.setString('pendingDayInstantAnchored', jsonEncode(value));
+    notifyListeners();
+  }
+
+  set pendingDayClockTimes(Map<String, ({int clockTime, int value})> value) {
+    _pendingDayClockTimes = value;
+    _prefs.setString('pendingDayClockTimes', encodePendingDayClockTimes(value));
     notifyListeners();
   }
 
@@ -871,7 +896,9 @@ class AppState extends ChangeNotifier {
     // docs/TODO.md T-202: injectable like setManualAlarmEnabled's own `now`
     // (T-201) - which instant a reading resolves to depends on the day it
     // is added on, and a daylight-saving change day cannot be waited for.
-    @visibleForTesting DateTime Function()? now,
+    // Since T-206 also passed by `applyPlannedAlarms`, so a ScheduledAlarm's
+    // "still ahead?" is judged by the same clock as the plan it comes from.
+    DateTime Function()? now,
   }) async {
     var retVal = {
       'success': false,
@@ -942,7 +969,10 @@ class AppState extends ChangeNotifier {
             'ScheduledAlarm with id ${alarm.id} is already in list! Removing it.');
         _scheduledAlarms.remove(alarm);
       }
-      if (!alarm.time.isBefore(DateTime.now())) {
+      // docs/TODO.md T-206: the same injected clock as the plan it comes
+      // from (`applyPlannedAlarms` passes its own `now`) - planAlarmSync has
+      // already decided with that clock which values are still ahead.
+      if (!alarm.time.isBefore((now ?? DateTime.now)())) {
         _scheduledAlarms.add(newAlarm);
         _scheduledAlarms.sort((x, y) => x.time.compareTo(y.time));
         _saveScheduledAlarms();
@@ -1376,6 +1406,21 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// docs/TODO.md T-206: `null` when the key is absent (keep what is
+  /// loaded), an empty map when it is unreadable - a corrupt value must not
+  /// resurrect entries the stored plan no longer has.
+  Map<String, ({int clockTime, int value})>? _loadPendingDayClockTimes() {
+    final data = _prefs.getString('pendingDayClockTimes');
+    if (data == null) return null;
+    try {
+      return decodePendingDayClockTimes(data);
+    } catch (e) {
+      debugPrint(
+          "=====_loadPendingDayClockTimes: Error loading pendingDayClockTimes: ${e.runtimeType}");
+      return {};
+    }
+  }
+
   DeactivationCode? _loadDeactivationCode() {
     try {
       final encodedDeactivationCode = _prefs.getString('deactivationCode');
@@ -1518,6 +1563,8 @@ class AppState extends ChangeNotifier {
       _pendingDayValues = _loadPendingDayValues() ?? _pendingDayValues;
       _pendingDayInstantAnchored =
           _loadPendingDayInstantAnchored() ?? _pendingDayInstantAnchored;
+      _pendingDayClockTimes =
+          _loadPendingDayClockTimes() ?? _pendingDayClockTimes;
     } catch (e) {
       debugPrint(
           "=====reloadSchedulingStateFromPreferences: Error reloading: ${e.runtimeType}");
@@ -1608,6 +1655,8 @@ class AppState extends ChangeNotifier {
       _pendingDayValues = _loadPendingDayValues() ?? _pendingDayValues;
       _pendingDayInstantAnchored =
           _loadPendingDayInstantAnchored() ?? _pendingDayInstantAnchored;
+      _pendingDayClockTimes =
+          _loadPendingDayClockTimes() ?? _pendingDayClockTimes;
       _overrunNotificationSent =
           _prefs.getBool('overrunNotificationSent') ?? _overrunNotificationSent;
       _safetyValveNotificationSent =

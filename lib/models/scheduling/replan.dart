@@ -35,6 +35,7 @@ import 'package:crescendo_alarm/models/scheduling/stored_values.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 typedef FetchEvents = Future<List<Meeting>> Function(DateTime start, DateTime end);
 
@@ -84,7 +85,12 @@ Future<ReplanResult> replan(
   AppState appState, {
   FetchEvents? fetchEvents,
   DateTime Function()? now,
-  Duration? deviceUtcOffset,
+  // docs/TODO.md T-206 (T206-R12): the device zone's RULES, not one offset -
+  // every window day is planned with its own day's rules, and every
+  // appointment assigned by the rules at its own instant. Production passes
+  // nothing and gets [deviceOffsetAt]; tests inject a zone's rules or
+  // [fixedOffset].
+  ZoneOffsetAt? offsetAt,
   bool todayAlreadyRang = false,
 }) async {
   // docs/TODO.md T-69: FR-16's Checkpoint 2 writes these fields straight to
@@ -99,8 +105,11 @@ Future<ReplanResult> replan(
       (DateTime start, DateTime end) =>
           fetchMeetingsUncached(appState, start, end);
   final currentTime = nowFn();
-  final offset = deviceUtcOffset ?? currentTime.timeZoneOffset;
+  final rules = offsetAt ?? deviceOffsetAt;
 
+  // Correct as the ring day on a wall-clock value too, including where a gap
+  // ends at midnight: R_plan keeps such a value on its own planned date
+  // (docs/timezone-requirements.md TZ-2a, T-206).
   final today = midnight(currentTime);
 
   // docs/TODO.md T-75: the day-advance progress marker, deliberately NOT
@@ -200,7 +209,7 @@ Future<ReplanResult> replan(
       final hf = hardFloor(
         day: day,
         allEvents: allEvents,
-        deviceUtcOffset: offset,
+        offsetAt: rules,
         durationToWakeUp: durationToWakeUp,
         durationToGetReady: durationToGetReadyForDay(day),
       );
@@ -243,14 +252,24 @@ Future<ReplanResult> replan(
     missedAppointmentFlagged: possiblyMissedAppointment,
   );
 
+  final lastConcludedKey = isoDate(lastConcludedDay);
   final lastEffectiveWakeTime =
-      instantFromStored(appState.pendingDayValues[isoDate(lastConcludedDay)]);
+      instantFromStored(appState.pendingDayValues[lastConcludedKey]);
+  // docs/TODO.md T-206 (T206-R10/R11, FR-3): the reading the anchor was
+  // planned as - only from an intact pair (its paired value is the one that
+  // rang); computeWeekPlan checks it against the value once more.
+  final anchorEntry = appState.pendingDayClockTimes[lastConcludedKey];
+  final lastEffectiveClockTime = anchorEntry != null &&
+          anchorEntry.value == appState.pendingDayValues[lastConcludedKey]
+      ? clockTimeFromStored(anchorEntry.clockTime)
+      : null;
 
   final result = computeWeekPlan(
     window: window,
     lastEffectiveWakeTime: lastEffectiveWakeTime,
+    lastEffectiveClockTime: lastEffectiveClockTime,
     allEvents: allEvents,
-    deviceUtcOffset: offset,
+    offsetAt: rules,
     durationToWakeUp: durationToWakeUp,
     durationToGetReadyForDay: durationToGetReadyForDay,
     preferredWakeUpTime: appState.preferredWakeUpTime,
@@ -330,6 +349,28 @@ Future<ReplanResult> replan(
   }
   appState.pendingDayInstantAnchored = mergedAnchors;
 
+  // docs/TODO.md T-206 (T206-R11): and the same merge once more for the
+  // planned clock times - written last, after the values and the anchored
+  // flags, and on every replan (an empty map too), so that from now on
+  // Checkpoint 2 re-resolves instead of shifting (its legacy branch runs
+  // only while the key does not exist at all). Each entry carries its value,
+  // which makes a torn write between the three keys detectable.
+  final mergedClockTimes = <String, ({int clockTime, int value})>{
+    for (final entry in appState.pendingDayClockTimes.entries)
+      if (worthKeeping(entry.key)) entry.key: entry.value,
+  };
+  for (final day in window) {
+    final clockTime = result.plannedClockTimes[day];
+    final value = result.valuesByDay[day];
+    if (clockTime == null || value == null) {
+      mergedClockTimes.remove(isoDate(day));
+    } else {
+      mergedClockTimes[isoDate(day)] =
+          (clockTime: clockTimeToStored(clockTime)!, value: toStored(value)!);
+    }
+  }
+  appState.pendingDayClockTimes = mergedClockTimes;
+
   // `windowDayCount != distinctDayKeys` is the signature of T-74d/T-76: two
   // window days collided onto the same day key.
   // docs/TODO.md T-140: the INPUTS without which the logged plan cannot be
@@ -359,7 +400,7 @@ Future<ReplanResult> replan(
     overrunFlag: result.overrunNotificationNeeded,
     safetyValveFlag: result.safetyValveTriggered,
     hasPreferredWakeUpTime: appState.preferredWakeUpTime != null,
-    maxStep: bucketMinutes(_maxStepMinutes(result.valuesByDay, window)),
+    maxStep: bucketMinutes(_maxStepMinutes(result, window, rules)),
     storedEntriesTotal: mergedValues.length,
     storedEntriesPruned: prunedCount,
   );
@@ -376,19 +417,19 @@ Future<ReplanResult> replan(
   // appointment (then the two are coupled), on the curve, or at
   // preferredWakeUpTime?
   //
-  // Read locally via the same offset that was used to plan - that's the
-  // number the user sees in the alarm list (FR-1/T-83's separation of
-  // instant and wall clock).
+  // Read locally with the zone's rules at each instant (docs/TODO.md T-206) -
+  // that's the number the user sees in the alarm list (FR-1/T-83's
+  // separation of instant and wall clock), also across a DST change.
   if (Diag.includeClockTimes) {
     int minuteOfDay(DateTime instant) {
-      final local = instant.toUtc().add(offset);
+      final local = instant.toUtc().add(rules(instant));
       return local.hour * 60 + local.minute;
     }
 
     for (final day in window) {
       final planned = result.valuesByDay[day];
       final dayEvents = eventsForDay(day,
-          allEvents: allEvents, deviceUtcOffset: offset)
+          allEvents: allEvents, offsetAt: rules)
         ..removeWhere((e) => e.isAllDay);
       DateTime? earliest;
       for (final e in dayEvents) {
@@ -462,34 +503,54 @@ Future<ReplanResult> replan(
 ///
 /// Per FR-16's own text, Checkpoint 2 "triggers only the time zone
 /// comparison, no replanning, no calendar access" - it
-/// never calls [replan] and never reads the calendar. What it *does* do on a
-/// detected change is FR-16's second half, applied to the still-pending days:
+/// never calls [replan] and never reads the calendar.
 ///
-/// - **wall-clock-anchored** values (`preferredWakeUpTime`/curve) keep their **local
-///   digits** - the alarm-clock convention, "7:00 stays 7:00, now in the new
-///   zone" - via [reinterpretForNewOffset];
-/// - **instant-anchored** values (taken straight from a real `hardFloor`) keep
-///   their **instant**: the appointment does not move, only its local display
-///   does (FR-16, "Instant-based values: unchanged").
+/// **One rules source** (docs/TODO.md T-206, T206-R14): the offset it
+/// compares is [offsetAt] applied to its own "now" - the same rules it
+/// re-resolves with, and the same quantity checkpoint 1 records
+/// (`runSchedulingCheckpoint`). There is no second offset injection that
+/// could disagree with them.
 ///
-/// Which is which cannot be re-derived here without calendar access, so
-/// `computeWeekPlan` records it per day and [replan] persists it next to the
-/// values (`pendingDayInstantAnchored`, see `AppState`). Days that already lie
-/// in the past are left untouched (FR-11: the value that actually rang is
-/// fixed).
+/// **Only on a detected offset change** does it touch the plan, and then
+/// only the still-pending days (FR-11: the value that actually rang is
+/// fixed), per day in this order:
+///
+/// 1. **instant-anchored** (`pendingDayInstantAnchored`, taken straight from
+///    a real `hardFloor`) → untouched: the appointment does not move, only
+///    its local display does - even if a planned clock time exists for it;
+/// 2. no `pendingDayClockTimes` key at all (a plan stored before T-206) →
+///    the legacy shift, [reinterpretForNewOffset]: the same digits in the
+///    new zone. Kept for the upgrade window; not dead code, but unreachable
+///    once a new version has planned once (every replan writes the key);
+/// 3. an **intact** planned clock time (its paired value is the stored
+///    value) → re-resolved by R_plan under the current rules, written only
+///    if it changed. For a daylight-saving change within one zone that
+///    changes nothing (each day was already planned with its own rules) -
+///    the old shift moved such a value by the DST difference whenever this
+///    ran with a stale baseline;
+/// 4. anything else (no entry for the day, a torn pair, an unreadable
+///    entry or key) → untouched: the value stays what FR-18 armed.
+///
+/// Which days are instant-anchored, and which reading each other day was
+/// planned as, cannot be re-derived here without calendar access, so
+/// `computeWeekPlan` records both and [replan] persists them next to the
+/// values.
 ///
 /// Known limitation, inherent to FR-16's own design: this corrects the stored
 /// plan, not the alarms already handed to the platform - FR-16 explicitly
 /// defers "the full recomputation" to the next regular planning run,
 /// so an alarm that fires between the offset change and the next
-/// replan/[applyPlannedAlarms] still uses the pre-change moment.
+/// replan/[applyPlannedAlarms] still uses the pre-change moment
+/// (docs/TODO.md T-113).
 Future<void> runTimezoneCheckpoint2({
-  Duration Function()? readOffset,
+  ZoneOffsetAt? offsetAt,
   SharedPreferences? prefs,
   DateTime Function()? now,
 }) async {
   final p = prefs ?? await SharedPreferences.getInstance();
-  final offset = (readOffset ?? () => DateTime.now().timeZoneOffset)();
+  final rules = offsetAt ?? deviceOffsetAt;
+  final nowValue = (now ?? DateTime.now)();
+  final offset = rules(nowValue);
   final previousMinutes = p.getInt('lastCheckedUtcOffsetMinutes');
   final previousOffset =
       previousMinutes == null ? null : Duration(minutes: previousMinutes);
@@ -505,27 +566,60 @@ Future<void> runTimezoneCheckpoint2({
             ? const <String, bool>{}
             : (jsonDecode(rawAnchored) as Map<String, dynamic>)
                 .map((key, value) => MapEntry(key, value as bool));
-        final nowValue = (now ?? DateTime.now)();
+        // Branch 2 is decided by the key's EXISTENCE alone: a present key
+        // that cannot be read, or has no entry for a day, means "planned by
+        // a T-206 version, pair lost" - skipped, never legacy-shifted.
+        final rawClockTimes = p.getString('pendingDayClockTimes');
+        final legacyPlan = rawClockTimes == null;
+        var clockTimes = <String, ({int clockTime, int value})>{};
+        if (!legacyPlan) {
+          try {
+            clockTimes = decodePendingDayClockTimes(rawClockTimes);
+          } catch (e) {
+            debugPrint(
+                "=====runTimezoneCheckpoint2: unreadable pendingDayClockTimes: ${e.runtimeType}");
+          }
+        }
 
-        var changed = false;
         var reinterpreted = 0;
         final updated = Map<String, int?>.from(values);
+        final updatedClockTimes = Map.of(clockTimes);
         values.forEach((day, millis) {
           if (millis == null) return;
-          if (anchored[day] == true) return; // instant-anchored: leave alone
+          if (anchored[day] == true) return; // 1. instant-anchored
           final value = instantFromStored(millis)!;
           if (!value.isAfter(nowValue)) return; // already rung (FR-11)
-          updated[day] = toStored(reinterpretForNewOffset(
-            value: value,
-            oldOffset: previousOffset,
-            newOffset: offset,
-          ));
+          if (legacyPlan) {
+            // 2. a plan from before T-206.
+            updated[day] = toStored(reinterpretForNewOffset(
+              value: value,
+              oldOffset: previousOffset,
+              newOffset: offset,
+            ));
+            reinterpreted++;
+            return;
+          }
+          final entry = clockTimes[day];
+          if (entry == null || entry.value != millis) return; // 4.
+          // 3. an intact pair: the planned clock time under today's rules.
+          final resolved = toStored(resolvePlannedClockTime(
+              clockTimeFromStored(entry.clockTime)!, rules))!;
+          if (resolved == millis) return;
+          updated[day] = resolved;
+          updatedClockTimes[day] =
+              (clockTime: entry.clockTime, value: resolved);
           reinterpreted++;
-          changed = true;
         });
 
-        if (changed) {
+        // Values first, then their clock times - the same order as
+        // `replan`, so an interrupted write leaves a torn pair (skipped by
+        // every reader), never a pair that claims a value it does not have.
+        if (reinterpreted > 0) {
           await p.setString('pendingDayValues', jsonEncode(updated));
+          if (!legacyPlan) {
+            await p.setString('pendingDayClockTimes',
+                encodePendingDayClockTimes(updatedClockTimes));
+          }
         }
 
         // docs/TODO.md T-62/T-89: if this event shows up in the export, it
@@ -562,28 +656,29 @@ Future<void> runTimezoneCheckpoint2({
 ///
 /// This is exclusively about the **difference** between two planned values,
 /// never about an instant itself: a history of wake instants would be a
-/// sleep pattern. The nominal day distance is factored out, leaving exactly
-/// what FR-6 bounds - the shift in wake time per day. Skipped days (gap days
-/// with no value) are counted along the way, otherwise the step would be too
-/// large by a multiple of 24 hours.
+/// sleep pattern. What FR-6 bounds - the shift in wake time per day - is
+/// measured the way the planning measures it (docs/TODO.md T-206, FR-1): as
+/// ΔT between consecutive planned days' local READINGS (the planned clock
+/// time, or for an instant-anchored day the reading its instant shows). So
+/// a daylight-saving change shows as no step at all, as it is planned; an
+/// instant difference minus 24 h per day would report the DST difference as
+/// a shift. Across skipped days (gap days with no value) the step is the
+/// whole shift since the last planned day, as before.
 int _maxStepMinutes(
-    Map<DateTime, DateTime?> valuesByDay, List<DateTime> window) {
-  const minutesPerDay = 24 * 60;
+    WeekPlanResult result, List<DateTime> window, ZoneOffsetAt rules) {
   var worst = 0;
-  DateTime? previousValue;
-  DateTime? previousDay;
+  DateTime? previousReading;
 
   for (final day in window) {
-    final value = valuesByDay[day];
+    final value = result.valuesByDay[day];
     if (value == null) continue;
-    if (previousValue != null && previousDay != null) {
-      final spannedDays = dayDistance(day, previousDay);
-      final step = value.difference(previousValue).inMinutes -
-          spannedDays * minutesPerDay;
+    final reading =
+        result.plannedClockTimes[day] ?? value.toUtc().add(rules(value));
+    if (previousReading != null) {
+      final step = readingDelta(previousReading, reading).inMinutes;
       if (step.abs() > worst.abs()) worst = step;
     }
-    previousValue = value;
-    previousDay = day;
+    previousReading = reading;
   }
   return worst;
 }

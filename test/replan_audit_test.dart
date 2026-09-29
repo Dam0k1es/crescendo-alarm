@@ -5,6 +5,7 @@ import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // Regressions from the independent spec review (2026-09-11), at the
 // replan()/state-bookkeeping level. The domain-layer counterparts live in
@@ -73,7 +74,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(8, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
         // settingsChanged/manualSync: today does NOT count as concluded
         todayAlreadyRang: false,
@@ -105,7 +106,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(8, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
         todayAlreadyRang: false,
       );
@@ -137,7 +138,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(7, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [_meetingAt(_utc(5, 0, day: 11))],
         todayAlreadyRang: true,
       );
@@ -184,7 +185,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(7, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
         todayAlreadyRang: false, // settingsChanged
       );
@@ -219,7 +220,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(8, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
         todayAlreadyRang: false,
       );
@@ -254,7 +255,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(8, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
         todayAlreadyRang: false,
       );
@@ -308,7 +309,7 @@ void main() {
       await replan(
         appState,
         now: () => now,
-        deviceUtcOffset: now.timeZoneOffset,
+        offsetAt: fixedOffset(now.timeZoneOffset),
         fetchEvents: (start, end) async => [],
       );
 
@@ -335,7 +336,7 @@ void main() {
       await replan(
         appState,
         now: () => now,
-        deviceUtcOffset: now.timeZoneOffset,
+        offsetAt: fixedOffset(now.timeZoneOffset),
         fetchEvents: (start, end) async => [],
       );
       final before = minutesOf(appState.scheduledAlarms.map((a) => a.time));
@@ -345,7 +346,7 @@ void main() {
       await replan(
         appState,
         now: () => now,
-        deviceUtcOffset: now.timeZoneOffset,
+        offsetAt: fixedOffset(now.timeZoneOffset),
         fetchEvents: (start, end) async => [],
       );
 
@@ -378,7 +379,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(7, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
         todayAlreadyRang: true,
       );
@@ -389,7 +390,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(7, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
         todayAlreadyRang: true,
       );

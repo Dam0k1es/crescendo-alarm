@@ -4,6 +4,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:crescendo_alarm/models/scheduling/scheduling_v2.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // docs/TODO.md T-61, levels 1 and 4 of the planned test structure - with the
 // infrastructure that had been missing so far: `tz.initializeTimeZones()`
@@ -41,7 +42,7 @@ void main() {
       final result = hardFloor(
         day: DateTime.utc(2026, 7, 10),
         allEvents: [event],
-        deviceUtcOffset: berlinSummer,
+        offsetAt: fixedOffset(berlinSummer),
         durationToWakeUp: const Duration(minutes: 30),
         durationToGetReady: Duration.zero,
       );
@@ -62,7 +63,7 @@ void main() {
       final result = hardFloor(
         day: DateTime.utc(2026, 7, 10),
         allEvents: [event],
-        deviceUtcOffset: berlinSummer,
+        offsetAt: fixedOffset(berlinSummer),
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
       );
@@ -80,7 +81,7 @@ void main() {
       final target = hardFloor(
         day: DateTime.utc(2026, 7, 10),
         allEvents: [event],
-        deviceUtcOffset: berlinSummer,
+        offsetAt: fixedOffset(berlinSummer),
         durationToWakeUp: const Duration(minutes: 30),
         durationToGetReady: Duration.zero,
       )!;
@@ -93,6 +94,7 @@ void main() {
         target: target,
         n: 1,
         maxDailyDelta: const Duration(hours: 12),
+        offsetAt: fixedOffset(berlinSummer),
       );
 
       // Locally: 07:00 -> 08:30, so ΔT = +1:30. Before the fix, the digits 5

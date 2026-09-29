@@ -9,6 +9,11 @@ import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
+
+import 'support/zone_rules.dart';
 
 // Phase 4 (docs/scheduling-v2-spec.md, "Implementation order"):
 // replan(AppState) - T-60 (calendar cache bypass), FR-11, FR-12, FR-15.
@@ -51,7 +56,7 @@ void main() {
       final result = await replan(
         appState,
         now: () => ringDay,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [_meetingAt(_utc(5, 30, day: 16))],
       );
 
@@ -75,7 +80,7 @@ void main() {
       await replan(
         appState,
         now: () => ringDay,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
       );
       final firstValue = appState.pendingDayValues['2026-03-11'];
@@ -87,7 +92,7 @@ void main() {
       final result = await replan(
         appState,
         now: () => ringDay,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [_meetingAt(_utc(6, 0, day: 11))],
       );
 
@@ -112,7 +117,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(0, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
       );
       expect(appState.pendingDayValues['2026-03-10'],
@@ -125,7 +130,7 @@ void main() {
       final result = await replan(
         appState,
         now: () => _utc(0, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [_meetingAt(_utc(5, 0, day: 10))],
         // This scenario is the ring checkpoint: day 10 has rung, so it's
         // concluded (docs/TODO.md T-71).
@@ -146,7 +151,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(0, 0, day: 9),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
         todayAlreadyRang: true,
       );
@@ -157,7 +162,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(0, 0, day: 12),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
         todayAlreadyRang: true,
       );
@@ -185,7 +190,7 @@ void main() {
         await replan(
           appState,
           now: () => _utc(7, 0, day: 10),
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           fetchEvents: (start, end) async => [],
           todayAlreadyRang: true,
         );
@@ -210,7 +215,7 @@ void main() {
           await replan(
             appState,
             now: () => _utc(7, 0, day: d),
-            deviceUtcOffset: Duration.zero,
+            offsetAt: fixedOffset(Duration.zero),
             fetchEvents: (start, end) async => [],
             todayAlreadyRang: true,
           );
@@ -238,7 +243,7 @@ void main() {
         await replan(
           appState,
           now: () => _utc(3, 0, day: 10),
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           fetchEvents: (start, end) async => [],
         );
 
@@ -259,7 +264,7 @@ void main() {
         await replan(
           appState,
           now: () => _utc(7, 0, day: d),
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           fetchEvents: (start, end) async => [],
           todayAlreadyRang: true,
         );
@@ -294,7 +299,7 @@ void main() {
         await replan(
           appState,
           now: () => _utc(7, 0, day: 9),
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           fetchEvents: (start, end) async => [],
           todayAlreadyRang: true,
         );
@@ -306,7 +311,7 @@ void main() {
         await replan(
           appState,
           now: () => _utc(3, 0, day: 10),
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           fetchEvents: (start, end) async => [],
         );
         expect(appState.gapDayCounter, 1,
@@ -317,7 +322,7 @@ void main() {
         await replan(
           appState,
           now: () => _utc(7, 0, day: 10),
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           fetchEvents: (start, end) async => [],
           todayAlreadyRang: true,
         );
@@ -333,7 +338,7 @@ void main() {
         await replan(
           appState,
           now: () => _utc(7, 0, day: 9),
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           fetchEvents: (start, end) async => [],
           todayAlreadyRang: true,
         );
@@ -344,7 +349,7 @@ void main() {
         await replan(
           appState,
           now: () => _utc(3, 0, day: 10),
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           fetchEvents: (start, end) async => [],
         );
 
@@ -353,7 +358,7 @@ void main() {
         final result = await replan(
           appState,
           now: () => _utc(7, 0, day: 10),
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           fetchEvents: (start, end) async => [_meetingAt(_utc(5, 0, day: 10))],
           todayAlreadyRang: true,
         );
@@ -368,7 +373,7 @@ void main() {
         await replan(
           appState,
           now: () => _utc(7, 0, day: 9),
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           fetchEvents: (start, end) async => [],
           todayAlreadyRang: true,
         );
@@ -393,7 +398,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(9, 0, day: 10), // 09:00, today has NOT rung
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
       );
 
@@ -413,7 +418,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(6, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
         todayAlreadyRang: true,
       );
@@ -428,7 +433,7 @@ void main() {
       final result = await replan(
         appState,
         now: () => _utc(0, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [_meetingAt(_utc(5, 0, day: 9))],
         todayAlreadyRang: true,
       );
@@ -448,7 +453,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(0, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [],
       );
 
@@ -479,7 +484,7 @@ void main() {
       await replan(
         appState,
         now: () => DateTime(2026, 10, 23, 6, 0), // local, not UTC
-        deviceUtcOffset: const Duration(hours: 2),
+        offsetAt: fixedOffset(const Duration(hours: 2)),
         fetchEvents: (start, end) async => [],
         todayAlreadyRang: true,
       );
@@ -500,7 +505,7 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
 
       await runTimezoneCheckpoint2(
-        readOffset: () => const Duration(hours: 9),
+        offsetAt: fixedOffset(const Duration(hours: 9)),
         prefs: prefs,
       );
 
@@ -532,7 +537,7 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
 
       await runTimezoneCheckpoint2(
-        readOffset: () => const Duration(hours: 9),
+        offsetAt: fixedOffset(const Duration(hours: 9)),
         prefs: prefs,
         now: () => DateTime.utc(2026, 3, 10, 12, 0),
       );
@@ -558,7 +563,7 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
 
       await runTimezoneCheckpoint2(
-        readOffset: () => const Duration(hours: 2),
+        offsetAt: fixedOffset(const Duration(hours: 2)),
         prefs: prefs,
         now: () => DateTime.utc(2026, 3, 10, 12, 0),
       );
@@ -579,7 +584,7 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
 
       await runTimezoneCheckpoint2(
-        readOffset: () => const Duration(hours: 9),
+        offsetAt: fixedOffset(const Duration(hours: 9)),
         prefs: prefs,
         now: () => DateTime.utc(2026, 3, 10, 12, 0),
       );
@@ -596,7 +601,7 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
 
       await runTimezoneCheckpoint2(
-        readOffset: () => const Duration(hours: 5),
+        offsetAt: fixedOffset(const Duration(hours: 5)),
         prefs: prefs,
       );
 
@@ -604,6 +609,9 @@ void main() {
       await appState.initialized;
       expect(appState.lastCheckedUtcOffset, const Duration(hours: 5));
     });
+
+    // docs/TODO.md T-206: FR-16's new "Test:" bullets, verbatim.
+    _t206Checkpoint2Bullets();
   });
 
   group('T-163: per-event calendar times reach Diag when opted in', () {
@@ -622,7 +630,7 @@ void main() {
       await replan(
         appState,
         now: () => ringDay,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [
           _meetingAt(_utc(9, 0, day: 12)),
           _meetingAt(_utc(14, 30, day: 12)),
@@ -650,7 +658,7 @@ void main() {
       await replan(
         appState,
         now: () => ringDay,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [
           Meeting(
             from: _utc(0, 0, day: 12),
@@ -686,7 +694,7 @@ void main() {
       await replan(
         appState,
         now: () => ringDay,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [
           ignoredEvent,
           _meetingAt(_utc(14, 30, day: 12), id: 'evt-kept'),
@@ -712,7 +720,7 @@ void main() {
       await replan(
         appState,
         now: () => ringDay,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => [_meetingAt(_utc(9, 0, day: 12))],
       );
 
@@ -720,5 +728,246 @@ void main() {
           Diag.records.where((r) => r.event == DiagEvent.dayEventTime),
           isEmpty);
     });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// docs/TODO.md T-206 - FR-16 checkpoint 2 after a daylight-saving change.
+// The spec's new "Test:" bullets (daylight saving, stale baseline, torn pair,
+// anchored wins, no change, and the location-change bullet's T-206 note),
+// verbatim. Zone rules are injected (Europe/Berlin via `package:timezone`),
+// never the process zone. Derived cases: test/replan_dst_test.dart.
+// ---------------------------------------------------------------------------
+
+int _ms(int month, int day, int hour, [int minute = 0]) =>
+    DateTime.utc(2026, month, day, hour, minute).millisecondsSinceEpoch;
+
+/// "Plan made Sat 28 Mar 2026 (CET)", as T-206 plans it: Sat 28 Mar has
+/// rung at 07:00 CET (06:00 UTC); Sun 29 Mar .. Sat 4 Apr are 07:00 CEST
+/// (05:00 UTC), each with its planned clock time 07:00 paired with that
+/// value; `lastCheckedUtcOffset` still +1.
+Map<String, Object> _plannedAcrossSpringChange({
+  Map<String, Object?> clockTimeOverrides = const {},
+  Map<String, int?> valueOverrides = const {},
+  Map<String, bool> anchoredOverrides = const {},
+}) {
+  final days = [for (var d = 29; d <= 35; d++) DateTime.utc(2026, 3, d)];
+  String iso(DateTime d) => d.toIso8601String().substring(0, 10);
+  final values = <String, int?>{
+    '2026-03-28': _ms(3, 28, 6),
+    for (final d in days) iso(d): _ms(d.month, d.day, 5),
+    ...valueOverrides,
+  };
+  final clockTimes = <String, Object?>{
+    for (final d in days)
+      iso(d): {
+        'c': DateTime.utc(d.year, d.month, d.day, 7).millisecondsSinceEpoch,
+        'v': _ms(d.month, d.day, 5),
+      },
+    ...clockTimeOverrides,
+  }..removeWhere((_, v) => v == null);
+  return {
+    'lastCheckedUtcOffsetMinutes': 60,
+    'pendingDayValues': jsonEncode(values),
+    'pendingDayInstantAnchored': jsonEncode({
+      for (final key in values.keys) key: false,
+      ...anchoredOverrides,
+    }),
+    'pendingDayClockTimes': jsonEncode(clockTimes),
+  };
+}
+
+Map<String, dynamic> _json(SharedPreferences prefs, String key) =>
+    jsonDecode(prefs.getString(key)!) as Map<String, dynamic>;
+
+void _t206Checkpoint2Bullets() {
+  late tz.Location berlin;
+  late ZoneOffsetAt berlinRules;
+  setUpAll(() {
+    tzdata.initializeTimeZones();
+    berlin = tz.getLocation('Europe/Berlin');
+    berlinRules = zoneRules(berlin);
+  });
+
+  // Checkpoint 2 on Sun 29 Mar 2026 at 03:30 CEST (+2), i.e. 01:30 UTC.
+  DateTime sunday0330() => tz.TZDateTime(berlin, 2026, 3, 29, 3, 30);
+
+  test(
+      'Test (daylight saving): the zone stays "Europe/Berlin", clocks move '
+      'overnight from CET (+1) to CEST (+2) -> the next checkpoint detects the '
+      'changed offset. Re-resolving the planned clock times leaves every '
+      'planned value unchanged, because they were already planned with the '
+      'CEST rules (T-206)', () async {
+    SharedPreferences.setMockInitialValues(_plannedAcrossSpringChange());
+    final prefs = await SharedPreferences.getInstance();
+    final before = _json(prefs, 'pendingDayValues');
+    final clockTimesBefore = _json(prefs, 'pendingDayClockTimes');
+
+    await runTimezoneCheckpoint2(
+        offsetAt: berlinRules, prefs: prefs, now: sunday0330);
+
+    expect(_json(prefs, 'pendingDayValues'), before);
+    expect(_json(prefs, 'pendingDayClockTimes'), clockTimesBefore);
+    expect(prefs.getInt('lastCheckedUtcOffsetMinutes'), 120);
+  });
+
+  test(
+      'Test (stale baseline, T-206): plan made Sat 28 Mar 2026 (CET): Sun 29 '
+      'Mar = 07:00 CEST = 05:00 UTC, planned clock time 07:00; '
+      'lastCheckedUtcOffset still +1; checkpoint 2 at Sun 29 Mar 03:30 CEST '
+      '(+2) -> change detected, Sun stays 05:00 UTC (the old shift would give '
+      '04:00 UTC = 06:00 CEST), and lastCheckedUtcOffset becomes +2', () async {
+    // Requirements T32: the plan is MADE by replan (not seeded), and asserted
+    // both after the replan and after checkpoint 2 - the second assertion
+    // alone would pass on the pre-T-206 code for the wrong reason (its
+    // one-offset plan gives 06:00 UTC, which the old shift "repairs").
+    SharedPreferences.setMockInitialValues({});
+    final appState = AppState();
+    await appState.initialized;
+    appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
+    appState.durationToGetReady = const TimeOfDay(hour: 0, minute: 0);
+    appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
+    appState.maxDailyDelta = const Duration(minutes: 30);
+    appState.lastProcessedConcludedDay = DateTime(2026, 3, 27);
+    appState.pendingDayValues = {
+      '2026-03-27': _ms(3, 27, 6),
+      '2026-03-28': _ms(3, 28, 6),
+    };
+
+    await replan(
+      appState,
+      now: () => tz.TZDateTime(berlin, 2026, 3, 28, 7, 0),
+      offsetAt: berlinRules,
+      fetchEvents: (start, end) async => [],
+      todayAlreadyRang: true,
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(_json(prefs, 'pendingDayValues')['2026-03-29'], _ms(3, 29, 5),
+        reason: 'after the replan: Sun 29 Mar is 07:00 CEST = 05:00 UTC');
+    final clockTimes = prefs.getString('pendingDayClockTimes');
+    expect(clockTimes, isNotNull,
+        reason: 'the replan must write pendingDayClockTimes');
+    expect((jsonDecode(clockTimes!) as Map<String, dynamic>)['2026-03-29'], {
+      'c': DateTime.utc(2026, 3, 29, 7).millisecondsSinceEpoch,
+      'v': _ms(3, 29, 5),
+    });
+    expect(_json(prefs, 'pendingDayInstantAnchored')['2026-03-29'], isFalse);
+
+    await prefs.setInt('lastCheckedUtcOffsetMinutes', 60);
+    await runTimezoneCheckpoint2(
+        offsetAt: berlinRules, prefs: prefs, now: sunday0330);
+
+    final values = _json(prefs, 'pendingDayValues');
+    for (var d = 29; d <= 35; d++) {
+      final day = DateTime.utc(2026, 3, d);
+      expect(values[day.toIso8601String().substring(0, 10)],
+          _ms(day.month, day.day, 5),
+          reason: 'after checkpoint 2: $day still 07:00 CEST');
+    }
+    expect(values['2026-03-28'], _ms(3, 28, 6),
+        reason: 'FR-11: the rung Saturday is never touched');
+    expect(prefs.getInt('lastCheckedUtcOffsetMinutes'), 120);
+  });
+
+  test(
+      'Test (torn pair, T-206): the same, but the entry\'s paired value '
+      'differs from pendingDayValues[Sun] -> Sun is left untouched', () async {
+    SharedPreferences.setMockInitialValues(_plannedAcrossSpringChange(
+      clockTimeOverrides: {
+        '2026-03-29': {
+          'c': DateTime.utc(2026, 3, 29, 7).millisecondsSinceEpoch,
+          'v': _ms(3, 29, 6),
+        },
+      },
+    ));
+    final prefs = await SharedPreferences.getInstance();
+
+    await runTimezoneCheckpoint2(
+        offsetAt: berlinRules, prefs: prefs, now: sunday0330);
+
+    expect(_json(prefs, 'pendingDayValues')['2026-03-29'], _ms(3, 29, 5));
+    expect(prefs.getInt('lastCheckedUtcOffsetMinutes'), 120);
+  });
+
+  test(
+      'Test (anchored wins, T-206): a day with pendingDayInstantAnchored = '
+      'true and a planned clock time -> untouched', () async {
+    SharedPreferences.setMockInitialValues(_plannedAcrossSpringChange(
+      anchoredOverrides: {'2026-03-29': true},
+      // Intact (paired value = the stored value), and re-resolving it would
+      // give 06:00 UTC - so leaving it alone is a decision, not a no-op.
+      clockTimeOverrides: {
+        '2026-03-29': {
+          'c': DateTime.utc(2026, 3, 29, 8).millisecondsSinceEpoch,
+          'v': _ms(3, 29, 5),
+        },
+      },
+    ));
+    final prefs = await SharedPreferences.getInstance();
+
+    await runTimezoneCheckpoint2(
+        offsetAt: berlinRules, prefs: prefs, now: sunday0330);
+
+    expect(_json(prefs, 'pendingDayValues')['2026-03-29'], _ms(3, 29, 5));
+  });
+
+  test(
+      'Test (no change, T-206): the same offset as at the last checkpoint -> '
+      'nothing but the offset is written; pendingDayValues and '
+      'pendingDayClockTimes are byte-identical afterwards', () async {
+    SharedPreferences.setMockInitialValues(
+        {..._plannedAcrossSpringChange(), 'lastCheckedUtcOffsetMinutes': 120});
+    final prefs = await SharedPreferences.getInstance();
+    final values = prefs.getString('pendingDayValues');
+    final clockTimes = prefs.getString('pendingDayClockTimes');
+
+    await runTimezoneCheckpoint2(
+        offsetAt: berlinRules, prefs: prefs, now: sunday0330);
+
+    expect(prefs.getString('pendingDayValues'), values);
+    expect(prefs.getString('pendingDayClockTimes'), clockTimes);
+    expect(prefs.getInt('lastCheckedUtcOffsetMinutes'), 120);
+  });
+
+  test(
+      'Test (location change), T-206 note: with a planned clock time of 09:00 '
+      'stored, R_plan under +9 gives 09:00 in zone B - the same instant as '
+      'the legacy shift gives without one', () async {
+    // Tomorrow's value: 09:00 in zone A (+1) = 08:00 UTC; 09:00 in zone B
+    // (+9) = 00:00 UTC.
+    final tomorrow = DateTime.utc(2026, 3, 11, 8, 0).millisecondsSinceEpoch;
+    final inZoneB = DateTime.utc(2026, 3, 11, 0, 0).millisecondsSinceEpoch;
+    for (final withClockTime in [true, false]) {
+      SharedPreferences.setMockInitialValues({
+        'lastCheckedUtcOffsetMinutes': 60,
+        'pendingDayValues': jsonEncode({'2026-03-11': tomorrow}),
+        'pendingDayInstantAnchored': jsonEncode({'2026-03-11': false}),
+        if (withClockTime)
+          'pendingDayClockTimes': jsonEncode({
+            '2026-03-11': {
+              'c': DateTime.utc(2026, 3, 11, 9).millisecondsSinceEpoch,
+              'v': tomorrow,
+            },
+          }),
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await runTimezoneCheckpoint2(
+        offsetAt: fixedOffset(const Duration(hours: 9)),
+        prefs: prefs,
+        now: () => DateTime.utc(2026, 3, 10, 13, 0), // 14:00 in zone A
+      );
+
+      expect(_json(prefs, 'pendingDayValues')['2026-03-11'], inZoneB,
+          reason: withClockTime ? 'R_plan(09:00) under +9' : 'legacy shift');
+      if (withClockTime) {
+        expect(_json(prefs, 'pendingDayClockTimes')['2026-03-11'],
+            {'c': DateTime.utc(2026, 3, 11, 9).millisecondsSinceEpoch,
+             'v': inZoneB},
+            reason: 'the paired value moves with the value');
+      }
+      expect(prefs.getInt('lastCheckedUtcOffsetMinutes'), 9 * 60);
+    }
   });
 }

@@ -3,7 +3,7 @@
 [![CI](https://github.com/Dam0k1es/crescendo-alarm/actions/workflows/ci.yml/badge.svg)](https://github.com/Dam0k1es/crescendo-alarm/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-Welcome to Crescendo Alarm, an innovative alarm clock app designed for individuals with irregular sleep patterns. Whether you work shifts or simply have trouble waking up, Crescendo Alarm has features tailored to your needs. (Travelling across time zones is not yet reliably supported, and daylight saving changes are being fixed - see [docs/timezone-requirements.md](docs/timezone-requirements.md).)
+Welcome to Crescendo Alarm, an innovative alarm clock app designed for individuals with irregular sleep patterns. Whether you work shifts or simply have trouble waking up, Crescendo Alarm has features tailored to your needs. (Travelling across time zones is not yet reliably supported - see [docs/timezone-requirements.md](docs/timezone-requirements.md).)
 
 <p align="center">
   <img src="assets/screenshots/alarms.png" alt="The Alarms screen, Scheduled tab, showing a week of calendar-derived wake-up times" width="240">

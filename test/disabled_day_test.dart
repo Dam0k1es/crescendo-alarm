@@ -7,6 +7,7 @@ import 'package:crescendo_alarm/models/scheduling/apply_alarms.dart';
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // FR-21 (docs/scheduling-v2-spec.md), docs/TODO.md T-03: a switched-off
 // planned alarm does not ring. The cases come from the requirement's
@@ -108,7 +109,7 @@ void main() {
       await replan(
         appState,
         now: () => _utc(6, 0, day: 10),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => <Meeting>[],
         todayAlreadyRang: true,
       );

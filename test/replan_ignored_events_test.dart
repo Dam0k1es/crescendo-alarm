@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // New feature (user request): an ignored calendar event must not produce a
 // hardFloor - the point of the feature is to let the user opt an appointment
@@ -47,7 +48,7 @@ void main() {
     await replan(
       appState,
       now: () => ringDay,
-      deviceUtcOffset: Duration.zero,
+      offsetAt: fixedOffset(Duration.zero),
       fetchEvents: (start, end) async =>
           [_meetingAt(eventDay, id: 'evt-ignored')],
     );
@@ -68,7 +69,7 @@ void main() {
     await replan(
       appState,
       now: () => ringDay,
-      deviceUtcOffset: Duration.zero,
+      offsetAt: fixedOffset(Duration.zero),
       fetchEvents: (start, end) async => [_meetingAt(eventDay, id: 'evt-1')],
     );
 
@@ -87,7 +88,7 @@ void main() {
     await replan(
       appState,
       now: () => ringDay,
-      deviceUtcOffset: Duration.zero,
+      offsetAt: fixedOffset(Duration.zero),
       fetchEvents: (start, end) async => [
         _meetingAt(earlier, id: 'evt-early'),
         _meetingAt(later, id: 'evt-late'),
@@ -111,7 +112,7 @@ void main() {
     await replan(
       appState,
       now: () => ringDay,
-      deviceUtcOffset: Duration.zero,
+      offsetAt: fixedOffset(Duration.zero),
       fetchEvents: (start, end) async => [meeting],
     );
 

@@ -294,16 +294,18 @@ Future<void> applyPlannedAlarms(
   var addFailures = 0;
   for (final value in plan.toAdd) {
     try {
-      await appState.addAlarm(ScheduledAlarm(
-        time: value,
-        enabled: true,
-        gentlewake: appState.gentleWakeUpEnabled,
-        gentleWakeDuration: appState.gentleWakeUpDuration,
-        tone: appState.selectedTone,
-        volume: appState.selectedVolume,
-        vibrate: appState.vibrationEnabled,
-        id: getRandom(),
-      ));
+      await appState.addAlarm(
+          ScheduledAlarm(
+            time: value,
+            enabled: true,
+            gentlewake: appState.gentleWakeUpEnabled,
+            gentleWakeDuration: appState.gentleWakeUpDuration,
+            tone: appState.selectedTone,
+            volume: appState.selectedVolume,
+            vibrate: appState.vibrationEnabled,
+            id: getRandom(),
+          ),
+          now: nowFn);
     } catch (e) {
       addFailures++;
       Diag.failure(

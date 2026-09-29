@@ -32,7 +32,18 @@ Two rules that are load-bearing and easy to break by "cleaning up":
 - **Every domain value is an absolute instant, UTC-tagged**, while `preferredWakeUpTime` is a bare
   device-local `TimeOfDay` and everything leaving the layer (alarm plugin, notifications, UI, alarm
   titles) is read as **local wall clock**. Use `instantFromStored`/`localFromStored` and
-  `alarmPlatformTime` at those boundaries; don't "unify" them.
+  `alarmPlatformTime` at those boundaries; don't "unify" them. **One exception, and it is not an
+  instant** (`docs/TODO.md` T-206): a **planned clock time** - the local reading a wall-clock value
+  was planned as (`WeekPlanResult.plannedClockTimes`, persisted as `pendingDayClockTimes`, read via
+  `clockTimeFromStored`), UTC-tagged digits. It is planning intent: the size and sign of a daily
+  shift are measured on readings, but a reading is **never compared with an instant** (a
+  `hardFloor` cap happens after resolution, on instants) and meets one only through
+  `resolvePlannedClockTime`.
+- **The zone's rules are an input, not ambient state** (T-206). The pure layer and `replan`/the
+  checkpoints take a `ZoneOffsetAt` (instant → UTC offset; production `deviceOffsetAt`, tests
+  `fixedOffset(d)` or a real zone's rules via `test/support/zone_rules.dart`), never one
+  `Duration` for the whole window: each day is resolved with its own day's rules, and a DST change
+  is no shift (maintainer decision A).
 - **Never rebuild an instant from wall-clock fields at a hand-off** (`docs/TODO.md` T-202). In the
   repeated DST hour, `DateTime(y, m, d, h, min)` resolves to the FIRST occurrence and a skipped time
   to +gap length - both an hour off. Instants cross every boundary as instants
@@ -40,8 +51,11 @@ Two rules that are load-bearing and easy to break by "cleaning up":
   handed them **UTC-tagged** (the plugin persists `toIso8601String()` and re-arms from it; the
   notification plugin re-resolves fields natively), so values the alarm plugin reports back are
   UTC-tagged too - compare instants, never digits or `==` across frames. The one place a local
-  reading becomes an instant is `localWallClockInstant` (`lib/utils/wall_clock.dart`): repeated
-  time → later occurrence, skipped time → the transition instant (the maintainer's TZ-1 rule).
+  reading becomes an instant is `resolveWallClock(reading, offsetAt)` (`lib/utils/wall_clock.dart`,
+  TZ-1's R): repeated time → later occurrence, skipped time → the transition instant (the
+  maintainer's TZ-1 rule). Planned values and manual alarms reach it through
+  `resolvePlannedClockTime` (R_plan, TZ-2a: one minute before a gap that would move the value onto
+  the next date - America/Nuuk); `localWallClockInstant` is a thin wrapper over the device's rules.
 
 ## Diagnostics log (`lib/utils/diag/diag_log.dart`)
 
@@ -509,7 +523,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **703 tests across 111 files** (2026-09-28), and CI runs them ten times over -
+`flutter test` currently runs **786 tests across 115 files** (2026-09-28, T-206), and CI runs them ten times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
 tests for native code (29 as of T-198, `SleepTimeDndPolicyTest`), run with
 `cd android && ./gradlew :app:testDebugUnitTest` (locally from the native-filesystem worktree, and in
@@ -636,6 +650,20 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   `replan_notifications_test.dart`, `app_state_scheduling_v2_test.dart`, `day_marker_test.dart`,
   `stored_values_test.dart`, `handler_replan_wiring_test.dart`,
   `handler_on_alarm_handled_test.dart`, `sleep_reminder_always_scheduled_test.dart`) is written
+
+- T-206 (DST within one zone): the spec's verbatim bullets are in `scheduling_v2_test.dart` and
+  `replan_test.dart`'s Checkpoint 2 group; derived pure cases in `t206_dst_planning_test.dart`
+  (injected zone rules - identical in every leg); `replan()`-level twins and persistence in
+  `replan_dst_test.dart` (process-zone cases skip in UTC/Tokyo, the TZ-2a case runs in the
+  America/Nuuk leg only); `t206_lemma_c_differential_test.dart` pins the new pure layer to a
+  verbatim snapshot of the old one (`test/support/scheduling_v2_legacy_8ac1d9e.dart`, never
+  imported from `lib/`) under constant offsets; `t206_dst_sweep_test.dart` sweeps every zone with a
+  2026/27 transition in the UTC leg only, against `test/fixtures/` tables regenerated with
+  `scripts/gen_dst_fixture.dart` (the oracle, `package:timezone`'s own database) and
+  `scripts/gen_dst_fixture.py` (system tzdata, informational - see `docs/TODO.md` T-206's known
+  limitation). The test ids (`T01` …), requirement ids (`T206-R1` …) and "requirements"
+  section numbers these files and the T-206 comments in `lib/` cite are defined in
+  `docs/t206-dst-requirements.md` - they are not `docs/TODO.md` items.
 
 - `scheduling_v2_audit_test.dart`, `replan_audit_test.dart` and `checkpoint_audit_test.dart` are
   the regressions from the independent spec review of 2026-09-11 (`docs/TODO.md` T-104 … T-110), kept out of

@@ -7,6 +7,7 @@ import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // Regressions from the independent spec review (2026-09-11), at the
 // checkpoint-trigger level. The domain layer and replan() live in
@@ -77,7 +78,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => DateTime.utc(2026, 3, 10, 9, 0),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const <Meeting>[],
         notifications: _SilentNotifications(),
       );
@@ -98,7 +99,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => DateTime.utc(2026, 3, 10, 20, 0),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async {
           fetches++;
           return const <Meeting>[];
@@ -118,7 +119,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => DateTime.utc(2026, 3, 10, 9, 0),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         fetchEvents: (start, end) async => const <Meeting>[],
         notifications: _SilentNotifications(),
       );
@@ -156,7 +157,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => beforeFlight,
-        deviceUtcOffset: beforeFlight.timeZoneOffset,
+        offsetAt: fixedOffset(beforeFlight.timeZoneOffset),
         fetchEvents: fetch,
         notifications: _SilentNotifications(),
       );
@@ -166,7 +167,7 @@ void main() {
         appState,
         trigger: CheckpointTrigger.appForeground,
         now: () => afterFlight,
-        deviceUtcOffset: afterFlight.timeZoneOffset,
+        offsetAt: fixedOffset(afterFlight.timeZoneOffset),
         fetchEvents: fetch,
         notifications: _SilentNotifications(),
       );

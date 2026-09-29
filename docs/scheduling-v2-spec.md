@@ -43,6 +43,13 @@
 > **Still open:** `docs/TODO.md` T-62 (whether `onNotificationCreatedMethod` is actually triggered
 > by a silent notification is not yet confirmed on a real or emulated device - "recommended" per
 > spec, not a TDD blocker) and Phase 6 (retiring the old `Scheduler`, `docs/TODO.md` T-64/T-86).
+>
+> **T-206 (2026-09-28): daylight saving within one zone.** FR-1 is rewritten; FR-2, FR-3, FR-4,
+> FR-5, FR-6, FR-10, FR-11, FR-16 and FR-21 are amended. Planned wall-clock values are planned as
+> local clock readings and become instants only with the zone's rules for the day they apply to
+> (maintainer decisions A and B, `docs/timezone-requirements.md` TZ-2 and TZ-2a). These FRs now
+> describe the target, and the code implements them since `docs/TODO.md` T-206 (2026-09-29);
+> before it, the code planned a whole window with one offset.
 
 ## Scope
 
@@ -51,25 +58,83 @@ excluded: this logic neither reads nor writes them, nor does it influence their 
 
 ## Basic concepts
 
-**Time values** are treated throughout as absolute instants (date + time as a concrete instant,
-e.g. UTC-based), never as bare time-of-day digits without a date (**FR-1**). Without this
-convention, "earlier"/"later" and time differences are undefined across any midnight day boundary
-and any time zone change. FR-1 only fixes the arithmetic; when a time zone change itself is
-detected and how wall-clock-anchored values are handled then is governed by FR-16.
+**Time values** are never bare time-of-day digits without a date (**FR-1**). Every stored,
+compared or armed value is an absolute instant (date + time as a concrete instant, e.g.
+UTC-based); the size of a daily shift is measured on local clock readings (a date plus a time of
+day, as the device's clock shows it), which become instants only through TZ-1's resolution with
+the zone's rules for their own day. Without this convention, "earlier"/"later" and time
+differences are undefined across any midnight day boundary, any time zone change and any
+daylight-saving change. FR-1 only fixes the arithmetic; when a time zone change itself is detected
+and how wall-clock-anchored values are handled then is governed by FR-16.
 
 ---
 
-## FR-1 — Absolute instants, not time-of-day digits
+## FR-1 — Instants for bounds and storage, local clock readings for shifts
 
-Every time value used (`hardFloor`, `lastEffectiveWakeTime`, segment anchors, intermediate values)
-is an absolute instant (date+time, internally comparable e.g. via a UTC representation).
-"Earlier"/"later" and `ΔT` (time difference) are computed exclusively via the absolute difference
-between two such instants.
+*Rewritten by `docs/TODO.md` T-206 (2026-09-28).* The earlier text said that "earlier"/"later"
+and `ΔT` "are computed exclusively via the absolute difference between two such instants". That
+already disagreed with FR-5's precondition and FR-6's clarification, which both decide by time of
+day, and it cannot express a daylight-saving change, where two readings of 07:00 are 23 or 25
+hours apart.
+
+**Two kinds of time value.**
+
+- **Instants**: an absolute point in time, internally comparable e.g. via a UTC representation.
+  `hardFloor`, every stored and planned value (`pendingDayValues`, and so `lastEffectiveWakeTime`),
+  and everything handed to the platform (alarm plugin, notifications, alarm list).
+- **Local readings**: a calendar date plus a time of day, as the device's clock shows it.
+  `preferredWakeUpTime` combined with a day, FR-4's held or drifted value, FR-6/FR-7's curve
+  values, and the planned clock time stored for each wall-clock-anchored day (FR-3). A reading is
+  not an instant and is never compared with one.
+
+**Conversions**, always with the device zone's rules (`docs/timezone-requirements.md` TZ-1, TZ-3):
+
+- An instant's reading is **L(t)**, taken with the rules in effect **at that instant**, not with
+  the offset in effect when the plan is made.
+- A reading `w` becomes an instant only through **R_plan(w)**: TZ-1's resolution R (a repeated
+  reading → its later occurrence, a skipped reading → the transition instant), with the rules for
+  the day it applies to, and with the one exception of TZ-2a: if R(w) falls on a later calendar
+  date than `w` itself, **R_plan(w) = R(w) − 1 minute**, the last valid minute before the gap, on
+  the planned day (maintainer decision B; only where a gap ends at midnight, e.g. America/Nuuk).
+
+**What is decided on which kind.**
+
+- **On instants:** FR-2's upper bound and every comparison with a `hardFloor` (the clamp, FR-5's
+  violation check), always **after** R_plan; and whether a value is still in the future (FR-11,
+  FR-16, FR-18).
+- **On readings:** the **size and the sign** of a daily shift: `ΔT` in FR-4 to FR-7, the
+  `maxDailyDelta` limit and FR-6's notification. `ΔT` between two readings is the difference of
+  their times of day, resolved across at most one midnight: the variant with `|Δ| ≤ 12h` wins (the
+  exact-12h case is `docs/TODO.md` T-115). An instant enters this arithmetic as its reading L(t),
+  or, for a day that has one, as its stored planned clock time (FR-3).
+
+Within one zone the two views agree except across a daylight-saving change. There a constant
+reading is **no** shift at all (maintainer decision A, `docs/timezone-requirements.md` TZ-2:
+"07:00" stays 07:00 by the clock; the night is an hour shorter or longer). After a genuine zone
+change (travel, provisional) both readings are taken under the rules in effect afterwards, so
+`ΔT` equals the instants' time-of-day difference - the second test below.
 
 - **Test:** anchor 22:00, `hardFloor` the next day at 05:00 → `ΔT = 7h, direction "later"`, not
   `ΔT = 17h, direction "earlier"` (a pure digit comparison with no day change).
 - **Test:** anchor 07:00 before a time zone change (CET), `hardFloor` afterwards 07:00 in the new
   zone (JST, +8h offset) → `ΔT = 8h` (the instants differ by 8h), not `ΔT = 0`.
+  (Both are read under the rules after the change: the anchor reads 15:00 JST.)
+- **Test (DST, spring, T-206):** Europe/Berlin, anchor Sat 28 Mar 2026 07:00 CET (06:00 UTC),
+  `hardFloor` Mon 30 Mar 2026 07:00 CEST (05:00 UTC) → `ΔT = 0` (same reading), although the
+  instants are 47h apart, not 48h.
+- **Test (DST, autumn, T-206):** anchor Sat 24 Oct 2026 07:00 CEST (05:00 UTC), `hardFloor` Mon 26
+  Oct 2026 07:00 CET (06:00 UTC) → `ΔT = 0`, although the instants are 49h apart.
+- **Test (order, T-206):** Europe/Berlin, Sun 25 Oct 2026, a planned reading of 02:30 (it occurs at
+  00:30 UTC and at 01:30 UTC) and a `hardFloor` of 00:45 UTC (the first 02:45) → the value is
+  **00:45 UTC**: R_plan first (01:30 UTC, the later occurrence), then the cap on instants. Capping
+  on readings (02:30 is before 02:45, keep it) would give 01:30 UTC and miss the appointment by
+  45 minutes.
+- **Test (TZ-2a, America/Nuuk):** a planned reading of Sat 28 Mar 2026 23:30 (inside the gap
+  23:00 → 00:00) → **29 Mar 00:59 UTC, which reads 22:59 on 28 Mar**, not 00:00 on 29 Mar; the
+  day's planned clock time stays 23:30. Counter-tests, plain R: Europe/Berlin 29 Mar 2026 02:30 →
+  01:00 UTC (03:00 CEST, same date); America/Santiago 6 Sep 2026 00:30 → 04:00 UTC (01:00, same
+  date); America/Nuuk 24 Oct 2026 23:30, a repeated reading → 25 Oct 01:30 UTC (the later
+  occurrence, still 24 Oct 23:30 by the clock).
 
 ## FR-2 — `hardFloor(day)`: definition and meaning as an upper bound
 
@@ -87,16 +152,23 @@ allowed), but **never later** (a later value means missing a real appointment).
 
 **The appointment's own time zone:** the **appointment's own zone** exclusively determines the
 conversion of its start into an absolute instant (already existing functionality,
-`convertToTZDateTime` in `lib/utils/utils.dart`). The **device's time zone at the moment of
-evaluation** (the same offset FR-16 checks) - **never** the appointment's own zone - decides which
-calendar day the instant is assigned to. Rationale: whoever needs to be woken up is physically
-wherever the device is, not wherever the appointment is located.
+`convertToTZDateTime` in `lib/utils/utils.dart`). The **device zone's rules at the appointment's
+own instant** - **never** the appointment's own zone, and **not** the offset in effect at the
+moment of evaluation - decide which calendar day the instant is assigned to: the calendar date the
+device's clock shows at that instant (L, FR-1). The two differ for an appointment after a
+daylight-saving change inside the window (`docs/TODO.md` T-119, resolved by T-206, confirmed by the maintainer on 2026-09-28). Rationale:
+whoever needs to be woken up is physically wherever the device is, not wherever the appointment is
+located. *(Until T-206 this read: "The device's time zone at the moment of evaluation (the same
+offset FR-16 checks) - never the appointment's own zone - decides which calendar day the instant is
+assigned to.")*
 
-**Testability:** the pure function (`eventsForDay`) takes the device offset as an **explicit
-parameter**, rather than calling `DateTime.toLocal()` internally - the latter would depend on the
+**Testability:** the pure function (`eventsForDay`) takes the device zone's **rules** as an
+**explicit parameter** - a function from an instant to the UTC offset in effect at it - rather
+than a single offset or calling `DateTime.toLocal()` internally; the latter would depend on the
 executing machine's system time zone and would therefore not be deterministically testable. Only
-the thin AppState layer (architecture) reads the actual, current offset (`DateTime.now()
-.timeZoneOffset`) and passes it on as a value.
+the thin AppState layer (architecture) supplies the actual device rules (Dart's local conversion
+over the OS time zone database) and passes them on as a value; tests inject a fixed offset or a
+real zone's rules.
 
 - **Test:** two non-all-day appointments (09:00, 07:00), `durationToWakeUp=15min`,
   `durationToGetReady=15min` → `hardFloor` = 07:00 − 30min = **06:30** (the earlier one counts).
@@ -106,19 +178,24 @@ the thin AppState layer (architecture) reads the actual, current offset (`DateTi
 - **Test (appointment's own time zone):** Tom (device on `Europe/Berlin`) has an appointment with
   `startTimeZone=Asia/Tokyo`, starting 03:00 JST = 19:00 CET **the day before** → counts toward
   `hardFloor` for the Berlin day before, not the Tokyo date.
+- **Test (DST inside the window, T-206):** device on `Europe/Berlin`, planning on Sat 28 Mar 2026
+  (CET, +1), an appointment Mon 30 Mar 2026 00:30 CEST (29 Mar 22:30 UTC), no lead times → it
+  belongs to **Monday 30 Mar**, and `hardFloor(Mon)` = 29 Mar 22:30 UTC; not Sunday 29 Mar (under
+  the planning day's +1 it would read Sunday 23:30).
 
 ## FR-3 — State
 
 | Field | Type | Note |
 |---|---|---|
 | `maxDailyDelta` | `Duration` | `> 0`; a system minimum of **15 minutes** is enforced (at 0 the parameter would have no effect left on `hardFloor` segments - it would only apply where it's least needed) |
-| `preferredWakeUpTime` | `TimeOfDay?` | a bare time of day, **not** an instant, **not** a date/zone - is only combined with a day + the current zone at the point of use (FR-4/FR-16); that's why FR-16 doesn't "carry over" anything onto `preferredWakeUpTime` itself on a time zone change |
-| `lastCheckedUtcOffset` | `Duration` | the offset at the last FR-16 checkpoint |
+| `preferredWakeUpTime` | `TimeOfDay?` | a bare time of day, **not** an instant, **not** a date/zone - is only combined with a day at the point of use and resolved by R_plan with that day's own zone rules (FR-1, FR-4, FR-10, FR-16); that's why FR-16 doesn't "carry over" anything onto `preferredWakeUpTime` itself on a time zone change |
+| `lastCheckedUtcOffset` | `Duration` | the offset at the last FR-16 checkpoint: the device zone's rules evaluated at that checkpoint's own instant |
 | `gapDayCounter` | `int` | rolling safety-valve counter (FR-9) |
 | `lastReplanDate` | `Date?` | **only** FR-17's daily lock: "has a checkpoint already run today?". **Not** updated by FR-16 checkpoint 2 |
 | `lastProcessedConcludedDay` | `Date?` | the day-advance's progress: up to which *concluded* day have FR-9 and FR-12 counted/checked? Separate from `lastReplanDate` (`docs/TODO.md` T-75), because the two meanings diverge as soon as a checkpoint runs for a day not yet concluded today |
 | `pendingDayValues` | `Map<Date, Instant?>` | the planned values themselves; `null` = no alarm for this day (a gap day without `preferredWakeUpTime`, or FR-9's valve). Revisable for any day not yet triggered (FR-11), fixed forever after that. Bounded from below at "from the day before yesterday" (T-82) |
 | `pendingDayInstantAnchored` | `Map<Date, bool>` | per planned day: did the value come directly from a real `hardFloor` (instant-anchored), or from `preferredWakeUpTime`/the curve (wall-clock-anchored)? FR-16 checkpoint 2 has no calendar access and cannot re-derive this |
+| `pendingDayClockTimes` | `Map<Date, (Reading, Instant)>` | T-206: per **wall-clock-anchored** planned day, the **planned clock time** - the local reading the value was planned as (stored as "wall milliseconds": the reading's digits read as UTC; **not** an instant) - paired with the value it resolved to (a copy of `pendingDayValues[day]` at planning time). Needed because a skipped reading cannot be recovered from its instant (02:30 on a spring-forward day resolves to 03:00, and 03:00 is what the clock then shows), and because FR-16 re-resolves it. An entry **counts only while it is intact**: its paired value equals `pendingDayValues[day]` and R_plan of its reading equals that value; otherwise it is ignored. No entry for instant-anchored days or days without a value; same retention bound as `pendingDayValues` |
 | `disabledDays` | `Set<Date>` | FR-21: days for which the user has explicitly **switched off** the planned alarm. Separate from `pendingDayValues`, because `null` there means "nothing planned" (FR-9/FR-10) and would be overwritten by the next planning run - the user's veto must not be |
 | `snoozeEnabled` | `bool` | FR-20: is the user allowed to postpone the alarm? Default **true** (2026-09-25, maintainer request - was **false**) |
 | `snoozeTime` | `Duration` | FR-20: by how much pressing snooze postpones. Default **5 minutes** |
@@ -132,24 +209,38 @@ Refers exclusively to the `ScheduledAlarm` chain.
 `pendingDayValues` for the most recently concluded day, and as a second source could only drift
 apart from it.
 
+`pendingDayClockTimes` (T-206) is **not** such a second source. It never says *which* value rang -
+that stays `pendingDayValues` - only *which reading that value was planned as*. The anchor's
+reading for FR-4 is the planned clock time of the same day if its entry is intact (see the table),
+otherwise the reading the clock showed at `lastEffectiveWakeTime` (L, FR-1). Any mismatch
+therefore falls back to the value, never the other way round.
+
 ## FR-4 — Days with no requirement of their own
 
 A day with no `hardFloor` of its own, that does not fall within an active smoothing segment (FR-7
 determines when a segment begins):
 
-- Without `preferredWakeUpTime`: the value holds at `lastEffectiveWakeTime`'s time of day, but on
-  the **real, actually planned calendar day** (`lastEffectiveWakeTime`'s date + 1), not on
-  `lastEffectiveWakeTime`'s own date - otherwise the stored value carries yesterday's date even
-  though it applies to today (found as a genuine bug during the TDD cycle itself: an initial
-  version left the date unchanged).
-- With `preferredWakeUpTime`: the value drifts toward `preferredWakeUpTime` (combined with the
-  actual calendar day mentioned above, not with `lastEffectiveWakeTime`'s own -
+- Without `preferredWakeUpTime`: the value holds at `lastEffectiveWakeTime`'s **planned clock
+  time** (its reading per FR-3: the stored planned clock time if that entry is intact, otherwise
+  the reading the clock showed when it rang), but on the **real, actually planned calendar day**
+  (that reading's date + 1), not on `lastEffectiveWakeTime`'s own date - otherwise the stored value
+  carries yesterday's date even though it applies to today (found as a genuine bug during the TDD
+  cycle itself: an initial version left the date unchanged). The held reading becomes an instant by
+  R_plan with that day's own zone rules (FR-1).
+- With `preferredWakeUpTime`: the value drifts, **in local readings**, toward `preferredWakeUpTime`
+  (combined with the actual calendar day mentioned above, not with `lastEffectiveWakeTime`'s own -
   `preferredWakeUpTime` itself carries no date anyway, FR-3), bounded by `maxDailyDelta`/day,
   stops once reached (no overshoot) - **additionally capped by FR-7's backward check**, if a future
   real `hardFloor` exists within the window: the drift must never consume more reserve than is
   still needed to reach it in time. The distance to `preferredWakeUpTime` is compared here, as in
-  FR-6, exclusively via the time-of-day components (see FR-6's clarification), not via the full
-  calendar difference.
+  FR-6, exclusively via the time-of-day components of the local readings (see FR-1 and FR-6's
+  clarification), not via the full calendar difference. The result becomes an instant by R_plan
+  with that day's own zone rules.
+
+**A daylight-saving change is not a shift** (T-206, maintainer decision A,
+`docs/timezone-requirements.md` TZ-2): it consumes none of `maxDailyDelta` and never triggers
+FR-6's notification. A held 07:00 is 07:00 by the clock on the change day and on every day after;
+a real drift on the change day is limited exactly as on any other day.
 
 The following tests check the drift rule itself **in isolation**, without FR-7's cap (assuming no
 future `hardFloor`) - the interplay with the cap is already tested by FR-7's own test cases.
@@ -161,13 +252,30 @@ future `hardFloor`) - the interplay with the cap is already tested by FR-7's own
   15min < 30min → **exactly 07:15**, not 07:30.
 - **Test (goal reached):** `V=07:00`, `preferredWakeUpTime=07:00` → unchanged **07:00**.
 
+Daylight-saving tests (T-206), each over several days of one plan in `Europe/Berlin`, with no
+`hardFloor` in the window:
+
+- **Test (DST, spring):** `V` = Sat 28 Mar 2026 07:00 CET, `preferredWakeUpTime=null` → Sun 29 Mar
+  **07:00 CEST** (05:00 UTC), and 07:00 on every day after; not 08:00.
+- **Test (DST, autumn):** `V` = Sat 24 Oct 2026 07:00 CEST, `preferredWakeUpTime=null` → Sun 25 Oct
+  **07:00 CET** (06:00 UTC), and 07:00 on every day after; not 06:00.
+- **Test (DST, held reading in the skipped hour):** `V` = Sat 28 Mar 2026 02:30 CET (planned clock
+  time 02:30), `preferredWakeUpTime=null` → Sun 29 Mar **03:00 CEST** (01:00 UTC, TZ-1), Mon 30 Mar
+  **02:30 CEST** (00:30 UTC), and 02:30 on every day after; not 03:00 from Sunday on.
+- **Test (DST, `preferredWakeUpTime` in the repeated hour):** `preferredWakeUpTime=02:30`, `V` = Sat
+  24 Oct 2026 02:30 CEST → Sun 25 Oct **02:30 CET** (01:30 UTC, the later occurrence).
+- **Test (DST, a real drift stays limited):** `V` = Sat 28 Mar 2026 07:00 CET,
+  `preferredWakeUpTime=09:00`, `maxDailyDelta=30min` → Sun **07:30** CEST, Mon 08:00, Tue 08:30,
+  Wed 09:00; not 08:30 on Sunday.
+
 ## FR-5 — Grouping real `hardFloor` points into segments ("runs")
 
 Real `hardFloor` points within the window: `t1, t2, …, tn`, chronological. Starting from the
 current anchor `A` (day 0):
 
 **Precondition: only a binding point can be a target.** Only a point whose time of day lies
-**earlier** than `A` (ΔT per FR-6's clarification, i.e. purely via the time-of-day components)
+**earlier** than `A` (ΔT per FR-1 and FR-6's clarification, i.e. purely via the time-of-day
+components of the local readings)
 qualifies as a target `t_m`. A point that is equal to or later than `A` demands nothing: someone
 who gets up at 06:45 has long since satisfied an appointment at 11:00. FR-4 applies to such a day
 (drift toward `preferredWakeUpTime`, bounded by `maxDailyDelta`), and the `hardFloor` then acts
@@ -191,7 +299,8 @@ warns against. They are excluded only as a *target*.
   `06:18 / 05:52 / 05:26 / 05:00`, then drifts back toward `preferredWakeUpTime`.
 
 1. Determine the point `t_m` (m ≥ 1) furthest in the future such that the even distribution
-   `A→t_m` (FR-6) shifts **no** intermediate point `t1…t_{m-1}` past its own `hardFloor`. If this is
+   `A→t_m` (FR-6) shifts **no** intermediate point `t1…t_{m-1}` past its own `hardFloor` (compared
+   as instants: the distributed reading resolved by R_plan against the `hardFloor` instant, FR-1). If this is
    violated for the next possible `t_m`, `m` is reduced until it holds (worst case `m=1`). **No**
    additional check of whether `t1…t_m` all "point in the same direction as `A`": an initial version
    contained such a directional filter, which proved wrong when working through a multi-day run -
@@ -237,19 +346,24 @@ distributed) the user is notified **once**.
 **Clarification of `ΔT` and `day_i`'s date (found as a genuine bug during implementation, not
 already at design time):** `A` and `F`, as real calendar-derived `hardFloor` points, often carry
 dates that are genuinely far apart (`F` can be days after `A`). `ΔT = |A − F|` here means
-**exclusively the time-of-day components** of `A` and `F` (hour/minute/second), **never** their
-full calendar difference - a naive `F − A` instant difference across several real days would yield
-a nonsensical value dominated by the day count, instead of the actually intended small daily
-time-of-day shift. The ambiguity in determining direction is resolved as in FR-1 (the variant with
-`|Δ| ≤ 12h` wins). Symmetrically, each `day_i` gets its **own, real calendar date**, `A`'s date `+
+**exclusively the difference of the times of day of their local readings** (hour/minute/second of
+each, read under the device zone's rules at its own instant - or, for an anchor with an intact
+planned clock time, that clock time; FR-1, FR-3), **never** their full calendar difference - a
+naive `F − A` instant difference across several real days would yield a nonsensical value
+dominated by the day count, instead of the actually intended small daily time-of-day shift. The
+ambiguity in determining direction is resolved as in FR-1 (the variant with `|Δ| ≤ 12h` wins).
+Symmetrically, each `day_i` gets its **own, real calendar date**, the date of `A`'s **reading** `+
 i` - **never** `F`'s own (possibly far-off) date. `F`'s own date is nowhere needed for the
-calculation itself, only to place `F` at the right position in the window.
+calculation itself, only to place `F` at the right position in the window. `day_i` is a reading;
+it becomes an instant only by R_plan with that day's own zone rules (FR-1).
 
-**Implementation note (UTC preservation):** if, when constructing `day_i` (or generally a "same
-time of day, new date" value), a local constructor is accidentally used instead of a UTC one, even
-though `A` itself was UTC-based, a real instant mismatch results - visible only on machines whose
-system time zone differs from UTC (also found as a genuine bug during implementation) - every such
-construction must carry over `A`'s (or the relevant reference's) `isUtc` flag.
+**Implementation note (reading space, T-206):** `day_i` is constructed in reading space - which has
+no transitions, so adding one calendar day or `n` minutes is exact there - and becomes an instant
+only via R_plan. This replaces the earlier "UTC preservation" note (construct "same time of day,
+new date" values in UTC, carrying over `A`'s `isUtc` flag): that instant-space construction is
+correct only while the offset is constant, and across a daylight-saving change it planned a run in
+UTC digits - a clock-reading zigzag and a spurious notification. That a reading may cross midnight
+onto the next date (`docs/TODO.md` T-112) is unchanged by this.
 
 - **Test (earlier):** `A=08:00, F=04:30, N=5, maxDailyDelta=60min` → `ΔT=3:30, ΔT/N=42min` (< 60min,
   no overrun) → day1=07:18, day2=06:36, day3=05:54, day4=05:12, day5=04:30.
@@ -259,6 +373,16 @@ construction must carry over `A`'s (or the relevant reference's) `isUtc` flag.
   day1=06:50, day2=05:40, day3=04:30, notification.
 - **Test (overrun, `N=1`):** `A=08:00, F=02:00, N=1, maxDailyDelta=60min` → full 6h jump,
   notification - **not** a spec defect.
+- **Test (DST, no shift across a change, T-206):** `Europe/Berlin`, `A` = Fri 27 Mar 2026 07:00
+  CET, the only `hardFloor` Tue 31 Mar 07:00 CEST (appointment 07:30 CEST, 30 min to wake up, no
+  getting-ready time), no `preferredWakeUpTime`, `maxDailyDelta` 15 or 30 min → `ΔT = 0`: **07:00 by
+  the clock on every day** (Sat 28 Mar 06:00 UTC, from Sun 29 Mar 05:00 UTC), **no** notification,
+  and no run starting on Saturday. The same with the appointment on Mon 30 Mar instead.
+- **Test (DST, a real shift across a change is measured on readings, T-206):** `A` = Sat 28 Mar
+  2026 07:00 CET, `F` = Sun 29 Mar 06:00 CEST (04:00 UTC), `N=1` → `ΔT = 60min` (not 0, not 120):
+  with `maxDailyDelta=60min` **no** notification, with `45min` a notification. `F` = Sun 29 Mar
+  05:00 CEST (03:00 UTC), `maxDailyDelta=30min` → `ΔT = 120min`, notification. In each case the
+  value is exactly `F`.
 
 ## FR-7 — When does a run actually begin? ("As late as necessary")
 
@@ -386,13 +510,17 @@ correctness-critical mechanism).
 If no `lastEffectiveWakeTime` exists (the very first planning run), **no** value is invented for
 days before the first real `hardFloor`:
 
-- With `preferredWakeUpTime`: these days use it.
+- With `preferredWakeUpTime`: these days use it, resolved by R_plan on each day with that day's
+  own zone rules (FR-1).
 - Without: no alarm planned.
 - The first real `hardFloor` is set on its own day (FR-2) and becomes the anchor for all following
   days from then on.
 
 - **Test:** days 1–5 appointment-free, day 6 `hardFloor=05:30`, no `preferredWakeUpTime` → days 1–5
   no alarm, day 6=05:30 becomes the new anchor.
+- **Test (DST, T-206):** `Europe/Berlin`, window Sat 28 Mar – Fri 3 Apr 2026, no appointment,
+  `preferredWakeUpTime=07:00`, no `lastEffectiveWakeTime` → 07:00 by the clock every day: 28 Mar
+  06:00 UTC, from 29 Mar on 05:00 UTC.
 
 ## FR-11 — Revisability up to the actual ring
 
@@ -411,6 +539,13 @@ but disproportionate for a private alarm app, and would be batched/delayed by th
 as "loaded", even if never re-queried (`docs/TODO.md` T-60 - already a bug in the existing code,
 independent of v2). The new planning must **not** reuse this cache, or a calendar change would stay
 invisible for the entire process lifetime.
+
+**Fixed together with its planned clock time (T-206):** a rung value is fixed as an instant, and
+its `pendingDayClockTimes` entry survives with it under the same retention bound, so the next day
+continues from the reading it was planned as (FR-4) - not from the reading the clock showed, which
+differs for a skipped reading. **Which day rang** is the calendar date of the ringing instant;
+R_plan (FR-1, TZ-2a) keeps a planned wall-clock value on its own planned date, so a pulled-forward
+value (America/Nuuk, 22:59 instead of 00:00) concludes its own day, not the next one.
 
 ## FR-12 — Appointments discovered late, after the alarm rang
 
@@ -445,8 +580,10 @@ value.
 
 ## FR-16 — Time zone change: two daily checkpoints
 
-The currently effective **UTC offset** is freshly read at exactly two points per day (via
-`DateTime.now().timeZoneOffset`, platform-side - **not** via the existing `Location`/abbreviation
+The currently effective **UTC offset** is freshly read at exactly two points per day (via the
+device zone's rules evaluated at the checkpoint's own instant - in production Dart's local
+conversion over the OS time zone database, i.e. `DateTime.now().timeZoneOffset`, platform-side -
+**not** via the existing `Location`/abbreviation
 table in `lib/main.dart`/`getLocationFromAbbreviation()`, which guesses ambiguously from a POSIX
 abbreviation like `"CST"` among three real zones, and stays correctly used for its actual purpose -
 FR-2's appointment-own-time-zone conversion - but would be needlessly error-prone for a pure offset
@@ -456,8 +593,14 @@ comparison), and compared with the offset at the previous checkpoint:
 2. **At the computed bedtime instant** = `next planned wake instant − sleepGoal −
    reminderDuration` (`sleepGoal`/`reminderDuration`: existing app state,
    `lib/screens/sleep_habits/screen_sleephabits.dart`) - **regardless of** whether the bedtime
-   notification itself is enabled. Triggers **only** the time zone comparison, **no** replanning,
-   **no** calendar access.
+   notification itself is enabled. Triggers **only** the time zone comparison and, on a detected
+   change, the re-resolution below - **no** replanning, **no** calendar access. With an unchanged
+   offset it writes nothing but the offset.
+
+**One rules source (T-206):** both checkpoints, and the planning they protect, take the offset from
+the **same** injected rules function (instant → UTC offset). Checkpoint 2 reads its offset as that
+function applied to its own "now"; it has no second, separate offset injection that could disagree
+with the rules it re-resolves with.
 
 No third, continuous background timer - both checkpoints hang off events that are scheduled
 anyway. FR-17 adds a conditional third trigger for checkpoint 1 (app foreground), not a standalone
@@ -469,10 +612,45 @@ happens during the day (e.g. Tom's flight lands in the afternoon) at the next ri
 **Behaviour on a detected change** (the offset is compared, not the zone name - this recognizes a
 genuine location change and a plain daylight-saving change the same way):
 - **Instant-based values** (`hardFloor`): unchanged (FR-1) - only the local display changes.
-- **Wall-clock-anchored values** (`preferredWakeUpTime`, carried-forward intermediate values): are
-  **carried over into the new zone with the same digits** (alarm-clock convention: "7:00" stays
-  "7:00", now in the new zone), no full recomputation of the segments/runs - that only follows at
-  the next regular planning run.
+- **Wall-clock-anchored values** (`preferredWakeUpTime`, carried-forward intermediate values) keep
+  their **planned clock time** (FR-3), **re-resolved by R_plan under the device's current rules**
+  (T-206); no full recomputation of the segments/runs - that only follows at the next regular
+  planning run. For a daylight-saving change inside one zone this changes nothing, because each
+  value was already resolved with its own day's rules. For a genuine zone change it carries the
+  same digits into the new zone (alarm-clock convention: "7:00" stays "7:00", now in the new zone),
+  and it now also resolves the new zone's own skipped or repeated hour by TZ-1. *(Until T-206 the
+  values were "carried over into the new zone with the same digits" by shifting each instant by the
+  offset difference.)*
+
+  For each day whose value is **after now** (FR-11: a value that has rung is never touched), in
+  this order:
+  1. instant-anchored (`pendingDayInstantAnchored[day] == true`) → untouched, even if a planned
+     clock time exists for it (the anchored flag wins);
+  2. `pendingDayClockTimes` missing from storage altogether (a plan made by a version before
+     T-206) → shifted by the offset difference, as before. This branch is kept for the upgrade
+     window; once a new version has planned once it is practically unreachable, which does not make
+     it removable dead code;
+  3. an **intact** entry (its paired value equals `pendingDayValues[day]`) → the value becomes
+     R_plan(planned clock time) under the current rules, and the entry's paired value with it;
+     written only if it differs;
+  4. anything else (no entry for the day, a torn pair whose paired value differs, an unreadable
+     entry) → untouched: the value stays what FR-18 armed.
+
+**Re-resolution policy (T-206): only on a detected offset change, never unconditionally.** An
+unconditional re-resolution would also catch a time zone database update between planning and
+ringing. But checkpoint 2 fires right after every replan (T-85d below), and it re-arms nothing
+(`docs/TODO.md` T-113), so it would become the most frequent writer of the plan with no way to keep
+the armed alarms in step. The next replan corrects a database update anyway.
+
+**Why the re-resolution is needed for daylight saving at all (T-206).** Checkpoint 2 fires when a
+notification is **created**, not when it is due (`docs/TODO.md` T-199), and most creations happen
+inside the checkpoint sequence right after checkpoint 1 has recorded the current offset - there
+it sees no change. A notification created **outside** a checkpoint after a change does see a stale
+baseline: a dismissed manual alarm (`Handler.onAlarmHandled` schedules the bedtime reminder, and
+manual alarms trigger no checkpoint) or the Sleep Habits reminder toggle, on a day whose FR-17
+daily lock was already consumed before the change (the lock returns before checkpoint 1 records the
+offset). The old shift by the offset difference would then move a value that is already correctly
+resolved by the DST difference.
 
 **Precondition (built):** checkpoint 2 had no hook in the original code - scheduled notifications
 (`awesome_notifications`) do not run any Dart code when they fire unless a listener is registered,
@@ -495,22 +673,39 @@ checkpoint" means "at the last *arbitrary* notification event". Deliberately lef
 than filtering on `sleepReminderNotificationId` - FR-16's goal is to notice a change happening
 during the day early, and more opportunities serve exactly that.
 
-**Known limitation on the transition day itself (`docs/TODO.md` T-85e):** a wall-clock-anchored
-value for the transition day is computed the day before with the *old* offset, and checkpoint 2
-runs at bedtime - so still before the change happens overnight. On that one day such an alarm
-therefore rings off by the offset difference; it is corrected at the ring checkpoint that same
-morning (which replans) or at the latest the following day. Instant-anchored values (real
-appointments) are unaffected. Accepted: a fix would need to look ahead at the next day's zone
-rules, which is exactly what FR-16's model ("compare offsets, don't interpret zone names")
-deliberately does not do.
+**Daylight-saving changes need no checkpoint (`docs/TODO.md` T-85e, withdrawn by T-206).**
+Wall-clock-anchored values are resolved with the device zone's rules for the day they apply to
+(FR-1), so a value planned the day before a change is already right on the change day and after
+it. FR-16's checkpoints remain for zone changes (travel, provisional:
+`docs/timezone-requirements.md` TZ-4 … TZ-7). The original objection, "a fix would need to look
+ahead at the next day's zone rules", conflated two things: guessing a zone from its name, which
+FR-16 rightly avoids, and asking the operating system for the offset at a future instant of the
+*current* zone, which is exact. *(Status: implemented by T-206. The
+withdrawn text accepted that on the change day such an alarm "rings off by the offset difference;
+it is corrected at the ring checkpoint that same morning (which replans) or at the latest the
+following day" - T-206 found that false whenever `maxDailyDelta` is below the DST difference: the
+error lasts ⌈60 min / `maxDailyDelta`⌉ days, four at 15 min.)*
 
 - **Test (location change):** alarm rings at 06:00 (zone A, +1). At 14:00 Tom lands in zone B (+9).
   The bedtime checkpoint detects the changed offset; `preferredWakeUpTime` (e.g. 09:00) now applies
   as 09:00 in zone B. Without the second checkpoint this would only have been corrected at the next
   ring (>12h later).
+  (T-206: with a planned clock time of 09:00 stored, R_plan under +9 gives 09:00 in zone B - the
+  same instant as the legacy shift gives without one.)
 - **Test (daylight saving):** the zone stays "Europe/Berlin", clocks move overnight from CET (+1) to
-  CEST (+2) → the next checkpoint detects the changed offset identically to a location change, no
-  separate case distinction needed.
+  CEST (+2) → the next checkpoint detects the changed offset. Re-resolving the planned clock times
+  leaves every planned value unchanged, because they were already planned with the CEST rules
+  (T-206; until then: "identically to a location change, no separate case distinction needed").
+- **Test (stale baseline, T-206):** plan made Sat 28 Mar 2026 (CET): Sun 29 Mar = 07:00 CEST =
+  05:00 UTC, planned clock time 07:00; `lastCheckedUtcOffset` still +1; checkpoint 2 at Sun 29 Mar
+  03:30 CEST (+2) → change detected, Sun stays **05:00 UTC** (the old shift would give 04:00 UTC =
+  06:00 CEST), and `lastCheckedUtcOffset` becomes +2.
+- **Test (torn pair, T-206):** the same, but the entry's paired value differs from
+  `pendingDayValues[Sun]` → Sun is left untouched.
+- **Test (anchored wins, T-206):** a day with `pendingDayInstantAnchored = true` and a planned clock
+  time → untouched.
+- **Test (no change, T-206):** the same offset as at the last checkpoint → nothing but the offset is
+  written; `pendingDayValues` and `pendingDayClockTimes` are byte-identical afterwards.
 
 ## FR-17 — App foreground as a catch-up checkpoint
 
@@ -604,7 +799,9 @@ Application and helper modules
  day_marker.dart        calendar day arithmetic (T-76): midnight/dayMarker/
                         dayDistance/dayStamp/isoDate
  stored_values.dart     the two permitted readings of a stored value (T-83):
-                        instantFromStored (domain, UTC) / localFromStored (UI)
+                        instantFromStored (domain, UTC) / localFromStored (UI);
+                        plus (T-206) the stored planned clock time, which is
+                        not an instant and meets one only through R_plan
  lib/utils/sleep_reminder.dart  scheduleSleepReminder (FR-16 "precondition")
 ```
 
@@ -630,8 +827,8 @@ flowchart TD
 No dedicated trigger exists for calendar changes themselves (FR-11) - a changed appointment takes
 effect at the next checkpoint. All nine new `AppState` fields (FR-3) persist following an
 already-proven pattern: `int`/`bool`/`String` directly via `setInt`/`setBool`/`setString`,
-`pendingDayValues` and `pendingDayInstantAnchored` via `jsonEncode`/`jsonDecode` (like
-`_scheduledAlarms` today) - no new persistence idea needed.
+`pendingDayValues`, `pendingDayInstantAnchored` and (T-206) `pendingDayClockTimes` via
+`jsonEncode`/`jsonDecode` (like `_scheduledAlarms` today) - no new persistence idea needed.
 
 **What disappears:** `lib/models/scheduling/scheduling.dart`'s current `getEarliestEvent`,
 `adjustAlarmTimes`, `getStartTimeForDate`, and the private `Scheduler` class. `docs/TODO.md` T-02
@@ -796,7 +993,12 @@ decision.
 - The switched-off day stays in the plan and stays an **anchor** for the smoothing (FR-4/FR-6). The
   user said "do not wake me on this day", not "remove this day from my rhythm".
 - FR-9's counter is untouched: a switched-off day is not an appointment-free day.
-- Switching the day back on restores the planned value immediately.
+- Switching the day back on restores the planned value immediately (and, T-206, its planned clock
+  time is unchanged by either switch).
+- **The switched-off day is the planned day.** The toggle keys the day by the alarm's local date;
+  R_plan keeps that equal to the planned day for a wall-clock value, also where a gap ends at
+  midnight (`docs/timezone-requirements.md` TZ-2a, T-206). A value that an appointment's lead
+  times push before midnight is a separate, open question (`docs/TODO.md` T-120).
 - A switched-off day that has passed is cleaned up along with `pendingDayValues` (the same
   retention bound, T-82) — otherwise the set grows without limit.
 - **Snooze (FR-20) is unaffected:** there is nothing to postpone that does not ring.

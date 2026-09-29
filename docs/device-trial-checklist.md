@@ -106,7 +106,8 @@ E6 is the point with the biggest leverage: that a silent notification actually t
 |---|---|---|---|
 | F1 | Change the device time zone (e.g. Berlin → Tokyo), open the app | days using the preferred wake-up time keep their **digits**, appointment days keep their **instant** (FR-16) | |
 | F2 | Check the diagnostics log after F1 | `timezoneCheck` with `offsetChangeShape=3` (otherChange) | |
-| F3 | Set the device clock to the day before a daylight-saving transition, alarm for the transition day | **known limitation:** on this one day the alarm can be off by one hour (see FR-16 in `docs/scheduling-v2-spec.md`) | |
+| F3 | Set the device clock to the day before a daylight-saving transition (automatic time off, device zone Europe/Berlin), `preferredWakeUpTime` 07:00, no appointment; let the day's alarm ring (or trigger a Sync) | the transition day's scheduled alarm reads **07:00** in the alarm list, not 08:00 (spring) / 06:00 (autumn), and so does every day after it (T-206; before it, a known one-hour error) | |
+| F4 | A3 (`docs/TODO.md` T-206): after F3, before and after the transition, `adb shell dumpsys alarm` for the app's package | the armed alarm's trigger time is 07:00 **local** on the transition day - proving that Dart's local conversion on the phone applies the transition to a *future* instant (`deviceOffsetAt`), which no test can show. Run once around the March and once around the October transition | |
 
 ## Findings
 

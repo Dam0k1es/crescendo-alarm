@@ -1,3 +1,10 @@
+// docs/TODO.md T-206 (requirements T02, "Lemma C"): a VERBATIM copy of
+// lib/models/scheduling/scheduling_v2.dart as of commit 8ac1d9e - the pure
+// layer before T-206 - kept only as the oracle for
+// test/t206_lemma_c_differential_test.dart: with one constant offset, the
+// new zone-rules-injected computation must be bit-identical to this one.
+// Never imported from lib/, never edited (below this comment block).
+//
 // Copyright (C) 2026 Dam0k1es, centron5961
 //
 // This file is part of Crescendo Alarm.
@@ -21,29 +28,10 @@
 //
 // Convention (spec, Phase 0): "Instant" is represented as a plain [DateTime];
 // "preferredWakeUpTime" as a [TimeOfDay]; day windows as plain integer day-offsets.
-//
-// docs/TODO.md T-206 (FR-1, maintainer decision A): two kinds of time value.
-// Every value going in or out of this file's public functions is an INSTANT
-// (UTC-tagged); the size and sign of a daily shift are decided on local
-// clock READINGS - a date plus a time of day as the device's clock shows
-// it, carried as a UTC-tagged `DateTime` whose digits are that reading.
-// Reading space has no transitions, so "the same time, one day later" is
-// exact there. The two meet in exactly two places:
-//
-// - an instant's reading is `_reading(t)` = L(t), with the zone's rules AT
-//   that instant;
-// - a reading becomes an instant only through `resolvePlannedClockTime`
-//   (R_plan, TZ-1/TZ-2a), with the rules for the day it applies to.
-//
-// A reading is never compared with an instant: FR-2's upper bound is
-// applied after R_plan, on instants. The zone's rules arrive as a function
-// value ([ZoneOffsetAt]), never from ambient state.
 
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart' show Meeting;
-import 'package:crescendo_alarm/utils/wall_clock.dart'
-    show ZoneOffsetAt, resolvePlannedClockTime;
 
 /// One real `hardFloor` point in the visible window (FR-2/FR-5), [dayOffset]
 /// relative to whichever anchor day is currently under consideration.
@@ -94,9 +82,6 @@ int _timeOfDayMicros(DateTime t) =>
 /// days apart (a future `hardFloor` point's own date is only used to place it
 /// correctly within a window - never to compute how *far*, in wall-clock
 /// terms, the wake time itself needs to move).
-///
-/// docs/TODO.md T-206: both arguments are local READINGS (FR-1), never
-/// instants - the digits compared are the ones the device's clock shows.
 Duration _wallClockDelta(DateTime anchor, DateTime target) {
   var deltaMicros = _timeOfDayMicros(target) - _timeOfDayMicros(anchor);
   const dayMicros = 24 * 60 * 60 * 1000000;
@@ -106,34 +91,38 @@ Duration _wallClockDelta(DateTime anchor, DateTime target) {
   return Duration(microseconds: deltaMicros);
 }
 
-/// FR-1's `ΔT` between two local readings [from] and [to] (docs/TODO.md
-/// T-206): the difference of their times of day, wrapped into (-12h, +12h].
-/// Public for the diagnostics' step measure (`replan.dart`), which must use
-/// the same arithmetic as the planning it describes.
-Duration readingDelta(DateTime from, DateTime to) => _wallClockDelta(from, to);
+/// Builds a `DateTime` on [reference]'s year/month with the given [day]/time
+/// components, preserving [reference]'s UTC-ness (`DateTime(...)` always
+/// builds a **local** instant regardless of its inputs' own origin - naively
+/// reusing it on a UTC [reference] silently reinterprets its wall-clock
+/// components in the host's local offset instead, corrupting the real instant
+/// whenever that offset isn't zero).
+DateTime _dateTimeLike(
+  DateTime reference, {
+  required int day,
+  required int hour,
+  required int minute,
+  int second = 0,
+  int millisecond = 0,
+  int microsecond = 0,
+}) {
+  return reference.isUtc
+      ? DateTime.utc(reference.year, reference.month, day, hour, minute, second,
+          millisecond, microsecond)
+      : DateTime(reference.year, reference.month, day, hour, minute, second,
+          millisecond, microsecond);
+}
 
-/// L(t) (FR-1): the local reading the device's clock shows at [instant],
-/// with the zone's rules AT that instant - UTC-tagged, digits = the reading.
-DateTime _reading(DateTime instant, ZoneOffsetAt offsetAt) =>
-    instant.toUtc().add(offsetAt(instant));
-
-/// The same time of day as the reading [reading], [days] calendar days
-/// later - exact in reading space, which has no transitions (docs/TODO.md
-/// T-206: this replaces `_dateTimeLike`, whose instant-space construction was
-/// right only while the offset stayed constant).
-DateTime _readingDaysLater(DateTime reading, int days) => DateTime.utc(
-      reading.year,
-      reading.month,
-      reading.day + days,
-      reading.hour,
-      reading.minute,
-      reading.second,
-      reading.millisecond,
-      reading.microsecond,
-    );
-
-/// [distribute] in reading space: the curve's values are READINGS.
-DistributionResult _distributeReadings({
+/// FR-6: distributes the wall-clock-time difference between [anchor] and
+/// [target] evenly across [n] days, placing day i on its own real calendar
+/// date (`anchor`'s date + i) - never on the real, possibly many-days-distant
+/// date [target] itself might carry (see [_wallClockDelta]). If the
+/// resulting per-day step exceeds [maxDailyDelta], the excess is still spread
+/// evenly across all n days (never dumped onto a single day) - except that
+/// for n=1 a single-day jump is unavoidable and not itself a spec violation.
+/// Either way, [overrunNotificationNeeded] is set whenever maxDailyDelta is
+/// exceeded.
+DistributionResult distribute({
   required DateTime anchor,
   required DateTime target,
   required int n,
@@ -152,8 +141,16 @@ DistributionResult _distributeReadings({
     // target's wall-clock reading regardless of whether deltaMicros divides
     // evenly by n.
     final stepMicros = (deltaMicros * i) ~/ n;
-    values[i] = _readingDaysLater(anchor, i)
-        .add(Duration(microseconds: sign * stepMicros));
+    final dayI = _dateTimeLike(
+      anchor,
+      day: anchor.day + i,
+      hour: anchor.hour,
+      minute: anchor.minute,
+      second: anchor.second,
+      millisecond: anchor.millisecond,
+      microsecond: anchor.microsecond,
+    );
+    values[i] = dayI.add(Duration(microseconds: sign * stepMicros));
   }
 
   final overrunNotificationNeeded =
@@ -165,60 +162,18 @@ DistributionResult _distributeReadings({
   );
 }
 
-/// FR-6: distributes the wall-clock-time difference between [anchor] and
-/// [target] evenly across [n] days, placing day i on its own real calendar
-/// date (`anchor`'s date + i) - never on the real, possibly many-days-distant
-/// date [target] itself might carry (see [_wallClockDelta]). If the
-/// resulting per-day step exceeds [maxDailyDelta], the excess is still spread
-/// evenly across all n days (never dumped onto a single day) - except that
-/// for n=1 a single-day jump is unavoidable and not itself a spec violation.
-/// Either way, [overrunNotificationNeeded] is set whenever maxDailyDelta is
-/// exceeded.
-///
-/// docs/TODO.md T-206: [anchor], [target] and the result are instants; the
-/// curve itself is built on their local readings under [offsetAt] (FR-1: the
-/// size and sign of a shift are decided on readings), and each day's value is
-/// resolved by R_plan with that day's own rules - so a daylight-saving change
-/// inside the run is not a shift.
-DistributionResult distribute({
-  required DateTime anchor,
-  required DateTime target,
-  required int n,
-  required Duration maxDailyDelta,
-  required ZoneOffsetAt offsetAt,
-}) {
-  final curve = _distributeReadings(
-    anchor: _reading(anchor, offsetAt),
-    target: _reading(target, offsetAt),
-    n: n,
-    maxDailyDelta: maxDailyDelta,
-  );
-  return DistributionResult(
-    valuesByDayOffset: curve.valuesByDayOffset
-        .map((i, w) => MapEntry(i, resolvePlannedClockTime(w, offsetAt))),
-    overrunNotificationNeeded: curve.overrunNotificationNeeded,
-  );
-}
+/// The device-local reading of an absolute [instant] under [deviceUtcOffset],
+/// carried in a UTC-tagged `DateTime` whose year/month/day/hour/minute are the
+/// values a clock in that zone would show. Mirrors [eventsForDay]'s own
+/// conversion, and is deliberately explicit rather than `toLocal()` so nothing
+/// depends on the host machine's zone (FR-2 "Testbarkeit").
+DateTime _localReading(DateTime instant, Duration deviceUtcOffset) =>
+    instant.toUtc().add(deviceUtcOffset);
 
-/// FR-4 in reading space: the day after [vReading]'s own date, holding its
-/// time of day or drifting it toward [preferredWakeUpTime] by at most
-/// [maxDailyDelta] - a READING.
-DateTime _gapDayDriftReading({
-  required DateTime vReading,
-  required TimeOfDay? preferredWakeUpTime,
-  required Duration maxDailyDelta,
-}) {
-  final todayReading = _readingDaysLater(vReading, 1);
-  if (preferredWakeUpTime == null) return todayReading;
-
-  final target = DateTime.utc(todayReading.year, todayReading.month,
-      todayReading.day, preferredWakeUpTime.hour, preferredWakeUpTime.minute);
-  final distance = _wallClockDelta(vReading, target);
-  if (distance == Duration.zero) return todayReading;
-
-  final step = distance.abs() < maxDailyDelta ? distance.abs() : maxDailyDelta;
-  return todayReading.add(distance.isNegative ? -step : step);
-}
+/// Inverse of [_localReading]: turns a device-local reading back into the
+/// absolute instant it denotes.
+DateTime _instantOf(DateTime localReading, Duration deviceUtcOffset) =>
+    localReading.subtract(deviceUtcOffset);
 
 /// FR-4, isolated from FR-7s cap: computes **today**'s (the day after `v`'s own
 /// **device-local** date - the day actually being planned) wake time by
@@ -228,46 +183,61 @@ DateTime _gapDayDriftReading({
 ///
 /// [v] and the return value are absolute instants (FR-1); [preferredWakeUpTime] is a
 /// bare device-local `TimeOfDay` with no date or zone of its own (FR-3). That
-/// mismatch is exactly why the zone's rules [offsetAt] are needed here
-/// (`docs/TODO.md` T-61): combining preferredWakeUpTime's digits with `v`'s
-/// *raw* fields would compare a device-local wall clock against a UTC one and
-/// drift by the offset on any device outside UTC+0. Everything below
-/// therefore happens in the local reading - `v`'s under the rules at `v`,
-/// T-206 - and only the result is resolved back to an instant, by R_plan
-/// with the rules of the day it applies to.
+/// mismatch is exactly why [deviceUtcOffset] is needed here (`docs/TODO.md`
+/// T-61): combining preferredWakeUpTime's digits with `v`'s *raw* fields would compare a
+/// device-local wall clock against a UTC one and drift by the offset on any
+/// device outside UTC+0. Everything below therefore happens in the local
+/// reading, and only the result is converted back to an instant.
+///
+/// [distribute]/[groupTarget] need no offset by contrast - they only ever
+/// compare two instants in the same frame, and their `day_i` date advance
+/// yields the identical instant whether computed in the local or the raw frame.
 DateTime applyGapDayDrift({
   required DateTime v,
   required TimeOfDay? preferredWakeUpTime,
   required Duration maxDailyDelta,
-  required ZoneOffsetAt offsetAt,
-}) =>
-    resolvePlannedClockTime(
-      _gapDayDriftReading(
-        vReading: _reading(v, offsetAt),
-        preferredWakeUpTime: preferredWakeUpTime,
-        maxDailyDelta: maxDailyDelta,
-      ),
-      offsetAt,
-    );
+  required Duration deviceUtcOffset,
+}) {
+  final vLocal = _localReading(v, deviceUtcOffset);
+  final todayLocal = DateTime.utc(
+    vLocal.year,
+    vLocal.month,
+    vLocal.day + 1,
+    vLocal.hour,
+    vLocal.minute,
+    vLocal.second,
+    vLocal.millisecond,
+    vLocal.microsecond,
+  );
+  if (preferredWakeUpTime == null) {
+    return _instantOf(todayLocal, deviceUtcOffset);
+  }
 
-/// FR-2: which of [allEvents] fall on [day] - the calendar date the device's
-/// clock shows at each event's own instant, under the device zone's rules
-/// [offsetAt] **at that instant** (docs/TODO.md T-119/T-206: not the offset in
-/// effect when planning, which puts an appointment shortly after midnight
-/// after a daylight-saving change onto the previous day) - and **never** by
-/// an event's own zone (that's already baked into `.from` as an absolute
-/// instant by existing, unchanged conversion code, see FR-2 "The
-/// appointment's own time zone"). The rules are an explicit parameter rather
-/// than `DateTime.toLocal()` so this stays deterministic regardless of the
-/// host machine's own configured timezone (see FR-2 "Testability"). [day] is
-/// read by its calendar fields only.
+  final targetLocal = DateTime.utc(todayLocal.year, todayLocal.month,
+      todayLocal.day, preferredWakeUpTime.hour, preferredWakeUpTime.minute);
+  final distance = _wallClockDelta(vLocal, targetLocal);
+  if (distance == Duration.zero) {
+    return _instantOf(todayLocal, deviceUtcOffset);
+  }
+
+  final step = distance.abs() < maxDailyDelta ? distance.abs() : maxDailyDelta;
+  return _instantOf(
+      todayLocal.add(distance.isNegative ? -step : step), deviceUtcOffset);
+}
+
+/// FR-2: which of [allEvents] fall on [day], bucketed by [deviceUtcOffset] -
+/// **never** by an event's own zone (that's already baked into `.from` as an
+/// absolute instant by existing, unchanged conversion code, see FR-2
+/// "The appointment's own time zone"). [deviceUtcOffset] is an explicit parameter
+/// rather than `DateTime.toLocal()` so this stays deterministic regardless of
+/// the host machine's own configured timezone (see FR-2 "Testability").
 List<Meeting> eventsForDay(
   DateTime day, {
   required List<Meeting> allEvents,
-  required ZoneOffsetAt offsetAt,
+  required Duration deviceUtcOffset,
 }) {
   return allEvents.where((event) {
-    final local = _reading(event.from, offsetAt);
+    final local = event.from.toUtc().add(deviceUtcOffset);
     return local.year == day.year &&
         local.month == day.month &&
         local.day == day.day;
@@ -279,14 +249,14 @@ List<Meeting> eventsForDay(
 DateTime? hardFloor({
   required DateTime day,
   required List<Meeting> allEvents,
-  required ZoneOffsetAt offsetAt,
+  required Duration deviceUtcOffset,
   required Duration durationToWakeUp,
   required Duration durationToGetReady,
 }) {
   final dayEvents = eventsForDay(
     day,
     allEvents: allEvents,
-    offsetAt: offsetAt,
+    deviceUtcOffset: deviceUtcOffset,
   );
   final nonAllDay = dayEvents.where((event) => !event.isAllDay);
   if (nonAllDay.isEmpty) return null;
@@ -305,68 +275,6 @@ DateTime? hardFloor({
       .toUtc()
       .subtract(durationToWakeUp)
       .subtract(durationToGetReady);
-}
-
-/// [groupTarget] with the anchor given as a READING (docs/TODO.md T-206):
-/// the planning loop's anchor may be a stored planned clock time, which its
-/// instant cannot recover (a skipped reading).
-HardFloorPoint _groupTargetFromReading({
-  required DateTime anchorReading,
-  required List<HardFloorPoint> points,
-  required Duration maxDailyDelta,
-  required ZoneOffsetAt offsetAt,
-}) {
-  assert(
-      points.isNotEmpty, 'groupTarget needs at least one real hardFloor point');
-
-  // FR-5 step 2: a ΔT=0 point (same wall-clock reading as the anchor - real
-  // calendar dates necessarily differ, since points are always strictly ahead
-  // of the anchor) ends its own run immediately and "is never grouped with
-  // a following point".
-  //
-  // That sentence carries no positional caveat, so the run is capped at the
-  // FIRST such point wherever it sits - not only when it happens to be
-  // points.first. The spec's own worked example puts it at position 1, which
-  // is exactly the case a `points.first` check already covers; an independent
-  // review found the same wording violated from position 2 onwards
-  // (docs/TODO.md T-104).
-  //
-  // Capping rather than returning: step 1's shrinking still applies below the
-  // cap. A ΔT=0 target yields a flat curve, and a flat curve can perfectly
-  // well violate a stricter intermediate point - then t_m has to shrink
-  // further, exactly as for any other target.
-  final zeroDeltaIndex = points.indexWhere((p) =>
-      _wallClockDelta(anchorReading, _reading(p.value, offsetAt)) ==
-      Duration.zero);
-  final candidates =
-      zeroDeltaIndex == -1 ? points : points.sublist(0, zeroDeltaIndex + 1);
-  for (var m = candidates.length; m >= 1; m--) {
-    final target = candidates[m - 1];
-    final curve = _distributeReadings(
-      anchor: anchorReading,
-      target: _reading(target.value, offsetAt),
-      n: target.dayOffset,
-      maxDailyDelta: maxDailyDelta,
-    );
-
-    var violated = false;
-    for (var j = 0; j < m - 1; j++) {
-      final intermediate = candidates[j];
-      // FR-1/FR-5 (T-206): an upper bound is compared on INSTANTS - the
-      // curve's reading resolved first, then against the hardFloor instant.
-      final interpolated = resolvePlannedClockTime(
-          curve.valuesByDayOffset[intermediate.dayOffset]!, offsetAt);
-      if (interpolated.isAfter(intermediate.value)) {
-        violated = true;
-        break;
-      }
-    }
-    if (!violated) return target;
-  }
-
-  // Unreachable: m=1 has no intermediate points to violate, so the loop
-  // above always returns by then.
-  return candidates.first;
 }
 
 /// FR-5: picks the farthest point from [points] (chronological, all relative
@@ -389,23 +297,59 @@ HardFloorPoint _groupTargetFromReading({
 /// re-derivation), a genuinely non-violated intermediate point can end up on
 /// the "wrong side" of a drifted anchor by raw value alone, which a direction
 /// filter would wrongly reject even though nothing is actually violated.
-///
-/// docs/TODO.md T-206: needs the zone's rules [offsetAt] - ΔT is taken on
-/// the readings of [anchor] and each point, and the violation check resolves
-/// the curve's reading by R_plan before comparing it with the point's
-/// instant.
 HardFloorPoint groupTarget({
   required DateTime anchor,
   required List<HardFloorPoint> points,
   required Duration maxDailyDelta,
-  required ZoneOffsetAt offsetAt,
-}) =>
-    _groupTargetFromReading(
-      anchorReading: _reading(anchor, offsetAt),
-      points: points,
+}) {
+  assert(
+      points.isNotEmpty, 'groupTarget needs at least one real hardFloor point');
+
+  // FR-5 step 2: a ΔT=0 point (same wall-clock reading as the anchor - real
+  // calendar dates necessarily differ, since points are always strictly ahead
+  // of the anchor) ends its own run immediately and "is never grouped with
+  // a following point".
+  //
+  // That sentence carries no positional caveat, so the run is capped at the
+  // FIRST such point wherever it sits - not only when it happens to be
+  // points.first. The spec's own worked example puts it at position 1, which
+  // is exactly the case a `points.first` check already covers; an independent
+  // review found the same wording violated from position 2 onwards
+  // (docs/TODO.md T-104).
+  //
+  // Capping rather than returning: step 1's shrinking still applies below the
+  // cap. A ΔT=0 target yields a flat curve, and a flat curve can perfectly
+  // well violate a stricter intermediate point - then t_m has to shrink
+  // further, exactly as for any other target.
+  final zeroDeltaIndex = points
+      .indexWhere((p) => _wallClockDelta(anchor, p.value) == Duration.zero);
+  final candidates =
+      zeroDeltaIndex == -1 ? points : points.sublist(0, zeroDeltaIndex + 1);
+  for (var m = candidates.length; m >= 1; m--) {
+    final target = candidates[m - 1];
+    final curve = distribute(
+      anchor: anchor,
+      target: target.value,
+      n: target.dayOffset,
       maxDailyDelta: maxDailyDelta,
-      offsetAt: offsetAt,
     );
+
+    var violated = false;
+    for (var j = 0; j < m - 1; j++) {
+      final intermediate = candidates[j];
+      final interpolated = curve.valuesByDayOffset[intermediate.dayOffset]!;
+      if (interpolated.isAfter(intermediate.value)) {
+        violated = true;
+        break;
+      }
+    }
+    if (!violated) return target;
+  }
+
+  // Unreachable: m=1 has no intermediate points to violate, so the loop
+  // above always returns by then.
+  return candidates.first;
+}
 
 /// The result of a single day's FR-7 decision: [value] is the day's computed
 /// wake time, [overrunNotificationNeeded] mirrors FR-6's flag (only ever true
@@ -420,32 +364,37 @@ class GapOrRunStartResult {
   final bool overrunNotificationNeeded;
 }
 
-/// FR-7 in reading space: [GapOrRunStartResult.value] is the day's planned
-/// READING, not yet resolved.
-GapOrRunStartResult _planGapOrRunStartDayReading({
-  required DateTime vReading,
+/// FR-7: decides whether today is still a gap day (FR-4 applies, possibly
+/// capped) or already the first day of a run (FR-6 applies directly).
+///
+/// [remainingPoints] must have `dayOffset` relative to **today** (tomorrow is
+/// day 1) - rebased fresh by the caller on every daily replanning pass, not
+/// carried over from a fixed historical anchor. This function itself never
+/// needs to know "which absolute day" today is.
+GapOrRunStartResult planGapOrRunStartDay({
+  required DateTime v,
   required List<HardFloorPoint> remainingPoints,
   required TimeOfDay? preferredWakeUpTime,
   required Duration maxDailyDelta,
-  required ZoneOffsetAt offsetAt,
+  required Duration deviceUtcOffset,
 }) {
   GapOrRunStartResult gapDay() => GapOrRunStartResult(
-        value: _gapDayDriftReading(
-            vReading: vReading,
+        value: applyGapDayDrift(
+            v: v,
             preferredWakeUpTime: preferredWakeUpTime,
-            maxDailyDelta: maxDailyDelta),
+            maxDailyDelta: maxDailyDelta,
+            deviceUtcOffset: deviceUtcOffset),
         overrunNotificationNeeded: false,
       );
 
   if (remainingPoints.isEmpty) return gapDay();
 
-  final grouped = _groupTargetFromReading(
-    anchorReading: vReading,
+  final grouped = groupTarget(
+    anchor: v,
     points: remainingPoints,
     maxDailyDelta: maxDailyDelta,
-    offsetAt: offsetAt,
   );
-  final f = _reading(grouped.value, offsetAt);
+  final f = grouped.value;
 
   // FR-2, and that's the whole point of the word "upper bound"
   // (docs/TODO.md T-132): a `hardFloor` that is NOT earlier than today's
@@ -471,7 +420,7 @@ GapOrRunStartResult _planGapOrRunStartDayReading({
   // FR-5's warning against a "directional filter" is preserved: the points
   // are NOT removed from `remainingPoints`, so they still take part in
   // `groupTarget`'s violation check. They are only excluded as a *target*.
-  if (_wallClockDelta(vReading, f) >= Duration.zero) return gapDay();
+  if (_wallClockDelta(v, f) >= Duration.zero) return gapDay();
 
   // FR-7: N_Rest = N_F - i. `grouped.dayOffset` is v-relative (the genuine
   // calendar-day distance from `v` to F - groupTarget/distribute need it that
@@ -497,30 +446,30 @@ GapOrRunStartResult _planGapOrRunStartDayReading({
   // Reuses distribute()'s own (wall-clock-only, see distribute()'s doc
   // comment) overrun detection, rather than duplicating that arithmetic here
   // - "feasible" means "a fresh N_Rest-day distribute() from candidate to F
-  // would not need to exceed maxDailyDelta". Readings only, nothing resolved
-  // inside the bisection below (docs/TODO.md T-206): feasibility is ΔT and n.
-  bool feasible(DateTime candidate) => !_distributeReadings(
+  // would not need to exceed maxDailyDelta".
+  bool feasible(DateTime candidate) => !distribute(
         anchor: candidate,
         target: f,
         n: nRest,
         maxDailyDelta: maxDailyDelta,
       ).overrunNotificationNeeded;
 
-  if (!feasible(vReading)) {
+  if (!feasible(v)) {
     // Already violated by mere holding: today is day 1 of the run.
     final n = nRest + 1; // FR-7: N = N_F - i + 1, today-relative = nRest + 1.
-    final curve = _distributeReadings(
-        anchor: vReading, target: f, n: n, maxDailyDelta: maxDailyDelta);
+    final curve =
+        distribute(anchor: v, target: f, n: n, maxDailyDelta: maxDailyDelta);
     return GapOrRunStartResult(
       value: curve.valuesByDayOffset[1]!,
       overrunNotificationNeeded: curve.overrunNotificationNeeded,
     );
   }
 
-  final drifted = _gapDayDriftReading(
-      vReading: vReading,
+  final drifted = applyGapDayDrift(
+      v: v,
       preferredWakeUpTime: preferredWakeUpTime,
-      maxDailyDelta: maxDailyDelta);
+      maxDailyDelta: maxDailyDelta,
+      deviceUtcOffset: deviceUtcOffset);
   if (feasible(drifted)) {
     return GapOrRunStartResult(
         value: drifted, overrunNotificationNeeded: false);
@@ -531,11 +480,19 @@ GapOrRunStartResult _planGapOrRunStartDayReading({
   // |V+d*sign - F| is convex as a function of d, satisfied at d=0, violated
   // at d=fullStep). Work happens exclusively in wall-clock differences (not
   // `drifted.difference(v)`, which would include the date advance to
-  // v.day+1 introduced by the drift) - candidates are built accordingly on
-  // the real following day, not via `v.add(...)` (which would wrongly stay
-  // on v's own date).
-  final today = _readingDaysLater(vReading, 1);
-  final fullStep = _wallClockDelta(vReading, drifted);
+  // v.day+1 introduced by applyGapDayDrift) - candidates are built
+  // accordingly on the real following day, not via `v.add(...)` (which would
+  // wrongly stay on v's own date).
+  final today = _dateTimeLike(
+    v,
+    day: v.day + 1,
+    hour: v.hour,
+    minute: v.minute,
+    second: v.second,
+    millisecond: v.millisecond,
+    microsecond: v.microsecond,
+  );
+  final fullStep = _wallClockDelta(v, drifted);
   final fullStepMicros = fullStep.inMicroseconds.abs();
   final sign = fullStep.isNegative ? -1 : 1;
   var lo = 0;
@@ -555,37 +512,6 @@ GapOrRunStartResult _planGapOrRunStartDayReading({
   );
 }
 
-/// FR-7: decides whether today is still a gap day (FR-4 applies, possibly
-/// capped) or already the first day of a run (FR-6 applies directly).
-///
-/// [remainingPoints] must have `dayOffset` relative to **today** (tomorrow is
-/// day 1) - rebased fresh by the caller on every daily replanning pass, not
-/// carried over from a fixed historical anchor. This function itself never
-/// needs to know "which absolute day" today is.
-///
-/// docs/TODO.md T-206: [v] and the result's value are instants; the decision
-/// is made on readings under [offsetAt] (FR-1), and the value is resolved by
-/// R_plan once, at the end.
-GapOrRunStartResult planGapOrRunStartDay({
-  required DateTime v,
-  required List<HardFloorPoint> remainingPoints,
-  required TimeOfDay? preferredWakeUpTime,
-  required Duration maxDailyDelta,
-  required ZoneOffsetAt offsetAt,
-}) {
-  final planned = _planGapOrRunStartDayReading(
-    vReading: _reading(v, offsetAt),
-    remainingPoints: remainingPoints,
-    preferredWakeUpTime: preferredWakeUpTime,
-    maxDailyDelta: maxDailyDelta,
-    offsetAt: offsetAt,
-  );
-  return GapOrRunStartResult(
-    value: resolvePlannedClockTime(planned.value, offsetAt),
-    overrunNotificationNeeded: planned.overrunNotificationNeeded,
-  );
-}
-
 /// FR-9: the rolling safety-valve counter, evaluated once per day for the day
 /// that just concluded. Resets to 0 on any real `hardFloor` day; otherwise
 /// increments by 1. Today itself is never passed in until it has concluded -
@@ -597,12 +523,6 @@ int updateGapDayCounter({
   return dayHadRealHardFloor ? 0 : previousCounter + 1;
 }
 
-/// FR-10's planned READING for [day]: its calendar date at
-/// [preferredWakeUpTime].
-DateTime _coldStartReading(DateTime day, TimeOfDay preferredWakeUpTime) =>
-    DateTime.utc(day.year, day.month, day.day, preferredWakeUpTime.hour,
-        preferredWakeUpTime.minute);
-
 /// FR-10: values for [days] (chronological, all strictly before the first
 /// real `hardFloor` point) when there is no established
 /// `lastEffectiveWakeTime` yet - the very first planning run ever. The first
@@ -610,20 +530,21 @@ DateTime _coldStartReading(DateTime day, TimeOfDay preferredWakeUpTime) =>
 /// by FR-2 and becomes the new anchor for whatever follows (computeWeekPlan).
 /// [days] are **device-local calendar dates** (date markers - only their
 /// year/month/day are read), and [preferredWakeUpTime] is a bare device-local time
-/// (FR-3), so producing an absolute instant (FR-1) needs the zone's rules -
-/// same reason as in [applyGapDayDrift], see `docs/TODO.md` T-61. Each day is
-/// resolved by R_plan with its own rules (T-206).
+/// (FR-3), so producing an absolute instant (FR-1) needs [deviceUtcOffset] -
+/// same reason as in [applyGapDayDrift], see `docs/TODO.md` T-61.
 Map<DateTime, DateTime?> coldStart({
   required List<DateTime> days,
   required TimeOfDay? preferredWakeUpTime,
-  required ZoneOffsetAt offsetAt,
+  required Duration deviceUtcOffset,
 }) {
   return {
     for (final day in days)
       day: preferredWakeUpTime == null
           ? null
-          : resolvePlannedClockTime(
-              _coldStartReading(day, preferredWakeUpTime), offsetAt),
+          : _instantOf(
+              DateTime.utc(day.year, day.month, day.day,
+                  preferredWakeUpTime.hour, preferredWakeUpTime.minute),
+              deviceUtcOffset),
   };
 }
 
@@ -636,7 +557,6 @@ class WeekPlanResult {
     required this.overrunNotificationNeeded,
     required this.safetyValveTriggered,
     required this.instantAnchoredDays,
-    this.plannedClockTimes = const {},
   });
 
   final Map<DateTime, DateTime?> valuesByDay;
@@ -647,20 +567,11 @@ class WeekPlanResult {
   /// therefore instant-anchored: it denotes a fixed real moment (the
   /// appointment), so FR-16 must leave it alone when the device's UTC offset
   /// changes - "only the local display changes". Every other planned day
-  /// is wall-clock-anchored (`preferredWakeUpTime`/curve) and has to keep its
-  /// planned clock time instead ([plannedClockTimes]). Checkpoint 2
+  /// is wall-clock-anchored (`preferredWakeUpTime`/curve) and has to keep its local
+  /// digits instead, via `reinterpretForNewOffset`. Checkpoint 2
   /// (`runTimezoneCheckpoint2`) cannot tell the two apart on its own - it has
   /// no calendar access by design - so this is persisted alongside the values.
   final Set<DateTime> instantAnchoredDays;
-
-  /// docs/TODO.md T-206 (T206-R9, FR-3): window day -> the planned clock time
-  /// its wall-clock-anchored value was planned as - a UTC-tagged READING, not
-  /// an instant. Invariants: an entry exists exactly for the days with a
-  /// value that are not instant-anchored (P1), and that value is exactly
-  /// `resolvePlannedClockTime(entry)` (P2). Needed because a skipped reading
-  /// cannot be recovered from its instant (02:30 on a spring-forward day
-  /// resolves to 03:00, and 03:00 is what the clock then shows).
-  final Map<DateTime, DateTime> plannedClockTimes;
 }
 
 /// FR-8: plans every day in [window] (chronological), the big integration
@@ -682,18 +593,8 @@ const int gapDayValveThreshold = 7;
 WeekPlanResult computeWeekPlan({
   required List<DateTime> window,
   required DateTime? lastEffectiveWakeTime,
-  // docs/TODO.md T-206 (T206-R10, FR-3): the planned clock time the anchor's
-  // value was planned as, if one is stored. Used as the anchor's reading only
-  // if it is consistent with the anchor - its R_plan equals
-  // [lastEffectiveWakeTime] in whole milliseconds, the stored precision -
-  // otherwise the anchor's own reading L(v) is. `lastEffectiveWakeTime` stays
-  // the only source of WHICH value rang.
-  DateTime? lastEffectiveClockTime,
   required List<Meeting> allEvents,
-  // docs/TODO.md T-206 (T206-R1): the device zone's rules. Every day is
-  // planned with the rules for that day, every appointment assigned with the
-  // rules at its own instant.
-  required ZoneOffsetAt offsetAt,
+  required Duration deviceUtcOffset,
   required Duration durationToWakeUp,
   // docs/TODO.md T-52.3: a callback rather than one `Duration` for the whole
   // window - "duration to get ready" can differ per weekday (an override the
@@ -712,16 +613,12 @@ WeekPlanResult computeWeekPlan({
   // computed, only whether a day *without* one is allowed to keep a value.
   required bool scheduleOnGapDays,
 }) {
-  DateTime resolve(DateTime clockTime) =>
-      resolvePlannedClockTime(clockTime, offsetAt);
-  DateTime readingOf(DateTime instant) => _reading(instant, offsetAt);
-
   final hardFloorByDay = <DateTime, DateTime>{};
   for (final day in window) {
     final hf = hardFloor(
       day: day,
       allEvents: allEvents,
-      offsetAt: offsetAt,
+      deviceUtcOffset: deviceUtcOffset,
       durationToWakeUp: durationToWakeUp,
       durationToGetReady: durationToGetReadyForDay(day),
     );
@@ -730,29 +627,10 @@ WeekPlanResult computeWeekPlan({
 
   final valuesByDay = <DateTime, DateTime?>{};
   final instantAnchoredDays = <DateTime>{};
-  final plannedClockTimes = <DateTime, DateTime>{};
   var overrunNotificationNeeded = false;
   var safetyValveTriggered = false;
 
-  // FR-10 for [days]: each day's planned clock time and its value.
-  void addColdStart(List<DateTime> days) {
-    for (final day in days) {
-      if (preferredWakeUpTime == null) {
-        valuesByDay[day] = null;
-        continue;
-      }
-      final clockTime = _coldStartReading(day, preferredWakeUpTime);
-      valuesByDay[day] = resolve(clockTime);
-      plannedClockTimes[day] = clockTime;
-    }
-  }
-
   DateTime? anchor = lastEffectiveWakeTime;
-  // docs/TODO.md T-206 (FR-3/FR-4): the READING the anchor stands for - what
-  // every shift below is measured from. For a wall-clock-anchored day that
-  // is its planned clock time, not the reading its instant shows (which
-  // differs for a skipped reading: planned 02:30, rang at 03:00).
-  DateTime? anchorReading;
   var startIndex = 0;
   // The real calendar date `anchor`'s value conceptually belongs to - needed
   // to compute each HardFloorPoint's dayOffset as a genuine day-count (not a
@@ -774,15 +652,13 @@ WeekPlanResult computeWeekPlan({
     // FR-10: cold start.
     final firstRealIndex = window.indexWhere(hardFloorByDay.containsKey);
     if (firstRealIndex == -1) {
-      if (scheduleOnGapDays) {
-        addColdStart(window);
-      } else {
-        for (final day in window) {
-          valuesByDay[day] = null;
-        }
-      }
       return WeekPlanResult(
-        valuesByDay: valuesByDay,
+        valuesByDay: scheduleOnGapDays
+            ? coldStart(
+                days: window,
+                preferredWakeUpTime: preferredWakeUpTime,
+                deviceUtcOffset: deviceUtcOffset)
+            : {for (final day in window) day: null},
         overrunNotificationNeeded: false,
         // FR-9's valve reports from this branch too (docs/TODO.md T-107).
         //
@@ -806,26 +682,19 @@ WeekPlanResult computeWeekPlan({
         safetyValveTriggered: gapDayCounter >= gapDayValveThreshold &&
             preferredWakeUpTime == null,
         instantAnchoredDays: const {},
-        plannedClockTimes: plannedClockTimes,
       );
     }
-    addColdStart(window.sublist(0, firstRealIndex));
-    anchor = hardFloorByDay[window[firstRealIndex]]!;
-    anchorReading = readingOf(anchor);
+    valuesByDay.addAll(coldStart(
+      days: window.sublist(0, firstRealIndex),
+      preferredWakeUpTime: preferredWakeUpTime,
+      deviceUtcOffset: deviceUtcOffset,
+    ));
+    anchor = hardFloorByDay[window[firstRealIndex]];
     valuesByDay[window[firstRealIndex]] = anchor;
     instantAnchoredDays.add(window[firstRealIndex]);
     anchorDay = window[firstRealIndex];
     startIndex = firstRealIndex + 1;
   } else {
-    // T206-R10: the stored clock time counts only while it is consistent with
-    // the value that rang - compared in whole milliseconds, the precision
-    // both are stored in. Any mismatch falls back to the value (FR-3).
-    final clockTime = lastEffectiveClockTime;
-    anchorReading = clockTime != null &&
-            resolve(clockTime).millisecondsSinceEpoch ==
-                anchor.millisecondsSinceEpoch
-        ? clockTime
-        : readingOf(anchor);
     anchorDay = dayMarker(window[startIndex], -1);
   }
 
@@ -861,57 +730,70 @@ WeekPlanResult computeWeekPlan({
         preferredWakeUpTime == null) {
       // FR-9: safety valve - no future anchor visible anywhere in the
       // window, and already 7 elapsed appointment-free days. Stop auto-continuing.
-      // No value, so no planned clock time either (T206-R9).
       valuesByDay[day] = null;
       safetyValveTriggered = true;
       continue;
     }
 
-    // The day's planned READING (FR-4's drift/hold, or FR-7's decision) and
-    // whether it opens a run that needs FR-6's notification.
-    final DateTime plannedReading;
-    var runOverrun = false;
     if (remaining.isEmpty) {
       // Here too FR-2's upper bound is a cap, not a target (docs/TODO.md
       // T-132): previously the day's own `hardFloor` was assigned unconditionally,
       // even when it lay LATER than today's value - the user would have slept in
       // for no reason at all.
-      plannedReading = _gapDayDriftReading(
-          vReading: anchorReading!,
+      final drifted = applyGapDayDrift(
+          v: anchor!,
           preferredWakeUpTime: preferredWakeUpTime,
-          maxDailyDelta: maxDailyDelta);
-    } else {
-      final candidate = _planGapOrRunStartDayReading(
-        vReading: anchorReading!,
-        remainingPoints: remaining,
-        preferredWakeUpTime: preferredWakeUpTime,
-        maxDailyDelta: maxDailyDelta,
-        offsetAt: offsetAt,
-      );
-      plannedReading = candidate.value;
-      runOverrun = candidate.overrunNotificationNeeded;
+          maxDailyDelta: maxDailyDelta,
+          deviceUtcOffset: deviceUtcOffset);
+      final bindsToday = ownHardFloor != null && drifted.isAfter(ownHardFloor);
+      final value = bindsToday ? ownHardFloor : drifted;
+      if (bindsToday) {
+        instantAnchoredDays.add(day);
+        // FR-6's reporting duty, which this branch used to skip entirely
+        // (docs/TODO.md T-105). Assigning a day its own hardFloor is a
+        // legitimate jump of any size - FR-6 explicitly permits it when the
+        // distance is a single day - but the requirement reads "on EVERY
+        // excess over maxDailyDelta (N=1 OR distributed) the user is
+        // notified once". The N=1 exemption is about not
+        // being able to spread the jump, not about staying silent.
+        //
+        // Same formula as `distribute` uses, so the two paths cannot drift
+        // apart: ΔT/N > maxDailyDelta, expressed without a division.
+        final n = dayDistance(day, anchorDay);
+        final delta = _wallClockDelta(anchor, value).abs();
+        if (n >= 1 && delta.inMicroseconds > maxDailyDelta.inMicroseconds * n) {
+          overrunNotificationNeeded = true;
+        }
+      }
+      valuesByDay[day] = value;
+      anchor = value;
+      anchorDay = day;
+      continue;
     }
 
-    // FR-1 (T-206): resolve first, then cap - on instants. FR-2: hardFloor is
-    // always an upper bound - today's own (if any) may never be exceeded,
-    // even by an otherwise-correct ongoing smooth curve. Capping on readings
-    // instead would let a reading in a repeated hour slip past an
-    // appointment between its two occurrences.
-    final resolved = resolve(plannedReading);
+    final candidate = planGapOrRunStartDay(
+      v: anchor!,
+      remainingPoints: remaining,
+      preferredWakeUpTime: preferredWakeUpTime,
+      maxDailyDelta: maxDailyDelta,
+      deviceUtcOffset: deviceUtcOffset,
+    );
+
+    // FR-2: hardFloor is always an upper bound - today's own (if any) may
+    // never be exceeded, even by an otherwise-correct ongoing smooth curve.
     final clampedToOwnHardFloor =
-        ownHardFloor != null && resolved.isAfter(ownHardFloor);
-    final DateTime value;
+        ownHardFloor != null && candidate.value.isAfter(ownHardFloor);
+    final value = clampedToOwnHardFloor ? ownHardFloor : candidate.value;
     if (clampedToOwnHardFloor) {
-      value = ownHardFloor;
       instantAnchoredDays.add(day);
-      // FR-6's reporting duty, which the branch without following points
-      // used to skip entirely (docs/TODO.md T-105) and the capped run branch
-      // too (T-133). Assigning a day its own hardFloor is a legitimate jump
-      // of any size - FR-6 explicitly permits it when the distance is a
-      // single day - but the requirement reads "on EVERY excess over
-      // maxDailyDelta (N=1 OR distributed) the user is notified once". The
-      // N=1 exemption is about not being able to spread the jump, not about
-      // staying silent.
+      // FR-6's reporting duty applies here too (docs/TODO.md T-133). T-105 added
+      // it for the branch with no following points; this second path, where a
+      // day's value is capped by an appointment, stayed silent.
+      //
+      // FR-6 leaves no doubt: "On EVERY excess over `maxDailyDelta` (`N=1` or
+      // distributed) the user is notified once." The capping is correct in
+      // substance - FR-2's upper bound must hold - just notifiable when it
+      // costs more than a single day's step.
       //
       // The everyday case behind this: the wake time has drifted over
       // appointment-free days toward `preferredWakeUpTime`, then an
@@ -919,50 +801,34 @@ WeekPlanResult computeWeekPlan({
       // back in one step - measured at 45 minutes against an allowed 30, and
       // the user never heard about it.
       //
-      // Same formula as `distribute` uses, so the paths cannot drift apart:
-      // ΔT/N > maxDailyDelta, expressed without a division - and ΔT on
-      // readings (FR-1, T-206), so a daylight-saving change is no shift.
+      // The same division-free formula as in the neighboring branch and in
+      // `distribute`, so the three cannot drift apart from each other.
       final n = dayDistance(day, anchorDay);
-      final delta = _wallClockDelta(anchorReading, readingOf(value)).abs();
+      final delta = _wallClockDelta(anchor, value).abs();
       if (n >= 1 && delta.inMicroseconds > maxDailyDelta.inMicroseconds * n) {
         overrunNotificationNeeded = true;
       }
-      anchorReading = readingOf(value);
-    } else {
-      value = resolved;
-      plannedClockTimes[day] = plannedReading;
-      anchorReading = plannedReading;
     }
 
     valuesByDay[day] = value;
+    anchor = value;
     anchorDay = day;
-    if (runOverrun) overrunNotificationNeeded = true;
+    if (candidate.overrunNotificationNeeded) overrunNotificationNeeded = true;
   }
 
-  if (scheduleOnGapDays) {
-    return WeekPlanResult(
-      valuesByDay: valuesByDay,
-      overrunNotificationNeeded: overrunNotificationNeeded,
-      safetyValveTriggered: safetyValveTriggered,
-      instantAnchoredDays: instantAnchoredDays,
-      plannedClockTimes: plannedClockTimes,
-    );
-  }
-  // T-52.1's mask: a day without an appointment of its own loses its value,
-  // and its planned clock time with it (T206-R9).
   return WeekPlanResult(
-    valuesByDay: {
-      for (final entry in valuesByDay.entries)
-        entry.key: hardFloorByDay.containsKey(entry.key) ? entry.value : null,
-    },
+    valuesByDay: scheduleOnGapDays
+        ? valuesByDay
+        : {
+            for (final entry in valuesByDay.entries)
+              entry.key:
+                  hardFloorByDay.containsKey(entry.key) ? entry.value : null,
+          },
     overrunNotificationNeeded: overrunNotificationNeeded,
     safetyValveTriggered: safetyValveTriggered,
-    instantAnchoredDays:
-        instantAnchoredDays.where(hardFloorByDay.containsKey).toSet(),
-    plannedClockTimes: {
-      for (final entry in plannedClockTimes.entries)
-        if (hardFloorByDay.containsKey(entry.key)) entry.key: entry.value,
-    },
+    instantAnchoredDays: scheduleOnGapDays
+        ? instantAnchoredDays
+        : instantAnchoredDays.where(hardFloorByDay.containsKey).toSet(),
   );
 }
 
@@ -984,12 +850,6 @@ WeekPlanResult computeWeekPlan({
 /// orchestration), not this pure function's - `preferredWakeUpTime` itself is never an
 /// input here either, since it already carries no zone of its own (FR-3) and
 /// so needs no reinterpretation at all.
-///
-/// docs/TODO.md T-206: since then only Checkpoint 2's LEGACY branch - a plan
-/// stored by a version before T-206, with no `pendingDayClockTimes` at all.
-/// A plan with planned clock times is re-resolved by R_plan instead, which
-/// leaves a value planned with a DST change's own rules alone (this shift
-/// would move it by the DST difference).
 DateTime reinterpretForNewOffset({
   required DateTime value,
   required Duration oldOffset,

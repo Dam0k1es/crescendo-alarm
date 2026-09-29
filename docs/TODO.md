@@ -32,7 +32,7 @@ Conventions:
 
 ## Waiting on a decision, not on work
 
-Seven items are investigated, reproduced, and **not** implemented, because in every one of them the
+Nine items are investigated, reproduced, and **not** implemented, because in every one of them the
 code follows the spec and the *requirement* has the gap. They need a decision from the project owner,
 not further analysis — each item names the question, the possible readings, and what each one costs:
 
@@ -41,10 +41,12 @@ not further analysis — each item names the question, the possible readings, an
 | **T-112** | What holds when a curve slips past midnight — may one calendar day carry two wake times while another carries none? |
 | **T-113** | Should FR-16's Checkpoint 2 retroactively adjust alarms that are already armed? (Otherwise the first alarm after a flight rings wrong by the full offset difference.) |
 | **T-115** | Which direction wins at a gap of exactly 12 hours? |
-| **T-119** | Does the day assignment need to use the offset of the respective window day? (Otherwise a genuine morning appointment gets swallowed twice a year.) |
+| **T-119** | ~~Does the day assignment need to use the offset of the respective window day?~~ **Decided 2026-09-28: yes, part of T-206.** |
 | **T-120** | Which day does a wake value belong to when the lead times push it back past midnight? |
 | **T-121** | Does an appointment inside the window also disable FR-9's valve for the days **after** it? |
 | **T-122** | Is anchoring decided by a value's origin, or by its meaning? |
+| **T-207** | Should a masked gap day still anchor the next day, or the cold start after it skip FR-6's jump warning? |
+| **T-208** | May an evening appointment more than 12 h after the wake time pull the wake time "earlier"? |
 
 The **decided** part of each of these cases is already pinned down by tests (T-118, T-123 … T-128) -
 that is the basis a decision can be formulated against.
@@ -1353,31 +1355,200 @@ rather than expanded into more scope here: see T-185.
   can be started), or FR-16 is formally re-scoped to "checked at every checkpoint" - and the T-62
   leg is changed to assert the callback does NOT fire before the due time.
 
-### T-206 · Scheduled wall-clock alarms are an hour off around a DST change, for ~2 days (P1, open)
+### T-206 · Scheduled wall-clock alarms are an hour off around a DST change, for several days — FIXED (2026-09-29, on `dev`; real-device check at the next transition outstanding)
 
-- [ ] Found by the persona-Tom simulation (2026-09-28, `docs/timezone-travel-analysis.md` Part I,
+- [x] Found by the persona-Tom simulation (2026-09-28, `docs/timezone-travel-analysis.md` Part I,
   real `replan()`/`applyPlannedAlarms` run per `TZ`, expectations from Python zoneinfo). In the
   **committed** scope of `docs/timezone-requirements.md` (TZ-2): daylight saving within one region,
   Germany included.
 - **Observed:** around a transition the plan gives a wall-clock (gap-day / `preferredWakeUpTime`)
   alarm one hour off - spring: 08:00 on the change day (an hour late → oversleeping), 07:30 the day
-  after; autumn: 06:00, then 06:30.
-- **Cause (as reported, to be re-verified test-first):** `replan` computes the whole 7-day window
-  with ONE device offset (`lib/models/scheduling/replan.dart:102`), so every day after a transition
-  inside the window is planned with the wrong offset, and FR-4's `maxDailyDelta` (< 1 h) then drifts
-  it back only gradually. FR-16's accepted transition-day limitation (T-85e, "corrected by the
-  following day") is therefore wrong whenever `maxDailyDelta` is below one hour.
-- **Related, same fix area:** T-202 also hits real appointment alarms (an alarm due in the second
-  pass of the repeated hour is armed at the first pass); `ScheduledAlarm.time` is persisted as a
-  local wall-clock string without offset (`lib/models/alarms/scheduled_alarm.dart:48`, `:74`), so a
-  second-pass instant comes back as the first pass after a restart. *(Both fixed by T-202,
-  2026-09-28; this entry's per-day offset is still open.)* None of Dart `DateTime`,
-  `package:timezone` or `java.time`'s default matches TZ-1's decisions; `java.time` with
-  `withLaterOffsetAtOverlap()` / the transition instant does.
-- **Acceptance:** per TZ-2/TZ-9 - a failing regression test per transition direction (spring and
-  autumn, `tz.TZDateTime`, a window that contains the transition), then a per-day offset (from the
-  zone's rules for that day, not the current offset), swept over all IANA zones and 2026/27
-  transitions.
+  after; autumn: 06:00, then 06:30. The tail lasts ⌈60 min / `maxDailyDelta`⌉ days - two at 30
+  min, **four at 15 min** (reproduced independently by Markus and Günther under
+  `TZ=Europe/Berlin` at 8ac1d9e, 2026 dates).
+- **Cause, verified (pipeline steps 1-2).** One root: the domain layer has no model of local time,
+  only "a UTC instant plus one constant offset". Four defects follow from it:
+  - **D1** (the report): `replan` computes the whole 7-day window with ONE device offset
+    (`lib/models/scheduling/replan.dart:102`), used by `applyGapDayDrift`, `coldStart`,
+    `eventsForDay`, the FR-9/FR-12 day advance and the diagnostics minute-of-day. The wrong first
+    day rings and is fixed (FR-11); the multi-day tail is FR-4 correctly continuing from it, not a
+    second defect. A replan *after* the change also misreads an anchor from before it (the anchor
+    must be read with its own instant's offset).
+  - **D2:** `distribute`, `groupTarget`, FR-7's feasibility/bisection and both FR-6 overrun checks
+    measure time-of-day on **UTC digits** (`_wallClockDelta` on UTC-tagged instants,
+    `scheduling_v2.dart:78-85`). Across a change a run is planned in UTC digits: a run that starts
+    a day early, a clock-reading jump of 3 × `maxDailyDelta`, and a spurious FR-6 notification for a
+    plan whose readings never change.
+  - **D3:** FR-16's Checkpoint 2 shifts every wall-clock value by the offset difference. Today that
+    happens to cancel D1; once D1 is fixed it would re-introduce the hour. Reachable path
+    (Günther's correction of the proposal's example - Checkpoint 2 fires when a notification is
+    *created*, T-199): a notification created outside a checkpoint after the change - a dismissed
+    manual alarm or the Sleep Habits reminder toggle - on a day whose FR-17 lock was consumed before
+    the change, so `lastCheckedUtcOffset` is stale. Checkpoint 2 re-arms nothing (T-113), so
+    `pendingDayValues` would then diverge from the armed alarm (the next anchor, the DND window and
+    the direct-boot mirror read the wrong hour until the next replan).
+  - **D4:** a value's reading cannot be recovered from its instant when it lies in a skipped hour
+    (02:30 resolves to 03:00, and the clock then shows 03:00); anchoring on the instant's reading
+    holds 03:00 forever instead of returning to 02:30.
+  - Also: an appointment within one DST difference of midnight after a change is assigned to the
+    wrong day (`eventsForDay` under the planning offset) - this is exactly spec decision T-119,
+    resolved here (below; included in T-206 by the maintainer, 2026-09-28).
+- **Maintainer decisions (2026-09-28, binding).**
+  - **A - the clock reading counts, not the sleep duration.** Offered (1) the clock reading counts
+    or (2) the sleep duration stays constant and the alarm drifts back gradually, the maintainer
+    answered, verbatim: "A: 1". "07:00" stays 07:00 by the clock on the change day and after; the
+    night is an hour shorter in spring and longer in autumn; a DST change consumes none of
+    `maxDailyDelta` and triggers no FR-6 warning. This also confirms explicitly the sentence
+    Günther asked not to inherit by derivation.
+  - **B - a value whose resolution lands on the next date belongs to the day it was planned for**
+    (America/Nuuk/Godthab/Scoresbysund: the spring gap runs 23:00 → 00:00, so a 23:30 reading
+    resolves to 00:00 on the next date). Verbatim: "B: Passt, zur not vorziehen" (B: fine - pull
+    it earlier if necessary). This allows the fallback of ringing at the last valid minute before
+    the gap instead.
+  - **Which one the design uses: the fallback** (`docs/timezone-requirements.md` TZ-2a:
+    R_plan(w) = R(w) − 1 minute when R(w) lands on a later date than `w`; 22:59 in the example).
+    Reason: the plain planned-day rule needs a window-day key carried from the plan to the ring
+    through every consumer that today derives a day from an alarm's instant - ring-day
+    identification (`replan.dart:104/140`), the FR-21 toggle (`screen_alarms.dart:203`), the T-141
+    prune (`apply_alarms.dart:232`), a new persisted `ScheduledAlarm` field and its migration.
+    (1) Any consumer missed fails toward concluding or disabling the **wrong** day - an armed alarm
+    the user switched off, or an unrung value fixed as the anchor (the FR-11/FR-21 class). (2) A
+    general window-day key would silently also change the two open, postponed decisions about the
+    same key-vs-date mismatch (T-112 curve past midnight, T-120 lead times past midnight); a key
+    only for this case would be a second, special-case mechanism. (3) The fallback fails early,
+    never late - the direction this project's threat model prefers - and costs one condition in
+    one resolver, in three zones, once a year, only for readings 23:00-23:59. It keeps B's
+    substance: the value rings on its planned day, and every existing day derivation is right by
+    construction. The day's planned clock time stays 23:30, so the next day is not planned from
+    22:59. **Confirmed by the maintainer (2026-09-28, "Greenland: Yes")**, and extended to manual
+    alarms ("Manual alarms: yes"): a manual alarm whose reading lands on a later date rings at the
+    same minute before the gap, so a manual and a scheduled 23:30 behave alike.
+- **Requirements recorded (2026-09-28):** `docs/timezone-requirements.md` TZ-2 (decision A), the
+  new TZ-2a (decision B and the fallback as a stated exception to TZ-1's R), TZ-8 and TZ-9
+  consequences, state "in progress". `docs/scheduling-v2-spec.md`: FR-1 **rewritten** (instants
+  for the `hardFloor` bound and storage; size **and sign** of shifts on local readings - the
+  appended form Markus proposed contradicted FR-5's time-of-day direction, Günther blocking point
+  4); FR-2 (day assignment by the device rules at the appointment's own instant; resolves T-119),
+  FR-3 (new `pendingDayClockTimes`: planned clock time paired with its resolved value, not a second
+  source), FR-4, FR-5, FR-6, FR-10, FR-11, FR-21, and FR-16 (one rules source for both checkpoints -
+  blocking point 2; re-resolution of intact pairs **only on a detected offset change**, anchored
+  flag wins, legacy shift only when no planned clock times are stored at all, anything else
+  untouched - blocking point 3; T-85e's accepted limitation **withdrawn**). New "Test:" bullets in
+  FR-1, FR-2, FR-4, FR-6, FR-10 and FR-16, to be implemented verbatim in
+  `test/scheduling_v2_test.dart` per its header.
+- **Relations:** T-119 is resolved by FR-2's new wording (the "lookahead" it objected to is the
+  OS's own rules for a future instant of the current zone, which are exact) - Markus and Günther
+  both recommend it and T-206's original acceptance already asked for it; the maintainer included
+  it in T-206 on 2026-09-28 ("t-119: OK"). The pre-existing
+  appointment-before-midnight day-key case Günther asked to track separately **is** T-120 (open,
+  unchanged). T-112, T-113, T-115, T-199 and travel (TZ-4 … TZ-7, T-205) stay out of scope.
+- **Implementation plan (staged, each stage device-safe as `current.apk`):** S1 pure refactor
+  (zone rules as a parameter, `resolveWallClock`, single rules source for Checkpoint 2; no
+  `expect` edited) with a differential test against a snapshot of today's pure layer; S2 FR-2 day
+  assignment by the rules at each appointment's instant; S3 reading-space planning, R_plan,
+  `pendingDayClockTimes` and Checkpoint 2's re-resolution **in one commit** (per-day rules without
+  the Checkpoint 2 change would ship D3, and the reverse would make Checkpoint 2 rewrite what FR-18
+  just armed); S4 all-zone sweep and Python fixture table; S5 docs (state "met", CLAUDE.md rules,
+  device-trial checklist line). Two wrong test comments (`test/scheduling_v2_dst_test.dart:37`,
+  `:73` - 06:00 CET and 05:40 CET, not 07:00/06:40 "Berlin") are corrected with the tests.
+- **Requirements and test plan:** `docs/t206-dst-requirements.md` (pipeline step 3) - it defines
+  the requirement ids (`T206-R1` …) and test ids (`T01` …, `TW1` …, `P1`/`P2`) cited in `lib/`
+  and in the tests.
+- **Implemented (2026-09-28/29, pipeline step 5):**
+  - `lib/utils/wall_clock.dart`: `ZoneOffsetAt`, `deviceOffsetAt`, `fixedOffset`;
+    `resolveWallClock(reading, offsetAt)` is the one implementation of R (µs resolution, asserts a
+    UTC-tagged reading), `localWallClockInstant` a wrapper over the device rules;
+    `resolvePlannedClockTime` is R_plan (TZ-2a). `nextManualOccurrence` resolves with R_plan
+    (T206-R21).
+  - `lib/models/scheduling/scheduling_v2.dart`: the pure layer plans in **reading space** -
+    `distribute`/`groupTarget`/FR-7's feasibility and bisection/FR-4's drift/both FR-6 checks on
+    local readings, each day resolved by R_plan with its own rules, then capped at its `hardFloor`
+    on instants; `eventsForDay`/`hardFloor` assign by the rules at each appointment's instant
+    (T-119); `WeekPlanResult.plannedClockTimes`; `computeWeekPlan(lastEffectiveClockTime:)` with the
+    whole-millisecond consistency check. Every public function takes `offsetAt` instead of
+    `deviceUtcOffset`; `_dateTimeLike` is gone.
+  - `replan.dart` / `checkpoint.dart`: `offsetAt` (default `deviceOffsetAt`) instead of
+    `deviceUtcOffset`; checkpoint 1 records `offsetAt(now)`; `pendingDayClockTimes` merged, pruned
+    and written after the values and the anchored flags on every replan (`{}` when empty);
+    Checkpoint 2 takes `offsetAt` only (`readOffset` removed) and applies FR-16's four-step policy
+    only on a detected offset change; the diagnostics step (`maxStepBucket`) and minute-of-day are
+    measured on readings with the rules at each instant.
+  - `AppState.pendingDayClockTimes` (persisted `{"<iso>": {"c", "v"}}`, loaded at start and by
+    `reloadSchedulingStateFromPreferences`, unreadable → `{}`), `stored_values.dart`'s
+    `clockTimeFromStored`/`clockTimeToStored` and the shared encode/decode.
+  - Beyond the plan, needed by the T51/T54 tests: `applyPlannedAlarms` now passes its injected
+    `now` to `AppState.addAlarm`, whose ScheduledAlarm branch compared against the **real** clock -
+    so no test with a planned date in the past (every 2026 DST date, seen from today) could see an
+    alarm armed. Production behaviour is unchanged (`now` is `DateTime.now` there).
+  - Every existing test call site went `deviceUtcOffset: d` → `offsetAt: fixedOffset(d)` and
+    `readOffset: () => d` → `offsetAt: fixedOffset(d)` mechanically; the `distribute` group's local
+    `_t` fixtures compare `.toLocal()` (frame only); `scheduling_v2_offset_test.dart`'s
+    "distribute gets NO offset" case now compares two constant offsets.
+  - **T33's expected value corrected after review:** the implementation left T33 ("a window day
+    that becomes instant-anchored or null loses its entry", `test/replan_dst_test.dart`) red,
+    expecting Mon 30 Mar to keep 07:00. Günther's review adjudicated: the test was wrong. With an
+    appointment at Tue 31 Mar 05:00 CEST and `maxDailyDelta` 30 min, FR-7 starts a run on Sunday
+    (07:00 → 06:20 → 05:40 on readings, Tue capped), so Monday's pair is `{c: 05:40, v: 03:40Z}`.
+    (8ac1d9e's single-offset code gives a different Monday, 04:00Z - it is not "the same".)
+  - **Verification (step 6 review):** stages S1-S4 were implemented together, not red-first per
+    stage; instead the reviewer mutated the code and confirmed the tests bite: R_plan → R (sweep:
+    72 failures in 105,858 plans, plus T52/T54/T55/TW8b and five Nuuk manual cases), one offset for
+    the window (17 Berlin failures), Checkpoint 2 always legacy shift (10), `lastEffectiveClockTime`
+    ignored (TW8b, T45).
+  - **TZ-1's formula corrected** (maintainer: "Doubled hour soll zur späteren zeit klingeln"):
+    `docs/timezone-requirements.md` TZ-1 now reads
+    `R(w) = min{ t : L(t) ≥ w and L(s) > w for every s > t }`; the old one gave the first
+    occurrence at the first minute of a repeated range. Code and tests already followed the prose.
+  - **Known limitation - the sweep's database** (acceptance (7) changed accordingly): the sweep
+    plans with `package:timezone`'s rules, so its oracle table is generated from that package's own
+    bundled database (`scripts/gen_dst_fixture.dart`; 0.11.1 bundles tzdata 2025c) by a brute-force
+    minute scan, not from Python `zoneinfo`. A device uses the **operating system's** tzdata, which
+    may be newer: against the dev VM's tzdata 2026c nine zones differ (Africa/Casablanca,
+    Africa/El_Aaiun, America/Edmonton, America/Vancouver, America/Yellowknife, Canada/Mountain,
+    Canada/Pacific, Europe/Chisinau, Europe/Tiraspol). The Python table
+    (`scripts/gen_dst_fixture.py`, `test/fixtures/dst_transitions_2026_2027_system_tzdata.json`)
+    stays as an informational cross-check: the differing zones are reported as a skip reason, and
+    for every zone whose rules agree the two independently generated R_plan tables must be
+    identical (they are). The app itself never uses `package:timezone`'s rules for planning - it
+    reads the device's (`deviceOffsetAt`) - so this limits the sweep's coverage, not the app.
+- **Verified (2026-09-29, pipeline steps 6-7 and after):**
+  - **Review of the implementation (Günther):** "go with changes" - correct, and the tests bite
+    (mutations listed above); the two blocking items (T33's expected value, a false claim in this
+    entry) are fixed. Non-blocking follow-ups: T-211.
+  - **Persona-Tom simulation, 5 zones without travel** (Berlin, New York, Sydney, Lord Howe, Nuuk;
+    40 simulations of the real checkpoint sequence day by day, against an independent Python
+    `zoneinfo` reference): every DST expectation met - the clock reading kept across the change, a
+    skipped time ringing when it first exists, a repeated time at the later pass, Nuuk's 23:30 at
+    22:59 on its own day (manual alarms too), no checkpoint during the night changing any later
+    ring, Checkpoint 2 never changing a value. Findings unrelated to DST: T-207 … T-210.
+  - **Randomized differential run:** 8,400 simulated windows (4,200 around a real 2026/27
+    transition plus a no-DST twin each) in 35 zones, about 2.7 million checks against the same
+    reference - no DST-related mismatch; every failure belongs to T-207/T-208 and reproduces
+    without DST. Deliberately wrong reference variants (no TZ-2a, first pass of a repeated hour,
+    shifted gap, next day planned from the pulled-forward value) each produced mismatches, so the
+    run would have caught those defect classes.
+  - **Full suite in all ten CI zones:** 786 tests, no failure; `flutter analyze` clean.
+  - **Outstanding:** a real phone across a real change (`docs/device-trial-checklist.md` F3/F4;
+    the next one in Europe is 25 Oct 2026).
+- **Accepted, no migration (test-phase policy):** an install upgraded during a transition week
+  anchors its first new plan on an already-rung, hour-off value (e.g. 08:00 CEST) and drifts back
+  once. A plan from an older version has no planned clock times; it keeps today's behaviour until
+  its first new replan.
+- **Acceptance (updated):** per TZ-2/TZ-2a/TZ-9 - (1) the regression tests listed in the
+  requirements (spring and autumn, `tz.TZDateTime` or injected real zone rules, windows that
+  contain the transition, each with a `replan()`-level twin in the process zone) fail first and
+  then pass; (2) a planned wall-clock value is resolved with the zone's rules for its own day, a
+  DST change consumes no `maxDailyDelta` and raises no FR-6 warning, and a real shift across a
+  change is still limited and warned about; (3) an appointment is assigned by the rules at its own
+  instant; (4) Checkpoint 2 after a DST change leaves correctly resolved values unchanged (asserted
+  after the replan **and** after Checkpoint 2), and never writes a torn pair; (5) in the
+  America/Nuuk leg a 23:30 reading on 28 Mar 2026 rings at 22:59 on 28 Mar and the day identified
+  as rung and the FR-21 key are 28 Mar; (6) with a constant offset the new pure layer is
+  bit-identical to the old one (differential test); (7) the sweep over every zone with a 2026/27
+  transition passes against a brute-force expectation table from the same rules source it plans
+  with (`package:timezone`, see "Known limitation" above), in CI's UTC leg, with the system tzdata
+  compared informationally; (8) all ten CI
+  legs green, `flutter analyze` clean.
 
 ### T-205 · Travelling across time zones: requirements recorded, provisional, not promised (P2, open)
 
@@ -1393,6 +1564,86 @@ rather than expanded into more scope here: see T-185.
   `ACTION_TIMEZONE_CHANGED` receiver; FR-16 Checkpoint 2 re-arms nothing (T-113) and does not run at
   bedtime (T-199); FR-16's accepted transition-day limitation (T-85e).
 - **Not in scope of this entry:** daylight saving within one region - committed, T-202.
+
+### T-207 · A masked gap day makes the next day replan from a cold start, with a large jump and an FR-6 warning (P2, open spec decision)
+
+- [ ] Found by the T-206 persona-Tom simulation (2026-09-29, run "Sydney", in the real engine with
+  the process `TZ` set, expectations from an independent Python reference of the spec).
+- **Situation:** with "schedule on gap days" off, a gap day keeps no stored value. The first
+  non-ring checkpoint on the following day therefore has no anchor and plans with FR-10's cold
+  start. Example: 4 Apr 2026 is a masked gap day; a replan at 5 Apr 01:59 moves 6 Apr from 05:28:20
+  to 07:45 while 7 Apr stays at 04:50 - a 175-minute jump, and the FR-6 notification is sent.
+- **Not DST-related:** the Sydney control week without a transition (19 Apr) produces exactly the
+  same result, and the reference agrees with the code - the code follows the spec; the spec has
+  the gap.
+- **Question:** should a masked gap day still carry an (unarmed) value that anchors the next day,
+  or should the cold start after a masked day be exempt from FR-6's jump warning?
+- *Done when:* the maintainer decides, the spec says so, and a regression test with a masked gap
+  day followed by an early appointment pins it down.
+
+### T-208 · An evening appointment more than 12 h after the wake time is read as "earlier" (P2, open spec decision, related to T-112/T-115)
+
+- [ ] Found by the T-206 persona-Tom simulation (2026-09-29, run "Berlin", autumn window).
+- **Situation:** FR-1's wraparound resolves a time-of-day difference into (−12 h, +12 h]. A
+  `hardFloor` more than 12 h after the current wake time therefore counts as *earlier*. Example:
+  anchor 18 Oct 05:50, a Thu 22 Oct 19:00 dinner (hardFloor 18:00, δ = −710 min) pulls the 19 Oct
+  alarm to 02:52:30, although that day's only early appointment is a 06:15 flight (hardFloor
+  05:15); later days get planned onto the previous evening (21 Oct → 20 Oct 22:11) and FR-6 is
+  raised. A 23:40 call on the evening before moves earlier days by 30-70 minutes. In one draft
+  with evening appointments, one planned day got two alarms (31 Mar 23:22 for 1 Apr, then 1 Apr
+  07:00) - the T-112 shape.
+- **Not DST-related**; same family as T-112 (curve past midnight) and T-115 (exactly 12 h).
+- **Concrete symptoms (randomized differential run, 2026-09-29, 8,400 simulated windows in 35
+  zones; every one also reproduced in the same zone without DST):** a planned day rings twice or
+  its curve crosses midnight; a value planned for day X but stored on date X-1 is switched off in
+  the UI under `isoDate(alarm.time)` = X-1 (FR-21), while the planned-day entry X stays active, so
+  the Sleep-time Do Not Disturb window (`sleepTimeWindow`) still targets the switched-off alarm;
+  and a capped value on such a cross-date day is not flagged as instant-anchored.
+- **Question:** should an appointment late in the day be allowed to act as a wake constraint at all
+  (for example only appointments before some cut-off, or only when `hardFloor` is before the
+  planned value on the same date), or is a real evening event a legitimate "earlier" target?
+- *Done when:* decided together with T-112/T-115, specified, and pinned down by a regression test
+  with an evening appointment in the window.
+
+### T-209 · `_timeOfDayMicros` drops the milliseconds (P3, bug)
+
+- [ ] Found by the T-206 persona-Tom simulation (2026-09-29); already present at 8ac1d9e.
+- **Situation:** `lib/models/scheduling/scheduling_v2.dart` `_timeOfDayMicros` computes
+  `((h*60+m)*60+s)*1e6 + t.microsecond`, but `DateTime.microsecond` is only the 0-999 part within
+  the millisecond; `t.millisecond * 1000` is missing. A spec-exact reference differs in 60 values
+  of the simulation by at most about 0.4 s; no alarm moved to another minute.
+- *Done when:* a regression test with a sub-second reading (e.g. 07:00:00.500) goes red, the
+  milliseconds are added, and the full suite stays green in all ten CI zones.
+
+### T-210 · Nuuk spring night: a late-handled 22:59 ring counts for the next day (P3, observation)
+
+- [ ] Found by the T-206 persona-Tom simulation (2026-09-29, run "Nuuk", variant "ring handled 90 s
+  late").
+- **Situation:** TZ-2a pulls every reading 23:00-23:59 on 28 Mar to 22:59. If the ring's checkpoint
+  only runs after midnight (here 29 Mar 00:00:30), the ring is identified as 29 Mar's, and 29 Mar's
+  not-yet-rung value becomes the anchor. Nothing is lost in the simulated case, but the handler's
+  margin before midnight shrinks that night from up to 60 minutes to one minute.
+- *Done when:* either ring-day identification is shown to be robust to this (a test with a ring
+  handled after midnight that asserts 28 Mar is concluded and 29 Mar still rings), or it is changed
+  to use the rung alarm's planned day.
+
+### T-211 · T-206 follow-ups from the implementation review (P3, code hygiene)
+
+- [ ] Found by Günther's review of the T-206 implementation (2026-09-29), all non-blocking.
+- **Pure wrappers off the production path:** `distribute`, `applyGapDayDrift`, `groupTarget`,
+  `planGapOrRunStartDay` and `coldStart` (`lib/models/scheduling/scheduling_v2.dart`) are no longer
+  called from `lib/`; `computeWeekPlan` calls private cores, and `addColdStart` duplicates
+  `coldStart`. The spec's verbatim unit tests therefore exercise thin wrappers, not the code that
+  plans on the phone.
+- **`localWallClockInstant` has no production caller** (`lib/utils/wall_clock.dart`); the
+  description in `docs/t206-dst-requirements.md` (R17/R21: "for every other caller") no longer
+  matches.
+- **Small:** R_plan is monotone only for whole-minute readings (a 22:59:30 reading lands 30 s off,
+  harmless); `test/scheduling_v2_offset_test.dart` still has test names that say
+  `deviceUtcOffset`.
+- *Done when:* `computeWeekPlan` goes through the public functions (or the wrappers are removed and
+  their tests retargeted at `computeWeekPlan`), `localWallClockInstant` is removed or documented as
+  a test helper, and the stale names are renamed - with the full suite green in all ten zones.
 
 ### T-204 · Release v1.4.0 published — DONE (2026-09-28)
 
@@ -1436,7 +1687,7 @@ rather than expanded into more scope here: see T-185.
   just-simulated ring.
 - **Ships after v1.4.0**, which still has the A1 rule (its release notes describe it).
 
-### T-202 · Alarms in the DST change hour: exact instants, TZ-1 resolution for manual alarms — DONE (2026-09-28, uncommitted, pending independent review)
+### T-202 · Alarms in the DST change hour: exact instants, TZ-1 resolution for manual alarms — DONE (2026-09-28, 0dbb45a; reviewed by Günther, theory review by Markus)
 
 - [x] Found by Günther's all-timezone review of T-201 (2026-09-28), pre-existing, outside T-201.
   `alarmPlatformTime` (`lib/utils/utils.dart:199-202`) rebuilds a local `DateTime` from wall-clock
@@ -5894,9 +6145,16 @@ red and that stays invisible in the rest of the suite today.
   level, and it has already struck this project six times (T-67, T-71, T-77, T-80, T-106, T-114).
 - **Requirement:** R2, R3
 
-### T-119 · OPEN SPEC DECISION: a daylight-saving transition WITHIN the 7-day window
+### T-119 · SPEC DECISION: a daylight-saving transition WITHIN the 7-day window — RESOLVED with T-206 (2026-09-29)
 
-- [ ] Decide whether day assignment must use the offset of each window day individually.
+- [x] **Decided 2026-09-28: yes, included in T-206** (maintainer: "t-119: OK"). FR-2 assigns an
+  appointment by the device rules at its own instant; closed with T-206.
+- **Implemented with T-206 (2026-09-28/29):** `eventsForDay`/`hardFloor` take the
+  zone's rules and assign by the date the device's clock shows at each appointment's own instant;
+  the same rules drive `replan`'s FR-9/FR-12 day advance and the diagnostics minute. Regression
+  tests: `test/scheduling_v2_test.dart` (FR-2 "DST inside the window"), `test/replan_dst_test.dart`
+  T11-T13 (process zone). Closed with T-206.
+- Original question: decide whether day assignment must use the offset of each window day individually.
 - **Situation:** the device offset is read as **one number** at checkpoint time and used for all
   seven window days. If a transition falls within the window, this number is wrong for the days
   after it by the transition difference, and appointments whose local time is closer to midnight
@@ -5922,6 +6180,11 @@ red and that stays invisible in the rest of the suite today.
 - **Already hardened (T-118a):** day assignment near midnight under a **constant** offset.
 - **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
   state.
+- **Resolved in T-206's requirements (2026-09-28), confirmed by the maintainer the same day:** yes -
+  FR-2 now assigns an appointment by the
+  device zone's rules at the appointment's own instant. The lookahead needed is the OS's own rules
+  for a future instant of the current zone, which are exact; no zone name is guessed. Implemented in
+  T-206's stage S2, and closed with it.
 - **Requirement:** R2
 
 ### T-120 · OPEN SPEC DECISION: which day does a wake value belong to when it falls back over midnight?
@@ -5956,6 +6219,10 @@ red and that stays invisible in the rest of the suite today.
     00:30 appointment would be guaranteed to be missed. Ruled out from a reviewer's perspective.
 - **Already hardened (T-118b):** that `hardFloor` may fall before midnight of its own day - the
   precondition of every one of these readings.
+- **Not decided by T-206** (2026-09-28): T-206's decision B (a value R moves onto the next date
+  stays on its planned day) is met by pulling that value forward to the minute before the gap, so it
+  needs no day key and leaves this question exactly as it is. This is the separate entry Günther
+  asked to track for the appointment-before-midnight case.
 - **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
   state.
 - **Requirement:** R2

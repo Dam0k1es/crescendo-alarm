@@ -239,19 +239,25 @@ then included in anything you copy and share from this screen.
 
 ## Time zones and daylight saving
 
-- **Daylight saving changes** where you are - in any region - are meant to be handled (an alarm
-  keeps its clock time on the day of the change and afterwards), and are being fixed right now.
-  - **During the change hour itself** (`docs/TODO.md` T-202, fixed): an alarm derived from an
-    appointment rings at its exact moment, even when that falls into the hour that repeats when the
-    clocks go back. A manual alarm set to a time in that repeated hour (e.g. 02:30 when 02:00-03:00
-    happens twice) rings **once, at the second 02:30**. One set to a time that is skipped when the
-    clocks go forward (02:30 when 02:00 jumps to 03:00) rings **as soon as the time exists** - at
-    03:00 - and is never skipped; the alarm itself stays set to 02:30 for the following days. The
-    Do Not Disturb sleep time and the bedtime reminder follow the same moments.
-  - **Still open:** a planned (Scheduled) wake-up time that is not tied to an appointment (a gap day
-    or your preferred wake-up time) can be an hour off on the day of the change and the day after
-    (T-206). Manual alarms keep their clock time. Check your Scheduled alarms around a change until
-    this is fixed.
+- **Daylight saving changes** where you are - in any region - are handled: an alarm keeps its clock
+  time on the day of the change and afterwards. An alarm planned for 07:00 rings at 07:00 on the new
+  clock; the change does not count as a shift of your wake-up time, so it uses none of the maximum
+  daily change and raises no warning.
+  - A time in the hour that repeats when the clocks go back (e.g. 02:30 when 02:00-03:00 happens
+    twice) rings **once, at the second 02:30**.
+  - A time that is skipped when the clocks go forward (02:30 when 02:00 jumps to 03:00) rings **as
+    soon as the time exists** - at 03:00 - and is never skipped; the following days go back to
+    02:30.
+  - Where the clocks jump from 23:00 straight to midnight (Greenland, once a year in spring), an
+    alarm set between 23:00 and 23:59 that night rings at **22:59**, the last minute before the
+    jump, so that it still rings on its own day - up to an hour early rather than on the next day.
+    Scheduled and manual alarms behave the same.
+  - An appointment counts for the day your clock shows at its start, also in a week with a change.
+  - The Do Not Disturb sleep time and the bedtime reminder follow the same moments. The Sleep Goal
+    counts real hours: 8 hours before 07:00 starts at 22:00 on the night the clocks go forward and
+    at 00:00 on the night they go back.
+  - This is tested for every time zone with a change in 2026/2027, but has not yet been watched on
+    a real phone across a real change - glance at your alarm list around the next one.
 - **Travelling across time zones is not yet reliably supported.** In particular, the first manual
   alarm after a flight can still ring at the time it was set for in the old zone, and travel
   combined with daylight saving changes in several regions is not supported yet. Until that is

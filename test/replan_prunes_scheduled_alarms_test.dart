@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // docs/TODO.md T-141: replan() is where pendingDayValues/disabledDays
 // already get pruned to the same "yesterday" retention bound (T-82) -
@@ -14,10 +15,10 @@ DateTime _utc(int hour, int minute, {int day = 10}) =>
     DateTime.utc(2026, 3, day, hour, minute);
 
 // Built as DateTime.utc, not the local DateTime(...) constructor: this
-// suite's `now`/`deviceUtcOffset: Duration.zero` only ever pretend the
+// suite's `now`/`offsetAt: fixedOffset(Duration.zero` only ever pretend the
 // DOMAIN layer is at UTC+0 - planAlarmSync's own frame-safe `_toMinute`
 // still converts a genuinely local DateTime via the real OS timezone
-// (`.toUtc()`), which on this dev machine (UTC+0) happened to be a no-op
+// (`.toUtc()`)), which on this dev machine (UTC+0) happened to be a no-op
 // but is not on every CI leg. Found via CI's America/St_Johns (UTC-3:30)
 // leg: the local constructor shifted this fixture's alarm by 3.5 hours,
 // enough to flip it from "already past" to "still ahead", which made
@@ -54,7 +55,7 @@ void main() {
     await replan(
       appState,
       now: () => ringDay,
-      deviceUtcOffset: Duration.zero,
+      offsetAt: fixedOffset(Duration.zero),
       fetchEvents: (start, end) async => const [],
     );
 
@@ -76,7 +77,7 @@ void main() {
     await replan(
       appState,
       now: () => ringDay,
-      deviceUtcOffset: Duration.zero,
+      offsetAt: fixedOffset(Duration.zero),
       fetchEvents: (start, end) async => const [],
     );
 

@@ -129,3 +129,52 @@ List<LocalTransition> localTransitions({int fromYear = 2026, int toYear = 2027})
 const String noTransitionReason =
     'the process time zone has no DST transition in 2026/2027 - nothing '
     'to resolve here (the other CI time zone legs cover it)';
+
+const int _dayMs = 24 * _hourMs;
+
+/// docs/TODO.md T-206 (TZ-2a): whether a gap's skipped readings resolve onto
+/// a LATER calendar date under TZ-1 - the transition's own reading
+/// ([LocalTransition.wallEndMs]) lies on a later date than the reading
+/// [wallMs] inside the gap (America/Nuuk, 28 Mar 2026: 23:00 -> 00:00).
+bool resolvesOntoLaterDate(LocalTransition t, int wallMs) =>
+    t.isGap && t.wallEndMs ~/ _dayMs > wallMs ~/ _dayMs;
+
+/// docs/TODO.md T-206 (TZ-2a): R_plan of the whole-minute reading [wallMs]
+/// in the process zone, in closed form from the transitions found by
+/// [localTransitions] - deliberately NOT the production resolver (which
+/// probes offsets and bisects):
+///
+/// - a unique reading: `wall - offset`, with the offset in effect on its side
+///   of the nearest transition;
+/// - a repeated reading: the later occurrence;
+/// - a skipped reading: the transition instant, or one minute before it
+///   where that instant carries a later date ([resolvesOntoLaterDate]).
+int expectedPlannedInstantMs(List<LocalTransition> transitions, int wallMs) {
+  for (final t in transitions) {
+    if (wallMs >= t.wallStartMs && wallMs < t.wallEndMs) {
+      if (t.isOverlap) return t.secondPassMs(wallMs);
+      return resolvesOntoLaterDate(t, wallMs)
+          ? t.instantMs - _minuteMs
+          : t.instantMs;
+    }
+  }
+  if (transitions.isEmpty) return wallMs - localOffsetMs(wallMs);
+  var offset = transitions.first.offsetBeforeMs;
+  for (final t in transitions) {
+    if (t.wallEndMs <= wallMs) offset = t.offsetAfterMs;
+  }
+  return wallMs - offset;
+}
+
+/// The whole-minute reading on [date]'s calendar date (its UTC-tagged or
+/// local fields, as named) at [hour]:[minute], as "wall milliseconds".
+int wallMsOn(DateTime date, int hour, int minute) =>
+    DateTime.utc(date.year, date.month, date.day, hour, minute)
+        .millisecondsSinceEpoch;
+
+/// The calendar date of "wall milliseconds" [wallMs], as a local midnight
+/// marker (the frame `replan()` builds its window in).
+DateTime localDateOfWall(int wallMs) {
+  final f = wallFields(wallMs);
+  return DateTime(f.year, f.month, f.day);
+}

@@ -72,22 +72,31 @@ import 'package:crescendo_alarm/utils/wall_clock.dart';
 /// wrong weekday entirely.
 ///
 /// docs/TODO.md T-202 (TZ-1): each candidate day's reading is turned into an
-/// instant by [localWallClockInstant], not by `DateTime(...)`. On a
+/// instant by TZ-1's resolution (`lib/utils/wall_clock.dart`), not by
+/// `DateTime(...)`. On a
 /// daylight-saving change day that is the difference between the app's rule
 /// and Dart's default: a reading in the repeated hour rings at its LATER
 /// occurrence (Dart: the first), a reading in the skipped hour at the first
 /// valid instant after the gap, 03:00 in Europe/Berlin (Dart: shifted by
 /// the gap, 03:30). A skipped reading therefore rings at the change itself,
-/// never at the next day's reading - where the gap ends at midnight
-/// (America/Nuuk: 23:00 -> 00:00) that instant carries the next date.
+/// never at the next day's reading.
+///
+/// docs/TODO.md T-206 (TZ-2a, maintainer: "Manual alarms: yes"): the
+/// resolution is [resolvePlannedClockTime] - R_plan, the same one the
+/// scheduling engine uses - not plain R. They differ only where the gap ends
+/// at midnight (America/Nuuk, 28 Mar 2026: 23:00 -> 00:00): R's instant would
+/// carry the NEXT date, so a manual 23:30 rings at the minute before the gap
+/// instead, 22:59 on its own date, like a scheduled 23:30 that night.
 DateTime nextManualOccurrence(
   TimeOfDay time,
   DateTime now,
   Map<DayOfWeek, bool> repeatOnDays,
 ) {
   final today = DateTime(now.year, now.month, now.day);
-  DateTime onDay(DateTime day) => localWallClockInstant(
-      day.year, day.month, day.day, time.hour, time.minute);
+  DateTime onDay(DateTime day) => resolvePlannedClockTime(
+          DateTime.utc(day.year, day.month, day.day, time.hour, time.minute),
+          deviceOffsetAt)
+      .toLocal();
   for (var offset = 0; offset <= 7; offset++) {
     final day = dayMarker(today, offset);
     final candidate = onDay(day);

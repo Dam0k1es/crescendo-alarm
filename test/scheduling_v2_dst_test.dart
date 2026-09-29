@@ -5,6 +5,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 import 'package:crescendo_alarm/models/scheduling/scheduling_v2.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // docs/TODO.md T-76: computeWeekPlan derived its HardFloorPoints' dayOffsets
 // via `window[j].difference(anchorDay).inDays`. On locally-tagged window
@@ -19,6 +20,14 @@ import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 // `tz.TZDateTime` is a `DateTime` with real transition behaviour and makes
 // the test independent of the test machine's time zone - exactly the gap the
 // first fix (T-74d) missed.
+//
+// docs/TODO.md T-206: these are DAY-COUNT tests. The plan runs under one
+// fixed `cest` offset for the whole window (the pre-T-206 model), so they
+// check that the curve counts real calendar days across the transition -
+// NOT how Berlin clock readings behave across it. Under Europe/Berlin's real
+// rules the first case's ΔT would be -80 min (anchor 06:00 CET, target
+// 04:40 CEST), not -140; the Berlin-reading tests are the T-206 ones in
+// test/scheduling_v2_test.dart and test/t206_dst_planning_test.dart.
 
 const cest = Duration(hours: 2);
 
@@ -34,7 +43,8 @@ void main() {
         List.generate(7, (i) => tz.TZDateTime(berlin, 2026, 3, 28 + i));
 
     // The anchor conceptually belongs to 2026-03-27 (the day before the
-    // window): 05:00 UTC = 07:00 Berlin.
+    // window): 05:00 UTC = 07:00 under the fixed `cest` offset (in real
+    // Berlin time, 06:00 CET - the transition is on the 29th).
     final anchor = DateTime.utc(2026, 3, 27, 5, 0);
 
     // A single real appointment, on the last window day: 05:10 UTC = 07:10
@@ -53,7 +63,7 @@ void main() {
       window: window,
       lastEffectiveWakeTime: anchor,
       allEvents: [event],
-      deviceUtcOffset: cest,
+      offsetAt: fixedOffset(cest),
       durationToWakeUp: const Duration(minutes: 30),
       durationToGetReadyForDay: (_) => const Duration(hours: 2),
       preferredWakeUpTime: null,
@@ -70,7 +80,9 @@ void main() {
     expect(
       result.valuesByDay[window[0]],
       DateTime.utc(2026, 3, 28, 4, 40),
-      reason: 'expected 04:40 UTC (= 06:40 Berlin, step exactly 20 min), '
+      // 04:40 UTC = 06:40 under the fixed `cest` offset (05:40 CET in real
+      // Berlin time on 28 Mar - the transition is on the 29th).
+      reason: 'expected 04:40 UTC (= 06:40 at +2, step exactly 20 min), '
           'got ${result.valuesByDay[window[0]]}',
     );
 
@@ -105,7 +117,7 @@ void main() {
       window: window,
       lastEffectiveWakeTime: null,
       allEvents: [at(31, 6, 0), at(2, 6, 0)],
-      deviceUtcOffset: cest,
+      offsetAt: fixedOffset(cest),
       durationToWakeUp: const Duration(minutes: 30),
       durationToGetReadyForDay: (_) => Duration.zero,
       preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),

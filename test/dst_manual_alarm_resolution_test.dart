@@ -38,6 +38,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm_enable.dart';
 import 'package:crescendo_alarm/models/scheduling/next_wake_up.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 import 'support/local_zone_transitions.dart';
 
@@ -121,7 +122,11 @@ void main() {
         final wall = t.wallMiddleMs;
         final now = _local(t.instantMs - 3 * _hour);
         final result = nextManualOccurrence(_timeOf(wall), now, _allDays);
-        expect(result.millisecondsSinceEpoch, t.instantMs,
+        // docs/TODO.md T-206 (TZ-2a, maintainer: "Manual alarms: yes"): the
+        // transition itself - or the minute before the gap where the
+        // transition carries a later date (America/Nuuk).
+        expect(result.millisecondsSinceEpoch,
+            expectedPlannedInstantMs(transitions, wall),
             reason: '$t: ${_timeOf(wall)} does not exist that day and must '
                 'ring as soon as the time exists, got $result');
         expect(result.isUtc, isFalse);
@@ -133,18 +138,20 @@ void main() {
         for (final wall in [t.wallStartMs, t.wallEndMs - _minute]) {
           final now = _local(t.instantMs - 3 * _hour);
           final result = nextManualOccurrence(_timeOf(wall), now, _allDays);
-          expect(result.millisecondsSinceEpoch, t.instantMs,
+          expect(result.millisecondsSinceEpoch,
+              expectedPlannedInstantMs(transitions, wall),
               reason: '$t, reading ${_timeOf(wall)}: got $result');
         }
       }
     }, skip: gaps.isEmpty ? noTransitionReason : false);
 
-    test('never skipped: it rings at the change, not at the next day\'s '
+    test('never skipped: it rings that night, not at the next day\'s '
         'reading', () {
-      // Not "on the same calendar date": where the gap ends at midnight
-      // (America/Nuuk, 28 Mar 2026: 23:00 -> 00:00), the first valid instant
-      // after a skipped 23:30 is 00:00 of the next date - still that night's
-      // ring, a day before the next 23:30.
+      // docs/TODO.md T-206 (TZ-2a): where the gap ends at midnight
+      // (America/Nuuk, 28 Mar 2026: 23:00 -> 00:00) the first valid instant
+      // after a skipped 23:30 carries the next date; a manual alarm then
+      // rings at the minute before the gap (22:59 on the 28th), like a
+      // scheduled one - still that night, a day before the next 23:30.
       for (final t in gaps) {
         final wall = t.wallMiddleMs;
         final now = _local(t.instantMs - 3 * _hour);
@@ -152,7 +159,8 @@ void main() {
         final nextDaysReading = wall + 24 * _hour - t.offsetAfterMs;
         expect(result.millisecondsSinceEpoch, lessThan(nextDaysReading),
             reason: '$t: got $result');
-        expect(result.millisecondsSinceEpoch, t.instantMs);
+        expect(result.millisecondsSinceEpoch,
+            expectedPlannedInstantMs(transitions, wall));
       }
     }, skip: gaps.isEmpty ? noTransitionReason : false);
 
@@ -167,7 +175,8 @@ void main() {
                 1];
         final result = nextManualOccurrence(_timeOf(wall), now,
             {for (final d in DayOfWeek.values) d: d == changeDay});
-        expect(result.millisecondsSinceEpoch, t.instantMs,
+        expect(result.millisecondsSinceEpoch,
+            expectedPlannedInstantMs(transitions, wall),
             reason: '$t: got $result');
       }
     }, skip: gaps.isEmpty ? noTransitionReason : false);
@@ -250,11 +259,42 @@ void main() {
         );
         expect(ok, isTrue);
         expect(armedAt?.millisecondsSinceEpoch,
-            t.isOverlap ? t.secondPassMs(wall) : t.instantMs,
+            expectedPlannedInstantMs(transitions, wall),
             reason: '$t: armed at $armedAt');
         // The alarm's own reading is never rewritten by the resolution.
         expect(alarm.time, _timeOf(wall));
       }
     }, skip: transitions.isEmpty ? noTransitionReason : false);
   });
+
+  // docs/TODO.md T-206, requirements T55 / T206-R21 (maintainer, 2026-09-28:
+  // "Manual alarms: yes"): a manual alarm whose reading falls into a gap
+  // that ends at midnight rings at the minute before the gap on its own
+  // date - R_plan, exactly like a scheduled value - while
+  // `localWallClockInstant` itself stays plain TZ-1 R for every other
+  // caller. Found generically, so it runs in the America/Nuuk leg and skips
+  // everywhere else.
+  final laterDateGaps =
+      gaps.where((t) => resolvesOntoLaterDate(t, t.wallMiddleMs)).toList();
+  test('T55: a manual 23:30 in the midnight-ending gap rings at 22:59 on the '
+      'same date; localWallClockInstant stays plain R', () {
+    for (final t in laterDateGaps) {
+      final wall = t.wallMiddleMs;
+      final f = wallFields(wall);
+      final now = _local(t.instantMs - 3 * _hour);
+      final result = nextManualOccurrence(_timeOf(wall), now, _allDays);
+      expect(result.millisecondsSinceEpoch, t.instantMs - _minute,
+          reason: '$t: got $result');
+      expect(result.day, f.day, reason: '$t: rings on its own date');
+      expect(
+          localWallClockInstant(f.year, f.month, f.day, f.hour, f.minute)
+              .millisecondsSinceEpoch,
+          t.instantMs,
+          reason: '$t: plain R (T-202) is unchanged');
+    }
+  },
+      skip: laterDateGaps.isEmpty
+          ? 'no gap in the process zone resolves onto a later date (only '
+              'America/Nuuk, Godthab, Scoresbysund have one, 2026/27)'
+          : false);
 }

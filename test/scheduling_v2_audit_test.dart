@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 import 'package:crescendo_alarm/models/scheduling/scheduling_v2.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
+import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // Regressions from the independent spec review (2026-09-11).
 //
@@ -49,6 +50,7 @@ void main() {
           HardFloorPoint(dayOffset: 3, value: _utc(5, 0, day: 4)),
         ],
         maxDailyDelta: const Duration(minutes: 60),
+        offsetAt: fixedOffset(Duration.zero),
       );
 
       // The run must not be grouped past the ΔT=0 point.
@@ -64,6 +66,7 @@ void main() {
           HardFloorPoint(dayOffset: 4, value: _utc(9, 0, day: 5)),
         ],
         maxDailyDelta: const Duration(minutes: 60),
+        offsetAt: fixedOffset(Duration.zero),
       );
 
       expect(result.dayOffset, 1);
@@ -80,6 +83,7 @@ void main() {
           HardFloorPoint(dayOffset: 4, value: _utc(6, 0, day: 5)),
         ],
         maxDailyDelta: const Duration(minutes: 60),
+        offsetAt: fixedOffset(Duration.zero),
       );
 
       expect(result.dayOffset, 4);
@@ -98,6 +102,7 @@ void main() {
           HardFloorPoint(dayOffset: 2, value: _utc(9, 0, day: 3)), // ΔT = 0
         ],
         maxDailyDelta: const Duration(minutes: 60),
+        offsetAt: fixedOffset(Duration.zero),
       );
 
       expect(result.dayOffset, 1);
@@ -137,7 +142,7 @@ void main() {
         // rang yesterday at 07:00
         lastEffectiveWakeTime: _utc(7, 0, day: 0),
         allEvents: [_meetingAt(_utc(1, 0, day: 1))],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -161,7 +166,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 0),
         allEvents: [_meetingAt(_utc(6, 40, day: 1))],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -182,7 +187,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 0),
         allEvents: [_meetingAt(_utc(6, 30, day: 1))],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -220,7 +225,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: null,
         allEvents: const [],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -242,7 +247,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: null,
         allEvents: const [],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
@@ -268,7 +273,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: null,
         allEvents: const [],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -289,7 +294,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 0),
         allEvents: const [],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -328,7 +333,7 @@ void main() {
         v: _utc(18, 59, day: 1),
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
 
       // -11:59 wins against +12:01, so backward, capped at 30min.
@@ -340,7 +345,7 @@ void main() {
         v: _utc(19, 1, day: 1),
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
       );
 
       // +11:59 wins against -12:01, so forward.
@@ -362,11 +367,14 @@ void main() {
   // ---------------------------------------------------------------------
 
   group('FR-2: day assignment at the midnight boundary (T-118a)', () {
-    // FR-2: "The device's time zone at the moment of evaluation - never the
-    // appointment's own zone - decides which calendar day the instant is
-    // assigned to."
+    // FR-2 (reworded by docs/TODO.md T-206): "The device zone's rules at the
+    // appointment's own instant - never the appointment's own zone, and not
+    // the offset in effect at the moment of evaluation - decide which
+    // calendar day the instant is assigned to: the calendar date the
+    // device's clock shows at that instant (L, FR-1)."
     //
-    // At a CONSTANT offset this is unambiguously decided. The existing FR-2
+    // At a CONSTANT offset this is unambiguously decided - and the two
+    // wordings agree there, which is what these cases pin down. The existing FR-2
     // time zone test checks the *source* of the offset, never its sign and
     // never a day boundary: its appointment sits at 18:00 UTC, where +/- one
     // hour falls on no other day.
@@ -381,7 +389,7 @@ void main() {
       final result = hardFloor(
         day: DateTime.utc(2026, 7, 15),
         allEvents: [_meetingAt(DateTime.utc(2026, 7, 15, 21, 30))],
-        deviceUtcOffset: offset,
+        offsetAt: fixedOffset(offset),
         durationToWakeUp: Duration.zero,
         durationToGetReady: Duration.zero,
       );
@@ -397,7 +405,7 @@ void main() {
         hardFloor(
           day: DateTime.utc(2026, 7, 15),
           allEvents: [event],
-          deviceUtcOffset: offset,
+          offsetAt: fixedOffset(offset),
           durationToWakeUp: Duration.zero,
           durationToGetReady: Duration.zero,
         ),
@@ -408,7 +416,7 @@ void main() {
         hardFloor(
           day: DateTime.utc(2026, 7, 16),
           allEvents: [event],
-          deviceUtcOffset: offset,
+          offsetAt: fixedOffset(offset),
           durationToWakeUp: Duration.zero,
           durationToGetReady: Duration.zero,
         ),
@@ -441,7 +449,7 @@ void main() {
       final result = hardFloor(
         day: DateTime.utc(2026, 3, 12),
         allEvents: [_meetingAt(DateTime.utc(2026, 3, 12, 0, 30))],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: const Duration(minutes: 30),
         durationToGetReady: const Duration(minutes: 30),
       );
@@ -476,7 +484,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 10),
         allEvents: [_meetingAt(_utc(8, 0, day: 11))],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -503,7 +511,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 10),
         allEvents: [_meetingAt(_utc(6, 0, day: 15))],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -527,7 +535,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 10),
         allEvents: const [],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -565,7 +573,7 @@ void main() {
           _meetingAt(_utc(8, 0, day: 11)),
           _meetingAt(_utc(8, 30, day: 15)),
         ],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -613,7 +621,7 @@ void main() {
         v: DateTime.utc(2026, 3, 10, 11, 15),
         preferredWakeUpTime: const TimeOfDay(hour: 6, minute: 30),
         maxDailyDelta: const Duration(minutes: 30),
-        deviceUtcOffset: const Duration(hours: 12, minutes: 45),
+        offsetAt: fixedOffset(const Duration(hours: 12, minutes: 45)),
       );
 
       expect(result, DateTime.utc(2026, 3, 11, 11, 45));
@@ -624,7 +632,7 @@ void main() {
       final result = coldStart(
         days: [DateTime.utc(2026, 4, 5)],
         preferredWakeUpTime: const TimeOfDay(hour: 0, minute: 15),
-        deviceUtcOffset: const Duration(hours: 12, minutes: 45),
+        offsetAt: fixedOffset(const Duration(hours: 12, minutes: 45)),
       );
 
       expect(
@@ -661,7 +669,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(8, 0, day: 10),
         allEvents: events,
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -675,7 +683,7 @@ void main() {
         final floor = hardFloor(
           day: day,
           allEvents: events,
-          deviceUtcOffset: Duration.zero,
+          offsetAt: fixedOffset(Duration.zero),
           durationToWakeUp: Duration.zero,
           durationToGetReady: Duration.zero,
         );
@@ -720,7 +728,7 @@ void main() {
           _meetingAt(_utc(8, 0, day: 12)),
           _meetingAt(_utc(11, 0, day: 13)),
         ],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
@@ -752,7 +760,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(6, 45, day: 11),
         allEvents: [_meetingAt(_utc(11, 0, day: 15))],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
@@ -778,7 +786,7 @@ void main() {
         window: window,
         lastEffectiveWakeTime: _utc(7, 0, day: 11),
         allEvents: [_meetingAt(_utc(5, 0, day: 15))],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: null,
@@ -821,7 +829,7 @@ void main() {
           _meetingAt(_utc(6, 15, day: 14)),
           _meetingAt(_utc(6, 15, day: 15)),
         ],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
@@ -849,7 +857,7 @@ void main() {
           _meetingAt(_utc(6, 15, day: 14)),
           _meetingAt(_utc(6, 15, day: 15)),
         ],
-        deviceUtcOffset: Duration.zero,
+        offsetAt: fixedOffset(Duration.zero),
         durationToWakeUp: Duration.zero,
         durationToGetReadyForDay: (_) => Duration.zero,
         preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
