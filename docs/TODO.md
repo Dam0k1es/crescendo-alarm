@@ -19,8 +19,12 @@ Conventions:
   such a suffix means: open. Whoever closes an item drags the heading along; otherwise the list
   stops being skimmable, and that is its entire value. (On 2026-09-11, 24 long-finished items
   carried their status only in the body.)
-  Older headings still use the German words this list was started with (`BEHOBEN`, `WIDERLEGT`,
-  `BEANTWORTET`, `TEILWEISE`/`GROSSTEILS`); they are translated as items get touched.
+  Older headings used the German words this list was started with (`BEHOBEN`, `WIDERLEGT`,
+  `BEANTWORTET`, `TEILWEISE`/`GROSSTEILS`); all have since been translated (none left as of
+  2026-10-01).
+- **Placement vs. priority:** entries from T-158 on were added near the top of the P0 section in
+  roughly the order they were written, whatever their priority. An explicit `(Pn, …)` tag in a
+  heading is that entry's priority; an entry without one takes the priority of its section.
 - **P0** blocks any push to `master` / production. **P1** must be resolved or consciously accepted
   before a public release. **P2** is real work that does not block a release. **P3** is
   housekeeping.
@@ -41,15 +45,19 @@ not further analysis — each item names the question, the possible readings, an
 | **T-112** | What holds when a curve slips past midnight — may one calendar day carry two wake times while another carries none? |
 | **T-113** | Should FR-16's Checkpoint 2 retroactively adjust alarms that are already armed? (Otherwise the first alarm after a flight rings wrong by the full offset difference.) |
 | **T-115** | Which direction wins at a gap of exactly 12 hours? |
-| **T-119** | ~~Does the day assignment need to use the offset of the respective window day?~~ **Decided 2026-09-28: yes, part of T-206.** |
 | **T-120** | Which day does a wake value belong to when the lead times push it back past midnight? |
 | **T-121** | Does an appointment inside the window also disable FR-9's valve for the days **after** it? |
 | **T-122** | Is anchoring decided by a value's origin, or by its meaning? |
+| **T-139** | May a `ΔT=0` point end FR-7's feasibility lookahead, or only the run? (Otherwise an "early appointment - free days - early appointment" week exceeds `maxDailyDelta` by half and warns.) |
 | **T-207** | Should a masked gap day still anchor the next day, or the cold start after it skip FR-6's jump warning? |
 | **T-208** | May an evening appointment more than 12 h after the wake time pull the wake time "earlier"? |
 
-The **decided** part of each of these cases is already pinned down by tests (T-118, T-123 … T-128) -
-that is the basis a decision can be formulated against.
+The **decided** part of the six remaining 2026-09-11 cases (T-112 … T-122) is pinned down by tests
+(T-118, T-123 … T-128) - that is the basis a decision can be formulated against. T-139 (from a device
+log) and T-207/T-208 (from the T-206 simulation) are reproduced in their entries, not yet by tests.
+
+**Decided since:** T-119 (2026-09-28, yes - each appointment is assigned by the zone's rules at its
+own instant; implemented with T-206, 718e4a5).
 
 ---
 
@@ -237,7 +245,8 @@ that is the basis a decision can be formulated against.
     `test/app_state_direct_boot_fallback_test.dart` (the computation and the seam call - not the
     platform channel itself, which has no implementation in `flutter test`, the same as the rest of
     the `alarm` plugin boundary).
-  - `android/app/src/main/kotlin/com/wakeywakey/wakeywakey/DirectBootFallback.kt` - the
+  - `android/app/src/main/kotlin/com/wakeywakey/wakeywakey/DirectBootFallback.kt` (since the T-169
+    rename: `.../kotlin/com/crescendoalarm/crescendoalarm/DirectBootFallback.kt`) - the
     device-protected-storage-backed `SharedPreferences` file both the channel handler
     (`MainActivity.configureFlutterEngine`) and the two receivers below read/write; readable before
     the first unlock, unlike the app's and the `alarm` plugin's normal storage.
@@ -271,7 +280,9 @@ that is the basis a decision can be formulated against.
   system settings, which - unlike a built-in system sound - may live on storage that isn't
   mounted/decryptable yet this early in the boot sequence, so `MediaPlayer.setDataSource`/`prepare`
   failed silently into the existing catch block. Fixed with a three-layer fallback in
-  `startLoopingSound()`: try the device's actual chosen alarm sound, then its generic default, and
+  `startLoopingSound()`: try the device's actual chosen alarm sound, then its generic default
+  (*correction 2026-10-01: `getDefaultUri(TYPE_ALARM)` is the settings alias for the user's own
+  chosen alarm sound, not a generic one - see the comments in `DirectBootFallbackService.kt`*), and
   only then fall back to a tone synthesized in code via `ToneGenerator` (`AudioManager.STREAM_ALARM`,
   looped by re-triggering `startTone` every 1.5s) - which needs no file or URI at all, so it cannot
   hit this failure mode and is the one sound primitive here actually guaranteed to be
@@ -300,7 +311,8 @@ that is the basis a decision can be formulated against.
   now dynamically registers a `BroadcastReceiver` for `Intent.ACTION_USER_PRESENT` - the system's own
   unconditional signal that the keyguard was just dismissed, which fires whether or not any activity
   ever launches. This broadcast is implicit and cannot be declared in the manifest (undeliverable to
-  manifest-registered receivers since Android 3.1); a running foreground service registering it
+  manifest-registered receivers since Android 3.1 - *correction 2026-10-01: the restriction on
+  implicit broadcasts to manifest receivers dates from Android 8.0, API 26*); a running foreground service registering it
   dynamically in `onStartCommand` and unregistering in `onDestroy` is the standard pattern. The
   `MainActivity` stop calls stay in place too, as a harmless extra safety net, but
   `ACTION_USER_PRESENT` is now the reliable path.
@@ -456,6 +468,10 @@ that is the basis a decision can be formulated against.
   `check_alarm_survival.sh`, ideally cross-checked against an actual ring, to close the
   disagreement. Until then the auditor's own words stand: *"do not rely on this app as a sole alarm
   for a shift a person cannot afford to miss."*
+- **Status (2026-10-01):** that re-run has not happened. The real-device instrument is
+  `scripts/verify-alarm-survival.sh` (T-93; `check_alarm_survival.sh` is its CI counterpart, which
+  T-131 shows cannot measure this), and the "cross-checked against an actual ring" variant is T-164's
+  `scripts/verify-long-idle-alarm-survival.sh` - built, not yet run.
 - **Two more findings, both fixed as documentation corrections:**
   1. `docs/USER_GUIDE.md` claimed the optional diagnostics clock-time switch (`Diag.dayPlanned`,
      T-135) records "bucketed, not exact clock times" - false; it records an exact minute-of-day.
@@ -643,10 +659,6 @@ that is the basis a decision can be formulated against.
 - **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
   state - the maintainer plans to run it with an idle period longer than the 24h minimum this tool
   was built for.
-- **Scheduled (maintainer, 2026-09-28):** start on **Friday 2026-10-02** (`arm`), read in on
-  **Sunday 2026-10-04** (`check`) - the phone left untouched over the weekend. `arm` sets the alarm
-  ~24 h out, so it is due Saturday; Sunday's `check` asks whether it rang after ~24 h of
-  untouched idle plus another day on top.
 - **Requirement:** R3
 
 ### T-165 · The `alarm` plugin's exported `AlarmReceiver` could silence a ringing alarm without the QR code — FIXED (2026-09-24), build-verified
@@ -1309,7 +1321,7 @@ rather than expanded into more scope here: see T-185.
   that Flutter's own `MethodChannel` handler already catches and turns into a normal error result, so
   `_setInterruptionFilter` still safely returns `false` either way. The comment now states this
   verified behavior instead of the earlier guess.
-- [ ] **`restoreStaleDoNotDisturb`'s safety net has no wiring-level test through
+- [x] **`restoreStaleDoNotDisturb`'s safety net has no wiring-level test through
   `runSchedulingCheckpoint`.** The function itself is well covered in isolation
   (`do_not_disturb_test.dart`), and T-184's own fix (above) closed the *scheduling* half of the
   checkpoint wiring gap (`checkpoint_test.dart`'s new "Do Not Disturb activation is rescheduled"
@@ -1321,6 +1333,10 @@ rather than expanded into more scope here: see T-185.
   (matching `fetchEvents`/`notifications`/`now` already are), and a test confirms a stale Do Not
   Disturb activation is actually restored during a real checkpoint run, not just that the function
   works when called directly.
+- **Moot (2026-10-01 review):** `restoreStaleDoNotDisturb` and its checkpoint call were removed with
+  the feature (T-197, 967f98f) and have no successor - T-198's native design ends a stale window in
+  `SleepTimeDndPolicy` (end alarm, later push, boot), and its checkpoint push is tested in
+  `test/sleep_time_dnd_wiring_test.dart`.
 
 ### T-199 · FR-16's Checkpoint 2 never runs at bedtime — it runs when the reminder is *scheduled* (P2, open)
 
@@ -1345,17 +1361,20 @@ rather than expanded into more scope here: see T-185.
   notification *actions*; with no engine attached, a created event is stored as a lost event
   (`LostEventsManager.saveCreated`) and replayed at the next `setListeners` (`setEventsHandle` →
   `recoverLostNotificationEvents`), again in the main isolate. CLAUDE.md's T-162 note ("only spins
-  one up when the app process wasn't already running") does not match that source.
+  one up when the app process wasn't already running") does not match that source (CLAUDE.md
+  carries this correction since the same commit, a39f0b1).
 - **Why nobody saw it:** `integration_test/silent_notification_test.dart` (T-62) schedules a silent
   notification 15 s ahead and waits for `lastCheckedUtcOffsetMinutes` to change - which the
   scheduling-time event already does. It cannot tell "fires at scheduling" from "fires when due".
+  On the CI emulator it does not even get that far: in master gate run 36408813857 (2026-09-28) it failed at its precondition
+  (`scheduleNotification: isAllowed: false`, `0 tests passed, 1 failed`, non-gating) - see T-62.
 - **Not fixed here** - T-198 only needed the finding to avoid building on it. *Done when:* either
   FR-16 Checkpoint 2 is triggered by a mechanism that verifiably fires at the bedtime instant (for
   example the same native exact-alarm path T-198 uses, calling back into Dart only when an engine
   can be started), or FR-16 is formally re-scoped to "checked at every checkpoint" - and the T-62
   leg is changed to assert the callback does NOT fire before the due time.
 
-### T-206 · Scheduled wall-clock alarms are an hour off around a DST change, for several days — FIXED (2026-09-29, on `dev`; real-device check at the next transition outstanding)
+### T-206 · Scheduled wall-clock alarms are an hour off around a DST change, for several days — FIXED (P1; 2026-09-29, 718e4a5 on `dev`; real-device check at the next transition outstanding)
 
 - [x] Found by the persona-Tom simulation (2026-09-28, `docs/timezone-travel-analysis.md` Part I,
   real `replan()`/`applyPlannedAlarms` run per `TZ`, expectations from Python zoneinfo). In the
@@ -1366,7 +1385,7 @@ rather than expanded into more scope here: see T-185.
   after; autumn: 06:00, then 06:30. The tail lasts ⌈60 min / `maxDailyDelta`⌉ days - two at 30
   min, **four at 15 min** (reproduced independently by Markus and Günther under
   `TZ=Europe/Berlin` at 8ac1d9e, 2026 dates).
-- **Cause, verified (pipeline steps 1-2).** One root: the domain layer has no model of local time,
+- **Cause, verified (2026-09-28).** One root: the domain layer has no model of local time,
   only "a UTC instant plus one constant offset". Four defects follow from it:
   - **D1** (the report): `replan` computes the whole 7-day window with ONE device offset
     (`lib/models/scheduling/replan.dart:102`), used by `applyGapDayDrift`, `coldStart`,
@@ -1425,7 +1444,8 @@ rather than expanded into more scope here: see T-185.
     same minute before the gap, so a manual and a scheduled 23:30 behave alike.
 - **Requirements recorded (2026-09-28):** `docs/timezone-requirements.md` TZ-2 (decision A), the
   new TZ-2a (decision B and the fallback as a stated exception to TZ-1's R), TZ-8 and TZ-9
-  consequences, state "in progress". `docs/scheduling-v2-spec.md`: FR-1 **rewritten** (instants
+  consequences, state "in progress" at the time ("met" in code and tests since 718e4a5).
+  `docs/scheduling-v2-spec.md`: FR-1 **rewritten** (instants
   for the `hardFloor` bound and storage; size **and sign** of shifts on local readings - the
   appended form Markus proposed contradicted FR-5's time-of-day direction, Günther blocking point
   4); FR-2 (day assignment by the device rules at the appointment's own instant; resolves T-119),
@@ -1451,10 +1471,11 @@ rather than expanded into more scope here: see T-185.
   just armed); S4 all-zone sweep and Python fixture table; S5 docs (state "met", CLAUDE.md rules,
   device-trial checklist line). Two wrong test comments (`test/scheduling_v2_dst_test.dart:37`,
   `:73` - 06:00 CET and 05:40 CET, not 07:00/06:40 "Berlin") are corrected with the tests.
-- **Requirements and test plan:** `docs/t206-dst-requirements.md` (pipeline step 3) - it defines
+  *All five stages landed together in 718e4a5 (see "Verification" below).*
+- **Requirements and test plan:** `docs/t206-dst-requirements.md` - it defines
   the requirement ids (`T206-R1` …) and test ids (`T01` …, `TW1` …, `P1`/`P2`) cited in `lib/`
   and in the tests.
-- **Implemented (2026-09-28/29, pipeline step 5):**
+- **Implemented (2026-09-28/29, committed as 718e4a5):**
   - `lib/utils/wall_clock.dart`: `ZoneOffsetAt`, `deviceOffsetAt`, `fixedOffset`;
     `resolveWallClock(reading, offsetAt)` is the one implementation of R (µs resolution, asserts a
     UTC-tagged reading), `localWallClockInstant` a wrapper over the device rules;
@@ -1490,7 +1511,7 @@ rather than expanded into more scope here: see T-185.
     appointment at Tue 31 Mar 05:00 CEST and `maxDailyDelta` 30 min, FR-7 starts a run on Sunday
     (07:00 → 06:20 → 05:40 on readings, Tue capped), so Monday's pair is `{c: 05:40, v: 03:40Z}`.
     (8ac1d9e's single-offset code gives a different Monday, 04:00Z - it is not "the same".)
-  - **Verification (step 6 review):** stages S1-S4 were implemented together, not red-first per
+  - **Verification (implementation review):** stages S1-S4 were implemented together, not red-first per
     stage; instead the reviewer mutated the code and confirmed the tests bite: R_plan → R (sweep:
     72 failures in 105,858 plans, plus T52/T54/T55/TW8b and five Nuuk manual cases), one offset for
     the window (17 Berlin failures), Checkpoint 2 always legacy shift (10), `lastEffectiveClockTime`
@@ -1511,7 +1532,7 @@ rather than expanded into more scope here: see T-185.
     for every zone whose rules agree the two independently generated R_plan tables must be
     identical (they are). The app itself never uses `package:timezone`'s rules for planning - it
     reads the device's (`deviceOffsetAt`) - so this limits the sweep's coverage, not the app.
-- **Verified (2026-09-29, pipeline steps 6-7 and after):**
+- **Verified (2026-09-29):**
   - **Review of the implementation (Günther):** "go with changes" - correct, and the tests bite
     (mutations listed above); the two blocking items (T33's expected value, a false claim in this
     entry) are fixed. Non-blocking follow-ups: T-211.
@@ -1562,8 +1583,11 @@ rather than expanded into more scope here: see T-185.
   now state the limit plainly. FR-16's code and all existing tests stay unchanged.
 - **Known gaps to resume from:** manual alarms are never re-armed on a zone change (FR-15); no
   `ACTION_TIMEZONE_CHANGED` receiver; FR-16 Checkpoint 2 re-arms nothing (T-113) and does not run at
-  bedtime (T-199); FR-16's accepted transition-day limitation (T-85e).
-- **Not in scope of this entry:** daylight saving within one region - committed, T-202.
+  bedtime (T-199); FR-16's accepted transition-day limitation (T-85e) - *withdrawn by T-206
+  (718e4a5): a DST change needs no checkpoint, and Checkpoint 2 now re-resolves stored planned
+  readings under the current rules instead of shifting them (a basis for TZ-4, not a travel
+  promise).*
+- **Not in scope of this entry:** daylight saving within one region - committed, T-202 and T-206.
 
 ### T-207 · A masked gap day makes the next day replan from a cold start, with a large jump and an FR-6 warning (P2, open spec decision)
 
@@ -1644,6 +1668,154 @@ rather than expanded into more scope here: see T-185.
 - *Done when:* `computeWeekPlan` goes through the public functions (or the wrappers are removed and
   their tests retargeted at `computeWeekPlan`), `localWallClockInstant` is removed or documented as
   a test helper, and the stale names are renamed - with the full suite green in all ten zones.
+
+### T-212 · The six bundled alarm tones are not freely licensed (P0, licence defect, open)
+
+- [ ] Found by the FOSS audit of 2026-10-01 (every shipped library and media file checked against
+  F-Droid's inclusion rules).
+- **Finding:** all six `assets/sounds/*.mp3` are byte-identical to the Mixkit preview files listed in
+  `assets/sounds/CREDITS.md` (SHA-256 compared). The Mixkit Sound Effects Free License says "You can't
+  redistribute the Item on its own, as stock, in a tool or template, or with source files"; Mixkit's
+  user terms grant only a non-exclusive licence, forbid making an item available to third parties,
+  and allow termination. That is not a free licence (OSI/FSF/DFSG): the public repository, the
+  published v1.4.0 APK and an F-Droid source tarball all redistribute the files on their own.
+- **What was wrong before:** T-29 replaced the original rips with these files on the assumption that
+  the licence only forbade reselling a file unmodified. `assets/sounds/CREDITS.md` repeated that and
+  was corrected on 2026-10-01; `docs/REQUIREMENTS.md` R10 and `docs/licence-position.md` were updated
+  the same day.
+- **Blocks:** the F-Droid submission, and the claim that everything in the repository is free.
+  `annoying_alarm.mp3` (or whichever is the default tone) needs a free replacement first.
+- **Options (maintainer decision):** replace each tone with a CC0/CC-BY/CC-BY-SA sound (for example
+  freesound.org filtered to CC0, OpenGameArt, Wikimedia Commons), or synthesise tones with a script
+  checked into the repository so the source exists; keep the file names so no code changes. Decide
+  also whether to remove the current files from the public repository (and its history, which
+  needs a force push the maintainer has to run).
+- *Done when:* every bundled tone has a recorded source, author and free licence in
+  `assets/sounds/CREDITS.md`, any CC-BY attribution is shown in the app's licence notices, and the
+  Mixkit files are gone from the shipped assets.
+
+### T-213 · Licence notices, F-Droid build hygiene and proprietary-dependency guards are incomplete (P1, open)
+
+- [ ] Found by the FOSS audit of 2026-10-01. No proprietary code ships (no GMS, Firebase, ML Kit,
+  Play Core or analytics in pubspec.lock, the native classpath, the DEX or the native libraries;
+  zxing-cpp is compiled from source). What is missing are notices and checks:
+- **Notices:** libzueci (BSD-3) and Bjoern Hoehrmann's UTF-8 decoder (MIT) are compiled into
+  `libflutter_zxing.so` but missing from `assets/text/NativeCodeNotices.txt`; zint's embedded font
+  data (Arimo, Apache-2.0; OCR-B) is not mentioned; the shipped Material Icons font is CC-BY-4.0
+  per the Flutter SDK's own licence file and has no attribution; none of the ~120 Java/Kotlin
+  libraries (Apache-2.0, and desugar_jdk_libs, GPL-2.0 with Classpath Exception) is named in an
+  in-app notice.
+- **F-Droid build hygiene:** the APK carries AGP's encrypted dependency-metadata signing block
+  (ID `0x504b4453`); `android/app/build.gradle.kts` needs
+  `dependenciesInfo { includeInApk = false; includeInBundle = false }`. `flutter_launcher_icons` is a
+  build tool listed under `dependencies:` instead of `dev_dependencies:`. `image_picker_android`
+  injects a disabled GMS `ModuleDependencies` stub into the merged manifest (no GMS code ships; can
+  be removed with `tools:node="remove"` if a reviewer objects).
+- **Guards:** `test/no_proprietary_dependencies_test.dart` lists exact names only (no
+  `syncfusion_` prefix rule; firebase_*, google_mlkit_*, google_mobile_ads and similar missing);
+  `scripts/check_proprietary_native_deps.py` forbids only `play-services-mlkit*` within GMS and
+  misses com.google.firebase, com.google.android.play, datatransport, ump, crashlytics and
+  com.huawei.hms; the SBOM check runs only on master/release builds and the SBOM is not uploaded;
+  nothing checks media licences, the dependency-metadata block or `NativeCodeNotices.txt` against
+  what CMake compiles.
+- *Done when:* the notices are complete and shown in the app, the dependency block is disabled and
+  verified absent from a built APK, and both deny-lists cover the missing families, each with a
+  failing-first test.
+
+### T-214 · The app icon's provenance and licence are not recorded (P1, open, maintainer input needed)
+
+- [ ] Found by the FOSS audit of 2026-10-01. `assets/icons/icon.png` and everything generated from it
+  (`icon_no_shadow.png`, which ships in the APK's assets, the launcher, notification and iOS icons)
+  carry no authoring metadata and no declared licence. The only record is the maintainer's
+  statement that the artwork is AI-generated (T-29, `docs/REQUIREMENTS.md` R10); the generator and
+  its output terms are not recorded, and some generators' free tiers attach non-commercial terms.
+- *Done when:* `assets/icons/CREDITS.md` records the tool, the plan/terms under which the image was
+  made and an explicit free licence for the artwork - or the icon is redrawn under a free licence.
+
+### T-215 · The QR scanner's emergency stop can be withdrawn again after it appeared (P1, bug, open)
+
+- [ ] Found by the code-comment review of 2026-10-01 (`lib/screens/scan_code/qr_scanner.dart`).
+- **Finding:** `onControllerCreated` sets `_cameraFailed = error != null`, and the scanner widget
+  calls it again after every app resume and every camera toggle. A successful re-initialisation
+  therefore hides the emergency-stop button again after the proof-of-life or the maximum-scan
+  timeout showed it, and both timers fire only once - so the T-38 escape hatch (for a camera that
+  is blocked or produces no usable frames) can be withdrawn for the rest of the ring.
+- *Done when:* a widget test shows the button staying visible after a timeout followed by a
+  successful `onControllerCreated`, and the code only ever raises `_cameraFailed` once set (or
+  re-arms the timers), without weakening the T-38 tests.
+
+### T-216 · The emergency stop cancels every armed alarm, and manual alarms are not re-armed (P1, bug, open)
+
+- [ ] Found by the code-comment review of 2026-10-01 (`qr_scanner.dart` `_emergencyStopAndClose`).
+- **Finding:** the emergency stop calls `Alarm.stopAll()`, which cancels every armed alarm on the
+  platform, not only the ringing one. Scheduled alarms come back at the next checkpoint (FR-18),
+  but nothing re-arms the user's manual alarms, which still show as enabled - the same
+  list-versus-platform divergence T-74e fixed elsewhere. After an emergency stop the next manual
+  alarm can stay silent.
+- *Done when:* a test shows that after an emergency stop every other enabled alarm is still armed
+  (or re-armed), and the stop itself still silences the ringing alarm.
+
+### T-217 · Direct-boot siren for an overdue alarm of any age; a late first unlock can lose the real alarm (P1, open, unverified on a device)
+
+- [ ] Found by the code-comment review of 2026-10-01 (`DirectBootReceiver.kt`, the `alarm` plugin's
+  boot handling). Not yet reproduced on a device.
+- **Finding:** since `alarm` 5.11 the plugin drops alarms that are more than 15 minutes overdue at
+  boot (`androidStaleAfter`, not overridden in `lib/`). `DirectBootReceiver` starts the fallback
+  siren for an overdue due time of any age - for example a 10-minute siren at boot after a weekend
+  powered off. And if the first unlock comes more than 15 minutes after the due time, the plugin
+  drops the real alarm, so only the siren rang.
+- Related small finding: the fallback siren's notification channel does not call
+  `setSound(null, null)`, so it also plays the default notification sound; a fix needs a new
+  channel id.
+- *Done when:* the intended behaviour for an alarm that became due while the phone was off or
+  locked is decided (ring once on unlock? only within some window?), both the native receiver and
+  the plugin's `androidStaleAfter` follow it, and a device run per `docs/device-trial-checklist.md`
+  confirms it.
+
+### T-218 · Schedule screen: calendar ranges are fetched or shown one day short or not at all (P2, bug, open)
+
+- [ ] Found by the code-comment review of 2026-10-01 (`lib/screens/schedule/*`, `lib/utils/utils.dart`).
+- **Findings (display and preload only; scheduling reads the calendar itself, uncached):**
+  `getCalendarEntries` queries until `end - 1 day`, so the last day of each fetched range (the
+  Sunday of a paged week) is probably empty - the T-70 bug class on the display path;
+  `updateCalendarData` only checks whether the visible *week* was fetched, so a 42-day month fetch
+  is skipped entirely when its first week is already loaded (T-145 incomplete);
+  `preloadCalendarData` passes its past/future durations to `loadCalendarData` in swapped order,
+  correct only by coincidence for the `(2, 1)` call; `getStartOfWeek`, `preloadCalendarData` and
+  `isCalendarWeekFetched` do week arithmetic with `Duration`, which can land on the wrong date
+  around a fall-back night (the bug class `day_marker.dart` warns about; impact: an extra fetch).
+- *Done when:* regression tests pin each one (red first) and the fixes keep the T-60/T-145 tests
+  green.
+
+### T-219 · Smaller code findings from the 2026-10-01 comment review (P3, open)
+
+- [ ] Collected while every comment in `lib/`, the native code and the scripts was checked; none
+  changes an alarm's time. Fix opportunistically, each with a test where behaviour changes.
+- **UI:** the alarm edit dialog writes the title into the stored alarm while typing, so Cancel does
+  not revert it, and its `TextEditingController` is never disposed (`screen_alarms.dart`); every
+  `Dismissible` gets a fresh random key on each build (also costs a full rebuild per notification);
+  a cancelled colour pick is applied by a later OK (`page_appearance.dart`); the QR scanner logs
+  under the tag "ScreenAlarmActiveState"; the one German UI string left, `" Uhr"` after the
+  preferred wake-up time (`screen_sleephabits.dart`); the time-zone abbreviation map sends
+  EET/EEST to Europe/Istanbul.
+- **Dead or misleading code:** `isSameDate`, an empty `initState` and `actions: null` in
+  `page_import_qr.dart`, a one-page `PageView`; `durationFromString`, `convertToTZDateTime`,
+  `convertFromTZDateTime` (unused) and the misnamed `generateRandomHash` in `utils.dart`;
+  `_requestPermissions` always returns true; random ids are never checked for collisions;
+  commented-out code in `calendar.dart` (`addToCalendar`, kept as the mirror of
+  `no_calendar_write_test.dart`'s fixture), `meeting_data.dart` (`meetingToEvent`),
+  `screen_sleephabits.dart` (a colour line) and `permissions.dart`
+  (`checkNotificationPermission`); two trailing comments that can only change with their code
+  line (`myalarm.dart` "Added id property", `deactivation_code.dart`'s mention of a
+  `base16Encode` that `dart:convert` does not have).
+- **Alarm handling:** `Handler.handleAlarm` stops a ring whose minute is already past before the
+  gate is shown - check that this cannot swallow a legitimately late ring.
+- **Scripts:** `verify-notification-survival.sh` still aborts on a debug build (the "production
+  only" rule was reversed on 2026-09-26), which blocks it on the dev-build phone;
+  `alarm_detection.sh`'s fallback (b) also counts the plugin's package `com.gdelataillade.alarm`,
+  which every app bundling the plugin shares (T-103-class risk, adds nothing today); the verify-*
+  traps delete `/tmp/ww_ui.xml`, which is never created locally; the self-test of
+  `check_proprietary_native_deps.py` leaves temp files behind.
 
 ### T-204 · Release v1.4.0 published — DONE (2026-09-28)
 
@@ -1792,6 +1964,11 @@ rather than expanded into more scope here: see T-185.
     the plugin;
   - the resolver assumes no zone changes its offset twice within ~30 h of a reading (true for all
     current tz rules, per the sweep).
+- **Since T-206 (718e4a5, 2026-09-29):** `resolveWallClock` (`lib/utils/wall_clock.dart`) is the one
+  implementation of TZ-1's R, and `nextManualOccurrence` resolves with `resolvePlannedClockTime`
+  (R_plan, TZ-2a) - `localWallClockInstant` is now a wrapper with no production caller (T-211). The
+  planning half this entry left untouched is T-206. Still true on 2026-10-01: the E2E helper change
+  is unexercised - `master` (and with it the emulator run) has not moved past 5f576e9.
 
 ### T-201 · A T-198 test depended on the local time of day it ran at — DONE (2026-09-28)
 
@@ -1820,7 +1997,7 @@ rather than expanded into more scope here: see T-185.
 
 ### T-200 · Sleep-time DND catch-up takes ~10-15 minutes on the phone instead of ~2 — RESOLVED by device evidence: no delay (2026-09-28)
 
-- [ ] Maintainer phone report (Android 16), verbatim: "Ich hatte nach 1 minute gecheckt, da war
+- [x] Maintainer phone report (Android 16), verbatim: "Ich hatte nach 1 minute gecheckt, da war
   nichts. aber nach 25 minuten schon. nach 15 minuten hatte ich eine signal nachricht gekriegt und
   die auch gelesen (keine vibration oder so). Den Wecker nachträglich aus der sleep time zu
   exludieren tat übrigens sofort. ihn wieder zu inkludieren triggert nach 10 minuten oder so."
@@ -1870,7 +2047,7 @@ rather than expanded into more scope here: see T-185.
   marker detection never worked in three runs (`flutter test` and the `testWidgets` zone both hold
   output back until a test ends), and it cost up to ~20 min of every master E2E job.
 
-### T-198 · Sleep-time Do Not Disturb, re-implemented natively — IMPLEMENTED (2026-09-27), device confirmation pending
+### T-198 · Sleep-time Do Not Disturb, re-implemented natively — IMPLEMENTED (2026-09-27), confirmed on an Android 16 phone (2026-09-28); Android 14 and older unverified
 
 - [x] Maintainer request, verbatim: "Bitte implementiere eine Funktionalität, um während der
   Schlafenszeit den Do not Disturb Modus zu aktivieren und beim ersten klingeln des nächsten Weckers
@@ -1947,8 +2124,8 @@ rather than expanded into more scope here: see T-185.
   the manual rule if active, else the most severe active automatic rule). **So "remember the previous
   filter and restore it" no longer makes sense:** the remembered value is the effective one, and
   handing a non-ALL value back *activates* the app's rule instead of ending it. Deactivating is
-  simply `setInterruptionFilter(ALL)`. (This app targets 36; the CI emulator is API 34, where the
-  call still changes the global DND.)
+  simply `setInterruptionFilter(ALL)`. (This app targets 36; the CI emulator was API 34 when this
+  was written, where the call still changes the global DND - it has been API 36 since deb581a.)
 
 **Design - both symptoms structurally impossible, not merely untested:**
 
@@ -2067,7 +2244,8 @@ rather than expanded into more scope here: see T-185.
   the start and goes off no earlier than the end; a past start is caught up after ~2 minutes; switching
   off leaves DND. `.github/scripts/run_e2e_tests.sh` grants access in a loop with `cmd notification
   allow_dnd` (a grant survives the reinstall `flutter test` does, not an uninstall) and forces DND off
-  afterwards. Runs only in master's E2E job - **it has never run yet.**
+  afterwards. Runs only in master's E2E job - **it has never run yet.** *(It has since run - see the
+  status note at the end of this entry.)*
 - `flutter analyze` clean; full suite 662/662 in three groups (was 614) - see the review addendum
   for the count after the fixes.
 
@@ -2157,6 +2335,20 @@ defects found and fixed in the follow-up commit:**
   establish whether that alarm was within the 8 h Sleep Goal or whether the ~2-minute catch-up
   (T-110) was waited out. No alarm had rung that day, so the after-wake-up rule (A1) cannot have
   suppressed it. Excluded-alarm, scheduled-alarm and ring cases not yet checked.
+- **Status (2026-10-01 review of this list):**
+  - **Confirmed on the maintainer's Android 16 phone (implicit app-owned mode):** the end at the
+    first ring (third phone check, 2026-09-27); a full night with the app closed - `SLEEP_TIME_START`
+    ~23:30, `SLEEP_TIME_END` ~07:30, Do Not Disturb on at night and off after the ring (`dumpsys
+    alarm`, 2026-09-28, T-200); and the catch-up exactly two minutes after a push (T-200's watch run,
+    which also settles the "second phone check" above as an observation effect, not a delay).
+  - **E2E:** `integration_test/sleep_time_dnd_test.dart` passed on the API 36 emulator in master gate
+    run 36408813857 (2026-09-28, 5f576e9). Its T-203 revision (023fe1a) has not run yet - `master`
+    has not moved since.
+  - **Open question 1 (A1) is answered:** removed at the maintainer's decision (T-203, 023fe1a).
+    Decisions 1-3 and 5 and open questions 2-3 have no recorded answer; the implementation stands as
+    described.
+  - **Not verified anywhere:** Android 14 and older (global Do Not Disturb - no device, and no E2E
+    since the emulator moved to API 36), a reboot inside the window, a force-stop during sleep time.
 
 ### T-197 · Do Not Disturb removed completely, pending a fresh design — DONE (2026-09-27)
 
@@ -2414,6 +2606,9 @@ defects found and fixed in the follow-up commit:**
   T-189's own design intent) or points at the wake-up/Sleep-Goal computation resolving to something
   the maintainer does not expect. Needs the maintainer's actual configured Sleep Goal and real next
   wake-up/alarm time to diagnose further, rather than guessing - not yet followed up on.
+  *Explained since (T-198's H1, 2026-09-27): switching on scheduled the activation notification,
+  and awesome_notifications' "created" callback - which activated Do Not Disturb with no time check -
+  fires at scheduling, not when due. That was T-197's first symptom; the code is gone.*
 - **Requirement:** yes - direct maintainer bug report following the T-189 fix, plus an explicit
   request ("Ich sehe Do not Disturb aus forcieren auch als sinnvoll") to add the force-off fallback.
 
@@ -2473,6 +2668,9 @@ defects found and fixed in the follow-up commit:**
   (T-62) calls `Notifications.scheduleNotification` directly, not through this code path. Low risk
   (identical notification mechanism either way), non-blocking, worth a real-device check next time
   `docs/device-trial-checklist.md` is walked through rather than a dedicated fix.
+  *Status (2026-10-01): not tracked anywhere else - the checklist has no line for it, and the
+  reminder's own branch is still unconfirmed on a device. (T-200 confirmed the same T-110 rule for
+  the native Do Not Disturb catch-up, a different mechanism.)*
 - **Requirement:** yes - direct maintainer clarification of exactly what "sleep time" should mean,
   following an independent review that found the first attempt incomplete.
 
@@ -2519,6 +2717,9 @@ defects found and fixed in the follow-up commit:**
   would be platform behavior to understand and document rather than a bug in this codebase to fix),
   or something else in the app's own UI. Needs a screenshot or more detail from the maintainer
   before it can be diagnosed - tracked here rather than guessed at.
+  *Answered since (T-198's H4, 2026-09-27): on Android 15+ `setInterruptionFilter` activates an
+  implicit, app-owned rule named after the app label ("Do Not Disturb (Crescendo Alarm)") - platform
+  behaviour, not a bug in this code.*
 
 ### T-187 · A fixed, shared debug keystore for every dev build — DONE (2026-09-26)
 
@@ -3419,9 +3620,9 @@ defects found and fixed in the follow-up commit:**
   source offer that someone could actually act on. **Met.**
 - **Requirement:** R9
 
-### T-35 · The LICENSE header breaks licence detection and strips the copyright from the build — PARTIALLY RESOLVED (2026-09-08)
+### T-35 · The LICENSE header breaks licence detection and strips the copyright from the build — RESOLVED (2026-09-18)
 
-- [ ] Confirm GitHub re-detects GPL-3.0 after the fix, and give the app an in-app notices surface.
+- [x] Confirm GitHub re-detects GPL-3.0 after the fix, and give the app an in-app notices surface.
 - **Why:** two lines were prepended above the licence text, which was enough for GitHub to classify
   the repository as `NOASSERTION / Other` — so the README badge was the only licence signal a
   visitor got — and it also meant Flutter's licence collector shipped the bare GPLv3 text without
@@ -3435,6 +3636,11 @@ defects found and fixed in the follow-up commit:**
   now returns `spdx_id: GPL-3.0`, not `NOASSERTION`.
 - **Still open:** the app itself still has no in-app licence/notices screen to carry the copyright
   to an end user - that's T-36, unchanged by this fix.
+- **Resolved (2026-10-01 review):** both halves are done. GitHub detection holds for the renamed
+  repository (`gh api repos/Dam0k1es/crescendo-alarm --jq .license.spdx_id` → `GPL-3.0`,
+  2026-10-01), and T-36 (9626c90, 2026-09-18) added the in-app surface: About > License shows the
+  GPLv3 text, and About > Third-Party Licenses carries the copyright line (`applicationLegalese`,
+  `lib/screens/settings/page_aboutpage.dart`; both holders since T-156, 2f1c7c7).
 - **Requirement:** R9
 
 ### T-36 · The app has no third-party licence or notice surface — FIXED (2026-09-18)
@@ -3712,7 +3918,9 @@ defects found and fixed in the follow-up commit:**
 - [x] **`ACCESS_NETWORK_STATE` removed and now confirmed safe (2026-09-20).** Traced (2026-09-18)
       via `aapt2 dump permissions` plus Gradle's
       `android/app/build/outputs/logs/manifest-merger-blame-*-report.txt` to two transitive
-      sources, not one: `androidx.media3:media3-common:1.9.0` (the `alarm` plugin's audio playback
+      sources, not one (*correction 2026-10-01: today only `media3-common` contributes it, via the
+      camera plugin's `androidx.camera:camera-video`; the transport libraries are no longer in the
+      build - see the comment in `android/app/src/main/AndroidManifest.xml`*): `androidx.media3:media3-common:1.9.0` (the `alarm` plugin's audio playback
       stack) **and** Google's `transport-runtime`/`transport-backend-cct` (pulled in by
       `awesome_notifications`, its own internal event-transport plumbing, not this app's calendar
       sync) - not to anything network-related in this app's own code, consistent with `INTERNET`
@@ -4665,7 +4873,7 @@ defects found and fixed in the follow-up commit:**
   `ChangeNotifierProvider` consumer) still builds.
 - **Requirement:** R3
 
-### T-46 · The scheduling window is hardcoded — ANSWERED (2026-09-10, by scheduling-v2)
+### T-46 · The scheduling window is hardcoded — PARTIALLY ANSWERED (2026-09-10, by scheduling-v2; the calendar preload range is still open)
 
 - [x] **Justified rather than made configurable.** FR-8 fixes the window explicitly: "only the
       visible 7-day window, no larger horizon", with the reasoning given in the spec text. The
@@ -4686,10 +4894,15 @@ defects found and fixed in the follow-up commit:**
   `lib/main.dart:242` (preload).
 - **Done when:** the ranges/threshold are either settings or documented as deliberate constants with
   a reason.
+- **Status (2026-10-01):** window and threshold are answered (first box); the preload range is not -
+  still `resyncCalendarData(_appState, pastWeeks: 2, futureWeeks: 1)` (`lib/main.dart:355`) with its
+  `// TODO user configurable preload range - 0x39A` at `:338`, neither a setting nor documented as a
+  deliberate constant. It only sizes the Schedule screen's calendar cache - `replan()` reads the
+  calendar uncached (`fetchMeetingsUncached`) - so it does not affect alarm times.
 
 ---
 
-### T-50 · Manual alarms don't respect two global settings — PARTLY FIXED (2026-09-18)
+### T-50 · Manual alarms don't respect two global settings — CLOSED: (a) FIXED, (b) DROPPED (2026-09-18)
 
 - [x] (a) Make manual alarms honor a vibration switch.
 - [x] (b) Dropped — see below.
@@ -4726,7 +4939,8 @@ defects found and fixed in the follow-up commit:**
   original note doesn't say what device-clock/DST change it means an alarm should react to, or
   what reacting should look like (re-fire? re-time? just re-notify?). Rather than guess at a
   behavior nobody asked for, this half is dropped without an implementation. Revisit only if a
-  concrete scenario is reported.
+  concrete scenario is reported. *(Since then, a manual alarm's behaviour across a DST change is
+  specified and implemented - T-202/T-206, TZ-1/TZ-2a; a zone change is travel, T-205.)*
 - **Tests:** `test/app_state_vibration_test.dart` (default, persistence, notifies listeners);
   `apply_alarms_test.dart` gained a `propertiesMatch` case (a differing `vibrate` triggers
   replacement) and an `applyPlannedAlarms` case (the setting reaches newly-planned alarms);
@@ -5074,7 +5288,7 @@ defects found and fixed in the follow-up commit:**
   the OS default").
 - **Done when:** a proper notification icon asset exists and is wired up.
 
-### T-153 · The alarm-ringing notification cannot be removed or its heads-up banner suppressed
+### T-153 · The alarm-ringing notification cannot be removed or its heads-up banner suppressed — CLOSED, no change wanted (2026-09-19)
 
 - [x] Investigated on maintainer's request; no code change - documenting the platform limit found.
 - **Why:** the maintainer asked for the notification shown while an alarm is ringing to be removed
@@ -5554,6 +5768,9 @@ defects found and fixed in the follow-up commit:**
       directly on purpose, so FR-17's "already replanned today" guard cannot suppress an explicit
       settings change. Any future settings UI for `wunschzeit`/`maxDailyDelta` must call it too.
       Tests: `test/settings_changed_test.dart`.
+      *(Same day, T-87 folded `onSchedulingSettingsChanged` and its file into the one entry point:
+      a settings change now runs `runSchedulingCheckpoint(trigger: CheckpointTrigger.settingsChanged)`,
+      covered in `test/checkpoint_test.dart`. Neither file name exists in the repository.)*
 - **Why:** all four are inputs to `computeWeekPlan` (`durationToWakeUp`/`durationToGetReady` feed
   `hardFloor` directly), but scheduling-v2 has exactly two entry points - the ring checkpoint (FR-8)
   and the app-foreground checkpoint (FR-17, once per day) - and neither reacts to a settings change.
@@ -5761,7 +5978,7 @@ defects found and fixed in the follow-up commit:**
   directly.
 - **Requirement:** R2
 
-### T-139 · FR-5's ΔT=0 rule cuts off the lookahead — `maxDailyDelta` gets blown by 50% as a result
+### T-139 · FR-5's ΔT=0 rule cuts off the lookahead — `maxDailyDelta` gets blown by 50% as a result — OPEN SPEC DECISION
 
 - [ ] Decide FR-5/FR-7, THEN fix test-driven.
 - **Where from:** the first diagnostics log from the device with clock-time logging enabled
@@ -5800,6 +6017,8 @@ defects found and fixed in the follow-up commit:**
   notification they cannot turn off.
 - **Postponed to the next version (maintainer, 2026-09-24):** the spec decision needed before this
   can be fixed test-driven is not a blocker for the current release state.
+- **Status (2026-10-01):** undecided; FR-5 step 2 is unchanged by T-206, and no test pins this case.
+  Now listed in "Waiting on a decision" at the top.
 - **Requirement:** R2
 
 ### T-138 · Snooze (FR-20) — IMPLEMENTED (2026-09-12)
@@ -5891,7 +6110,7 @@ defects found and fixed in the follow-up commit:**
   therefore explicitly pumps the animation to completion before measuring the time.
 - **Requirement:** R12 (usability)
 
-### T-135 · The log records wake times and early appointment times — at the maintainer's request (2026-09-12)
+### T-135 · The log records wake times and early appointment times — at the maintainer's request — IMPLEMENTED (2026-09-12, daf9fee)
 
 - [x] `Diag.dayPlanned`: per window day, the planned wake time and the day's earliest appointment.
 - [x] Own switch, default **off**, separate from the general diagnostics switch.
@@ -5929,6 +6148,8 @@ defects found and fixed in the follow-up commit:**
   appear, `-1` meaning, header, main switch remains overriding), `diag_log_api_test.dart`
   (tightened guard), `app_state_scheduling_v2_test.dart` (persistence round trip, independence of
   the two switches).
+- **Since then:** T-173 (2026-09-25) made the general diagnostics switch off by default too, and
+  T-163 put `Diag.dayEventTime` behind this same clock-time switch.
 - **Requirement:** R7 (data minimization), R2 (diagnosability)
 
 ### T-133 · A capping jump at an appointment stayed silent — RESOLVED (2026-09-12)
@@ -6025,10 +6246,10 @@ defects found and fixed in the follow-up commit:**
   than the current wake time" appeared in not a single one, even though it is the everyday case.
 - **Requirement:** R2
 
-### T-131 · The reboot procedure structurally cannot measure anything: `flutter test` uninstalls the app
+### T-131 · The reboot procedure structurally cannot measure anything: `flutter test` uninstalls the app — ANSWERED (2026-09-16, f0accb6: measured on a real phone, not in CI)
 
 - [x] Name the root cause instead of booking it a third time as a pattern-matching question.
-- [ ] **Decision needed:** by what path should the alarm be armed for the measurement?
+- [x] **Decision needed:** by what path should the alarm be armed for the measurement?
 - **The finding, from run 34627328009:** the three resolution paths report in agreement
   - `pm list packages -U` → no line contains the package name
   - `dumpsys package` → `Unable to find package: com.wakeywakey.wakeywakey`
@@ -6054,6 +6275,13 @@ defects found and fixed in the follow-up commit:**
   labeling; the latter already exists as section C in `docs/device-trial-checklist.md` and needs
   only a device and five minutes. Until that is decided, **T-93 stays open** - and specifically as
   *unanswered*, not as *failed*.
+- **Answered by the route T-93 took (f0accb6, 2026-09-16):** the device test, scripted -
+  `scripts/verify-alarm-survival.sh` measures on a real phone over USB and arms through the app's own
+  UI (`uiautomator` accessibility tree, `.github/scripts/ui_tap.sh`); `CLAUDE.md` records this as the
+  standing approach. The CI leg stays as non-gating evidence and still reports exactly this entry's
+  verdict (`RESULT: not measurable - the app is NOT INSTALLED at the time of measurement.`, master
+  gate run 36408813857, 2026-09-28). T-93 stays open for its own reason (the force-stop
+  discrepancy), not for this one.
 - **Requirement:** R3
 
 ### T-130 · uid resolution failed silently — RESOLVED (2026-09-11)
@@ -6145,7 +6373,7 @@ red and that stays invisible in the rest of the suite today.
   level, and it has already struck this project six times (T-67, T-71, T-77, T-80, T-106, T-114).
 - **Requirement:** R2, R3
 
-### T-119 · SPEC DECISION: a daylight-saving transition WITHIN the 7-day window — RESOLVED with T-206 (2026-09-29)
+### T-119 · SPEC DECISION: a daylight-saving transition WITHIN the 7-day window — RESOLVED with T-206 (2026-09-29, 718e4a5)
 
 - [x] **Decided 2026-09-28: yes, included in T-206** (maintainer: "t-119: OK"). FR-2 assigns an
   appointment by the device rules at its own instant; closed with T-206.
@@ -6639,7 +6867,8 @@ red and that stays invisible in the rest of the suite today.
   still never been observed. `dumpsys_alarm_own.txt` is therefore explicitly marked as
   **constructed** (`fixtures/README.md`). The next run has to show whether the detection holds up
   in reality; if it again finds nothing, the script now reports **inconclusive** instead of FAIL
-  and names the three places to look.
+  and names the three places to look. *Closed since (T-99, 2026-09-19): a real Fairphone 6 recording
+  replaced the constructed fixture, and the self-test asserts against it.*
 - **Lesson, in general:** a blind piece of evidence that reports "nothing found" is harmless - you
   notice it. One that finds something wrong is dangerous: it looks like a result. Whoever widens a
   pattern because it matches nothing must, in the same step, check what it matches **additionally**.
@@ -6649,7 +6878,7 @@ red and that stays invisible in the rest of the suite today.
 
 - [x] Narrow the cache down to what pays off.
 - [x] Delete the caches that had piled up.
-- [ ] Confirm in the next run that the build job goes through (after that, T-06's remaining task -
+- [x] Confirm in the next run that the build job goes through (after that, T-06's remaining task -
       a live proof that the gate really stops something - is still separately open).
 - **Why:** in run 34535358135, `Build Android (production)` showed `failure`, and the obvious
   interpretation would have been "the desugaring or override change broke the build". That was
@@ -6669,6 +6898,9 @@ red and that stays invisible in the rest of the suite today.
 - **Lesson that outlasts this specific case:** on a red job, look at the **step list** first, not
   at your own most obvious hypothesis. Here, the wrong interpretation would have led to reverting
   a correct and demonstrably verified change (T-90/T-97).
+- **Confirmed:** the production build has gone through in the `master` gates since - e.g. run
+  35513763937 (2026-09-20, `Build Android (production)` and MobSF both passed, T-159) and the v1.4.0
+  gate, run 36408813857 (2026-09-28). T-06 is resolved too.
 
 ### T-101 · risk.png was a planning-phase picture, now it's a threat model — RESOLVED (2026-09-10)
 
@@ -6712,7 +6944,7 @@ red and that stays invisible in the rest of the suite today.
   5 days, release APK and reports 30) - so it cannot build up again without someone maintaining a
   cleanup script.
 
-### T-98 · The E2E time limit was sized for the state before the engine scenarios — RESOLVED (2026-09-10)
+### T-98 · The E2E time limit was sized for the state before the engine scenarios — LARGELY RESOLVED (2026-09-10)
 
 - [x] Raise the limit.
 - [ ] Tighten it again after a few measured runs (then with actual numbers instead of an estimate).
@@ -6724,12 +6956,16 @@ red and that stays invisible in the rest of the suite today.
   fine content-wise. A time limit is meant to cut off a hung job, not a slow one.
 - **Status:** provisionally 60 minutes. Important for the next diagnosis: `timeout-minutes` is
   read at a run's **start** - a change made while a job is running has no effect on it any more.
+- **Status (2026-10-01):** still the provisional `timeout-minutes: 60`
+  (`.github/workflows/e2e-tests.yml:24`). Measured runs exist now - the v1.4.0 gate's E2E job took
+  about 25 minutes (run 36408813857, 2026-09-28, including the T-200 idle leg df3a75f has since
+  removed) - but the tightening itself has not been done.
 
-### T-99 · Two pieces of evidence in the E2E job were blind — PARTIALLY RESOLVED (2026-09-10)
+### T-99 · Two pieces of evidence in the E2E job were blind — RESOLVED (2026-09-10; last point confirmed 2026-09-28)
 
 - [x] Make both spots diagnosable.
 - [x] Read the real `dumpsys alarm` patterns from a real run and lock the counting to them.
-- [ ] Confirm that `adb root` actually sets the timezone on the CI image.
+- [x] Confirm that `adb root` actually sets the timezone on the CI image.
 - **Why:** run 34532845207 brought both of these to light - both things I had previously only
   **assumed**, and the review pass had explicitly flagged them as unverified:
   1. **The reboot proof found nothing.** `arm_alarm_test.dart` had, in the same run, provably set
@@ -6773,6 +7009,10 @@ red and that stays invisible in the rest of the suite today.
   `applyPlannedAlarms: removed 0, added 7` - an injected appointment produces exactly the seven
   alarms the fixture predicts, and a dismiss leaves them standing (T-64). This is the first
   confirmation of FR-18 all the way to the alarm plugin, on a device.
+- **Timezone confirmed (2026-10-01 review, from master gate run 36408813857, 2026-09-28):**
+  `run_e2e_tests.sh` logged `device timezone now: Europe/Berlin` and raised no mismatch warning, so
+  the zone setting takes effect and the precondition for the T-61 scenario being meaningful holds.
+  Observed on the API 36 image only (the emulator moved from API 34 with deb581a).
 
 ### T-97 · Project hygiene: leftover cruft in pubspec, build, and docs — RESOLVED (2026-09-10)
 
@@ -7018,6 +7258,8 @@ red and that stays invisible in the rest of the suite today.
   theoretically defused, but measurably gone. Proof that the app runs on API 24 is still missing —
   an API-24 leg in `e2e-tests.yml` would be the next step, but it would be an unverified leg, and
   one of those must not block a release.
+- **Status (2026-10-01):** unchanged - no API-24 run exists; the CI emulator moved from API 34 to 36
+  (deb581a, T-198), further away from the claim.
 
 ### T-91 · The new engine had never run on any device — RESOLVED (2026-09-10)
 
@@ -7112,6 +7354,10 @@ red and that stays invisible in the rest of the suite today.
     after this entry's own measurement contradicted it. Fixed by rewriting R3's relevant paragraphs
     to state plainly that the force-stop question is unresolved (not "loses it" and not "survives
     it") until a clean re-measurement closes the disagreement - see R3 for the corrected text.
+  - **Status (2026-10-01):** the clean re-measurement has not happened. T-164's
+    `scripts/verify-long-idle-alarm-survival.sh` (arm, reboot, force-stop, then ask after 24 h
+    whether it actually rang) is the built, not yet run tool for it; T-131's arming question is
+    answered by this entry's real-phone route.
 - **Root cause known since 2026-09-11, and structural (T-131):** `flutter test` uninstalls the app
   after the run, so Android drops its AlarmManager entries with it - there can be no alarm
   registered at the time of measurement at all. The procedure therefore needs a different way of
@@ -7275,7 +7521,8 @@ red and that stays invisible in the rest of the suite today.
 - [x] (e) FR-16's DST test suggests the case is fully handled; on the transition day itself, a
       wall-clock-anchored alarm still rings an hour wrong, because the value was computed the day
       before with the old offset and Checkpoint 2 runs at bedtime, still before the transition.
-      Document this as a deliberate boundary.
+      Document this as a deliberate boundary. *(This boundary was withdrawn by T-206, 718e4a5: each
+      day is now resolved with its own zone rules, so the change day itself is right.)*
 - **Status:** (a), (b), (d), (e) done 2026-09-10 - the header was rewritten (a consolidation section
   instead of a contradictory chronicle), the architecture block and Mermaid diagram brought in line
   with the actual structure, FR-3's table completed (nine fields, `lastEffectiveWakeTime` explained
@@ -7371,10 +7618,10 @@ red and that stays invisible in the rest of the suite today.
   `Scheduler` without losing alarm functionality. Note T-61 (UTC+0 assumption) becomes
   **user-visible** the moment this lands - it should be fixed first or at the same time.
 
-### T-62 · Unverified: does a silent background notification actually trigger `onNotificationCreatedMethod`? — TEST WRITTEN, awaiting a real E2E run (2026-09-19)
+### T-62 · Unverified: does a silent background notification actually trigger `onNotificationCreatedMethod`? — ANSWERED by T-199 (2026-09-27): it fires when the notification is scheduled, not when it is due
 
 - [x] Write a device test that can answer the question at all.
-- [ ] Confirm on a real/emulated Android device that scheduling a
+- [x] Confirm on a real/emulated Android device that scheduling a
       `NotificationContent` with neither `title` nor `body` (Phase 5 step 21,
       `sleepReminderContent(reminderEnabled: false)`) actually fires
       `onNotificationCreatedMethod` (`lib/utils/notifications.dart`) at the
@@ -7406,4 +7653,15 @@ red and that stays invisible in the rest of the suite today.
 - **Done when:** confirmed on a real/emulated device (the test now exists; its first real run's
   result is still needed), or downgraded from "recommended" if a more direct source confirms the
   behavior without needing a live test.
+- **Answered (2026-10-01 review), negatively, by the second branch above - a more direct source:**
+  T-199 read AndroidAwnCore 0.12.1's bytecode. For a scheduled notification
+  `onNotificationCreatedMethod` fires when it is *scheduled*; when it comes due there is no second
+  "created" event, and a silent one has no "displayed" event either. The device leg could not have
+  shown this: it waits 15 s for a value the scheduling-time event already writes, and on the CI
+  emulator it has failed before measuring anything in the runs on record (`scheduleNotification:
+  isAllowed: false` - T-159's runs on 2026-09-20; master gate run 36408813857 on 2026-09-28, job "E2E
+  tests (real emulator)": `❌ a title/body-less scheduled notification fires onNotificationCreatedMethod
+  (failed)` at `silent_notification_test.dart` line 88, `0 tests passed, 1 failed`, non-gating).
+  What follows - FR-16's Checkpoint 2 never runs at bedtime, and the leg should assert the callback
+  does NOT fire before the due time - is T-199.
 
