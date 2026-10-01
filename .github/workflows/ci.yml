@@ -129,7 +129,7 @@ jobs:
         run: flutter test --coverage --concurrency 2
       - name: Upload coverage
         if: matrix.tz == 'UTC'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-lcov
           path: coverage/lcov.info
@@ -211,7 +211,7 @@ jobs:
         if: always()
         run: rm -f android/app/keystore/crescendo-alarm-dev.jks
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: app-development-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
@@ -348,7 +348,7 @@ jobs:
         # docs/TODO.md T-213 (G3): the native dependency set of a gated
         # build, kept so it can be audited after the fact.
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-sbom
           path: build/app/reports/cyclonedx/bom.json
@@ -359,7 +359,7 @@ jobs:
         if: always()
         run: rm -rf android/app/keystore android/key.properties
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: app-production-apk
           path: build/app/outputs/flutter-apk/app-release.apk
@@ -414,7 +414,7 @@ jobs:
             "$GITHUB_WORKSPACE/.github/security-exceptions.json"
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mobsf-report
           path: mobsf-report.json
