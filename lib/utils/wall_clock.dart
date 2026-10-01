@@ -143,7 +143,8 @@ DateTime resolveWallClock(DateTime wallReading, ZoneOffsetAt offsetAt) {
 /// LATER calendar date than the reading's own - a skipped hour that ends at
 /// midnight (America/Nuuk, 28 Mar 2026: 23:00 -> 00:00). There it is one
 /// minute earlier: the last valid minute before the gap, on the planned day
-/// (maintainer decision B, "zur not vorziehen"). Since R of a skipped reading
+/// (maintainer decision B, "zur not vorziehen" - pull it earlier if
+/// necessary). Since R of a skipped reading
 /// is the transition instant, that is the minute right before the
 /// transition. The zone's own rules decide when this applies; no zone is
 /// named here.

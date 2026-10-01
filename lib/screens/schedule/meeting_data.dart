@@ -17,6 +17,10 @@
 
 part of 'screen_schedule.dart';
 
+/// One device-calendar event as the app sees it ([eventToMeeting]), drawn by
+/// the Schedule tab ([meetingToCalendarEvent]) and read by scheduling-v2.
+/// [from] and [to] are absolute instants: the `tz.TZDateTime`s
+/// `device_calendar` returns, in the event's own zone.
 class Meeting {
   Meeting({
     required this.from,
@@ -57,15 +61,9 @@ class Meeting {
     }
   }
 
-  // Repository hygiene pass (2026-09): this used to be `jsonEncode(this)
-  // .hashCode`, relying on dart:convert's fallback of calling a `toJson()`
-  // method - which had been commented out below (see git history), so every
-  // call here actually threw `JsonUnsupportedObjectError` instead of
-  // returning an int. Nothing currently puts a `Meeting` in a `Set` or uses
-  // one as a `Map` key, so the break went unnoticed, but it violated the
-  // basic hashCode contract (must never throw; must agree with `==`)
-  // regardless of whether anything exercised it yet. Hashes exactly the
-  // fields `==` above compares.
+  // Hashes exactly the fields `==` above compares, so equal meetings hash
+  // equally; `Object.hashAll` because `==` compares [ids] by content
+  // (`listEquals`), not by identity.
   @override
   int get hashCode => Object.hash(
         from,
@@ -96,10 +94,9 @@ class Meeting {
 /// disguise, and the first version of this function used it: a 09:00 Berlin
 /// appointment was drawn at 07:00 in summer. `DateTime.fromMillisecondsSinceEpoch`
 /// is the conversion that actually asks the *device* - same instant, read in
-/// the zone the user's clock shows. (`alarmPlatformTime` in lib/utils/utils.dart
-/// uses `.toLocal()` and is correct, because its receiver is a plain UTC
-/// `DateTime`. Same method name, different runtime type, different frame - the
-/// T-61/T-83 trap one level deeper.)
+/// the zone the user's clock shows. (On a plain `DateTime`, `toLocal()` does
+/// ask the device. Same method name, different runtime type, different frame -
+/// the T-61/T-83 trap one level deeper.)
 ///
 /// **All-day entries are the exception and must not take that path.**
 /// `device_calendar` deliberately normalises an Android all-day event to
@@ -108,7 +105,8 @@ class Meeting {
 /// move every all-day event one day earlier for any device west of UTC. They
 /// also carry no start/end time: calendar_view reads that as a full-day event,
 /// while 00:00-00:00 would be drawn as a sliver at the top of the time grid.
-/// [ignored] (new feature, user request): drawn grey regardless of the
+///
+/// [ignored] (docs/TODO.md T-149): drawn grey regardless of the
 /// event's real colour when the user has chosen to leave this appointment
 /// out of scheduling - `DefaultEventTile` (calendar_view) draws a
 /// `CalendarEventData`'s `color` as its whole background, so this is the

@@ -62,15 +62,16 @@ class SnoozeButton extends StatelessWidget {
   final VoidCallback? onBeforeSnooze;
 
   /// Runs when the attempt did not actually postpone anything (budget
-  /// exhausted, or the platform refused) - undoes [onBeforeSnooze]'s claim,
-  /// since nothing was stopped and the alarm is still ringing as before.
+  /// exhausted, snooze switched off meanwhile, or the platform refused the
+  /// new alarm) - undoes [onBeforeSnooze]'s claim, since nothing was stopped
+  /// and the alarm is still ringing as before.
   final VoidCallback? onSnoozeAttemptFailed;
 
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    // Without a recorded origin call (e.g. after a process death during
-    // which the handler didn't run), NOW counts as the origin. That's the
+    // Without a recorded original wake instant (e.g. after a process death
+    // during which the handler didn't run), NOW counts as the origin. That's the
     // conservative side: the budget then restarts, but it does start - a
     // silent failure of the feature would be the worse choice.
     final origin = appState.snoozeOriginFor(alarmId) ?? DateTime.now();

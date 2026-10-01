@@ -89,7 +89,7 @@ object SleepTimeDnd {
         if (contains(key)) getLong(key, 0L) else null
 
     /**
-     * Dart's push. Returns the report `SleepTimeDndReport` in Dart parses -
+     * Dart's push. Returns the report Dart's `SleepTimeDndReport` parses -
      * the decision plus what happened natively since the previous push
      * (booleans only), then resets those flags.
      *
@@ -276,6 +276,12 @@ object SleepTimeDnd {
         }
     }
 
+    /**
+     * Read-only queries for Dart (channel methods `currentInterruptionFilter`
+     * and `isAccessGranted`). The filter is the effective one across every
+     * active rule (see [SleepTimeDndPolicy.deactivationFilter]) - for
+     * observing, never for restoring.
+     */
     fun currentFilter(context: Context): Int =
         context.getSystemService(NotificationManager::class.java)?.currentInterruptionFilter
             ?: NotificationManager.INTERRUPTION_FILTER_UNKNOWN

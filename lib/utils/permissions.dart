@@ -31,15 +31,15 @@ import 'package:permission_handler/permission_handler.dart';
 /// through [PermissionsManager.requestPermissions].
 ///
 /// Top-level, mutable function variables - the same shape as this project's
-/// other injectable seams (e.g. `Handler`'s `runCheckpoint`/`sleep`) - rather
-/// than a constructor parameter, because production code
+/// other top-level seams (e.g. `mirrorDirectBootFallback`,
+/// `pushSleepTimeWindow`) - rather than a constructor parameter, because production code
 /// (`Handler.handleAlarm`) constructs `QrScanner()` directly with no natural
 /// place to thread one through, and because the Schedule tab's and the
 /// alarms screen's "Sync Alarms" button both need the exact same
-/// calendar-permission request, not two independent copies of it. Real
-/// production code calls these directly; only the "...Default" functions
-/// below are test-only, kept so a test that overrides the mutable variable
-/// can restore it afterwards.
+/// calendar-permission request, not two independent copies of it.
+/// Production code calls the mutable variables; the "...Default" functions
+/// are their real implementations, public so a test that overrides a
+/// variable can restore it afterwards.
 Future<void> requestCameraPermissionDefault() async {
   if (Platform.isAndroid || Platform.isIOS) {
     await PermissionsManager().checkCameraPermission();

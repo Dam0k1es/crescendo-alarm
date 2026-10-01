@@ -8,7 +8,8 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
     // docs/TODO.md T-148: see settings.gradle.kts's comment on the plugin
     // version - `:app:cyclonedxBom` (invoked from CI) writes
-    // build/reports/bom.json for osv-scanner.
+    // build/app/reports/cyclonedx/bom.json (from the repository root) for
+    // osv-scanner and scripts/check_proprietary_native_deps.py.
     id("org.cyclonedx.bom")
 }
 
@@ -53,22 +54,23 @@ android {
         // not a confirmed crash. Desugaring defuses it regardless and only
         // costs build time; that's considerably cheaper than leaving the
         // question open, since this project has no evidence whatsoever that
-        // the app runs on API 24 (the E2E emulator has so far only run
-        // API 34).
+        // the app runs on API 24 (the E2E emulator runs API 36, and ran
+        // API 34 before that).
         isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
         applicationId = "com.crescendoalarm.crescendoalarm"
-        // Was intended to stay below the Flutter default (21) for older-device
-        // compatibility, but several plugins (image_picker_android,
-        // shared_preferences_android, flutter_plugin_android_lifecycle in their
-        // currently-resolved versions) declare minSdk=24 in their own Gradle
-        // modules; Android's manifest merger always takes the highest minSdk
-        // across the app and all dependencies, so 24 is the real enforced floor
-        // regardless of what's set here. Set explicitly to 24 to match reality
-        // (found via MobSF static analysis flagging a mismatch) rather than
-        // leave a value that looks lower than what actually gets enforced.
+        // Pinned, not `flutter.minSdkVersion` (24 as well on the current
+        // Flutter, but free to move with an SDK upgrade): several plugins
+        // (image_picker_android, shared_preferences_android,
+        // flutter_plugin_android_lifecycle in their currently-resolved
+        // versions) declare minSdk=24 in their own Gradle modules, and
+        // Android's manifest merger always takes the highest minSdk across
+        // the app and all dependencies, so 24 is the real enforced floor
+        // regardless of what's set here (found via MobSF static analysis
+        // flagging a mismatch). Going lower needs those plugins downgraded
+        // first, not just this line changed.
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -136,10 +138,12 @@ tasks.named<org.cyclonedx.gradle.CyclonedxDirectTask>("cyclonedxDirectBom") {
 // docs/TODO.md T-148: the one real finding the scoped SBOM above turned up -
 // `device_calendar` transitively pulls `gson:2.8.8`, which carries
 // GHSA-4jrv-ppp4-jm57/CVE-2022-25647 (a deserialization type-confusion
-// issue, CVSS 7.7). Forced to the fixed 2.8.9 rather than accepted as an
-// exception: a same-minor-series patch release is exceedingly unlikely to
-// break anything `device_calendar` does with it, and there is no reason to
-// carry a fixable HIGH when the fix is a one-line version bump.
+// issue, CVSS 7.7). Forced to a fixed release (2.8.9 or later) rather than
+// accepted as an exception: there is no reason to carry a fixable HIGH when
+// the fix is a one-line version bump. Dependabot keeps bumping this pin
+// (2.8.9 -> 2.14.0 on 2026-09-25), so it is no longer the same-minor patch
+// release T-148 chose: every bump has to keep `device_calendar` working,
+// which serializes calendars and events to Dart with Gson.
 configurations.all {
     resolutionStrategy {
         force("com.google.code.gson:gson:2.14.0")

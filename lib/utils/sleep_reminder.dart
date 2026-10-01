@@ -32,17 +32,18 @@ import 'package:crescendo_alarm/utils/utils.dart';
 /// there could wipe out a warning that was never meant to be touched).
 const int sleepReminderNotificationId = 100000001;
 
-/// Phase 5 (docs/scheduling-v2-spec.md, "Implementierungsreihenfolge", Schritt
-/// 21): schedules the sleep-time notification - always, regardless of
-/// [AppState.reminderEnabled] (FR-16 "Voraussetzung": Checkpoint 2 needs a
+/// Phase 5 (docs/scheduling-v2-spec.md, "Implementation order", step 21):
+/// schedules the sleep-time notification - always, regardless of
+/// [AppState.reminderEnabled] (FR-16 "precondition": Checkpoint 2 needs a
 /// notification hook even when the visible reminder itself is disabled;
 /// [sleepReminderContent] decides visible-vs-silent, not whether to schedule
 /// at all). Shared by every trigger point that needs this - the reminder
-/// toggle, a dismissed alarm, and app cold-start (found missing during an
-/// independent Phase 5 review: without it, a fresh install never schedules
-/// anything until the toggle is touched or an alarm is dismissed once,
-/// leaving Checkpoint 2 without a hook in the meantime) - rather than
-/// re-duplicating this computation a third time. [notifications] is
+/// toggle, a dismissed alarm, and the end of every scheduling checkpoint,
+/// cold start included (docs/TODO.md T-80; the cold-start call was found
+/// missing during an independent Phase 5 review: without it, a fresh install
+/// never schedules anything until the toggle is touched or an alarm is
+/// dismissed once, leaving Checkpoint 2 without a hook in the meantime) -
+/// rather than re-duplicating this computation a third time. [notifications] is
 /// injectable purely for testability.
 Future<void> scheduleSleepReminder(
   AppState appState, {
@@ -107,7 +108,8 @@ Future<void> scheduleSleepReminder(
     // hook as early as possible. It is deliberately NOT made visible while
     // doing so - a "time to sleep" message hours after the intended instant
     // would be misleading, and FR-16 explicitly separates visibility from the
-    // hook ("regardless of whether the reminder itself is enabled").
+    // hook ("regardless of whether the bedtime notification itself is
+    // enabled").
     final missedBedtime = !dateTime.isAfter(DateTime.now());
     if (missedBedtime) {
       dateTime = DateTime.now().add(const Duration(minutes: 2));

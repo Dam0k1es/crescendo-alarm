@@ -24,7 +24,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-// Dependencies of calendar.dart
+// timezone and diag_log are used only by calendar.dart, a part of this
+// library - a part cannot import anything itself.
 import 'package:timezone/timezone.dart' as tz;
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
@@ -44,9 +45,13 @@ part 'meeting_data.dart';
 /// calendar_view (MIT) equivalent.
 final EventController<Meeting> _events = EventController<Meeting>();
 
+/// The screen's [AppState], set in [_ScreenScheduleState.initState]. The
+/// library's top-level functions take an `appState` parameter instead (which
+/// shadows this): they also run while this screen has never been opened -
+/// the calendar sync on every app open and the scheduling checkpoints.
 late AppState appState;
 
-/// New feature (user request): the "X" that marks an ignored event's tile,
+/// docs/TODO.md T-149: the "X" that marks an ignored event's tile,
 /// on top of the grey `meetingToCalendarEvent` already gives it. A named
 /// widget of its own (rather than an inline `Icon`) purely so a test can
 /// find it by type without depending on icon data/colour, which is
@@ -74,7 +79,10 @@ enum _ScheduleView {
   final String label;
 }
 
-// Define the screen schedule widget.
+/// The Schedule tab: the device calendar in day, week, work-week or month
+/// view. Tapping an event (day/week view) toggles whether it counts for
+/// scheduling (docs/TODO.md T-149); an app-bar button picks which calendars
+/// count (T-53).
 class ScreenSchedule extends StatefulWidget {
   const ScreenSchedule({super.key});
 
@@ -82,7 +90,6 @@ class ScreenSchedule extends StatefulWidget {
   State<ScreenSchedule> createState() => _ScreenScheduleState();
 }
 
-// Define the screen schedule state.
 class _ScreenScheduleState extends State<ScreenSchedule> {
   _ScheduleView _view = _ScheduleView.week;
   late DateTime _displayDate;
@@ -260,20 +267,16 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
     updateCalendarData(appState, const Duration(days: 7));
   }
 
-  /// `timeFormat: 'HH:mm'` in SfCalendar terms. calendar_view's default hour
-  /// label is "1 PM", which ignores the phone's 24-hour setting and is simply
-  /// wrong for most of this app's users. `DayView` offers no string-only hook,
-  /// so the whole mark is built here - which also lets the label take its
-  /// colour from the theme like every other calendar surface.
+  /// The hour labels of the day/week time grid. calendar_view's default
+  /// label is "1 PM" regardless of the phone's 24-hour setting, and `DayView`
+  /// offers no string-only hook, so the whole mark is built here - which also
+  /// lets the label take its colour from the theme like every other calendar
+  /// surface.
   ///
-  /// docs/TODO.md T-52.2: this used to hardcode 'HH:mm' (24h) regardless of
-  /// the device's own setting - wrong for exactly the users
-  /// [MediaQuery.alwaysUse24HourFormat] is false for.
-  /// `MediaQuery.of(context).alwaysUse24HourFormat` is Flutter's own reading
-  /// of that setting (populated from the platform's `is24HourFormat` on
-  /// Android) - the same source `showTimePicker` itself defaults to, so this
-  /// follows the identical rule as every other time display already in the
-  /// app rather than introducing a second, independent format decision.
+  /// docs/TODO.md T-52.2: 12- or 24-hour follows
+  /// `MediaQuery.of(context).alwaysUse24HourFormat`, Flutter's own reading of
+  /// the device setting (populated from the platform's `is24HourFormat` on
+  /// Android) and the same source `showTimePicker` itself defaults to.
   Widget _timeLineMark(DateTime date) {
     final format =
         MediaQuery.of(context).alwaysUse24HourFormat ? 'HH:mm' : 'h:mm a';
@@ -293,7 +296,7 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
     );
   }
 
-  /// New feature (user request): draws the same tile calendar_view always
+  /// docs/TODO.md T-149: draws the same tile calendar_view always
   /// has (`DefaultEventTile` - the grey background from `meetingToCalendarEvent`
   /// already does the "grayed out" half), plus a centred X on top when every
   /// event in this slot is ignored. Only "every" rather than "any": two
@@ -340,19 +343,16 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
   }
 
   /// docs/TODO.md T-53: which calendars feed the Schedule display and
-  /// scheduling. Same shape as [_showIgnoreEventSheet] just above -
+  /// scheduling. Same shape as [_showIgnoreEventSheet] below -
   /// `StatefulBuilder`-wrapped `CheckboxListTile`s in a modal sheet, so the
   /// sheet stays open while the user toggles more than one entry.
   void _showCalendarSelectionSheet() {
     showModalBottomSheet<void>(
       context: context,
-      // A device with many calendars (several accounts, each with its own
-      // holiday/birthday calendars) previously overflowed the bottom sheet -
-      // the plain, non-scrolling Column below has no way to shrink to fit,
-      // and without this the sheet's own default height cap made that worse
-      // by leaving even less room. `isScrollControlled` lets the sheet grow
-      // up to the full screen height before the list inside needs to
-      // scroll at all.
+      // Lifts the sheet's default height cap, which a device with many
+      // calendars (several accounts, each with its own holiday/birthday
+      // calendars) overflowed: the sheet can grow to the full screen height
+      // before the list below has to scroll.
       isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
         child: Padding(
@@ -393,7 +393,7 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
                                   calendar.id!, value ?? true);
                               setSheetState(() {});
                               // The same trigger _showIgnoreEventSheet uses
-                              // above: a change here feeds hardFloor
+                              // below: a change here feeds hardFloor
                               // derivation (replan.dart) and must take
                               // effect immediately, not on the next
                               // incidental replan.
@@ -434,11 +434,11 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
                     appState.setEventIgnored(meeting, value);
                     setSheetState(() {});
                     setState(() => _syncEventsFromAppState(appState));
-                    // New feature (user request): consulted by hardFloor
-                    // derivation (replan.dart) - a change must take effect
-                    // immediately, the same as any other setting that feeds
-                    // the computation (FR-21's disabledDays toggle uses the
-                    // identical trigger for the identical reason).
+                    // docs/TODO.md T-149: ignored events are left out of
+                    // hardFloor derivation (replan.dart) - a change must
+                    // take effect immediately, the same as any other setting
+                    // that feeds the computation (FR-21's disabledDays toggle
+                    // uses the identical trigger for the identical reason).
                     runCheckpointSafely(appState,
                         trigger: CheckpointTrigger.settingsChanged);
                   },
@@ -478,8 +478,9 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
           timeLineBuilder: _timeLineMark,
           eventTileBuilder: _eventTileBuilder,
           onEventTap: _onEventTap,
+          // Monday, like getStartOfWeek: updateCalendarData fetches and
+          // records whole weeks from that day.
           startDay: WeekDays.monday,
-          // `firstDayOfWeek: 1` in SfCalendar terms.
           weekDays: _view == _ScheduleView.workWeek
               ? const [
                   WeekDays.monday,
@@ -518,11 +519,9 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
     }
   }
 
-  // Define the screen schedule widget
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Define the app bar.
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         surfaceTintColor: Theme.of(context).colorScheme.surface,
@@ -561,7 +560,6 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
           ),
         ],
       ),
-      // Define the body of the screen.
       body: CalendarControllerProvider<Meeting>(
         controller: _events,
         child: Theme(
@@ -575,13 +573,17 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
   }
 }
 
-// Initialize and update calendar data
+/// Ensures [calendars] is loaded, then fetches calendar data into
+/// `appState.meetings` through [updateCalendarData] - from [backwards]
+/// before the start of the week of [specificDate] (or of
+/// `appState.visibleDate`) to [timeToFetch] after it.
 Future<void> loadCalendarData(AppState appState, Duration timeToFetch,
     [Duration backwards = const Duration(days: 0),
     DateTime? specificDate]) async {
   debugPrint("=====loadCalendarData");
 
-  // Initializing the calendar if not already initialized or no calendar has been found before (in case of a user caused changed)
+  // Retried for as long as no calendar has been found: the user may have
+  // granted calendar access or added an account since.
   if (appState.calendarsInitialized == false || calendars.isEmpty) {
     debugPrint(
         "=====loadCalendarData: Calendars are not initialized yet. Initializing them.");
@@ -591,7 +593,6 @@ Future<void> loadCalendarData(AppState appState, Duration timeToFetch,
         "=====loadCalendarData: List of calendars is already initialized and has ${calendars.length} calendars");
   }
 
-  // Update the calendar data source with the current appointments
   try {
     debugPrint("=====loadCalendarData: Updating calendar data");
     if (specificDate == null) {
@@ -619,24 +620,24 @@ void _syncEventsFromAppState(AppState appState) {
       .toList());
 }
 
-// Update the calendar data source with the current appointments
-//
-// docs/TODO.md T-145: was declared `async` but returned bare `void`, so
-// `loadCalendarData`'s own `await` of this call was a no-op - it fired this
-// function's work and moved on without waiting for it, racing
-// `preloadCalendarData`'s own follow-up `markWeekFetched` loop against
-// whatever this function had or hadn't finished recording yet. Usually
-// invisible (both sides finish "fast enough" against fakes/mocks), but a
-// widened fetch window here (T-145's month-view fix, or T-145's own test)
-// took a little longer and reliably lost the race, corrupting
-// `fetchedCalendarWeeks`'s count non-deterministically between runs.
-// `Future<void>` lets every caller that actually needs to wait do so.
+/// Fetches from [backwards] before the start of the week of [specificDate]
+/// (or of `appState.visibleDate`) to [timeToFetch] after it into
+/// `appState.meetings`, records the covered weeks with `markWeekFetched`,
+/// and redraws [_events]. Without [specificDate] the fetch is skipped when
+/// the visible week was fetched before, unless
+/// `appState.firstUpdateOfCalendar` is set.
+///
+/// Returns a `Future` its callers can await (docs/TODO.md T-145): as a
+/// fire-and-forget `void`, `preloadCalendarData`'s own `markWeekFetched`
+/// loop raced it and non-deterministically corrupted `fetchedCalendarWeeks`.
 Future<void> updateCalendarData(AppState appState, Duration timeToFetch,
     [Duration backwards = const Duration(days: 0),
     DateTime? specificDate]) async {
   debugPrint("=====updateCalendarData");
 
-  // Set mutex to prevent calculating scheduled meetings while reading calendar data
+  // Shows the Schedule tab's spinner (main.dart, docs/TODO.md T-60) while
+  // this read is in flight. Nothing on the scheduling path waits on it:
+  // replan() reads the calendar itself (fetchMeetingsUncached).
   try {
     appState.isReadingCalendarMutex = true;
   } catch (e) {

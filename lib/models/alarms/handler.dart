@@ -87,8 +87,8 @@ class Handler {
   @visibleForTesting
   static const int maxOverlayAttempts = 5;
 
-  /// Also the fallback's own final wait before [Alarm.stopAll] - see
-  /// [handleAlarm]'s doc comment on why the two share one constant.
+  /// Also the fallback's own final wait before [Alarm.stopAll] (see
+  /// [handleAlarm]).
   @visibleForTesting
   static const Duration overlayRetryDelay = Duration(seconds: 3);
 
@@ -104,7 +104,7 @@ class Handler {
   }
 
   /// FR-8: the actual ring is scheduling-v2's daily replanning trigger -
-  /// "feuert immer", regardless of how the rest of [handleAlarm] resolves
+  /// it "always fires", regardless of how the rest of [handleAlarm] resolves
   /// (dismissed via overlay, via the 3s-timeout fallback, whatever). Fired
   /// via `unawaited` and wrapped in its own try/catch so a slow or failing
   /// checkpoint (a real calendar-plugin call) can never delay or break
@@ -184,6 +184,14 @@ class Handler {
     return false;
   }
 
+  /// Everything a newly ringing alarm triggers, in order: the FR-8 ring
+  /// checkpoint (fire-and-forget, see [_fireReplanCheckpoint]), the stop of a
+  /// stale ring, recording the FR-20 snooze origin, and the ring screen -
+  /// the QR gate ([shouldRequireDeactivationCode]) or the plain one - shown
+  /// with [_showOverlayWithRetries]. If no screen can be shown (or a stale
+  /// ring could not be stopped), every alarm is stopped after one more
+  /// [overlayRetryDelay], rather than left ringing with nothing on screen to
+  /// stop it.
   Future<void> handleAlarm(AlarmSettings event) async {
     _fireReplanCheckpoint(event);
 
@@ -196,13 +204,12 @@ class Handler {
     // On top of that, it logged the exact wake time in plain text.
     //
     // The same diagnosis - and more - is now provided by the PII-free event
-    // logger below (Diag.alarmRang): alarm type as a type code, no
-    // timestamp, no id.
+    // logger (Diag.alarmRang, in _fireReplanCheckpoint above): alarm type as
+    // a type code, no timestamp, no id.
 
     bool stoppingAlarmPossible = true;
 
     try {
-      // Check if the alarm is set in the past
       bool alarmSetBeforeNow = false;
       try {
         alarmSetBeforeNow = isAlarmStale(event.dateTime, DateTime.now());
@@ -211,7 +218,6 @@ class Handler {
             "=====handleAlarm: Failed to check if alarm is set in the past: ${e.runtimeType}");
       }
 
-      // If the event is in the past, stop it
       if (alarmSetBeforeNow) {
         debugPrint("=====handleAlarm: Stopping alarm that is set in the past");
         try {
@@ -221,7 +227,9 @@ class Handler {
           stoppingAlarmPossible = false;
         }
 
-        // Double check if alarm is still in the list of AlarmSettings
+        // Only a stop that took effect leaves nothing to show. If the alarm
+        // is still armed, fall through: a ring that could not be stopped
+        // must still get a screen to stop it from.
         try {
           List<AlarmSettings> alarmSettings = await Alarm.getAlarms();
           if (!alarmSettings.contains(event)) {
@@ -232,10 +240,8 @@ class Handler {
         }
       }
 
-      // If the event is in the future or now, show either the default alarm overlay or the QR code scanner
-
-      // Check if the deactivation code is set - and, since T-176, whether
-      // this specific alarm has opted out of requiring it.
+      // The QR gate needs a configured code - and, since T-176, an alarm
+      // that has not opted out of requiring it.
       bool isDeactivationCodeSet = false;
       try {
         isDeactivationCodeSet = shouldRequireDeactivationCode(
@@ -258,8 +264,6 @@ class Handler {
             "=====handleAlarm: rememberSnoozeOrigin failed: ${e.runtimeType}");
       }
 
-      // If the deactivation code is not set, show the alarm overlay; if it
-      // is, show the QR code scanner instead.
       final overlayShown = await _showOverlayWithRetries(
         () => isDeactivationCodeSet
             ? QrScanner(alarmId: event.id)
@@ -289,7 +293,7 @@ class Handler {
   /// next selected day.
   ///
   /// The sleep-reminder reschedule happens always, regardless of
-  /// [AppState.reminderEnabled] (FR-16 "Voraussetzung",
+  /// [AppState.reminderEnabled] (FR-16 "precondition",
   /// docs/scheduling-v2-spec.md): Checkpoint 2 needs a notification hook even
   /// when the visible reminder itself is disabled; `scheduleSleepReminder()`/
   /// `sleepReminderContent()` decide visible-vs-silent, not whether to
@@ -320,8 +324,8 @@ class Handler {
   /// T-64 above already fixed once).
   ///
   /// [notifications] and [setManualAlarmEnabled] are both injectable
-  /// (defaulting to the real [Notifications] and [AppState
-  /// .setManualAlarmEnabled]) purely for testability - see
+  /// (defaulting to the real [Notifications] and
+  /// [AppState.setManualAlarmEnabled]) purely for testability - see
   /// test/sleep_reminder_always_scheduled_test.dart and
   /// test/handler_manual_alarm_rearm_test.dart, neither of which can reach
   /// the real `alarm` plugin from `flutter test`.

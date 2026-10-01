@@ -6,7 +6,8 @@
 # reasoning `.github/scripts/alarm_detection.sh` already documents for the
 # alarm-counting half of these scripts.
 #
-# Contract for the sourcing script: define `note()` (logging) before calling
+# Contract for the sourcing script: define `note()` (logging) and `raw()`
+# (appends stdin to the evidence log under a heading) before calling
 # `tap_label`, and set `FIXTURES` (a directory of recorded accessibility
 # trees) before calling `ui_self_test`. Sourcing this file executes nothing
 # on its own - no `adb` call happens until `ui_dump`/`tap_label` is actually

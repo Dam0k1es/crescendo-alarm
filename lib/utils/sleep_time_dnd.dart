@@ -42,7 +42,8 @@
 //   `alarm` plugin uses for the ring itself, at the same whole-minute instant.
 //
 // The window is re-computed and pushed at the bedtime reminder's own call
-// sites (R2: "Die Zeitplanung ist bzgl des Starts daher zu übernehmen") -
+// sites (R2: "Die Zeitplanung ist bzgl des Starts daher zu übernehmen" -
+// its scheduling is therefore to be adopted for the start) -
 // the end of every scheduling checkpoint and every handled alarm - and
 // additionally after every real alarm arm/cancel, at cold start, and when
 // the setting changes (see AppState.refreshSleepTimeDnd for why a trigger

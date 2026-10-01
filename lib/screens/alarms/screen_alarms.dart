@@ -30,17 +30,20 @@ import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 import 'package:crescendo_alarm/utils/permissions.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
+/// The Alarms tab: the plan's [ScheduledAlarm]s and the user's
+/// [ManualAlarm]s as two lists. Swiping an alarm right deletes it; swiping
+/// left deletes every alarm of the visible tab after a confirmation. The
+/// floating button adds a manual alarm, or on the Scheduled tab runs a
+/// `manualSync` checkpoint.
 class ScreenAlarms extends StatefulWidget {
   const ScreenAlarms({super.key});
 
   // "Scheduled" comes first: the calendar-derived alarms are the actual
   // product path, manual alarms the exception.
   //
-  // `const` instead of `static int`: the two used to be mutable and could
-  // have been changed from anywhere, even though they describe the tab
-  // order below. Whoever swaps these here must also swap the `tabs:` and
+  // Whoever swaps these here must also swap the `tabs:` and
   // `TabBarView.children` lists - otherwise the screen shows one list while
-  // the button belongs to the other.
+  // the button and swipe-to-delete-all act on the other.
   static const int scheduledTabIndex = 0;
   static const int manualTabIndex = 1;
 
@@ -70,6 +73,8 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     super.dispose();
   }
 
+  /// Rebuilds so the floating action button follows the visible tab (add
+  /// vs. sync).
   void _handleTabChange() {
     setState(() {});
   }
@@ -178,11 +183,9 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                         fontSize: 18,
                       ),
                     ),
-                    // User request: always show which day(s) a manual alarm
-                    // rings on, at a glance, without opening the edit
-                    // dialog. Scheduled alarms have no `repeatOnDays` of
-                    // their own - each is a single calendar-derived day - so
-                    // this is manual-only.
+                    // docs/TODO.md T-152: manual alarms only - a scheduled
+                    // alarm has no `repeatOnDays` of its own, each is a
+                    // single calendar-derived day.
                     if (alarms[index] case final ManualAlarm manualAlarm)
                       Padding(
                         padding: const EdgeInsets.only(top: 6.0),
@@ -335,6 +338,11 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     }
   }
 
+  /// The add/edit dialog for a manual alarm. Returns the edited alarm on
+  /// Save - keeping [alarm]'s id and enabled state, or a new id for a new
+  /// alarm - and `null` on Cancel. A new alarm inherits the global defaults
+  /// (gentle wake, volume, vibration, snooze, tone) and starts one minute
+  /// from now, repeating on today's weekday only.
   Future<ManualAlarm?> _showAlarmOverlay(
       BuildContext context, ManualAlarm? alarm) async {
     TextEditingController titleController =
@@ -363,19 +371,21 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     // code was configured.
     //
     // docs/TODO.md T-193 (maintainer request): "wenn kein code gesetzt ist,
-    // soll auch die Option auf off sein" - with no deactivation code
-    // configured at all, this toggle has no effect whatsoever
-    // (Handler.shouldRequireDeactivationCode already ignores it without a
-    // code), so showing/allowing "on" would be actively misleading. Forced
-    // off (not just displayed off - genuinely stored as `false`) whenever
-    // no code exists, and the Switch below is disabled to match, rather
-    // than defaulting `true` and silently diverging from what's shown.
+    // soll auch die Option auf off sein" (with no code set, the option should
+    // be off too) - with no deactivation code configured at all, this toggle
+    // has no effect whatsoever (`shouldRequireDeactivationCode` in
+    // handler.dart already ignores it without a code), so showing/allowing
+    // "on" would be actively misleading. Forced off (not just displayed off -
+    // genuinely stored as `false`) whenever no code exists, and the Switch
+    // below is disabled to match, rather than defaulting `true` and silently
+    // diverging from what's shown.
     final codeConfigured = _appState.deactivationCode != null;
     bool requireDeactivationCode =
         codeConfigured ? (alarm?.requireDeactivationCode ?? true) : false;
     // docs/TODO.md T-198 (R5, maintainer request): "Ein manueller Alarm soll
     // durch einen Schalter von der Schlafenszeit ausgenommen werden
-    // können." Off by default - a manual alarm counts for the Do Not
+    // können." (a switch should let a manual alarm be excluded from the
+    // sleep time). Off by default - a manual alarm counts for the Do Not
     // Disturb sleep time unless the user excludes it. No AppState default to
     // inherit from, like requireDeactivationCode above.
     bool excludeFromSleepTime = alarm?.excludeFromSleepTime ?? false;
@@ -386,7 +396,7 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     // Reachable on a real device: a pre-T-56 install's custom tone lived at
     // a fixed path (`custom_tones/custom_tone.<ext>`) that this version
     // never writes to again, so upgrading orphans it. Falls back to the
-    // first bundled tone, the same default AppState itself starts with.
+    // first bundled tone.
     String selectedTone = alarm?.tone ?? _appState.selectedTone;
     final validTonePaths = {
       for (final (_, path) in bundledTones) path,
@@ -507,11 +517,10 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // docs/TODO.md T-176: pre-existing overflow at
-                            // narrow phone widths, found while adding the
-                            // "Guaranteed Wake-Up" toggle below and testing
-                            // this dialog at a realistic width for the
-                            // first time - same Expanded fix.
+                            // docs/TODO.md T-176: Expanded so the label
+                            // wraps instead of overflowing the Row at narrow
+                            // phone widths - same fix as "Deactivation Code
+                            // Required" below.
                             const Expanded(
                               child: Text('Gentle Wake Up',
                                   style: TextStyle(fontSize: 20)),
@@ -558,9 +567,9 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                     // docs/TODO.md T-176: per-alarm override of the
                     // deactivation-code ("guaranteed wake-up") gate - only
                     // takes effect when a code is actually configured
-                    // (Handler.shouldRequireDeactivationCode), but is shown
-                    // unconditionally, matching every other per-alarm
-                    // setting in this dialog.
+                    // (shouldRequireDeactivationCode in handler.dart), but
+                    // is shown unconditionally, matching every other
+                    // per-alarm setting in this dialog.
                     //
                     // docs/TODO.md T-192 (maintainer request): labeled
                     // "Deactivation Code Required", not "Guaranteed Wake-Up"
@@ -642,7 +651,6 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                             const SizedBox(height: 8),
                             DropdownButton<String>(
                               isExpanded: true,
-                              // Make the dropdown button as wide as its parent
                               value: selectedTone,
                               onChanged: (String? newValue) {
                                 setState(() {
@@ -697,12 +705,10 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                     // Set repeatOnDays
                     //
                     // docs/TODO.md T-176 (maintainer request): a title
-                    // label, and all seven days on one visible row rather
-                    // than wrapping into three (the old `Wrap` with 40dp
-                    // chips, 10dp spacing and a forced break before the
-                    // weekend). Each day now sits in its own `Expanded`
-                    // slot, so the row divides the available width by
-                    // seven and can never wrap regardless of screen width.
+                    // label, and all seven days on one row. Each day sits in
+                    // its own `Expanded` slot, so the row divides the
+                    // available width by seven and can never wrap
+                    // regardless of screen width.
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(12.0),
@@ -775,11 +781,9 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
   }
 }
 
-/// User request: a small, read-only pill per weekday on the alarm list
-/// itself, so which day(s) a manual alarm rings on is visible without
-/// opening the edit dialog - the same information [_buildDaySelector]
-/// already lets the user set, just not shown anywhere outside that dialog
-/// before now.
+/// docs/TODO.md T-152 (user request): a small, read-only pill per weekday on
+/// the alarm list itself, so which day(s) a manual alarm rings on is visible
+/// without opening the edit dialog, where [_buildDaySelector] sets them.
 Widget _buildWeekdayPills(BuildContext context, ManualAlarm alarm) {
   final accent = context.watch<AppState>().accentColor;
   return Row(
@@ -815,9 +819,8 @@ Widget _buildWeekdayPills(BuildContext context, ManualAlarm alarm) {
 Widget _buildDaySelector(BuildContext context, DayOfWeek day,
     Map<DayOfWeek, bool> repeatOnDays, StateSetter setState) {
   String dayLabel = _getDayLabel(day);
-  // docs/TODO.md T-176: shrunk from radius 20 (its own `Expanded` slot now
-  // bounds its width instead of a `Wrap`'s `spacing`) so seven of these fit
-  // one row on a realistic phone width without wrapping.
+  // docs/TODO.md T-176: radius 16 so seven of these, each in its own
+  // `Expanded` slot, fit one row on a realistic phone width.
   return Center(
     child: GestureDetector(
       onTap: () {
@@ -842,11 +845,6 @@ Widget _buildDaySelector(BuildContext context, DayOfWeek day,
   );
 }
 
-// Repository hygiene pass (2026-09): these were German abbreviations
-// ("DIE"/Dienstag, "MI"/Mittwoch, "DO"/Donnerstag, "SA"/Samstag,
-// "SO"/Sonntag) shown directly in the UI, missed by the earlier audit
-// because none of them are full German words. Now English throughout,
-// matching the project's standing "everything in English" rule.
 String _getDayLabel(DayOfWeek day) {
   switch (day) {
     case DayOfWeek.monday:

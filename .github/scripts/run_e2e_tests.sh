@@ -2,7 +2,7 @@
 # Runs the E2E integration tests against the emulator started by
 # reactivecircus/android-emulator-runner in .github/workflows/e2e-tests.yml,
 # while collecting evidence of the run: a segmented screen recording (video,
-# no audio - see EVIDENCE.md note below), a coarse audio-focus timeline, and
+# no audio - see the README.md written below), a coarse audio-focus timeline, and
 # the raw test output. Everything lands in $EVIDENCE_DIR, which the workflow
 # uploads as a build artifact.
 #
@@ -162,19 +162,6 @@ trap stop_evidence_collection EXIT
 
 # --- Build, install, and run the actual tests ---
 
-# Build once and install with every dangerous permission pre-granted via
-# `adb install -g`, *before* the app ever runs for the first time. An earlier
-# version of this script tried to grant permissions via a background loop
-# racing the app's own first launch instead, and lost that race: the app's
-# PermissionsManager.requestPermissions() saw the camera permission as not
-# yet granted and called Permission.camera.request() for real, which then
-# collided with a later test's own request with
-# "PlatformException: A request for permissions is already running" (the
-# native permission_handler side only allows one request in flight at a
-# time, and integration_test runs multiple testWidgets in the same process).
-# `flutter test` below re-installs the same already-built APK over this one
-# (adb install -r, not an uninstall+reinstall), which preserves permissions
-# granted here.
 # docs/TODO.md T-92: set the device timezone to a zone WITH daylight saving
 # and a whole-hour offset before the app runs for the first time.
 #
@@ -210,6 +197,19 @@ if [[ "$DEVICE_TZ" != "Europe/Berlin" ]]; then
   echo "::warning::Emulator timezone is $DEVICE_TZ, not Europe/Berlin - the T-61 frame scenario proves nothing in this run."
 fi
 
+# Build once and install with every dangerous permission pre-granted via
+# `adb install -g`, *before* the app ever runs for the first time. An earlier
+# version of this script tried to grant permissions via a background loop
+# racing the app's own first launch instead, and lost that race: the app's
+# PermissionsManager.requestPermissions() saw the camera permission as not
+# yet granted and called Permission.camera.request() for real, which then
+# collided with a later test's own request with
+# "PlatformException: A request for permissions is already running" (the
+# native permission_handler side only allows one request in flight at a
+# time, and integration_test runs multiple testWidgets in the same process).
+# `flutter test` below re-installs the same already-built APK over this one
+# (adb install -r, not an uninstall+reinstall), which preserves permissions
+# granted here.
 flutter build apk --debug
 adb install -r -g build/app/outputs/flutter-apk/app-debug.apk
 
@@ -228,6 +228,9 @@ TEST_EXIT_CODE=${PIPESTATUS[0]}
 # (no effect on TEST_EXIT_CODE), same reasoning as the alarm-survival leg
 # below: this exact mechanism has never been measured on this emulator
 # image before, and an unverified leg must not block a release.
+# What a pass proves is narrow (docs/TODO.md T-199): the callback fires when
+# the notification is SCHEDULED, not when it comes due, and this leg cannot
+# tell the two apart.
 flutter test integration_test/silent_notification_test.dart -d emulator-5554 \
   2>&1 | tee "$EVIDENCE_DIR/silent_notification.log" || true
 
@@ -255,17 +258,14 @@ wait "$DND_GRANT_PID" 2>/dev/null || true
 adb shell cmd notification set_dnd off >/dev/null 2>&1 || true
 
 # docs/TODO.md T-93 / docs/REQUIREMENTS.md R3: does a set alarm survive a
-# reboot? Unverified to this day - and it's the last open question of the
-# "guaranteed wake-up" product promise.
+# reboot? Evaluated through `dumpsys alarm` rather than by waiting for a
+# ring, so it costs no waiting time.
 #
-# The trick that makes this cheap and deterministic: NOT waiting for a
-# ring, but evaluating `dumpsys alarm` instead. That way it's checkable
-# WHETHER an alarm is registered, without spending any time.
-#
-# Deliberately NOT gating (no effect on TEST_EXIT_CODE): this behaviour has
-# never been measured on this emulator image before, and an unverified leg
-# must not block a release. It gathers evidence first; once it has been
-# reproducibly green, it belongs gated for real.
+# Deliberately NOT gating (no effect on TEST_EXIT_CODE) - and in this job it
+# cannot measure at all (docs/TODO.md T-131): `flutter test` uninstalls the
+# app after the run, Android drops the package's AlarmManager entries with
+# it, and check_alarm_survival.sh then reports "not measurable". The real
+# measurement is scripts/verify-alarm-survival.sh against a USB phone.
 # First arm an alarm and LEAVE it standing - app_test.dart consistently
 # cleans up in tearDown, so nothing stays registered coming out of it.
 flutter test integration_test/arm_alarm_test.dart -d emulator-5554 \

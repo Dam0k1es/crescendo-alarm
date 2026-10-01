@@ -116,9 +116,10 @@ class UnsupportedToneFormatException implements Exception {
 /// documents-relative [path] `importCustomTone` returned for it.
 ///
 /// Plain data, immutable, JSON round-trippable: `AppState` persists a list
-/// of these the same way it persists every other value, and `==`/`hashCode`
-/// let a `ManualAlarm`'s stored `tone` (still a bare path string, unchanged)
-/// be matched back to the [CustomTone] that owns it by comparing [path].
+/// of these the same way it persists every other value. An alarm's stored
+/// `tone` stays a bare path string, so it is matched back to the
+/// [CustomTone] that owns it by comparing [path]; `==`/`hashCode` are value
+/// equality over both fields.
 class CustomTone {
   const CustomTone({required this.name, required this.path});
 

@@ -29,6 +29,9 @@ import 'package:crescendo_alarm/models/scan_code/qr_export.dart';
 import 'package:crescendo_alarm/screens/scan_code/page_import_qr.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
+/// The Scan Code tab's content: generate a deactivation code or import one
+/// (`PageImportQr`), and once one is set, describe, share, print or remove
+/// it. Reads and writes `AppState.deactivationCode`.
 class PageDeactivationCode extends StatefulWidget {
   const PageDeactivationCode({super.key});
 
@@ -43,14 +46,14 @@ class PageDeactivationCode extends StatefulWidget {
   @visibleForTesting
   static Future<void> Function(List<int> pngBytes)? debugPrintOverride;
 
-  /// Test seam: replaces the real [renderQrCodePng] call. `test/qr_export_test
-  /// .dart` already covers that function itself in isolation (a plain
-  /// `test()`, not `testWidgets()`); its `dart:ui` image rasterization
-  /// (`Picture.toImage`/`Image.toByteData`) never resolves when triggered
-  /// from inside an active `testWidgets` binding via a real button tap - not
-  /// even inside `tester.runAsync` - so widget tests that only need to check
-  /// the Share/Print *wiring* use a fast, deterministic fake here instead of
-  /// re-exercising the real rendering pipeline.
+  /// Test seam: replaces the real [renderQrCodePng] call.
+  /// `test/qr_export_test.dart` already covers that function itself in
+  /// isolation (a plain `test()`, not `testWidgets()`); its `dart:ui` image
+  /// rasterization (`Picture.toImage`/`Image.toByteData`) never resolves when
+  /// triggered from inside an active `testWidgets` binding via a real button
+  /// tap - not even inside `tester.runAsync` - so widget tests that only need
+  /// to check the Share/Print *wiring* use a fast, deterministic fake here
+  /// instead of re-exercising the real rendering pipeline.
   @visibleForTesting
   static Future<Uint8List> Function(String payload)? debugRenderQrCodeOverride;
 
@@ -61,7 +64,7 @@ class PageDeactivationCode extends StatefulWidget {
 class _PageDeactivationCodeState extends State<PageDeactivationCode> {
   late final AppState _appState;
 
-  // must not be final, because of reinitialization on rebuild:
+  // Not final: recomputed from the screen width on every build.
   late double _displayArea;
 
   /// The payload of the code the description prompt has already been shown
@@ -87,10 +90,10 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
     );
   }
 
-  /// User request: a QR code re-rendered from a scanned-in payload looks
-  /// nothing like the code that was actually scanned, so it's useless as a
-  /// reminder of what to scan next time. This lets the user write that
-  /// reminder themselves instead.
+  /// docs/TODO.md T-150 (user request): a QR code re-rendered from a
+  /// scanned-in payload looks nothing like the code that was actually
+  /// scanned, so it's useless as a reminder of what to scan next time. This
+  /// lets the user write that reminder themselves instead.
   Future<void> _showDescriptionDialog(DeactivationCode code) async {
     final controller = TextEditingController(text: code.description ?? '');
     final result = await showDialog<String>(
@@ -138,9 +141,9 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
   /// `Intent.ACTION_SEND` - no external app is required, the OS's own
   /// chooser is the mechanism; the user picks whatever target they want
   /// from it). Reads `_appState.deactivationCode` directly rather than
-  /// whatever `page_deactivation_code.dart` happens to have on screen right
-  /// now (the QR image, or the user's own description once one exists) -
-  /// the export always reflects the actual code.
+  /// whatever this screen happens to show right now (the QR image, or the
+  /// user's own description once one exists) - the export always reflects
+  /// the actual code.
   Future<void> _shareQrCode() async {
     final code = _appState.deactivationCode;
     if (code == null) return;
@@ -168,13 +171,14 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
   }
 
   /// docs/TODO.md T-182 (maintainer request, "wichtig wäre mir den QR Code
-  /// an einen Drucker senden zu können"): prints the deactivation code
-  /// directly via `android.print.PrintManager` (through the `printing`/`pdf`
-  /// packages) - the OS's own print framework, not dependent on whether a
-  /// print target happens to be registered in the generic share sheet
-  /// `_shareQrCode` uses. `pdf` is needed only because that is the document
-  /// format Android's print framework itself expects; the underlying
-  /// content is the same PNG `_shareQrCode` exports.
+  /// an einen Drucker senden zu können" - being able to send the QR code to
+  /// a printer matters to them): prints the deactivation code directly via
+  /// `android.print.PrintManager` (through the `printing`/`pdf` packages) -
+  /// the OS's own print framework, not dependent on whether a print target
+  /// happens to be registered in the generic share sheet `_shareQrCode`
+  /// uses. `pdf` is needed only because that is the document format
+  /// Android's print framework itself expects; the underlying content is the
+  /// same PNG `_shareQrCode` exports.
   Future<void> _printQrCode() async {
     final code = _appState.deactivationCode;
     if (code == null) return;
@@ -199,15 +203,12 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
 
   @override
   Widget build(BuildContext context) {
-    // Real-device report: after importing a code via the QR scanner
-    // (`PageImportQr`, a separate pushed route/widget), this screen kept
-    // showing "no code configured" until something else happened to rebuild
-    // it - `_appState` was read with `listen: false` in initState, so
-    // AppState.notifyListeners() from that other widget's mutation had no
-    // way to reach this screen; only the Generate/Remove buttons' own local
-    // `setState` calls masked the same gap for themselves. Subscribing here
-    // makes this screen react to a `deactivationCode` change no matter which
-    // widget made it.
+    // docs/TODO.md T-143: `_appState` is read with `listen: false` in
+    // initState, so without this subscription a `deactivationCode` change
+    // made by another route (`PageImportQr`'s scanner) never rebuilt this
+    // screen - it kept showing "no code configured" after a successful
+    // import (a real-device report). The Generate/Remove buttons' own
+    // `setState` calls had only masked the gap for themselves.
     context.watch<AppState>();
     _displayArea = MediaQuery.of(context).size.width * 0.75;
 
@@ -289,7 +290,6 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
 
     return PageView(
       children: [
-        // No Deactivation Code
         if (_appState.deactivationCode == null)
           Center(
             child: SizedBox(
@@ -333,8 +333,6 @@ class _PageDeactivationCodeState extends State<PageDeactivationCode> {
             ),
           ),
 
-        // Deactivation Code Set
-        //
         // The QR image's size is derived from screen WIDTH alone
         // (`_displayArea`), with no regard for available height - on a wide
         // but short screen (a small phone, or landscape) that image plus the

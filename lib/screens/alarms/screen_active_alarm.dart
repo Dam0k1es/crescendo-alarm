@@ -27,6 +27,15 @@ import 'package:crescendo_alarm/models/alarms/ringing_watch.dart';
 import 'package:crescendo_alarm/screens/alarms/snooze_button.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
+/// The default ring screen for alarm [alarmId], shown by
+/// `Handler.handleAlarm` when no deactivation code is required (otherwise
+/// `QrScanner` is shown instead).
+///
+/// Back navigation is blocked (`PopScope(canPop: false)`), so the screen
+/// closes only through Stop, a successful Snooze (FR-20), or [RingingWatch]
+/// noticing that the alarm stopped ringing somewhere else. Stop and an
+/// external stop share one `Handler.onAlarmHandled` call; a snooze is a
+/// postponement and runs none.
 class ScreenAlarmActive extends StatefulWidget {
   final int alarmId;
 
@@ -60,7 +69,11 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
   late DateTime _currentDateTime;
 
   /// Guards `Handler.onAlarmHandled` against being called more than once for
-  /// this ring - see `_callOnAlarmHandledOnce`.
+  /// this ring. A successful Stop's own `Alarm.stop()` also removes the alarm
+  /// from `Alarm.ringing`, so [RingingWatch] reacts to the same change the
+  /// Stop button is already handling - without this guard the dismissal
+  /// would run twice, e.g. re-arming a repeating manual alarm twice
+  /// (docs/TODO.md T-147).
   bool _onAlarmHandledCalled = false;
 
   /// Set synchronously the instant Snooze is pressed, before anything
@@ -69,12 +82,7 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
   /// snooze calls `Alarm.stop()` on the *old* alarm as its last internal
   /// step, which [RingingWatch] also observes, and in practice its listener
   /// fires before the snooze's own completion handler gets a chance to say
-  /// "this one was a postponement, not a real stop". Bug report: pressing
-  /// Stop threw a Navigator "!_debugLocked" assertion, from the same
-  /// `Alarm.stop()`-updates-`Alarm.ringing` mechanism racing the Stop
-  /// button's own dismissal - not from snoozing, but the underlying hazard
-  /// (two independent reactions to one platform change) is identical, so
-  /// both needed the same treatment.
+  /// "this one was a postponement, not a real stop".
   bool _snoozing = false;
 
   /// See [_onAlarmHandledCalled].
@@ -87,7 +95,10 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
 
   /// Idempotent by construction (`ModalRoute.isCurrent`), so every caller -
   /// Stop, Snooze, and [RingingWatch] - can call it unconditionally without
-  /// its own guard.
+  /// its own guard. Stop and Snooze both change `Alarm.ringing` themselves,
+  /// so [RingingWatch] reacts to the same change: an unguarded second
+  /// `Navigator.pop` hit the navigator mid-transaction (a "!_debugLocked"
+  /// assertion, docs/TODO.md T-147) or would pop the route underneath.
   void _pop() {
     if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
       Navigator.pop(context);
@@ -121,7 +132,9 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
     );
     _currentTime = TimeOfDay.now();
     _currentDateTime = DateTime.now();
-    // The alarm library may trigger the event before the minutes have changed.
+    // The alarm plugin may fire a few seconds before the minute it was set
+    // for. Only the date line reads this value (the HH:MM clock below uses
+    // `TimeOfDay.now()` as is), so the rounding matters for a midnight alarm.
     if (_currentDateTime.second >= 55) {
       _currentDateTime = _currentDateTime.add(const Duration(minutes: 1));
     }
@@ -157,17 +170,14 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
       child: Scaffold(
         backgroundColor: Theme.of(context).colorScheme.surface,
         body: SafeArea(
-          // The SnoozeButton (visible whenever snoozeEnabled, on by default)
-          // added just enough height to overflow this Column on short
-          // viewports - found via the CI timezone matrix's fixed 600dp test
-          // surface, not a real device report, but the fix has to hold on a
-          // real short/small screen too, not just make the test pass. A
-          // LayoutBuilder + ConstrainedBox(minHeight) + IntrinsicHeight lets
-          // the Spacer-based centering below work unchanged whenever content
-          // fits, and only turns scrollable once it doesn't - a plain
-          // SingleChildScrollView alone can't host Spacer (it needs a
-          // bounded height to compute flex, which an unbounded scroll axis
-          // doesn't give it).
+          // The SnoozeButton (FR-20) makes this Column taller than short
+          // viewports - first seen on `flutter test`'s 800x600 surface, but a
+          // small phone screen is no different. LayoutBuilder +
+          // ConstrainedBox(minHeight) + IntrinsicHeight keep the Spacer-based
+          // centering below whenever the content fits and only scroll once
+          // it doesn't; a plain SingleChildScrollView alone can't host a
+          // Spacer (flex needs a bounded height, which an unbounded scroll
+          // axis doesn't give it).
           child: LayoutBuilder(
             builder: (context, constraints) => SingleChildScrollView(
               child: ConstrainedBox(

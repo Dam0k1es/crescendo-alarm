@@ -1,3 +1,20 @@
+// Copyright (C) 2026 Dam0k1es, centron5961
+//
+// This file is part of Crescendo Alarm.
+//
+// Crescendo Alarm is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Crescendo Alarm is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
+
 package com.crescendoalarm.crescendoalarm
 
 import android.content.Intent
@@ -7,15 +24,16 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
-    // docs/TODO.md T-158: the app running at all - reached here - means the
-    // device has been unlocked and the real ring pipeline (or the user
-    // themselves) can take over from here. Stop the direct-boot fallback
-    // unconditionally, regardless of HOW this activity was reached: tapping
-    // the fallback's own notification, tapping the real alarm's own
-    // full-screen intent, or the user simply opening the app - a real
-    // device test found the fallback siren kept running after the real
-    // alarm's ring screen had already taken over, because nothing had ever
-    // told it to stop unless its own notification specifically was tapped.
+    // docs/TODO.md T-158: this activity is not direct-boot-aware, so reaching
+    // it means the device has been unlocked at least once since boot and the
+    // real ring pipeline (or the user themselves) can take over. Stop the
+    // direct-boot fallback unconditionally, regardless of HOW this activity
+    // was reached: tapping the fallback's own notification, tapping the real
+    // alarm's own full-screen intent, or the user simply opening the app.
+    // Only a safety net: on a real device this alone changed nothing, since
+    // the real alarm's full-screen intent does not reliably launch this
+    // activity - the reliable stop is DirectBootFallbackService's own
+    // ACTION_USER_PRESENT receiver.
     // `stopService` on an already-stopped service is a harmless no-op, so
     // this is safe to call every time regardless of whether a fallback was
     // ever actually armed.

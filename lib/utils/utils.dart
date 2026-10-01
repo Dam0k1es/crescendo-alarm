@@ -23,6 +23,9 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 
+/// A random alarm/notification id below 99999999. Not checked for
+/// uniqueness; fixed ids (e.g. `sleepReminderNotificationId`) are chosen
+/// outside this range so they can never collide with one.
 int getRandom() {
   return Random().nextInt(99999999);
 }
@@ -50,6 +53,10 @@ String formatTimeOfDay(TimeOfDay time) {
   return '$hour:$minute';
 }
 
+/// A date as a `ScheduledAlarm`'s title and the ring screen show it
+/// ("Monday, 5. October 2026"), formatted from [dateTime]'s own fields - so
+/// it must be a local reading (`localFromStored`), never a UTC-tagged
+/// instant (docs/TODO.md T-83).
 String formatDateTime(DateTime dateTime) {
   String weekday = DateFormat('EEEE').format(dateTime);
   String dayOfMonth = DateFormat('d').format(dateTime);
@@ -59,16 +66,14 @@ String formatDateTime(DateTime dateTime) {
   return formattedDate;
 }
 
+/// Parses an "HH:MM h" duration (the " h" suffix is optional).
 Duration durationFromString(String time) {
-  // Remove the ' h' at the end
   time = time.replaceAll(' h', '');
 
-  // Split the string
   List<String> parts = time.split(':');
   int hours = int.parse(parts[0]);
   int minutes = int.parse(parts[1]);
 
-  // Create and return a duration
   return Duration(hours: hours, minutes: minutes);
 }
 
@@ -222,7 +227,8 @@ Duration durationFromTimeOfDay(TimeOfDay time) {
   return Duration(hours: time.hour, minutes: time.minute);
 }
 
-// Expecting a String like '08:15'
+/// Parses "hour:minute" - '08:15' as [formatTimeOfDay] writes it, or the
+/// unpadded '8:5' form `AppState` persists.
 TimeOfDay timeOfDayFromString(String data) {
   return TimeOfDay(
       hour: int.parse(data.split(':')[0]),

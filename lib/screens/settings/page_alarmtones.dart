@@ -28,6 +28,11 @@ import 'package:crescendo_alarm/models/alarms/custom_tone.dart';
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
+/// Settings > Alarm Tones: the default tone (bundled or imported, previewed
+/// on tap), custom tone import, and the default volume and vibration. These
+/// are what planned alarms are armed with and what new manual alarms
+/// inherit; each change runs a `settingsChanged` checkpoint (docs/TODO.md
+/// T-84) so already-armed planned alarms pick it up.
 class PageAlarmTones extends StatefulWidget {
   const PageAlarmTones({super.key});
 
@@ -61,7 +66,8 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
       await _stopAudio();
       _audioPlayer = AudioPlayer();
       try {
-        // Not really system volume, but saves us a library
+        // The player's own volume, not the system volume the alarm plugin
+        // sets - only an approximation of the alarm, but no extra plugin.
         _audioPlayer?.setVolume(_appState.selectedVolume);
         await _audioPlayer!.setSource(await _sourceFor(path));
         await _audioPlayer!.resume();
@@ -79,7 +85,8 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
   /// file the app copied into its own Documents directory (see
   /// `custom_tone.dart`) - `audioplayers` needs a different `Source` for
   /// each, unlike the alarm plugin, which resolves both forms of [path]
-  /// itself (see `AppState._setAlarm`'s doc comment on `assetAudioPath`).
+  /// itself (see `importCustomTone`'s doc comment on
+  /// `AlarmSettings.assetAudioPath`).
   Future<Source> _sourceFor(String path) async {
     if (path.startsWith('assets/')) {
       return AssetSource(path.replaceFirst('assets/', ''));
@@ -359,9 +366,9 @@ class _PageAlarmTonesState extends State<PageAlarmTones> {
     );
   }
 
-  // docs/TODO.md T-50: there was no vibration setting anywhere in the app
-  // before this - every alarm always vibrated regardless of anything the
-  // user could do.
+  /// docs/TODO.md T-50: whether alarms vibrate - applied to planned alarms
+  /// (through the checkpoint below) and inherited by manual alarms created
+  /// afterwards.
   Widget _buildVibrationToggle(BuildContext context) {
     return Card(
       child: Padding(

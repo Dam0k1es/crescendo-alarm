@@ -21,6 +21,9 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:crescendo_alarm/screens/settings/page_license.dart';
 import 'package:crescendo_alarm/screens/settings/page_native_notices.dart';
 
+/// Settings > About: the bundled privacy policy (`assets/text/Privacy.md`),
+/// plus the app's own licence, Flutter's collected third-party licences and
+/// the native-code notices (docs/TODO.md T-36, T-142).
 class PageAboutpage extends StatelessWidget {
   const PageAboutpage({super.key});
 

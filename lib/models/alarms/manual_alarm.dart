@@ -20,7 +20,14 @@ import 'dart:convert';
 import 'package:crescendo_alarm/models/alarms/myalarm.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
+/// An alarm the user set: a bare device-local `TimeOfDay` ([time]) plus the
+/// weekdays it rings on, resolved to a concrete moment only when it is armed
+/// (`nextManualOccurrence`). Never touched by the scheduling engine (FR-15).
 class ManualAlarm extends MyAlarm {
+  /// The weekdays this alarm rings on - every day unless the user narrows
+  /// it. The platform alarm is one-shot, so the repeat is made real by
+  /// re-arming after every dismiss (`Handler.onAlarmHandled`, docs/TODO.md
+  /// T-14).
   Map<DayOfWeek, bool> repeatOnDays;
 
   /// docs/TODO.md T-176 (maintainer request): whether snooze is available
@@ -48,6 +55,7 @@ class ManualAlarm extends MyAlarm {
 
   /// docs/TODO.md T-198 (R5, maintainer request): "Ein manueller Alarm soll
   /// durch einen Schalter von der Schlafenszeit ausgenommen werden können."
+  /// (A manual alarm should be excludable from sleep time by a switch.)
   /// When `true`, this alarm is ignored when deciding which alarm ends the
   /// Do Not Disturb sleep time (`sleepTimeWindow` in
   /// `lib/utils/sleep_time_dnd.dart`) - e.g. a medication reminder in the
@@ -89,7 +97,9 @@ class ManualAlarm extends MyAlarm {
   factory ManualAlarm.fromJson(String jsonString) {
     final data = jsonDecode(jsonString);
 
-    // Convert the String keys back to DayOfWeek values.
+    // The keys are `DayOfWeek.toString()` ("DayOfWeek.monday"), as toJson
+    // writes them - persisted, so renaming the enum or a value breaks every
+    // stored manual alarm.
     final repeatOnDays = (data['repeatOnDays'] as Map<String, dynamic>).map(
       (key, value) => MapEntry(
         DayOfWeek.values.firstWhere((day) => day.toString() == key),
@@ -179,6 +189,9 @@ class ManualAlarm extends MyAlarm {
   }
 }
 
+/// Monday first, so `DayOfWeek.values[dateTime.weekday - 1]` maps a
+/// `DateTime.weekday` onto it - the order is load-bearing, and so are the
+/// names (persisted via `toString()`, see [ManualAlarm.fromJson]).
 enum DayOfWeek {
   monday,
   tuesday,

@@ -227,6 +227,9 @@ class SleepTimeDndPolicyTest {
     // included on purpose - "Ich inkludiere ihn ja absichtlich. Ich kann ja
     // auch nachts um 2:00 morgens einen wecker auf 08:00 stellen, dann bin
     // ich bei 08:00 stunden schlafziel ja nie in dem fall, dass DND angeht."
+    // (I include it on purpose. I can also set an alarm for 08:00 at 2:00 at
+    // night - with an 8-hour Sleep Goal I would then never get Do Not
+    // Disturb.)
     // Keeping a backup alarm out of sleep time is what "Exclude from Sleep
     // Time" is for. (These cases failed against the A1 rule with the
     // last-ring record set, as on the device after a ring; the record itself

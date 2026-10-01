@@ -43,9 +43,9 @@
 // timing via `Stopwatch` (monotonic, no clock read).
 //
 // Sink: a bounded in-memory ring buffer, batched to SharedPreferences.
-// Deliberately not a file via `path_provider`: FR-16's checkpoint 2 runs in
-// a background isolate with no AppState and already talks directly to
-// SharedPreferences there today (`runTimezoneCheckpoint2`) - a file logger
+// Deliberately not a file via `path_provider`: FR-16's checkpoint 2 is built
+// to run in a background isolate with no AppState and already talks directly
+// to SharedPreferences there (`runTimezoneCheckpoint2`) - a file logger
 // there would depend on the plugin channel's availability, exactly the bug
 // class T-79 was. No network code: the app's offline property stays
 // untouched, and export goes via the clipboard, and thus only ever at the
@@ -160,11 +160,11 @@ enum DiagField {
   manualAlarmCount(104),
   pendingValueCount(105),
   daysSinceLastReplan(106),
-  // The FR-19-less daily log (docs/TODO.md T-135). ONLY these three carry
-  // clock values, and only when clock-time logging has been explicitly
-  // switched on. The INPUTS of a planning run (docs/TODO.md T-140).
-  // Durations are not times of day and are always included; preferredWakeUpTime
-  // is one and is gated behind the clock-time switch.
+  // The daily log (docs/TODO.md T-135) and the INPUTS of a planning run
+  // (docs/TODO.md T-140). The three `...MinuteOfDay` fields carry clock
+  // values and are recorded only when clock-time logging has been
+  // explicitly switched on - preferredWakeUpTime is a time of day too. The
+  // durations are not times of day and are always included.
   maxDailyDeltaMinutes(117),
   wakeUpMinutes(118),
   getReadyMinutes(119),
@@ -449,6 +449,9 @@ OffsetChangeShape bucketOffsetChange(Duration before, Duration after) {
 
 // ------------------------------------------------------------------ Record
 
+/// One logged event. [boot] (the persisted start counter) and [seq] (the
+/// order within that start) replace a timestamp; [fields] holds only codes,
+/// counts and relative days.
 class DiagRecord {
   const DiagRecord({
     required this.boot,
@@ -474,6 +477,9 @@ class DiagRecord {
         for (final entry in fields.entries) ...[entry.key.code, entry.value],
       ];
 
+  /// The reverse of [encode], tolerant of other app versions: `null` for a
+  /// malformed entry or an event/uptime code this version does not know,
+  /// and unknown field codes are dropped.
   static DiagRecord? decode(List<dynamic> raw) {
     if (raw.length < 4 || raw.length.isOdd) return null;
     final event = DiagEvent.values.where((e) => e.code == raw[2]).firstOrNull;
@@ -535,12 +541,12 @@ abstract final class Diag {
 
   /// Idempotent per isolate (docs/TODO.md T-162): `onNotificationCreatedMethod`
   /// calls this with `isolate: LogIsolate.background` on the assumption that
-  /// it always runs in a genuinely fresh isolate - true only when the app
-  /// process wasn't already running. `awesome_notifications` also fires that
-  /// callback IN-PROCESS, in the SAME isolate, whenever the app is alive
-  /// when a notification it just created is created - which
-  /// `scheduleSleepReminder()` does at the end of every checkpoint. Without
-  /// this guard, that second, in-process call would overwrite the shared
+  /// it runs in a genuinely fresh isolate. `awesome_notifications` also fires
+  /// that callback IN-PROCESS, in the SAME isolate - per T-199 (from the
+  /// plugin's own source) it never starts a separate one for it at all -
+  /// whenever a notification is scheduled, which `scheduleSleepReminder()`
+  /// does at the end of every checkpoint. Without this guard, that second,
+  /// in-process call would overwrite the shared
   /// `_isolate`/`_boot` static state mid-session: every later event gets
   /// mis-tagged `(bg)`, the persisted boot counter is bumped a second time
   /// with no corresponding `boot()` event, and because [flush] persists
@@ -579,7 +585,8 @@ abstract final class Diag {
   static void setIncludeClockTimes(bool value) => _includeClockTimes = value;
   static bool get includeClockTimes => _includeClockTimes;
 
-  /// Test-only: resets the process-level state.
+  /// Test-only: resets the process-level state - and switches recording ON,
+  /// so a test sees its events without calling [init].
   static void resetForTest() {
     _ring.clear();
     _seq = 0;
@@ -619,7 +626,8 @@ abstract final class Diag {
   }
 
   /// Persisted in a batch, not per event - the ring path must not get any
-  /// I/O latency. Callers: checkpoint end, app pause, boot.
+  /// I/O latency. Callers: checkpoint end, app pause/detach, and FR-16's
+  /// checkpoint 2 after its own record.
   static Future<void> flush() async {
     final prefs = _prefs;
     if (!_dirty || prefs == null) return;
@@ -631,9 +639,11 @@ abstract final class Diag {
 
   /// Reads both sinks and merges them by (boot, seq).
   ///
-  /// Two keys are needed because FR-16's checkpoint 2 runs in its own
-  /// isolate with its own memory - the static ring buffer there is a
-  /// DIFFERENT one. The same trap as T-69, just one level deeper.
+  /// Two keys, because FR-16's checkpoint 2 is built to run in its own
+  /// isolate with its own memory - a static ring buffer there would be a
+  /// DIFFERENT one. The same trap as T-69, just one level deeper. (Per
+  /// docs/TODO.md T-199 the plugin in fact delivers that callback in the main
+  /// isolate.)
   static Future<List<DiagRecord>> readAll({SharedPreferences? prefs}) async {
     final p = prefs ?? _prefs ?? await SharedPreferences.getInstance();
     // (boot, seq) is meant to be a unique record identity - a genuinely
@@ -827,7 +837,8 @@ abstract final class Diag {
 
   /// FR-16 checkpoint 2. Also answers T-62 ("does the silent notification
   /// even trigger the callback?") - if this event shows up in the export,
-  /// the answer is yes.
+  /// the answer is yes. Not WHEN, though: docs/TODO.md T-199 found it fires
+  /// when the notification is scheduled, not when it comes due.
   static void timezoneCheck({
     required bool offsetChanged,
     required OffsetChangeShape shape,
@@ -914,9 +925,10 @@ abstract final class Diag {
   /// appointment, both as a minute of the local day (0..1439), `-1` for
   /// "none" (docs/TODO.md T-135).
   ///
-  /// One of only two events carrying clock values (the other is
-  /// [dayEventTime] below), both gated behind [setIncludeClockTimes]; a
-  /// no-op otherwise. Built for exactly the question the rest of the log
+  /// Like [dayEventTime] below, gated behind [setIncludeClockTimes] and a
+  /// no-op otherwise - the two events that exist only to carry clock values
+  /// ([planInputs]' preferred wake-up time is the one other clock value,
+  /// behind the same switch). Built for exactly the question the rest of the log
   /// cannot answer: *why* does a given day carry this wake time - is it the
   /// appointment, the curve, or the preferred wake-up time? Counts and
   /// buckets alone cannot reconstruct that; with these two numbers a week's
@@ -974,7 +986,7 @@ abstract final class Diag {
   /// should be extended when Sleep Habits change, no matter which"). Most of
   /// these settings ARE clock values (durations, times of day), so carrying
   /// the actual value would violate this log's own structural no-clock-value
-  /// rule for every setting but the three already gated behind
+  /// rule, whose only exceptions are the minute-of-day fields gated behind
   /// [setIncludeClockTimes] - carrying only WHICH setting changed answers
   /// "did the user touch their configuration around the time something went
   /// wrong" without ever answering "to what", and needs no switch: unlike a

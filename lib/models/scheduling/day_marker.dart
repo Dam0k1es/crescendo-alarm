@@ -59,6 +59,8 @@ int dayDistance(DateTime a, DateTime b) =>
     dayStamp(a).difference(dayStamp(b)).inDays;
 
 /// The `YYYY-MM-DD` key under which a day is stored in
-/// `AppState.pendingDayValues` and `pendingDayInstantAnchored`.
+/// `AppState.pendingDayValues`, `pendingDayInstantAnchored`,
+/// `pendingDayClockTimes` and `disabledDays` - compared as strings for the
+/// retention bound, which works because the format sorts chronologically.
 String isoDate(DateTime day) =>
     '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';

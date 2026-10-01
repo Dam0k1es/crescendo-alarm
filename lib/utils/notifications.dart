@@ -26,11 +26,17 @@ import 'package:crescendo_alarm/utils/utils.dart';
 /// whenever ANY notification is created - including the silent, title/body-less
 /// "background notification" `sleepReminderContent(reminderEnabled: false)`
 /// produces (step 21) - **not** `onNotificationDisplayedMethod`, which only
-/// fires for a notification that actually appears in the status bar. Runs in
-/// its own background isolate with no `AppState`/`Provider` access, hence
-/// [runTimezoneCheckpoint2] (not [runAlarmRingCheckpoint]) - see that
+/// fires for a notification that actually appears in the status bar. Built
+/// for a background isolate with no `AppState`/`Provider` access, hence
+/// [runTimezoneCheckpoint2] (not `runSchedulingCheckpoint`) - see that
 /// function's own doc comment for why it talks to `SharedPreferences`
 /// directly instead.
+///
+/// docs/TODO.md T-199 (open, read from the plugin's own source): for a
+/// scheduled notification, "created" fires at the moment it is SCHEDULED, in
+/// the main isolate, and a silent one produces no callback at all when it
+/// comes due - so this runs at every bedtime-reminder (re)schedule, never at
+/// bedtime.
 ///
 /// `@pragma('vm:entry-point')` is required by `awesome_notifications` itself
 /// for any listener that must survive being invoked from a fresh background
@@ -38,11 +44,13 @@ import 'package:crescendo_alarm/utils/utils.dart';
 @pragma('vm:entry-point')
 Future<void> onNotificationCreatedMethod(
     ReceivedNotification receivedNotification) async {
-  // docs/TODO.md T-89: this isolate's entry point is the one correct place
-  // for `Diag.init` - it sets global state (a prefs handle and the isolate
-  // identity), and this isolate has its own ring buffer, different from the
-  // main isolate's (the same trap as T-69, just one level deeper). Hence a
-  // dedicated prefs key and a merge on read.
+  // docs/TODO.md T-89: this entry point is the one correct place for
+  // `Diag.init` - it sets global state (a prefs handle and the isolate
+  // identity), and a background isolate has its own ring buffer, different
+  // from the main isolate's (the same trap as T-69, just one level deeper).
+  // Hence a dedicated prefs key and a merge on read. Delivered in the main
+  // isolate instead (T-199: in practice, always), the call is a no-op -
+  // `Diag.init` is idempotent per isolate (T-162).
   try {
     await Diag.init(isolate: LogIsolate.background);
   } catch (e) {
@@ -58,7 +66,7 @@ Future<void> onNotificationCreatedMethod(
 @pragma('vm:entry-point')
 Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {}
 
-/// FR-16 "prerequisite, still to be built" (docs/scheduling-v2-spec.md): the
+/// FR-16 "precondition (built)" (docs/scheduling-v2-spec.md): the
 /// sleep-time notification must always be scheduled (Phase 5 step 21) so
 /// Checkpoint 2 has something to hang off of even when the visible reminder
 /// itself is disabled - deciding whether it's visible or not is orthogonal to
@@ -73,7 +81,10 @@ Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {}
 }
 
 class Notifications {
-  // Initialise the awesome_notifications library
+  /// Initialises both plugins - `Alarm.init()` as well as
+  /// awesome_notifications' channel and listeners. Awaited before the first
+  /// checkpoint (docs/TODO.md T-79, see main.dart): the checkpoint arms
+  /// alarms and schedules FR-16's notification right away.
   Future<void> init() async {
     await Alarm.init();
     await AwesomeNotifications().initialize(
@@ -99,13 +110,17 @@ class Notifications {
     );
   }
 
-  // Set a notification to be shown at a specific time. `title`/`body` are
-  // nullable - omitting both creates a silent "background notification"
-  // (see `sleepReminderContent`'s doc comment) instead of a visible one.
-  // `id` is optional - a fixed id lets a caller later cancel/replace exactly
-  // this notification (see `cancelNotification`) without affecting any other;
-  // omitting it (the default, used by every caller that doesn't need to
-  // revise a specific earlier notification) picks a fresh random one.
+  /// Shows a notification at [scheduledDate], or right away without one.
+  /// [title]/[body] are nullable - omitting both creates a silent
+  /// "background notification" (see `sleepReminderContent`'s doc comment)
+  /// instead of a visible one. [id] is optional - a fixed id lets a caller
+  /// later cancel/replace exactly this notification (see
+  /// [cancelNotification]) without affecting any other; omitting it (the
+  /// default, used by every caller that doesn't need to revise a specific
+  /// earlier notification) picks a fresh random one.
+  ///
+  /// Returns the notification's id, or `-1` when notifications are not
+  /// allowed or the plugin refused it.
   Future<int> scheduleNotification({
     String? title,
     String? body,
@@ -156,13 +171,11 @@ class Notifications {
     }
   }
 
-  // Cancel notification by id
   Future<void> cancelNotification(int id) async {
     debugPrint("=====cancelNotification: Cancelling notification with id: $id");
     return AwesomeNotifications().cancel(id);
   }
 
-  // Cancel all notifications
   Future<void> cancelAllNotifications() async {
     debugPrint("=====cancelAllNotifications: Cancelling all notifications");
     return AwesomeNotifications().cancelAll();

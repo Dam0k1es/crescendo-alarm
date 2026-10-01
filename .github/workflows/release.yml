@@ -12,7 +12,7 @@ env:
 jobs:
   e2e-tests:
     name: E2E tests (real emulator)
-    # A production release requires these to actually pass on a real device -
+    # A production release requires these to actually pass on a real emulator -
     # no exceptions, no time-boxed skip. If this job fails or times out, the
     # release does not happen (build-signed-release below depends on it).
     # The job itself lives in e2e-tests.yml (reusable) - ci.yml calls the
@@ -148,8 +148,9 @@ jobs:
     # still gets pruned down over time. Storage policy: keep this run's own
     # artifacts, plus whichever *other* release.yml run was most recently
     # successful (so there's always one known-good reference build/evidence
-    # set available even when the latest run failed) - everything else from
-    # this workflow gets deleted. ci.yml's artifacts are untouched; see
+    # set available even when the latest run failed) and the most recent
+    # *other* failed one (its evidence, for comparison) - everything else
+    # from this workflow gets deleted. ci.yml's artifacts are untouched; see
     # .github/scripts/cleanup_old_artifacts.sh for how that scoping works.
     needs: [e2e-tests, build-signed-release]
     if: always()
@@ -157,7 +158,7 @@ jobs:
     permissions:
       # Declaring `permissions:` on a job replaces the whole default set, not
       # just adds to it - contents: read is needed too, or actions/checkout
-      # fails with a redacted "Repository not found" (this repo is private).
+      # fails with a redacted "Repository not found" (seen while the repo was private).
       contents: read
       actions: write
     steps:

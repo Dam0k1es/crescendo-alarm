@@ -46,7 +46,10 @@ import 'package:crescendo_alarm/utils/utils.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Guarantee that no debug log messages are printed in release mode
+  // No debug log output in release builds. This reaches only the isolate
+  // main() runs in: a background-isolate entry point keeps the default
+  // debugPrint, which writes to logcat even in release
+  // (test/no_pii_in_logs_test.dart).
   if (kReleaseMode) {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
@@ -264,7 +267,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Load app state
     _appState = Provider.of<AppState>(context, listen: false);
 
     // docs/TODO.md T-39: the Alarm.ringing subscription used to live here -
@@ -274,7 +276,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     notifications = Notifications();
 
-    // Set the local timezone
+    // Loads the IANA zone database the zone lookups below resolve against;
+    // the local zone itself is resolved further down (currentTimeZone).
     tzdata.initializeTimeZones();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // docs/TODO.md T-79: awaited, and BEFORE the checkpoint below. init()
@@ -325,7 +328,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       debugPrint("=====initState: timezone resolved");
 
       // FR-17 (docs/scheduling-v2-spec.md): a conditional third Checkpoint-1
-      // trigger, running "sofort, vor jeder UI-Interaktion" whenever
+      // trigger, running "immediately, before any UI interaction" whenever
       // lastReplanDate is stale (catches a reboot, a force-quit, or simply a
       // missed daily ring) - a no-op otherwise. Runs before the calendar
       // preload below since it's the higher-priority recovery path.
@@ -336,7 +339,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           trigger: CheckpointTrigger.appForeground);
 
       // TODO user configurable preload range - 0x39A
-      // Load calendar data after setting timezone
+      // (tracked as docs/TODO.md T-46). Runs after currentTimeZone is set:
+      // the Schedule tab's calendar read converts events with it.
       await _syncCalendarAndAlarmsOnOpen();
     });
   }
@@ -362,11 +366,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   /// `initState`'s post-frame call covers a cold start (reboot, force-quit);
   /// this covers resuming a warm process, which is the normal case on Android
   /// and the third gap FR-17 explicitly names ("opening the app in between is
-  /// an additional, cheap opportunistic re-read"). Idempotent by
-  /// FR-17's own guard: the checkpoint is a no-op when today has already been
-  /// replanned - and it is serialized against the ring checkpoint that the
-  /// full-screen intent bringing us to the foreground has just started
-  /// (docs/TODO.md T-77).
+  /// an additional, cheap opportunistic re-read"). The `appForeground`
+  /// checkpoint itself is idempotent by FR-17's own guard (a no-op once today
+  /// has been replanned); the calendar resync after it always runs its
+  /// `manualSync` checkpoint (see [_syncCalendarAndAlarmsOnOpen]). Both are
+  /// serialized against the ring checkpoint that the full-screen intent
+  /// bringing us to the foreground has just started (docs/TODO.md T-77).
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);

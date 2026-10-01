@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fail if mobsfscan's JSON report contains an un-excepted ERROR-severity
-finding. mobsfscan itself always runs with --no-fail (see ci.yml) so it never
+finding. mobsfscan itself always runs with --no-fail (see
+.github/workflows/security-gate.yml) so it never
 blocks the pipeline on its own; this script is what actually enforces
 docs/REQUIREMENTS.md R1 ("no SAST finding at severity high-or-above may be
 outstanding" - mobsfscan's ERROR severity is that bar). Exceptions are

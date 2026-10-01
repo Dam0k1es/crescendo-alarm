@@ -29,12 +29,14 @@
          code either. It sat unused since the very first commit; found and
          removed while adding that import feature.
 
-         ACCESS_NETWORK_STATE comes from `media3-common` and Google's
-         `transport-runtime`/`transport-backend-cct` libraries, pulled in
-         transitively by `awesome_notifications` (media-style notification
-         support and its own internal event-transport plumbing) - not
-         declared by any Flutter plugin's own manifest, only found by
-         grepping the merged native dependency tree. This app makes zero
+         ACCESS_NETWORK_STATE comes from `androidx.media3:media3-common`,
+         which the camera plugin's CameraX video module pulls in
+         transitively (`androidx.camera:camera-video` via
+         `media3-muxer`/`media3-container`) - not declared by any Flutter
+         plugin's own manifest, only visible in the manifest-merger report
+         (build/app/outputs/logs/). When T-49 traced it, Google's
+         `transport-runtime`/`transport-backend-cct` contributed it too;
+         neither is in the build any more. This app makes zero
          network calls anywhere in `lib/` (see `CLAUDE.md`'s first line);
          nothing here ever queries connectivity state, so there is nothing
          for those libraries' own network-awareness to do. Removing it also
@@ -95,14 +97,13 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- docs/TODO.md T-158: neither this app nor the `alarm` plugin is
-             direct-boot-aware, so a reboot followed by the device staying
-             locked withholds BOOT_COMPLETED (and with it, the plugin's own
-             re-arm) entirely until the first unlock - the alarm does not
-             ring at all until then. This is the Direct-Boot fallback:
-             DirectBootReceiver gets LOCKED_BOOT_COMPLETED immediately
-             (unlike BOOT_COMPLETED, which the OS withholds from
-             non-direct-boot-aware apps the same way) and arms
+        <!-- docs/TODO.md T-158: BOOT_COMPLETED (and with it, the `alarm`
+             plugin's own re-arm) only arrives at the first unlock after a
+             reboot, for every app - so a reboot followed by the device
+             staying locked means the alarm does not ring at all until then.
+             This is the Direct-Boot fallback: DirectBootReceiver is
+             direct-boot-aware, so it gets LOCKED_BOOT_COMPLETED before that
+             unlock (non-direct-boot-aware components never get it), and arms
              DirectBootFallbackAlarmReceiver for the instant
              lib/utils/direct_boot_mirror.dart last mirrored, which in turn
              starts DirectBootFallbackService - a real foreground service,
@@ -217,6 +218,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Exact alarms: the ring itself (`alarm` plugin) and this app's own
+         native alarms (DirectBootReceiver, SleepTimeDnd). USE_EXACT_ALARM
+         (API 33+) is granted at install and cannot be revoked by the user;
+         SCHEDULE_EXACT_ALARM covers API 31-32, where USE_EXACT_ALARM does
+         not exist yet and the user can revoke it - hence the
+         canScheduleExactAlarms() checks in the native code. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 

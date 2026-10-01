@@ -53,9 +53,11 @@ DateTime? instantFromStored(int? millis) => millis == null
 /// locally tagged.
 ///
 /// Behind this are readers that interpret the digits as wall-clock time -
-/// `ScheduledAlarm.title` via `formatDateTime`, the alarm list in the UI, and
-/// `alarmPlatformTime` at the handoff to the alarm plugin. The same real
-/// moment as [instantFromStored], just in the reading this side needs.
+/// `ScheduledAlarm.title` via `formatDateTime` and the alarm list in the UI.
+/// The same real moment as [instantFromStored], just in the reading this
+/// side needs. (`alarmPlatformTime`, at the handoff to the alarm plugin,
+/// works on the instant since docs/TODO.md T-202, so either reading is
+/// correct there.)
 DateTime? localFromStored(int? millis) =>
     millis == null ? null : DateTime.fromMillisecondsSinceEpoch(millis);
 

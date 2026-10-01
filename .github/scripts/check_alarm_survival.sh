@@ -9,8 +9,9 @@
 #
 # What's already known from the code (and what this script is meant to
 # verify):
-#   * The app has NO BootReceiver of its own (grep BOOT_COMPLETED lib/ android/
-#     only finds the uses-permission line).
+#   * The app's only boot receiver of its own is DirectBootReceiver
+#     (LOCKED_BOOT_COMPLETED, docs/TODO.md T-158): it arms a fallback siren
+#     and re-arms the sleep-time Do Not Disturb window, never the real alarms.
 #   * The `alarm` plugin registers its own
 #     `com.gdelataillade.alarm.alarm.BootReceiver` and re-arms the stored
 #     alarms after boot via `setExactAndAllowWhileIdle(RTC_WAKEUP, ...)`.
@@ -41,6 +42,11 @@
 # dumpsys output (`fixtures/`) and runs automatically with every
 # invocation. A pattern that counts foreign alarms aborts the run right
 # here - before the measurement, not after the misinterpretation.
+#
+# Usage: check_alarm_survival.sh <package> <evidence-dir>   (run_e2e_tests.sh)
+#        check_alarm_survival.sh --self-test                (no device needed)
+# Given both arguments it always exits 0 (non-gating): the verdict is in the
+# evidence log.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -123,7 +129,7 @@ note "app uid: ${APP_UID:-<not resolvable>}  token: ${UID_TOKEN:-<none>}"
 #
 # Run 34627328009 showed the actual root cause, and it is structural: all
 # three resolution approaches consistently reported "Unable to find
-# package" resp. "No such file or directory" for /data/data/<package>. The
+# package" or, for /data/data/<package>, "No such file or directory". The
 # app was UNINSTALLED at the time of measurement - `flutter test` installs
 # it for the run and tears it down again afterward, and Android discards
 # the package's AlarmManager entries along with it.

@@ -28,11 +28,10 @@ import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 /// `lib/main.dart` replaces that with an empty function in release. A device
 /// test could therefore only show THAT something went wrong, never why.
 ///
-/// Why display + clipboard instead of a share dialog: the app deliberately
-/// makes not a single network call, and a share dialog would be a new
-/// dependency requiring a licence check (`share_plus`). But above all, this
-/// form is more honest - the user reads exactly what they're passing on,
-/// instead of consenting to a black box.
+/// Why display + clipboard instead of a share sheet: this form is more
+/// honest - the user reads exactly what they're passing on, instead of
+/// consenting to a black box, and nothing leaves the device except by their
+/// own paste.
 class PageDiagnostics extends StatefulWidget {
   const PageDiagnostics({super.key});
 

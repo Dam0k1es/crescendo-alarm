@@ -54,7 +54,7 @@ import android.util.Log
  * apps use for exactly this reason, and it is what loops the sound and
  * vibration here for real, until [ACTION_STOP] is sent (the notification's
  * own Stop action), `ACTION_USER_PRESENT` fires (the device was unlocked -
- * see [userPresentReceiver]'s own doc comment for why this, not
+ * see the comment on [userPresentReceiver] for why this, not
  * `MainActivity`'s lifecycle, is the reliable stop signal), or
  * [MAX_RING_MILLIS] elapses.
  *
@@ -99,9 +99,11 @@ class DirectBootFallbackService : Service() {
     // dismissed - it fires whether or not any activity ever launches - so
     // this is the actually-reliable way to know the fallback's one job
     // (getting someone to unlock the device) is done. Can only be received
-    // by a dynamically registered receiver (implicit broadcasts like this
-    // one aren't delivered to manifest-declared receivers since Android
-    // 3.1), which is exactly what a running foreground service can do.
+    // by a dynamically registered receiver (since Android 8.0 / API 26, an
+    // app targeting it gets no implicit broadcast in a manifest-declared
+    // receiver, and ACTION_USER_PRESENT is not on the platform's
+    // implicit-broadcast exception list), which is exactly what a running
+    // foreground service can do.
     private val userPresentReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.i(TAG, "Device unlocked (ACTION_USER_PRESENT); stopping the direct-boot fallback.")
@@ -196,8 +198,13 @@ class DirectBootFallbackService : Service() {
     }
 
     /**
-     * Tries the device's actual chosen alarm sound first, then its generic
-     * default, and only falls back to a synthesized tone if both fail.
+     * Tries the user's chosen alarm sound by its actual URI first, then the
+     * same choice through the settings alias `RingtoneManager.getDefaultUri`
+     * (`Settings.System.DEFAULT_ALARM_ALERT_URI`) - for which
+     * `MediaPlayer.setDataSource` tries the settings provider's cached copy
+     * first, because "the actual provider may not be encryption aware, or it
+     * may be stored on CE media storage" (AOSP MediaPlayer.java) - and only
+     * falls back to a synthesized tone if both fail.
      *
      * Found necessary by real-device testing: vibration worked continuously
      * but no sound played at all pre-unlock. The likely cause is that
@@ -326,10 +333,13 @@ class DirectBootFallbackService : Service() {
         val text = "Device was still locked after a restart - unlock to continue."
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // The channel itself stays silent (no sound attached) - the
-            // service loops the alarm sound via MediaPlayer instead, so the
-            // system doesn't also play its own one-shot channel sound on
-            // top of it.
+            // Meant to stay silent, so the system does not play its own
+            // one-shot sound on top of the alarm sound MediaPlayer loops -
+            // but no setSound(null, null) is called, so the channel keeps
+            // NotificationChannel's default sound
+            // (Settings.System.DEFAULT_NOTIFICATION_URI). Silencing it needs
+            // that call under a new channel id: an existing channel's sound
+            // can no longer be changed by the app.
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Fallback alarm (device locked after restart)",

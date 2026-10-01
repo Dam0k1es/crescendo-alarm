@@ -18,6 +18,10 @@
 import 'package:flutter/material.dart';
 import 'package:crescendo_alarm/screens/scan_code/qr_scanner.dart';
 
+/// The code-import screen: [QrScanner] with a Cancel button, reached from
+/// the Scan Code tab while no deactivation code is set. The first code it
+/// decodes - any QR code or barcode (docs/REQUIREMENTS.md R13) - becomes the
+/// deactivation code.
 class PageImportQr extends StatefulWidget {
   const PageImportQr({super.key});
 

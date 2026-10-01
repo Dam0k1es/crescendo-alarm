@@ -27,11 +27,11 @@ import android.os.Build
 import android.util.Log
 
 /**
- * docs/TODO.md T-158: while a non-direct-boot-aware app's `BOOT_COMPLETED`
- * (and with it, the `alarm` plugin's own re-arm of `AlarmManager`) is
- * withheld by Android entirely until the device is unlocked for the first
- * time after a reboot, this receiver IS direct-boot-aware and receives
- * `LOCKED_BOOT_COMPLETED` immediately. It cannot read the app's real alarm
+ * docs/TODO.md T-158: `BOOT_COMPLETED` (and with it, the `alarm` plugin's
+ * own re-arm of `AlarmManager`) only arrives once the user unlocks the
+ * device for the first time after a reboot - for every app, direct-boot-aware
+ * or not. `LOCKED_BOOT_COMPLETED` arrives before that, but only to
+ * direct-boot-aware components, which this receiver is. It cannot read the app's real alarm
  * data - that lives in the normal, credential-encrypted `SharedPreferences`
  * both this app and the `alarm` plugin use, not decryptable yet - only the
  * single due time mirrored ahead of time into device-protected storage by
@@ -71,7 +71,9 @@ class DirectBootReceiver : BroadcastReceiver() {
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-            // Exact-alarm permission was revoked since this was mirrored -
+            // Exact-alarm permission was revoked since this was mirrored
+            // (only possible on API 31-32: from 33 on, USE_EXACT_ALARM is
+            // granted at install and cannot be revoked) -
             // nothing more this receiver can do without credential-encrypted
             // storage to check anything else. The `alarm` plugin's own
             // re-arm still runs normally once BOOT_COMPLETED is finally
@@ -81,11 +83,15 @@ class DirectBootReceiver : BroadcastReceiver() {
         }
 
         val now = System.currentTimeMillis()
-        // Same shape as the `alarm` plugin's own BootReceiver: an alarm
-        // still ahead is scheduled for its real time; one already overdue
-        // by the time this finally runs fires as soon as possible instead
-        // of being silently dropped, since a locked reboot could take a
-        // while to even get this receiver called.
+        // An alarm still ahead is scheduled for its real time; one already
+        // overdue by the time this finally runs fires as soon as possible
+        // instead of being silently dropped, since a locked reboot could
+        // take a while to even get this receiver called. Unlike the `alarm`
+        // plugin's own BootReceiver, there is no stale cutoff: since 5.11.0
+        // the plugin discards an alarm overdue by more than
+        // `AlarmSettings.androidStaleAfter` (15 minutes by default, which
+        // lib/ does not override), while this fires however old the
+        // mirrored due time is.
         val fireAt = if (dueAtMillis > now) dueAtMillis else now
 
         val pendingIntent = PendingIntent.getBroadcast(

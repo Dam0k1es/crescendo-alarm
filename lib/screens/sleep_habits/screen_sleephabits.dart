@@ -24,6 +24,10 @@ import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/utils/permissions.dart' as permissions;
 import 'package:crescendo_alarm/utils/sleep_reminder.dart';
 
+/// The Sleep Habits tab: the inputs of the wake-up time (scheduling-v2),
+/// what happens when an alarm rings (gentle wake, snooze), and the bedtime
+/// reminder with its sleep-time Do Not Disturb. A change that feeds the plan
+/// runs a `settingsChanged` checkpoint right away.
 class ScreenSleephabits extends StatefulWidget {
   const ScreenSleephabits({super.key});
 
@@ -64,6 +68,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
     _appState = Provider.of<AppState>(context, listen: false);
   }
 
+  /// Forced to the 24-hour dial: most values picked here are durations
+  /// ("01:30 h"), for which AM/PM would be meaningless.
   Future<TimeOfDay?> _showRealTimePicker(TimeOfDay? initialTime) {
     return showTimePicker(
       context: context,
@@ -100,6 +106,9 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
     );
   }
 
+  /// Picks a new value for the AppState field named by [setting] - a
+  /// duration, or the time of day 'preferredWakeUpTime' - with [forWeekday]
+  /// selecting the day for 'getReadyForDay'.
   Future<void> _changeDuration(String setting,
       {TimeOfDay? initialTime, DayOfWeek? forWeekday}) async {
     final TimeOfDay? pickedTime =
@@ -149,14 +158,14 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
               Duration(hours: pickedTime.hour, minutes: pickedTime.minute);
           Diag.sleepHabitChanged(setting: DiagSleepHabitSetting.maxDailyDelta);
           break;
-        // docs/TODO.md T-96: how long the gentle-wake ramp takes, i.e. how
-        // long the alarm stays quiet. Used to be hardcoded.
         // FR-20: by how much pressing snooze postpones.
         case 'snoozeTime':
           _appState.snoozeTime =
               Duration(hours: pickedTime.hour, minutes: pickedTime.minute);
           Diag.sleepHabitChanged(setting: DiagSleepHabitSetting.snoozeTime);
           break;
+        // docs/TODO.md T-96: how long the gentle-wake ramp takes to reach
+        // the set volume.
         case 'gentleWakeDuration':
           _appState.gentleWakeUpDuration =
               Duration(hours: pickedTime.hour, minutes: pickedTime.minute);
@@ -165,12 +174,13 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
           break;
       }
 
-      // docs/TODO.md T-65: every one of these four feeds scheduling-v2 - the
-      // two durations go into hardFloor (FR-2), sleepGoal/reminderDuration
-      // shift the bedtime (FR-16 Checkpoint 2) - and v2's own triggers (ring,
-      // once-daily foreground) would otherwise not notice the change until
-      // the next day. This replaced the old engine's `scheduleAlarms()` calls
-      // here, which Phase 6 then removed entirely (docs/TODO.md T-64).
+      // docs/TODO.md T-65: almost every setting above reaches the armed
+      // alarms - the lead times go into hardFloor (FR-2), the drift target
+      // and its bound into the plan (FR-4, FR-6), sleepGoal/reminderDuration
+      // shift the bedtime (FR-16 Checkpoint 2) and the Do Not Disturb
+      // window, and the ramp duration is a property of the armed alarms
+      // (T-96) - and v2's own triggers (ring, once-daily foreground) would
+      // otherwise not notice the change until the next day.
       await runCheckpointSafely(_appState,
           trigger: CheckpointTrigger.settingsChanged);
     }
@@ -282,8 +292,8 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
         ),
       ),
       const SizedBox(height: 8.0),
-      // Directly below it, the bound on how fast the wake time may approach
-      // this target (FR-6) - it qualifies the entry above and is
+      // Then the bound on how fast the wake time may approach the preferred
+      // wake-up time (FR-6) - it qualifies the first entry and is
       // meaningless without it.
       _buildTile(
         // docs/TODO.md T-88: AppState bounds this value below at 15 minutes
@@ -347,10 +357,10 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
     ];
   }
 
-  /// docs/TODO.md T-178: moved here from after "Bedtime reminder" - this
-  /// group (what happens once the alarm rings) is causally closer to
-  /// "wake-up time" (what determines whether/when it rings at all) than the
-  /// bedtime reminder is, which shifts only itself, never the alarm.
+  /// docs/TODO.md T-178: comes before "Bedtime reminder" - this group (what
+  /// happens once the alarm rings) is causally closer to "wake-up time"
+  /// (what determines whether/when it rings at all) than the bedtime
+  /// reminder is, which shifts only itself, never the alarm.
   List<Widget> _buildWhenAlarmRingsTiles() {
     return [
       _buildTile(
@@ -490,8 +500,9 @@ class _ScreenSleephabitsState extends State<ScreenSleephabits> {
       const SizedBox(height: 8.0),
       // docs/TODO.md T-198 (R6, maintainer request): "Der DND Trigger soll
       // in den Sleep Habits aktiviert und deaktiviert werden können
-      // (default off)." Independent of "Enable Reminder" above (R3) - it
-      // shares the reminder's bedtime computation, not its switch.
+      // (default off)." (the DND trigger should be switchable on and off in
+      // Sleep Habits, default off). Independent of "Enable Reminder" above
+      // (R3) - it shares the reminder's bedtime computation, not its switch.
       _buildTile(
         help: 'Silences the phone from bedtime (next alarm minus Sleep '
             'Goal) until that alarm first rings. Alarms still sound. '

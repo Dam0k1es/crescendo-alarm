@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Crescendo Alarm. If not, see <https://www.gnu.org/licenses/>.
 
-// Scheduling-Logik v2 (docs/scheduling-v2-spec.md). Pure functions only - no
+// Scheduling logic v2 (docs/scheduling-v2-spec.md). Pure functions only - no
 // AppState, no BuildContext, no plugin access, so every function here is
 // directly unit-testable without mocks (see test/scheduling_v2_test.dart).
 //
@@ -220,7 +220,7 @@ DateTime _gapDayDriftReading({
   return todayReading.add(distance.isNegative ? -step : step);
 }
 
-/// FR-4, isolated from FR-7s cap: computes **today**'s (the day after `v`'s own
+/// FR-4, isolated from FR-7's cap: computes **today**'s (the day after `v`'s own
 /// **device-local** date - the day actually being planned) wake time by
 /// drifting `v` towards [preferredWakeUpTime] by at most [maxDailyDelta], stopping
 /// exactly at [preferredWakeUpTime] rather than overshooting. Holds at `v`'s clock
@@ -300,7 +300,9 @@ DateTime? hardFloor({
   // any device outside UTC+0 (empirically: a 09:00 Berlin event produced a
   // wake time two hours late). `.toUtc()` keeps the exact same real moment
   // (FR-1/FR-16: the appointment does not move) and puts it in the one frame
-  // the whole layer shares.
+  // the whole layer shares. (Since T-206, ΔT is taken on `_reading`s, which
+  // normalise their input themselves; the `.toUtc()` keeps this result in
+  // the layer's convention.)
   return earliest.from
       .toUtc()
       .subtract(durationToWakeUp)
@@ -480,11 +482,12 @@ GapOrRunStartResult _planGapOrRunStartDayReading({
   // the day before "today" (planGapOrRunStartDay only ever decides the single
   // day right after v - see computeWeekPlan's call site), so
   // N_Rest = N_F - 1 = grouped.dayOffset - 1. (Found as a real, previously
-  // undetected bug: the isolated tests below happened to pass with the buggy
-  // `nRest = grouped.dayOffset` because their own dayOffset inputs were
-  // themselves off by one in the same direction, canceling the error out for
-  // a single-day decision - only computeWeekPlan's genuinely v-relative
-  // dayOffset construction across a real multi-day run exposed it.)
+  // undetected bug: the isolated tests (test/scheduling_v2_test.dart)
+  // passed with the buggy `nRest = grouped.dayOffset` because their own
+  // dayOffset inputs were themselves off by one in the same direction,
+  // canceling the error out for a single-day decision - only
+  // computeWeekPlan's genuinely v-relative dayOffset construction across a
+  // real multi-day run exposed it.)
   final nRest = grouped.dayOffset - 1;
   // No separate "N_Rest <= 1" early-exit to plain FR-4 here: that would
   // incorrectly abandon an already-established, still-valid run (see
@@ -629,7 +632,8 @@ Map<DateTime, DateTime?> coldStart({
 
 /// FR-8: the result of planning [window]. [overrunNotificationNeeded] and
 /// [safetyValveTriggered] mirror FR-6's and FR-9's respective notification
-/// flags - the caller (Phase 4) decides how/whether to actually notify.
+/// flags - the caller (`replan`, which hands them to
+/// `reportReplanNotifications`) decides how/whether to actually notify.
 class WeekPlanResult {
   const WeekPlanResult({
     required this.valuesByDay,
@@ -663,12 +667,6 @@ class WeekPlanResult {
   final Map<DateTime, DateTime> plannedClockTimes;
 }
 
-/// FR-8: plans every day in [window] (chronological), the big integration
-/// step tying FR-2/FR-4/FR-5/FR-6/FR-7/FR-9/FR-10 together.
-///
-/// [gapDayCounter] must already reflect every already-concluded day up to
-/// today (FR-9) - this function never increments it for days still being
-/// planned, only ever consults it.
 /// FR-9's threshold: "Once the counter reaches **>= 7**, automatic
 /// advancement is stopped and the user is notified."
 ///
@@ -679,6 +677,12 @@ class WeekPlanResult {
 /// with 6 (docs/TODO.md T-107).
 const int gapDayValveThreshold = 7;
 
+/// FR-8: plans every day in [window] (chronological), the big integration
+/// step tying FR-2/FR-4/FR-5/FR-6/FR-7/FR-9/FR-10 together.
+///
+/// [gapDayCounter] must already reflect every already-concluded day up to
+/// today (FR-9) - this function never increments it for days still being
+/// planned, only ever consults it.
 WeekPlanResult computeWeekPlan({
   required List<DateTime> window,
   required DateTime? lastEffectiveWakeTime,
@@ -848,7 +852,7 @@ WeekPlanResult computeWeekPlan({
     if (remaining.isEmpty &&
         ownHardFloor == null &&
         gapDayCounter >= gapDayValveThreshold &&
-        // FR-9 "Ausnahme: gesetzte preferredWakeUpTime" (docs/TODO.md T-78): the valve
+        // FR-9 "Exception: `preferredWakeUpTime` set" (docs/TODO.md T-78): the valve
         // guards against *blind* extrapolation. A preferredWakeUpTime is an explicit
         // target - FR-4 drifts towards it and stops exactly on it, so the
         // continuation is bounded by construction and there is nothing to
@@ -966,8 +970,8 @@ WeekPlanResult computeWeekPlan({
   );
 }
 
-/// FR-16: reinterprets a wall-clock-anchored [value] (a "fortgeschriebener
-/// Zwischenwert" - the actual output of FR-4/FR-6/FR-7, computed while
+/// FR-16: reinterprets a wall-clock-anchored [value] (a "carried-forward
+/// intermediate value" - the actual output of FR-4/FR-6/FR-7, computed while
 /// [oldOffset] was in effect) so its **local wall-clock reading stays the
 /// same digits**, now read under [newOffset] instead (the alarm-clock
 /// convention: "7:00" stays "7:00", just in the new zone) - rather than
@@ -980,13 +984,14 @@ WeekPlanResult computeWeekPlan({
 /// value - those stay unchanged; only the local *display* of an unchanged
 /// instant differs after an offset change. Deciding which of a day's
 /// `pendingDayValues` entries are wall-clock-anchored (this applies) versus
-/// hardFloor-derived (this must not be applied) is the caller's job (Phase 4
-/// orchestration), not this pure function's - `preferredWakeUpTime` itself is never an
+/// hardFloor-derived (this must not be applied) is the caller's job
+/// (`runTimezoneCheckpoint2`), not this pure function's - `preferredWakeUpTime` itself is never an
 /// input here either, since it already carries no zone of its own (FR-3) and
 /// so needs no reinterpretation at all.
 ///
-/// docs/TODO.md T-206: since then only Checkpoint 2's LEGACY branch - a plan
-/// stored by a version before T-206, with no `pendingDayClockTimes` at all.
+/// docs/TODO.md T-206: since then used only by Checkpoint 2's LEGACY branch -
+/// a plan stored by a version before T-206, with no `pendingDayClockTimes` at
+/// all.
 /// A plan with planned clock times is re-resolved by R_plan instead, which
 /// leaves a value planned with a DST change's own rules alone (this shift
 /// would move it by the DST difference).

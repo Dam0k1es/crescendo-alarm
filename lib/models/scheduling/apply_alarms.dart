@@ -47,16 +47,16 @@ class AlarmSyncPlan {
 }
 
 /// Truncates to minute precision **in one common frame** - `AppState._setAlarm`
-/// hands the plugin a minute-precise local time, so anything finer would
-/// produce spurious "different alarm" mismatches on every replan.
+/// arms the plugin at the whole minute (`alarmPlatformTime`), so anything
+/// finer would produce spurious "different alarm" mismatches on every replan.
 ///
-/// The `.toUtc()` matters (docs/TODO.md T-61): the values being compared come
-/// from two different frames - planned values are UTC-tagged instants, while
-/// `AlarmSettings.dateTime` from `Alarm.getAlarms()` came back local-tagged
-/// before T-202 (UTC-tagged since, see `buildRingingAlarmSettings`) - only the
-/// instant is meaningful. Comparing their raw digits would treat a correctly-scheduled alarm as
-/// "missing from the platform" on every device outside UTC+0, re-setting it on
-/// every replan.
+/// The `.toUtc()` matters (docs/TODO.md T-61): only the instant is
+/// meaningful, and the operands do not share one tagging - stored values are
+/// read local-tagged (`localFromStored`), while `now` can arrive UTC-tagged
+/// or as a `tz.TZDateTime` (several tests inject one). Truncating each one's own digits would
+/// put the same instant on different minutes outside UTC+0. (The platform's
+/// own alarms are no longer compared by time at all, but by id since T-88 -
+/// see [planAlarmSync].)
 DateTime _toMinute(DateTime t) {
   final utc = t.toUtc();
   return DateTime.utc(utc.year, utc.month, utc.day, utc.hour, utc.minute);
@@ -79,8 +79,10 @@ DateTime _toMinute(DateTime t) {
 /// moved into the past. Treating it as "stale, no longer planned" and calling
 /// `AppState.removeAlarm` on it would `Alarm.stop()` the ringing alarm
 /// mid-ring and silently defeat the guaranteed-wake-up feature. Cleaning up
-/// genuinely stale past alarms is `handleAlarm`'s own job (see `isAlarmStale`),
-/// not this function's.
+/// genuinely stale past alarms is `handleAlarm`'s own job (see `isAlarmStale`)
+/// for the ring, and [pruneScheduledAlarms]'s for the list (docs/TODO.md
+/// T-141) - not this function's.
+///
 /// [platformAlarmIds], when given, are the **ids** the platform actually still
 /// has scheduled (`Alarm.getAlarms()`). `AppState`'s own list can diverge from
 /// it - an alarm cancelled natively (e.g. the QR dismiss path before T-74e, or
@@ -236,7 +238,7 @@ List<ScheduledAlarm> pruneScheduledAlarms(
 /// Applies [planAlarmSync]'s result to [appState] - the step that actually
 /// makes scheduling-v2 ring alarms.
 ///
-/// FR-15 (`ManualAlarm`-Isolation) holds structurally: this only ever reads
+/// FR-15 (`ManualAlarm` isolation) holds structurally: this only ever reads
 /// `appState.scheduledAlarms` and only ever creates `ScheduledAlarm`s -
 /// `manualAlarms` is never read or written. Each add/remove is individually
 /// guarded so one failing plugin call (`Alarm.set`/`Alarm.stop`) can't abort

@@ -22,7 +22,7 @@ env:
 
 jobs:
   analyze-and-test:
-    # The name stays, because release.yml and the needs: below refer to it.
+    # The job id stays, because the needs: below refers to it.
     # In substance this is now a matrix over timezones - see below.
     name: Analyze & Test (TZ=${{ matrix.tz }})
     runs-on: ubuntu-latest
@@ -80,15 +80,15 @@ jobs:
           restore-keys: pub-
       - run: flutter pub get
       - name: Confirm the runner really is in this timezone
-        # Without this proof the matrix could check the same thing six
-        # times over and nobody would notice. `date` shows the offset that
+        # Without this proof every leg of the matrix could be checking the
+        # same zone and nobody would notice. `date` shows the offset that
         # Dart sees too.
         run: date +"%Z %z (%Y-%m-%d %H:%M)"
       # The alarm-survival measurement produces a verdict ("survived the
       # reboot" / "did not"), so its measuring instrument must itself be
       # verified. It has gotten this wrong twice before: first the pattern
       # found nothing, then it counted foreign alarms and reported an
-      # unfounded FAIL (docs/TODO.md T-99, T-102). The self-test runs
+      # unfounded FAIL (docs/TODO.md T-99, T-103). The self-test runs
       # against recorded dumpsys output, so it needs no emulator - and
       # therefore belongs in the fast lane, not only in the E2E job.
       - name: Alarm-survival detection self-test
@@ -104,8 +104,8 @@ jobs:
         if: matrix.tz == 'UTC'
         run: python3 scripts/check_proprietary_native_deps.py --self-test
       - name: Analyze
-        # Frame-independent, hence only in the UTC leg - running it six
-        # times would be waste with no additional signal.
+        # Frame-independent, hence only in the UTC leg - running it in
+        # every leg would be waste with no additional signal.
         if: matrix.tz == 'UTC'
         run: flutter analyze
       - name: Test
@@ -202,7 +202,7 @@ jobs:
           # docs/TODO.md T-100: without this field, GitHub's default of
           # 90 days applies. At ~94 MB per debug APK and one push per work
           # step, that had built up to 1375 MB of artifact storage - 2.75x
-          # a private repo's 500 MB quota. A development APK is worthless
+          # the 500 MB quota the repo had while it was private. A development APK is worthless
           # after a few days anyway, since the next push replaces it.
           retention-days: 5
 
@@ -334,7 +334,7 @@ jobs:
     permissions:
       # Declaring permissions: on a job replaces the whole default set, not
       # just adds to it - contents: read is needed too, or actions/checkout
-      # fails with a redacted "Repository not found" (this repo is private).
+      # fails with a redacted "Repository not found" (seen while the repo was private).
       contents: read
       actions: write
     steps:

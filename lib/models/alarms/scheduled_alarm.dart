@@ -20,6 +20,10 @@ import 'dart:convert';
 import 'package:crescendo_alarm/models/alarms/myalarm.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
+/// One planned day's alarm, created by FR-18's reconciliation
+/// (`applyPlannedAlarms`) from a `pendingDayValues` entry. [time] is that
+/// value's local reading (`localFromStored`) - the frame its title and the
+/// alarm list display (docs/TODO.md T-83).
 class ScheduledAlarm extends MyAlarm {
   /// No `title` parameter (docs/TODO.md T-86): the constructor always
   /// immediately overwrote it with `formatDateTime(time)`, so a passed-in

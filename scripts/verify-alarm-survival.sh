@@ -27,6 +27,7 @@
 # Usage:
 #   scripts/verify-alarm-survival.sh --self-test        # no device needed
 #   scripts/verify-alarm-survival.sh [--apk current.apk] [--no-reboot] [--yes]
+#     [--package NAME]   # default com.crescendoalarm.crescendoalarm
 #
 # Exit codes: 0 = ran (see the verdict in the report), 1 = could not measure.
 set -uo pipefail

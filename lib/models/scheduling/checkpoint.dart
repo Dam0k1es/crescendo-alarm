@@ -20,7 +20,7 @@
 //
 // Previously there were five: replan(), runAlarmRingCheckpoint(),
 // onAppForegroundCheckpoint(), runForegroundCheckpointSafely() and
-// onSchedulingSettingsChanged(). They differed along four orthogonal
+// onSchedulingSettingsChanged(). They differed along five orthogonal
 // dimensions - does the caller record the time zone offset? does today
 // count as concluded? are FR-6/9/12 reported? is the bedtime notification
 // replanned? are errors swallowed? - and every combination was assembled by
@@ -169,9 +169,9 @@ Future<ReplanResult?> runSchedulingCheckpoint(
       //
       // The condition is **equality**, not "not before today" (docs/TODO.md
       // T-109). FR-17 literally says "If `lastReplanDate` ≠ today's calendar
-      // date: immediately […] Otherwise: no additional checkpoint" - and a
-      // `>=` would additionally swallow the case where the marker lies in
-      // the FUTURE.
+      // date (device time zone): immediately […] Otherwise: no additional
+      // checkpoint" - and a `>=` would additionally swallow the case where
+      // the marker lies in the FUTURE.
       //
       // It gets there with no action by the app at all: it's a device-local
       // digit date with no clamping, and a zone change across the date
@@ -292,7 +292,7 @@ Future<ReplanResult?> runCheckpointSafely(
 
 /// Translates the trigger into the stable diagnostic code.
 ///
-/// The logger deliberately keeps its own enum: it must not import into the
+/// The logger deliberately keeps its own enum: it must not import the
 /// scheduling layer, and the exported codes must stay stable even when a
 /// trigger is added here.
 DiagTrigger diagTriggerOf(CheckpointTrigger trigger) => switch (trigger) {

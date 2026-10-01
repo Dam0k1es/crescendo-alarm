@@ -49,15 +49,28 @@ bool isDeactivationCodeValid(
   return storedCode.payload == scannedPayload;
 }
 
+/// The camera screen behind the "guaranteed wake-up" gate, in two flows:
+/// importing a deactivation code (`PageImportQr`, with no code stored yet -
+/// the first decoded code becomes it) and deactivating the ringing alarm
+/// [alarmId] (shown by `Handler.handleAlarm` when a code is required - only
+/// a scan matching the stored code stops it).
+///
+/// Back navigation is blocked (`PopScope(canPop: false)`). The ways out are
+/// a valid scan, Snooze (FR-20), [RingingWatch] seeing the alarm stopped
+/// elsewhere, the import flow's Cancel button, and the emergency stop once
+/// scanning shows no sign of working.
 class QrScanner extends StatefulWidget {
+  /// Shows a Cancel button. Only the code-import flow sets it: on the ringing
+  /// gate, leaving without a valid scan must not be possible.
   final bool displayExitButton;
 
   /// docs/TODO.md T-74e: the id of the alarm that is actually ringing. Without
   /// it this screen had to `Alarm.stop` **every** saved alarm to silence the
   /// ringing one, which cancelled unrelated future alarms at the platform
   /// level while leaving `AppState`'s lists untouched - a divergence FR-18's
-  /// sync could not see (it models "existing" from `AppState`). `null` keeps
-  /// the old stop-everything behaviour as a fallback.
+  /// sync could not see (it models "existing" from `AppState`). `null` (the
+  /// import flow) still stops every platform alarm, but only while something
+  /// is actually ringing - see `deactivationStopTargets`.
   final int? alarmId;
 
   const QrScanner({
@@ -109,16 +122,19 @@ class _QrScannerState extends State<QrScanner> {
   StreamSubscription<Object?>? _subscription;
   late final AppState _appState;
 
-  /// Set when the scanner is not working. It drives the emergency stop button
-  /// below - without it a "guaranteed wake-up" alarm whose scanner never comes
-  /// up leaves the user on a `PopScope(canPop: false)` screen with no scanner
-  /// and no way out.
+  /// Set when the scanner may not be working: the camera reported an error,
+  /// no frame reached the decoder within [_proofOfLifeTimeout], or no valid
+  /// code was found within [_maxTimeWithoutValidScan]. Cleared again whenever
+  /// the camera (re)initializes without an error (`onControllerCreated`).
+  /// It drives the emergency stop button below - without it a "guaranteed
+  /// wake-up" alarm whose scanner never comes up leaves the user on a
+  /// `PopScope(canPop: false)` screen with no scanner and no way out.
   bool _cameraFailed = false;
 
   /// Evidence that the decode loop is alive: a scan arrived, successful or not.
   bool _scannerProvedAlive = false;
 
-  /// The escape hatch's real trigger.
+  /// The escape hatch's main trigger.
   ///
   /// An independent review listed six ways the camera can end up dead without
   /// `onControllerCreated` ever reporting an error - an empty camera list, a
@@ -128,8 +144,8 @@ class _QrScannerState extends State<QrScanner> {
   /// Several of those are likeliest exactly when this screen appears: while
   /// the device is waking from the lock screen.
   ///
-  /// So the button is not driven by an initialisation event any more but by
-  /// the absence of evidence that scanning works. If nothing has been decoded
+  /// So the button is not driven by an initialisation event alone but by the
+  /// absence of evidence that scanning works. If nothing has been decoded
   /// after this long, the user gets a way out regardless of what any callback
   /// did or did not report.
   static const Duration _proofOfLifeTimeout = Duration(seconds: 10);
@@ -155,9 +171,12 @@ class _QrScannerState extends State<QrScanner> {
   /// Only set when this screen was opened for a specific ringing alarm
   /// (`widget.alarmId != null`) - a plain code-import/scan has nothing
   /// ringing to watch. See RingingWatch's doc comment for the bug this
-  /// guards against: a notification-swipe stop happening at the native
-  /// level with no Dart code involved, which this screen otherwise never
-  /// learns about.
+  /// guards against: the alarm being stopped somewhere other than this
+  /// screen, which it otherwise never learns about. Since
+  /// `androidStopAlarmOnDismiss: false` (`ringing_alarm_settings.dart`) that
+  /// is no longer a notification swipe, but e.g. `Alarm.stopAll()` from
+  /// another ring screen's emergency stop or from `Handler.handleAlarm`'s
+  /// fallback.
   RingingWatch? _ringingWatch;
 
   /// Guards `widget.alarmId` specifically against a double
@@ -234,7 +253,6 @@ class _QrScannerState extends State<QrScanner> {
     // its own camera controller.
     unawaited(_subscription?.cancel());
 
-    // Dispose the widget itself.
     super.dispose();
   }
 
@@ -255,7 +273,6 @@ class _QrScannerState extends State<QrScanner> {
         return;
       }
 
-      // IMPORT QR CODE IF NONE IS SET
       if (_appState.deactivationCode == null) {
         // docs/TODO.md T-89: the payload IS the deactivation secret - anyone
         // holding this log line could defeat the "guaranteed" wake-up at will.
@@ -275,7 +292,6 @@ class _QrScannerState extends State<QrScanner> {
         // so there is nothing else for it to do here.
         _closeView();
       }
-      // VALIDATE QR CODE AND CLOSE OVERLAY ON SUCCESS
       else {
         bool validationSuccessful = false;
         try {
@@ -299,9 +315,10 @@ class _QrScannerState extends State<QrScanner> {
     }
 
     if (_appState.deactivationCode == null) {
-      // in case this state is reached, isDeactivationCodeValid already
-      // returned true above to prevent the user being locked in ScanCode
-      // View - nothing to stop, so there's nothing more to do here.
+      // Not reachable from _handleScan, which validates only while a code is
+      // stored - kept as a fail-open: isDeactivationCodeValid already
+      // returned true above so the user is never locked in behind the
+      // scanner.
       debugPrint('=====qrValidator: ILLEGAL STATE!!!');
       return true;
     }
@@ -358,12 +375,12 @@ class _QrScannerState extends State<QrScanner> {
       icon: Icon(Icons.close, color: _appState.accentColor),
     );
 
-    // Shown instead of the (hidden-by-design) exit button only when the
-    // camera itself is unusable (permission revoked, hardware busy, unsupported
-    // device, a hardware camera kill-switch, ...): without this, a
-    // "guaranteed wake-up" alarm whose QR scanner can never initialize would
-    // leave the user stuck on a PopScope(canPop: false) screen with no
-    // scanner and no way out.
+    // Shown instead of the (hidden-by-design) exit button once _cameraFailed
+    // is set - a camera error (permission revoked, hardware busy, unsupported
+    // device, ...) or one of the two timeouts (which also catch a hardware
+    // camera kill-switch): without this, a "guaranteed wake-up" alarm whose
+    // QR scanner can never work would leave the user stuck on a
+    // PopScope(canPop: false) screen with no scanner and no way out.
     //
     // User request: named for what actually triggers it (the camera, not
     // some generic "give up" state) and sized up - this is the one control
@@ -530,6 +547,10 @@ class _QrScannerState extends State<QrScanner> {
         _appState, id);
   }
 
+  /// Idempotent (`ModalRoute.isCurrent`): a valid scan, Snooze and
+  /// [RingingWatch] can all react to the same stop, and an unguarded second
+  /// `Navigator.pop` would hit the navigator mid-transaction or pop the route
+  /// underneath (docs/TODO.md T-147).
   void _closeView() {
     if (context.mounted && ModalRoute.of(context)?.isCurrent == true) {
       Navigator.pop(context);
@@ -537,10 +558,11 @@ class _QrScannerState extends State<QrScanner> {
     }
   }
 
-  // Fallback for when the camera itself has failed: a "guaranteed wake-up"
-  // alarm cannot be dismissed by scanning, so stop all ringing alarms
-  // directly (mirroring Handler.handleAlarm's own "no overlay could be
-  // shown" fallback) before letting the user leave this screen.
+  /// The emergency stop for when the camera cannot open the gate: a
+  /// "guaranteed wake-up" alarm cannot be dismissed by scanning then, so
+  /// stop alarms directly (mirroring `Handler.handleAlarm`'s own "no overlay
+  /// could be shown" fallback) before letting the user leave this screen.
+  /// `Alarm.stopAll()` cancels every armed alarm, not only the ringing ones.
   Future<void> _emergencyStopAndClose() async {
     try {
       await Alarm.stopAll();

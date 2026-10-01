@@ -51,7 +51,8 @@ FetchEvents? debugFetchEventsOverride;
 
 /// FR-6/FR-9/FR-12's respective notification flags, bubbled up from a single
 /// `replan()` call - plain data, no side effect: actually showing a
-/// notification for any of these is Phase 5's job (platform wiring).
+/// notification for any of these is `reportReplanNotifications`'s job
+/// (replan_notifications.dart, step 5 of the checkpoint sequence).
 class ReplanResult {
   const ReplanResult({
     required this.overrunNotificationNeeded,
@@ -59,8 +60,16 @@ class ReplanResult {
     required this.possiblyMissedAppointment,
   });
 
+  /// FR-6: reaching a `hardFloor` needed more than `maxDailyDelta` per day.
   final bool overrunNotificationNeeded;
+
+  /// FR-9: the gap-day counter reached its threshold, so automatic
+  /// advancement is stopped.
   final bool safetyValveTriggered;
+
+  /// FR-12: a day that already concluded turned out to have a real
+  /// appointment earlier than the value planned for it (or it had none) -
+  /// surfaced too late for that day's alarm to have honoured it.
   final bool possiblyMissedAppointment;
 }
 
@@ -72,11 +81,14 @@ class ReplanResult {
 /// (`checkpoint.dart`) is the one entry point, and it decides
 /// [todayAlreadyRang] from its trigger.
 ///
-/// The day that "just rang" (or, on FR-17's recovery path, today's real
-/// calendar date) is [now]'s date - it becomes the new fixed anchor (FR-11:
-/// "only the value that has actually been triggered is fixed forever"), and the fresh
-/// 7-day window (FR-8: "no extended computation horizon") starts the day
-/// after it. If more than one calendar day has elapsed since
+/// The most recently concluded day becomes the fixed anchor (FR-11: "only
+/// the value that has actually been triggered is fixed forever"), and the
+/// fresh 7-day window (FR-8: "no extended computation horizon") starts the
+/// day after it. With [todayAlreadyRang] (the ring) that day is [now]'s own
+/// date. Otherwise today has not rung yet (docs/TODO.md T-71) and it is
+/// yesterday - or today after all, if the progress marker already points
+/// to today (T-114) - so the window starts today and today stays
+/// revisable. If more than one calendar day has elapsed since
 /// [AppState.lastProcessedConcludedDay] (e.g. a reboot gap, FR-17), every
 /// skipped day in between is walked individually so FR-9's `gapDayCounter` and
 /// FR-12's missed-appointment check both reflect each of them, not just the
@@ -175,10 +187,10 @@ Future<ReplanResult> replan(
       dayDistance(firstUnprocessedDay, lastConcludedDay) <= 0;
 
   final fetchStart = needsDayAdvance ? firstUnprocessedDay : windowStart;
-  // New feature (user request): an event the user chose to ignore must play
-  // no part in hardFloor derivation - filtered out here, once, so every pure
-  // function below (eventsForDay/hardFloor in scheduling_v2.dart) never has
-  // to know ignoring exists at all.
+  // docs/TODO.md T-149 (user request): an event the user chose to ignore
+  // must play no part in hardFloor derivation - filtered out here, once, so
+  // every pure function below (eventsForDay/hardFloor in scheduling_v2.dart)
+  // never has to know ignoring exists at all.
   final allEvents = (await fetch(fetchStart, dayMarker(windowStart, 7)))
       .where((event) => !appState.isEventIgnored(event))
       .toList();
@@ -302,16 +314,21 @@ Future<ReplanResult> replan(
   // fixed forever" - and "forever" includes the rest of that same day
   // (docs/TODO.md T-106).
   //
-  // Only the ring sets `todayAlreadyRang`. For `settingsChanged` and
-  // `manualSync` the window therefore starts at TODAY again, even if today
-  // rang ten minutes ago - and the merge below would then overwrite the
-  // already-triggered value. Consequences: a second alarm the same morning
-  // (FR-18 schedules every still-future value), and - worse - the ring day
-  // then holds a value that never rang. The next checkpoint reads exactly
-  // that as `lastEffectiveWakeTime` (FR-3: "always the entry in
-  // `pendingDayValues` for the most recently concluded day"), so the entire
-  // following week hangs off a made-up anchor.
+  // Only the ring sets `todayAlreadyRang`. If the window started at TODAY
+  // again for `settingsChanged` or `manualSync` although today rang ten
+  // minutes ago, the merge below would overwrite the already-triggered
+  // value. Consequences: a second alarm the same morning (FR-18 schedules
+  // every still-future value), and - worse - the ring day would then hold a
+  // value that never rang. The next checkpoint reads exactly that as
+  // `lastEffectiveWakeTime` (FR-3: "always the entry in `pendingDayValues`
+  // for the most recently concluded day"), so the entire following week
+  // would hang off a made-up anchor.
   //
+  // Nothing in this merge prevents that - it overwrites every window day
+  // unconditionally. The window formation above does: [lastConcludedDay]
+  // follows the progress marker (T-114), so no day that already rang is
+  // ever inside the window (its former write-lock here was dead code and
+  // was removed).
   final mergedValues = <String, int?>{
     for (final entry in appState.pendingDayValues.entries)
       if (worthKeeping(entry.key)) entry.key: entry.value,
@@ -371,11 +388,10 @@ Future<ReplanResult> replan(
   }
   appState.pendingDayClockTimes = mergedClockTimes;
 
-  // `windowDayCount != distinctDayKeys` is the signature of T-74d/T-76: two
-  // window days collided onto the same day key.
   // docs/TODO.md T-140: the INPUTS without which the logged plan cannot be
-  // recomputed. Always written - durations are not times of day; the
-  // preferredWakeUpTime depends on whether it's set and is -1 otherwise.
+  // recomputed. Always written - durations are not times of day. The
+  // preferredWakeUpTime is one, so `Diag.planInputs` records it only behind
+  // the clock-time switch; it is -1 otherwise, and -1 here when unset.
   // T-52.3: this one value is now only the global default - a per-weekday
   // override (see AppState.durationToGetReadyForWeekday) can make a specific
   // planned day's real input differ from what's logged here. Recording a
@@ -390,6 +406,8 @@ Future<ReplanResult> replan(
         : appState.preferredWakeUpTime!.hour * 60 + appState.preferredWakeUpTime!.minute,
   );
 
+  // `windowDayCount != distinctDayKeys` is the signature of T-74d/T-76: two
+  // window days collided onto the same day key.
   Diag.weekPlanComputed(
     todayAlreadyRang: todayAlreadyRang,
     windowDayCount: window.length,
@@ -492,18 +510,26 @@ Future<ReplanResult> replan(
 // This file is thereby reduced back to its actual job: WHAT gets planned
 // (FR-8 and FR-16's checkpoint 2), not WHEN and TRIGGERED BY WHAT.
 
-/// FR-16 Checkpoint 2 (docs/scheduling-v2-spec.md): fires at the computed
-/// sleep-time notification (Phase 5 step 22's `onNotificationCreatedMethod`),
-/// which runs in its own background isolate with **no `AppState`/`Provider`
-/// access at all** - unlike [runAlarmRingCheckpoint], this reads/writes
+/// FR-16 Checkpoint 2 (docs/scheduling-v2-spec.md), run from the bedtime
+/// notification's `onNotificationCreatedMethod` (Phase 5 step 22,
+/// lib/utils/notifications.dart). That callback is a static entry point
+/// built for a background isolate, with **no `AppState`/`Provider` access
+/// at all** - so unlike `runSchedulingCheckpoint`, this reads/writes
 /// `lastCheckedUtcOffset` **directly via `SharedPreferences`**, using the
 /// exact same key `AppState.lastCheckedUtcOffset` itself persists to
 /// (`lastCheckedUtcOffsetMinutes`), so a later, normal `AppState` load in the
 /// main isolate picks up whatever this checkpoint last wrote.
 ///
+/// When it actually runs (docs/TODO.md T-199, open, read from the plugin's
+/// own source): "created" fires when the notification is SCHEDULED - in the
+/// main isolate, at the end of every checkpoint and every handled alarm -
+/// and a silent scheduled notification produces no callback when it comes
+/// due. So this runs at every reminder (re)schedule, never at bedtime.
+///
 /// Per FR-16's own text, Checkpoint 2 "triggers only the time zone
-/// comparison, no replanning, no calendar access" - it
-/// never calls [replan] and never reads the calendar.
+/// comparison and, on a detected change, the re-resolution below - no
+/// replanning, no calendar access": it never calls [replan] and never reads
+/// the calendar.
 ///
 /// **One rules source** (docs/TODO.md T-206, T206-R14): the offset it
 /// compares is [offsetAt] applied to its own "now" - the same rules it

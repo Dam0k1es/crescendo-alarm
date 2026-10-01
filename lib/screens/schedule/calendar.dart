@@ -17,9 +17,18 @@
 
 part of 'screen_schedule.dart';
 
+/// The device calendars found by the last successful [initCalendars] -
+/// shared by the Schedule display ([getCalendarEntries]) and scheduling
+/// ([fetchMeetingsUncached]), each filtering it by the user's selection
+/// (docs/TODO.md T-53). Stays empty in the Linux dev build, where
+/// `device_calendar` has no implementation.
 List<Calendar> calendars = [];
 final DeviceCalendarPlugin _deviceCalendarPlugin = DeviceCalendarPlugin();
 
+/// Loads the device's calendars into [calendars] and, if any were found,
+/// sets `AppState.calendarsInitialized`. A failure (including the Linux dev
+/// build, where `retrieveCalendars()` throws) is only logged and leaves
+/// [calendars] as it was.
 Future initCalendars(AppState appState) async {
   debugPrint("=====initCalendars");
 
@@ -56,7 +65,10 @@ Future<List<Meeting>> getCalendarEntries(
   Color selectedColor;
   List<Meeting> meetingCollection = [];
 
-  // To really retrieve one week one day has to be subtracted, else on other places 6 days or 13 days would be specified
+  // Callers pass an exclusive end (start + 7, 14 or 42 days). Subtracting a
+  // whole day treats device_calendar's endDate as an inclusive day, but it
+  // is an instant: the query ends a day early - the cut-off docs/TODO.md
+  // T-70 removed from fetchMeetingsUncached below (which subtracts 1 ms).
   debugPrint(
       "=====getCalendarEntries: Retrieving calendar entries from $startTime to ${endTime.subtract(const Duration(days: 1))}");
   final params = RetrieveEventsParams(
@@ -118,9 +130,9 @@ Future<List<Meeting>> getCalendarEntries(
 /// scheduling-v2's `replan()` (`lib/models/scheduling/replan.dart`) needs the
 /// true, complete current calendar state every time it replans, never a diff
 /// against what a previous replan already saw (FR-11/FR-12 both depend on
-/// that). `startTimeZone`/`endTimeZone` are left blank: nothing in the
-/// scheduling-v2 domain layer (`scheduling_v2.dart`) ever reads those fields,
-/// only `.from`/`.to`/`.isAllDay`.
+/// that). `startTimeZone`/`endTimeZone` are left blank: nothing on the
+/// scheduling path reads them - `replan()` and `scheduling_v2.dart` use only
+/// `.from`/`.to`/`.isAllDay`, plus `.ids` for ignored events.
 Future<List<Meeting>> fetchMeetingsUncached(
     AppState appState, DateTime start, DateTime end) async {
   // The module-level `calendars` list is otherwise only ever populated via
@@ -197,7 +209,9 @@ Future<List<Meeting>> fetchMeetingsUncached(
   return meetings;
 }
 
-// For future development
+// For future development. Disabled on purpose: WRITE_CALENDAR stays in the
+// manifest only because nothing in lib/ writes to the device calendar
+// (docs/TODO.md T-161, test/no_calendar_write_test.dart).
 // Future<bool> addToCalendar(Meeting meeting) async {
 //   var event = meetingToEvent(meeting);
 //   Result<String>? result =
@@ -228,8 +242,11 @@ bool isSameDate(DateTime date1, DateTime date2) {
   return status;
 }
 
+/// Maps a time zone abbreviation, as `DateTime.timeZoneName` reports it
+/// (main.dart), to an IANA location. Abbreviations are ambiguous (CST, IST,
+/// BST, ...), so each maps to one representative zone; an unknown one falls
+/// back to UTC.
 tz.Location getLocationFromAbbreviation(String abbreviation) {
-  // Map Posix to Olson Format
   final Map<String, String> timeZoneMapping = {
     'ACDT': 'Australia/Adelaide',
     'ACST': 'Australia/Darwin',

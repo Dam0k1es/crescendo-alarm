@@ -18,7 +18,10 @@
 import 'dart:convert';
 import 'dart:math';
 
+/// The secret a ringing alarm's QR gate compares a scan against.
 class DeactivationCode {
+  /// The exact text a scan must decode to - the secret itself, so it must
+  /// never reach a log or a `toString()` (docs/TODO.md T-89).
   late final String payload;
 
   /// A free-text reminder of what to scan, entered by the user themselves -
@@ -30,17 +33,19 @@ class DeactivationCode {
   /// what to scan next time. `null` until the user sets one.
   String? description;
 
-  // Initialize payload in constructor
+  /// Without [payload], a fresh random code (to print or share); with one,
+  /// an existing code the user scanned in (docs/REQUIREMENTS.md R13: any
+  /// pre-existing QR code can be adopted).
   DeactivationCode({String? payload, this.description}) {
     this.payload = payload ?? generateRandomHash();
   }
 
+  /// 128 bits from a cryptographically secure generator, base64-encoded (not
+  /// hex, and not a hash of anything): unguessable, so a gated alarm cannot
+  /// be silenced by guessing the code.
   static String generateRandomHash() {
-    // Create a secure random object
     final random = Random.secure();
-    // Generate 16 random bytes (128 bits)
     final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    // Convert bytes to a hex string (common representation for hashes)
     final hash = base64Encode(bytes); // You can also use base16Encode for hex
     return hash;
   }

@@ -17,7 +17,13 @@
 
 import 'package:crescendo_alarm/utils/utils.dart';
 
+/// What a `ScheduledAlarm` (planned by the scheduling engine, FR-18) and a
+/// `ManualAlarm` (set by the user) share: everything the `alarm` plugin is
+/// armed with except the moment itself.
 abstract class MyAlarm {
+  /// A `DateTime` (the planned moment, local-tagged) for a `ScheduledAlarm`,
+  /// a bare device-local `TimeOfDay` for a `ManualAlarm` - resolved to a
+  /// moment only when it is armed (`nextManualOccurrence`).
   dynamic time;
   String title;
   bool enabled;
@@ -72,6 +78,9 @@ abstract class MyAlarm {
 
   String toJson();
 
+  /// Not decodable at this level: the stored JSON does not say which
+  /// subclass it is, so callers use `ScheduledAlarm.fromJson` or
+  /// `ManualAlarm.fromJson` for the list they are loading.
   factory MyAlarm.fromJson(String jsonString) {
     throw UnimplementedError();
   }

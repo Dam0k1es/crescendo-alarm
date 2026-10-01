@@ -5,6 +5,8 @@ allprojects {
     }
 }
 
+// Every project builds into the Flutter project's top-level build/ (:app into
+// build/app/), where the flutter tool and CI look for the APK and the SBOM.
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
@@ -16,18 +18,12 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 
-// An override used to sit here that forced every Android library subproject
-// to compileSdk 36. The reason was `awesome_notifications_core`, which
-// hardcoded compileSdkVersion 33 and thereby made the AAR metadata check fail
-// against its own newer AndroidX dependencies.
-//
-// Removed in the 2026-09-10 hygiene pass (docs/TODO.md T-97):
-// `awesome_notifications` 0.12.1 does not require `awesome_notifications_core`
-// at all - the entry in pubspec.yaml was leftover cruft from the
-// 0.9.x/0.10.x era, when the main package still needed it. Without that
-// dependency the offending AAR is out of the build, and the workaround lost
-// its reason to exist. Verified with a `flutter clean` release build, not
-// just an incremental one.
+// No compileSdk override for plugin subprojects any more: its only reason,
+// `awesome_notifications_core`, left the build in docs/TODO.md T-97 (see
+// CLAUDE.md). Should one ever be needed again, register its `afterEvaluate`
+// before the `evaluationDependsOn(":app")` below - after it, Gradle throws
+// "Cannot run Project.afterEvaluate(Action) when the project is already
+// evaluated".
 
 subprojects {
     project.evaluationDependsOn(":app")

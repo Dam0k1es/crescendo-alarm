@@ -21,8 +21,10 @@
 # (a) The summary line `Pending alarms per uid: [..., u0a161:2, ...]`. That is
 #     the most reliable number the dump offers: the system's own per-uid
 #     counter, with no text-pattern guessing at all.
-# (b) The entry lines carrying the package name. Needed when the summary line
-#     is missing (older images) or the uid could not be resolved.
+# (b) The entry lines carrying the package name (or the `alarm` plugin's
+#     `com.gdelataillade.alarm`, see count_package_entry_lines). Needed when
+#     the summary line is missing (older images) or the uid could not be
+#     resolved.
 #
 # What must NEVER go back in here: a generic substring such as "AlarmReceiver".
 # It matches other apps (T-103) - and the summary line covers them all at once
@@ -108,6 +110,8 @@ notification_origwhen_ms() {
 # after the misreading.
 # ---------------------------------------------------------------------------
 self_test() {
+  # The recordings predate the 2026-09-25 rename to com.crescendoalarm, so
+  # they carry the app's former package name - keep it here.
   local failed=0 pkg='com.wakeywakey.wakeywakey' n
 
   # 1. A recording without a single alarm of our own must yield 0 - even when

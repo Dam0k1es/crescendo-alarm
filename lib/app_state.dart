@@ -73,7 +73,8 @@ class AppState extends ChangeNotifier {
   Set<String> _disabledDays = <String>{};
 
   /// Calendar events (by their `device_calendar` id, `Meeting.ids`) the user
-  /// has chosen to leave out of scheduling - a feature request, not an FR:
+  /// has chosen to leave out of scheduling - a feature request
+  /// (docs/TODO.md T-149), not an FR:
   /// some appointments (on a shared calendar the user doesn't own, or just
   /// not worth waking up for) should not drive `hardFloor`, but marking that
   /// must never write back to the calendar itself. Keyed by id, not by the
@@ -172,9 +173,11 @@ class AppState extends ChangeNotifier {
   /// `assert(fadeDuration > Duration.zero)` on `VolumeSettings.fade`
   /// (assertions are off in the release build, so a zero would have
   /// reached it unchecked); T-175 switched the ramp itself to
-  /// `VolumeSettings.staircaseFade` (see `ringing_alarm_settings.dart`),
-  /// whose own guard is "at least one fade step", satisfied by the same
-  /// positive-duration floor for the same underlying reason.
+  /// `VolumeSettings.staircaseFade` (see `ringing_alarm_settings.dart`).
+  /// The guard of that one a zero duration would trip is "fadeSteps must be
+  /// sorted by strictly increasing time" - `_exponentialFadeSteps` would put
+  /// every point at zero - and the same positive-duration floor satisfies
+  /// it.
   static const _gentleWakeUpDurationMinimum = Duration(minutes: 1);
 
   // Theming variables
@@ -330,7 +333,8 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// FR-20: may the user postpone the alarm? Default **off**.
+  /// FR-20: may the user postpone the alarm? Default **on** (maintainer
+  /// request, see [_snoozeEnabled]).
   bool get snoozeEnabled => _snoozeEnabled;
 
   /// FR-20: by how much pressing snooze postpones. Default 5 minutes.
@@ -363,11 +367,11 @@ class AppState extends ChangeNotifier {
 
   TimeOfDay get durationToGetReady => _durationToGetReady;
 
-  // docs/TODO.md T-52.3: a read-only view of the overrides - the alarm
-  // editor/replan side should always resolve through
-  // [durationToGetReadyForWeekday], never read this map directly, or a day
-  // without an override would wrongly look unset instead of falling back to
-  // the global value.
+  /// docs/TODO.md T-52.3: a read-only view of the overrides - the alarm
+  /// editor/replan side should always resolve through
+  /// [durationToGetReadyForWeekday], never read this map directly, or a day
+  /// without an override would wrongly look unset instead of falling back to
+  /// the global value.
   Map<DayOfWeek, TimeOfDay> get durationToGetReadyByWeekday =>
       Map.unmodifiable(_durationToGetReadyByWeekday);
 
@@ -389,6 +393,10 @@ class AppState extends ChangeNotifier {
   // Scheduling-v2 (docs/scheduling-v2-spec.md FR-3/FR-9/FR-16/FR-17)
   int get gapDayCounter => _gapDayCounter;
 
+  /// FR-16: the device's UTC offset as the last checkpoint recorded it -
+  /// what Checkpoint 2 compares against. Persisted in whole minutes under
+  /// `lastCheckedUtcOffsetMinutes`, the key `runTimezoneCheckpoint2` reads
+  /// and writes directly.
   Duration get lastCheckedUtcOffset =>
       Duration(minutes: _lastCheckedUtcOffsetMinutes);
 
@@ -441,7 +449,7 @@ class AppState extends ChangeNotifier {
   Map<String, ({int clockTime, int value})> get pendingDayClockTimes =>
       _pendingDayClockTimes;
 
-  /// FR-6 requires the overrun warning "einmalig" - remembers that it was
+  /// FR-6 requires the overrun warning "once" - remembers that it was
   /// already sent for the currently running overrun episode
   /// (`docs/TODO.md` T-74a).
   bool get overrunNotificationSent => _overrunNotificationSent;
@@ -456,11 +464,11 @@ class AppState extends ChangeNotifier {
 
   /// Whether the PII-free event logger records (`docs/TODO.md` T-89).
   ///
-  /// On by default: the log only ever leaves the device when the user
-  /// explicitly copies it in settings, and it structurally cannot contain
-  /// personal data - the recording API takes not a single String. The
-  /// switch exists anyway, because "on, but switchable off and inspectable"
-  /// is the only honest default.
+  /// Off by default (T-173, maintainer requirement: "the logs should be
+  /// disabled by default. All of them."). The log only ever leaves the
+  /// device when the user explicitly copies it in settings, and it
+  /// structurally cannot contain personal data - the recording API takes not
+  /// a single String.
   bool get diagnosticsEnabled => _diagnosticsEnabled;
 
   /// Does the log also record wake times and early appointment times
@@ -545,9 +553,10 @@ class AppState extends ChangeNotifier {
   }
 
   set gentleWakeUpDuration(Duration value) {
-    // Bounded below (docs/TODO.md T-96): the alarm plugin requires
-    // `fadeDuration > Duration.zero`, but the hh:mm picker allows 00:00 -
-    // and in the release build the assertion wouldn't fire anyway.
+    // Bounded below (docs/TODO.md T-96): the hh:mm picker allows 00:00,
+    // which the alarm plugin's fade asserts against (see
+    // [_gentleWakeUpDurationMinimum]) - and in the release build the
+    // assertion wouldn't fire anyway.
     _gentleWakeUpDuration =
         value < _gentleWakeUpDurationMinimum ? _gentleWakeUpDurationMinimum : value;
     _prefs.setInt('gentleWakeUpSeconds', _gentleWakeUpDuration.inSeconds);
@@ -638,7 +647,7 @@ class AppState extends ChangeNotifier {
   set preferredWakeUpTime(TimeOfDay? value) {
     _preferredWakeUpTime = value;
     if (value == null) {
-      // The stored key was renamed from 'preferredWakeUpTime' along with the
+      // The stored key was renamed from 'wunschzeit' along with the
       // identifier. That drops the setting of anyone who upgrades from an
       // older build, because nothing reads the old key any more. The
       // maintainer accepted this explicitly while the app is still in its
@@ -891,6 +900,12 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Adds [alarm] - an equal entry already in the list is replaced, not
+  /// duplicated - and arms it. A [ManualAlarm] is resolved to its next
+  /// occurrence ([_getAlarmTime]) and armed only while enabled (FR-21); a
+  /// [ScheduledAlarm] is kept and armed only if its time is not already
+  /// before [now]. Returns `{'success': bool, 'errMsg': String}`; `success`
+  /// stays `false` for a past `ScheduledAlarm`.
   Future<Map<String, dynamic>> addAlarm(
     MyAlarm alarm, {
     // docs/TODO.md T-202: injectable like setManualAlarmEnabled's own `now`
@@ -908,7 +923,9 @@ class AppState extends ChangeNotifier {
     if (alarm is ManualAlarm) {
       // Fetch a DateTime, as ManualAlarms use TimeOfDay
       DateTime alarmDateTime = _getAlarmTime(alarm, now: now);
-      // Create a new alarm in case it was set to a DayTime in the past
+      // A field-by-field copy: every field must be carried over by hand -
+      // this reconstruction has silently dropped fields before (T-176,
+      // T-198, below).
       ManualAlarm newAlarm = ManualAlarm(
           id: alarm.id,
           // docs/TODO.md T-202: the alarm's own reading, NOT the resolved
@@ -954,7 +971,8 @@ class AppState extends ChangeNotifier {
         await _setAlarm(newAlarm, alarmDateTime);
       }
     } else if (alarm is ScheduledAlarm) {
-      // Create a new alarm in case it was set to a DayTime in the past
+      // A field-by-field copy, like the ManualAlarm branch above (the title
+      // is derived from the time).
       ScheduledAlarm newAlarm = ScheduledAlarm(
           id: alarm.id,
           time: alarm.time,
@@ -988,6 +1006,10 @@ class AppState extends ChangeNotifier {
     return retVal;
   }
 
+  /// Replaces the manual alarm [oldAlarm] with [newAlarm] under a fresh id
+  /// (overwriting `newAlarm.id`), arms it while enabled, then stops and
+  /// removes the old one. Only [ManualAlarm]s; returns `success: false` for
+  /// anything else or when [oldAlarm] is not in the list.
   Future<Map<String, dynamic>> updateAlarm(
       MyAlarm oldAlarm, MyAlarm newAlarm) async {
     if (oldAlarm is ManualAlarm) {
@@ -997,10 +1019,8 @@ class AppState extends ChangeNotifier {
       if (index != -1) {
         // Set a new id for the alarm as the alarm library may fail to set an alarm with the same id directly after stopping it
         newAlarm.id = getRandom();
-        // Set the new alarm in the list of custom alarm data type
         _manualAlarms[index] = newAlarm as ManualAlarm;
         _saveManualAlarms();
-        // Set the new alarm in the list of flutter_alarm plugin type
         DateTime alarmDateTime = _getAlarmTime(newAlarm);
         // FR-21: see addAlarm - editing must not arm a switched-off alarm.
         if (newAlarm.enabled) {
@@ -1135,8 +1155,9 @@ class AppState extends ChangeNotifier {
   Future<void> _setAlarm(MyAlarm alarm, DateTime alarmDateTime) async {
     final alarmSettings = buildRingingAlarmSettings(
       id: alarm.id,
-      // docs/TODO.md T-61: converts the instant to local time first instead of
-      // reinterpreting its raw digits as local (see alarmPlatformTime).
+      // docs/TODO.md T-61: keeps the instant (truncated to the minute)
+      // instead of reinterpreting its raw digits as local (see
+      // alarmPlatformTime).
       dateTime: alarmPlatformTime(alarmDateTime),
       tone: alarm.tone,
       gentlewake: alarm.gentlewake,
@@ -1147,7 +1168,6 @@ class AppState extends ChangeNotifier {
       vibrate: alarm.vibrate,
     );
 
-    // Set the alarm
     await Alarm.set(alarmSettings: alarmSettings);
     refreshDirectBootFallback();
     // docs/TODO.md T-198: the same "every real arm/cancel" hook - see
@@ -1186,6 +1206,9 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  /// Stops the platform alarm [id] without removing anything from
+  /// [scheduledAlarms]/[manualAlarms] - how snooze ends the current ring
+  /// (`snoozeRingingAlarm`): the alarm itself stays.
   Future<void> stopPlatformAlarm(int id) => _stopAlarm(id);
 
   Future<void> _stopAlarm(int id) async {
@@ -1233,7 +1256,8 @@ class AppState extends ChangeNotifier {
   /// Disturb itself when they fire. Nothing here switches Do Not Disturb.
   ///
   /// Call sites - the reminder's own ones first (R2: "Die Zeitplanung ist
-  /// bzgl des Starts daher zu übernehmen"):
+  /// bzgl des Starts daher zu übernehmen" - its scheduling is therefore to
+  /// be adopted for the start):
   /// - the end of every scheduling checkpoint, right after
   ///   `scheduleSleepReminder` (`checkpoint.dart`), and
   /// - every handled alarm (`Handler.onAlarmHandled`), likewise;
@@ -1571,7 +1595,8 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // only overrides values not being already set
+  // Each stored value replaces its field's default; a missing or unreadable
+  // one keeps the default.
   Future<void> _loadFromPreferences() async {
     // docs/TODO.md T-45: this call used to sit outside every try block below,
     // so a throwing plugin (a platform-channel failure, corrupted storage)
@@ -1590,9 +1615,9 @@ class AppState extends ChangeNotifier {
       debugPrint(
           "=====_loadFromPreferences: Error obtaining SharedPreferences instance: ${e.runtimeType}");
     }
-    // A failure below must never leave _prefs unassigned or throw out of
-    // this method: main() awaits `initialized` before runApp(), so any
-    // unhandled error here would prevent the app from starting at all.
+    // A failure below must never throw out of this method: main() awaits
+    // `initialized` before runApp(), so any unhandled error here would
+    // prevent the app from starting at all.
     // Corrupted or incompatible persisted data should fall back to defaults
     // instead of crashing the app on launch.
     try {

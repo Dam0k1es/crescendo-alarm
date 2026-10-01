@@ -29,8 +29,8 @@ import 'package:crescendo_alarm/utils/notifications.dart';
 /// Reports [result]'s three flags (FR-6, FR-9, FR-12) to the user.
 ///
 /// Called from **every** replan path - the ring checkpoint, FR-17's recovery
-/// checkpoint and a settings change - because FR-12 explicitly names FR-8 *or*
-/// FR-17 ("je nachdem was zuerst eintritt") and its flag is only ever computed
+/// checkpoint, a settings change and a manual sync - because FR-12 explicitly
+/// names FR-8 *or* FR-17 ("whichever comes first") and its flag is only ever computed
 /// on the day-advance that one of them performs: whoever advances the day is
 /// the only one who can report it (`docs/TODO.md` T-67).
 ///
@@ -40,7 +40,7 @@ import 'package:crescendo_alarm/utils/notifications.dart';
 /// FR-6's and FR-9's warnings are each sent **once per episode**, not once per
 /// replan (T-74a, T-81): both flags are re-derived by `computeWeekPlan` on
 /// every replan and would otherwise repeat on every app open and every
-/// settings change - contradicting FR-6's "einmalig", and especially bad for
+/// settings change - contradicting FR-6's "once", and especially bad for
 /// FR-9, whose episode can last indefinitely. `AppState`'s
 /// `overrunNotificationSent` / `safetyValveNotificationSent` remember that the
 /// respective warning was sent, and reset as soon as its flag goes away again.

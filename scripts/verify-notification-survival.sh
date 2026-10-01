@@ -3,7 +3,11 @@
 # (the sleep-time reminder's own FR-16 Checkpoint 2 hook) survive a reboot,
 # the same way the `alarm` plugin's own ringing alarms already do (T-93)?
 #
-# Why this is a real, open question and not a duplicate of T-93: a real
+# Answered since (T-155: not a bug - the restore works once the device is
+# unlocked; see the polling comment further down). The script stays for
+# re-checks.
+#
+# Why this was a real question and not a duplicate of T-93: a real
 # Fairphone 6 run gathering T-93's evidence incidentally showed the app's
 # `awesome_notifications`-scheduled entries gone after a reboot, while its
 # `alarm`-plugin entries survived and were correctly re-planned. Reading
@@ -18,13 +22,13 @@
 # a bug) as with "the restore genuinely failed" (a real bug) - the captured
 # evidence could not tell those apart.
 #
-# docs/TODO.md's standing "ignore data loss during the test phase" policy is
-# about persisted-data SCHEMA changes, not about this: the maintainer's
-# explicit, standing instruction for real-device scripts is that their own
-# phone runs production only, never a debug/dev build, and no test may
-# replace, rebuild or reinstall anything on it under any circumstance - a
-# script that cannot satisfy its precondition against whatever is already
-# installed MUST refuse to run, not fall back to installing something else.
+# Read-only by design: a script that cannot satisfy its precondition against
+# whatever is already installed refuses to run rather than replacing that
+# install (and its data) with something else. Precondition 1 below also
+# refuses a DEBUG build; it dates from the maintainer's 2026-09-19
+# "production only on my phone" instruction (docs/TODO.md T-155), which the
+# maintainer reversed on 2026-09-26 - the phone runs the dev build now, so
+# that check blocks this script there until it is revisited.
 #
 # This script therefore does NOT build, install or schedule anything. It
 # reads whatever is ALREADY scheduled by the production app installed on the

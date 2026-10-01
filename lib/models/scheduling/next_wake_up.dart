@@ -31,7 +31,9 @@ import 'package:crescendo_alarm/models/scheduling/stored_values.dart';
 /// Reading `manualAlarms` here is deliberate and not an FR-15 violation:
 /// FR-15 forbids the *scheduling* logic from letting manual alarms influence
 /// the computed `ScheduledAlarm` chain. This function feeds the bedtime
-/// reminder (FR-16 Checkpoint 2's hook, `scheduleSleepReminder`), and a user
+/// reminder (FR-16 Checkpoint 2's hook, `scheduleSleepReminder`) and, with
+/// narrowed inputs, the Do Not Disturb sleep-time window (`sleepTimeWindow`,
+/// docs/TODO.md T-198), and a user
 /// who only ever sets manual alarms must still get a sensible bedtime - the
 /// old `Scheduler.nextAlarmTime()` considered both for exactly that reason.
 ///
@@ -68,9 +70,10 @@ DateTime? nextWakeUpTime({
   }
 
   for (final millis in pendingDayValues.values) {
-    // localFromStored (docs/TODO.md T-83): the same reading as on the
-    // manual-alarm side below, which builds from `now`'s local fields - both
-    // candidates must be compared in the same frame.
+    // localFromStored (docs/TODO.md T-83): local-tagged like the manual-alarm
+    // side below (`nextManualOccurrence`), so the result has the same frame
+    // whichever source wins - callers read it as local wall clock. The
+    // comparison itself (`isBefore`/`isAfter`) is on instants either way.
     final planned = localFromStored(millis);
     if (planned == null) continue;
     consider(planned);
