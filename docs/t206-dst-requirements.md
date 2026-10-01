@@ -158,7 +158,7 @@ points.
 | ID | Test | Expect (today) | Legs |
 |---|---|---|---|
 | **T10** (M-R7, spec FR-2 bullet, verbatim in `scheduling_v2_test.dart`) | `eventsForDay` / `hardFloor`, Berlin rules, event `from = tz.TZDateTime(berlin, 2026, 3, 30, 0, 30)` (= `2026-03-29T22:30Z`), 1 h long, lead times 0; days `tz.TZDateTime(berlin, 2026, 3, 29)` and `(…, 30)`. | `eventsForDay(30 Mar) == [event]`, `eventsForDay(29 Mar) == []`; `hardFloor(30 Mar) == 2026-03-29T22:30Z`, `hardFloor(29 Mar) == null`. (Under the planning day's +1 the event reads Sun 23:30 → assigned to 29 Mar.) Autumn mirror: event `tz.TZDateTime(berlin, 2026, 10, 26, 23, 30)` (= `22:30Z`) belongs to 26 Oct, not 27 Oct (under +2 it reads 27 Oct 00:30). | all 10 |
-| **T11** (twin of T10, 8ac1d9e) | Process zone, for each 2026 local transition `T`: `Dafter = date(L(T)) + 1`; event reading = `Dafter 00:00 + |Δ|/2` for a gap, `Dafter 24:00 − |Δ|/2` for an overlap (unique readings; Lord Howe: 00:15 / 23:45), instant via `DateTime(y, m, d, h, min)`. Seed `lastProcessedConcludedDay = date(L(T)) − 1`, `pendingDayValues[that day] = DateTime(that day, 12, 0)`, P null, lead times 0; `replan(now: that value, todayAlreadyRang: true)`. | `pendingDayInstantAnchored[iso(Dafter)] == true` and `pendingDayValues[iso(Dafter)] == event ms`; the neighbour (`Dafter − 1` for a gap, `Dafter + 1` for an overlap) not anchored. Today the event lands on the neighbour. Berlin: event Mon 30 Mar 00:30 CEST (`29 Mar 22:30Z`) / Mon 26 Oct 23:30 CET (`22:30Z`). | 8 DST legs |
+| **T11** (twin of T10, 8ac1d9e) | Process zone, for each 2026 local transition `T`: `Dafter = date(L(T)) + 1`; event reading = `Dafter 00:00 + \|Δ\|/2` for a gap, `Dafter 24:00 − \|Δ\|/2` for an overlap (unique readings; Lord Howe: 00:15 / 23:45), instant via `DateTime(y, m, d, h, min)`. Seed `lastProcessedConcludedDay = date(L(T)) − 1`, `pendingDayValues[that day] = DateTime(that day, 12, 0)`, P null, lead times 0; `replan(now: that value, todayAlreadyRang: true)`. | `pendingDayInstantAnchored[iso(Dafter)] == true` and `pendingDayValues[iso(Dafter)] == event ms`; the neighbour (`Dafter − 1` for a gap, `Dafter + 1` for an overlap) not anchored. Today the event lands on the neighbour. Berlin: event Mon 30 Mar 00:30 CEST (`29 Mar 22:30Z`) / Mon 26 Oct 23:30 CET (`22:30Z`). | 8 DST legs |
 | **T12** | FR-12 day advance uses the same assignment: seed as T11 but with `lastProcessedConcludedDay = Dafter − 2` and the ring on `Dafter` (so the day advance walks `Dafter − 1 … Dafter`), event on `Dafter` at the T11 reading, `pendingDayValues[iso(Dafter)]` = a value later than the event. | `possiblyMissedAppointment == true` (the event is found on `Dafter`, not on the neighbour). | 8 DST legs |
 | **T13** | Diagnostics minute: with `diagnosticsIncludeClockTimes = true`, the T11 event's `Diag.dayEventTime.startMinuteOfDay` is its local minute (Berlin 30 = 00:30) and its window-day index is `Dafter`'s. | as stated | 8 DST legs |
 | **T14** (counter) | T-118a's constant-offset midnight tests and every existing FR-2 test unchanged (under `fixedOffset`); an appointment at Mon 30 Mar 12:00 CEST is on 30 Mar before and after. | green | all 10 |
@@ -229,6 +229,14 @@ Also in the same commit as FR-2's code: update the verbatim FR-2 quote in
 `test/scheduling_v2_audit_test.dart:365-367` to the new sentence (G#7).
 
 ### b.6 Stage S4 - the sweep (TZ-9)
+
+> **As implemented (2026-09-29, `docs/TODO.md` T-206 "Known limitation"):** the oracle table
+> `test/fixtures/dst_transitions_2026_2027.json` is generated from `package:timezone`'s own bundled
+> database by `scripts/gen_dst_fixture.dart`, not by the Python script. The Python/`zoneinfo` table
+> (`scripts/gen_dst_fixture.py` → `test/fixtures/dst_transitions_2026_2027_system_tzdata.json`) is
+> an informational cross-check: zones whose rules differ between the two databases are reported as
+> a skip reason, not failed, so tzdata drift does **not** fail loudly as planned below. The plan
+> below is kept as written.
 
 - **File:** `test/t206_dst_sweep_test.dart`, pure layer only. **Runs in CI's UTC leg only**: `skip`
   unless `Platform.environment['TZ'] == 'UTC'` (the result does not depend on the process zone;

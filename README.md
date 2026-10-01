@@ -14,6 +14,10 @@ Welcome to Crescendo Alarm, an innovative alarm clock app designed for individua
 - **Calendar Integration:** Syncs with your mobile calendar to derive intelligent alarm schedules based on your commitments.
 - **Gentle Wake-Up:** Alarm volume increases gradually for a smoother start to your day.
 - **Guaranteed Wake-Up:** Requires scanning a physical QR code to turn off the alarm, ensuring you get out of bed. "Guaranteed" isn't absolute: a couple of narrow fail-safes exist so a broken camera can't lock you in with a ringing alarm forever - see `docs/REQUIREMENTS.md` R4 for exactly what they are and why they're there.
+- **Also:** manual alarms (repeat days, per-alarm tone/volume/snooze/code settings), snooze within
+  a wake-up budget, a bedtime reminder, an optional sleep-time Do Not Disturb, imported custom
+  alarm tones, choosing which calendars count and ignoring single events, sharing/printing the
+  deactivation code, and an opt-in, PII-free diagnostics log - see the [User Guide](docs/USER_GUIDE.md).
 
 ## Technologies Used
 
@@ -55,19 +59,29 @@ Ensure you have the following installed:
 
 ### Installing onto a device via adb
 
-To flash a build without a full dev loop (e.g. a signed release APK, or the
-latest `dev` build for testing):
+Signed release APKs are attached to the repository's
+[GitHub Releases](https://github.com/Dam0k1es/crescendo-alarm/releases) - one asset per release,
+`crescendo-alarm-vX.Y.Z.apk`:
 
 ```sh
-flutter build apk --release   # or --debug for a local, unsigned build
-adb install -r build/app/outputs/flutter-apk/app-release.apk
+adb install -r crescendo-alarm-vX.Y.Z.apk
+```
+
+To flash your own build without a full dev loop:
+
+```sh
+flutter build apk --debug     # build/app/outputs/flutter-apk/app-debug.apk
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
 ```
 
 `-r` reinstalls over an existing install (keeps app data); drop it for a
-clean install. A real production build additionally needs
-`android/key.properties` pointing at a signing key - see `CLAUDE.md`'s
-"Current APK" section for how release builds are normally produced and
-verified (`apksigner verify`) instead.
+clean install. Android only updates an install signed with the same key: a
+debug build is signed with your machine's debug key (or the project's shared
+dev key, if `android/app/keystore/crescendo-alarm-dev.jks` is present), so it
+cannot update a release install in place. `flutter build apk --release`
+additionally needs `android/key.properties` pointing at a signing key -
+release builds are normally produced by CI (`release.yml`, see `CLAUDE.md`'s
+"CI/CD pipeline").
 
 ### Usage
 
@@ -86,13 +100,14 @@ For every screen and control in detail, see the full [User Guide](docs/USER_GUID
 ### Alarm scheduling
 
 Wake-up times are derived from the calendar by a purpose-built engine, specified up front in
-[`docs/scheduling-v2-spec.md`](docs/scheduling-v2-spec.md) as 18 functional requirements and then
+[`docs/scheduling-v2-spec.md`](docs/scheduling-v2-spec.md) as numbered functional requirements (FR-1 … FR-21) and then
 implemented test-first against it. In short: the earliest non-all-day appointment of a day sets an
 upper bound ("be up by then"), days without appointments drift gradually towards a preferred
 wake-up time instead of jumping, and a wake-up time that has to move a long way is spread evenly
 over the days leading up to it rather than dumped on one night. Re-planning happens at events that
-are scheduled anyway - when an alarm rings, at the bedtime reminder, when the app is opened, and
-when a relevant setting changes - so there is no battery-draining background worker.
+occur anyway - when an alarm rings, when the app is opened (at most once a day), when a relevant
+setting changes, and on the alarm list's sync button - so there is no battery-draining background
+worker.
 
 ### Quality & Testing
 
@@ -105,7 +120,7 @@ gaps in that coverage.
 
 ### Project Documentation
 
-See `docs/` for personas, use cases and technology choices, plus the two documents that matter
+See `docs/` for personas, use cases and technology choices, plus the documents that matter
 most:
 
 - [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) - the essential requirements that must be met (or

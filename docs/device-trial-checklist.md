@@ -17,7 +17,7 @@ Fill in per run. Copy the template, don't overwrite it.
 
 ## Why manual at all
 
-Automation covers a lot by now: `flutter test` checks the domain logic in six time zones, and the
+Automation covers a lot by now: `flutter test` checks the domain logic in ten time zones, and the
 E2E suite runs against a real emulator and proves FR-18 all the way to the alarm plugin. Four
 things it structurally **cannot** show, and those are exactly what's here:
 
@@ -27,8 +27,8 @@ things it structurally **cannot** show, and those are exactly what's here:
    source of T-61.
 2. **Sound.** The emulator runs without audio (`-noaudio`); the only substitute is a `dumpsys
    audio` log as circumstantial evidence.
-3. **Camera.** The QR scan is injected via `debugBarcodeStreamOverride`; real decoding has never
-   run (T-16).
+3. **Camera.** The QR scan is injected via `QrScanner.debugScanStreamOverride`; real decoding has
+   been confirmed on a real device by hand (T-143), never in CI (T-16).
 4. **OEM behaviour.** Doze, battery saving, and manufacturer-specific process killers don't exist
    on a standard emulator.
 
@@ -36,13 +36,13 @@ things it structurally **cannot** show, and those are exactly what's here:
 
 | # | Check | Expectation | Result |
 |---|---|---|---|
-| A1 | Install and start the app | Splash → permissions → main screen | |
+| A1 | Install and start the app | Privacy policy → **Continue** → permissions → main screen | |
 | A2 | Set a manual alarm for +2 min | rings, overlay appears | |
 | A3 | Switch off via "Stop" | overlay gone, no alarm still active | |
 | A4 | Sound audible? Volume as set? | yes | |
 | A5 | Enable gentle wake (default ramp 1 min), repeat the alarm | volume rises over ~60 s up to the set volume | |
 | A6 | Set "Ramp duration" to 5 min, repeat the alarm | the ramp now takes ~5 min, no longer 1 min (T-96) | |
-| A7 | Try setting the ramp below 1 min | not possible, "At least 00:01 h" message appears | |
+| A7 | Try setting the ramp below 1 min | not possible: 00:00 is raised to 00:01 (the minimum is stated in the option's **?** help, T-166) | |
 
 ## B — Calendar-derived wake-up (the actual product path)
 
@@ -64,41 +64,45 @@ things it structurally **cannot** show, and those are exactly what's here:
 | C1 | Set an alarm, `adb shell dumpsys alarm \| grep com.crescendoalarm.crescendoalarm` | entry present | |
 | C2 | Reboot the device **without** opening the app, then repeat C1 | entry present again | |
 | C3 | Wait for the alarm to ring after the reboot | rings | |
-| C4 | `adb shell am force-stop com.crescendoalarm.crescendoalarm`, then C1 | **Expectation: entry gone** — Android removes the alarms of a force-stopped package; this is platform behaviour, not an app defect. Record it here so R3 tracks it as a boundary, not a bug. | |
+| C4 | `adb shell am force-stop com.crescendoalarm.crescendoalarm`, then C1 | **Unresolved** (`docs/REQUIREMENTS.md` R3, `docs/TODO.md` T-93): expected "entry gone" (platform behaviour), but a 2026-09-19 `dumpsys` measurement still found it registered. Record exactly what you see. | |
 | C5 | Open the app after C4 | alarms are re-armed (FR-17 recovery) | |
 | C6 | Enable battery saver, set an alarm for +10 min, screen off | rings anyway | |
 
-Known from the code regarding C1/C2: the app has **no** `BootReceiver` of its own. The `alarm`
-plugin registers one (`com.gdelataillade.alarm.alarm.BootReceiver`) and re-arms the stored alarms
-after boot via `setExactAndAllowWhileIdle(RTC_WAKEUP, …)`; in doing so it discards missed alarms as
-"stale". So C2 should be green — it has just never been checked.
+Known from the code regarding C1/C2: the `alarm` plugin registers a `BootReceiver`
+(`com.gdelataillade.alarm.alarm.BootReceiver`) and re-arms the stored alarms after boot via
+`setExactAndAllowWhileIdle(RTC_WAKEUP, …)`; in doing so it discards missed alarms as "stale". The
+app's own `DirectBootReceiver` (T-158) only adds the locked-after-reboot fallback and re-arms the
+sleep-time Do Not Disturb alarms. C2/C3 have been observed once on a real device (Findings below),
+not yet through this table.
 
 ## D — Guaranteed wake-up (QR)
 
 | # | Check | Expectation | Result |
 |---|---|---|---|
-| D1 | Generate and print a QR code in settings | | |
+| D1 | Generate a code on the **Scan Code** tab and print it (**Print**) | | |
 | D2 | Let an alarm ring | QR scanner appears instead of "Stop" | |
 | D3 | Scan the **wrong** code | alarm keeps running, scanner stays open | |
 | D4 | Scan the correct code with the **real camera** | alarm stops (closes T-16) | |
-| D5 | Check whether the scanned value appears anywhere on screen | **must not** — only "QR Code detected" | |
+| D5 | Check whether the scanned value appears anywhere on screen | **must not** — the scanner simply closes on the right code | |
 
 ## E — Diagnostics log (T-89)
 
 | # | Check | Expectation | Result |
 |---|---|---|---|
-| E1 | Open Settings → Diagnostics | events visible | |
-| E2 | Review the content | no time of day, no date, no appointment title, no calendar name, no QR code | |
+| E1 | Open Settings → Diagnostics, switch on **Record diagnostics** (off by default, T-173) | events visible after the next scheduling activity | |
+| E2 | Review the content (with "Also record wake and appointment times" off) | no time of day, no date, no appointment title, no calendar name, no QR code | |
 | E3 | Check after B3 | `weekPlanComputed` with `plannedDays=7`, `windowDayCount == distinctDayKeys` | |
 | E4 | Check after A3 | `alarmSync` **without** a large `toRemove` at `toAdd=0` (that would be T-64) | |
 | E5 | Check after the morning alarm | `dayAdvance` with `daysProcessed >= 1` (0 would be T-75) | |
-| E6 | Check at bedtime | `timezoneCheck` present and marked with `(bg)` → **closes T-62** | |
+| E6 | Check at bedtime | *Superseded by T-199, see below* | |
 | E7 | Press "Copy" and paste the text somewhere | complete, exclusively enum names and numbers | |
 | E8 | Switch off, restart the app, check | no new events | |
 
-E6 is the point with the biggest leverage: that a silent notification actually triggers
-`onNotificationCreatedMethod` has so far only been inferred from the package source. If
-`timezoneCheck (bg)` appears in the log, FR-16's checkpoint 2 is confirmed on the device.
+E6 was meant to confirm FR-16's checkpoint 2 on the device via a `timezoneCheck (bg)` entry at
+bedtime. `docs/TODO.md` T-199 (from the plugin's own source) found that `onNotificationCreatedMethod`
+fires when a notification is *scheduled*, in the main isolate, and not again when it comes due - so
+`timezoneCheck` appears right after each checkpoint, not at bedtime and not marked `(bg)`. E6 as
+written cannot pass until T-199 is resolved; do not record a missing bedtime entry as a new defect.
 
 ## F — Time zones and daylight saving
 
@@ -129,6 +133,8 @@ is the evidence, not the task list.
   device model/APK/commit via the table template above - do that on the next trial to make this a
   full, repeatable C1/C2 entry.
 - **2026-09-18, C4 (real device): confirmed, and confirmed as a platform boundary, not a bug.**
+  *(Contradicted the next day by a scripted `dumpsys alarm` measurement that still found the alarms
+  registered after force-stop - unresolved, see `docs/REQUIREMENTS.md` R3 and `docs/TODO.md` T-93.)*
   `am force-stop` during a scheduled alarm loses it - no ring. This is Android's own documented
   behaviour (every AlarmManager entry a force-stopped package owns is dropped by the OS itself) and
   is not something app code can prevent - see `docs/REQUIREMENTS.md` R3's own note on this

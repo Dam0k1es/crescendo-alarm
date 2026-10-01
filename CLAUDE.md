@@ -18,7 +18,7 @@ Layering, outermost first:
 | File | Role |
 |---|---|
 | `checkpoint.dart` | **The** entry point: `runSchedulingCheckpoint({trigger})` / `runCheckpointSafely(...)`. Serialized against itself, and runs the full sequence (offset → replan → FR-6/9/12 notifications → bedtime reminder). Every platform trigger goes through here with a `CheckpointTrigger`; nothing else composes that sequence by hand. |
-| `replan.dart` | `replan()` (reads the calendar uncached, walks the day-advance for FR-9/FR-12, calls the domain layer, applies FR-18) and `runTimezoneCheckpoint2()` (FR-16's second checkpoint, which runs in a background isolate and therefore talks to `SharedPreferences` directly). |
+| `replan.dart` | `replan()` (reads the calendar uncached, walks the day-advance for FR-9/FR-12, calls the domain layer, applies FR-18) and `runTimezoneCheckpoint2()` (FR-16's second checkpoint, built for a background isolate and therefore talking to `SharedPreferences` directly - in practice it runs in the main isolate, whenever a notification is *scheduled*, not at bedtime: `docs/TODO.md` T-199, open). |
 | `scheduling_v2.dart` | Pure domain logic - plain values only, no `AppState`, no plugins, no `BuildContext`. Directly unit-testable without mocks. |
 | `apply_alarms.dart` | FR-18: turns the computed week into real `ScheduledAlarm`s (`planAlarmSync` pure, `applyPlannedAlarms` the applier). |
 | `replan_notifications.dart`, `next_wake_up.dart` | FR-6/9/12 warnings (once per episode); the next expected wake-up across plan **and** manual alarms. |
@@ -26,7 +26,7 @@ Layering, outermost first:
 
 Two rules that are load-bearing and easy to break by "cleaning up":
 
-- **Never add a second entry point.** The five that used to exist differed in four orthogonal
+- **Never add a second entry point.** The five that used to exist differed in five orthogonal
   dimensions and produced the same class of bug three times (T-67, T-71, T-80). Add a
   `CheckpointTrigger` value instead.
 - **Every domain value is an absolute instant, UTC-tagged**, while `preferredWakeUpTime` is a bare
@@ -55,7 +55,8 @@ Two rules that are load-bearing and easy to break by "cleaning up":
   TZ-1's R): repeated time → later occurrence, skipped time → the transition instant (the
   maintainer's TZ-1 rule). Planned values and manual alarms reach it through
   `resolvePlannedClockTime` (R_plan, TZ-2a: one minute before a gap that would move the value onto
-  the next date - America/Nuuk); `localWallClockInstant` is a thin wrapper over the device's rules.
+  the next date - America/Nuuk); `localWallClockInstant` is a thin wrapper over the device's rules, with no production caller left
+  (tests only).
 
 ## Diagnostics log (`lib/utils/diag/diag_log.dart`)
 
@@ -106,17 +107,18 @@ Consequences to respect when adding an event:
     any `int` parameter whose name looks like a clock value, and the allowed names are listed there
     explicitly - eight as of T-163, not the original two (`plannedMinuteOfDay`,
     `earliestEventMinuteOfDay`): `preferredWakeUpMinuteOfDay`, `maxDailyDeltaMinutes`,
-    `wakeUpMinutes` and `getReadyMinutes` were added for `Diag.planInputs`, which logs those four
-    durations **unconditionally** (outside the `diagnosticsIncludeClockTimes` switch, unlike the
-    others) because they are configuration values, not clock readings - a duration reveals
-    nothing about when someone sleeps. `startMinuteOfDay`/`endMinuteOfDay` (T-163) were added for
+    `wakeUpMinutes` and `getReadyMinutes` were added for `Diag.planInputs`. It logs the three
+    durations **unconditionally** (outside the `diagnosticsIncludeClockTimes` switch) because they
+    are configuration values, not clock readings - a duration reveals nothing about when someone
+    sleeps. `preferredWakeUpMinuteOfDay` *is* a clock reading, so `planInputs` records it only
+    behind that switch (-1 otherwise), like the other minute-of-day fields. `startMinuteOfDay`/`endMinuteOfDay` (T-163) were added for
     `Diag.dayEventTime`, gated behind the switch like `dayPlanned`'s own two. Do not widen the list
     further without the same kind of reason, and note that `...MinuteOfDay` had to be added to the
     pattern, because a `...OfDay` suffix slipped past the original rule unnoticed.
 - **Exceptions go in as `runtimeType`** through an identity table to an int; `toString()` is never
   called on a `Type` (R8 obfuscation is then irrelevant).
-- **The background isolate has its own ring buffer.** FR-16's Checkpoint 2 runs in a separate
-  isolate, so there are two `SharedPreferences` keys and a merge on read - the same trap as T-69,
+- **The background isolate has its own ring buffer.** FR-16's Checkpoint 2 was built to run in a
+  separate isolate (see T-199 at the end of this item for what actually happens), so there are two `SharedPreferences` keys and a merge on read - the same trap as T-69,
   one level down. `Diag.init` belongs at the isolate's *entry point*
   (`onNotificationCreatedMethod`), never inside the checkpoint: it mutates global state.
   **`onNotificationCreatedMethod` does not always run in a genuinely fresh isolate, though**
@@ -161,7 +163,9 @@ T-198 records why, from primary sources. Rules that are load-bearing:
   device it kept DND off for a daytime alarm the maintainer had included on purpose. The
   maintainer's call: an included alarm gets its sleep time; keeping a backup alarm out of it is what
   the per-alarm **Exclude from Sleep Time** switch is for. Don't reintroduce a ring-based
-  suppression. Test such rules with a next alarm *less* than one Sleep Goal away - that is where
+  suppression. Decision code 10 (`AFTER_WAKE_UP` / `afterWakeUp`) stays reserved on both sides so
+  v1.4.0 reports and exported logs still decode, and the native `last_end_millis` key is only ever
+  cleared now. Test such rules with a next alarm *less* than one Sleep Goal away - that is where
   both versions differ.
 - **On Android 15+ (this app targets 36), `setInterruptionFilter` controls an app-owned implicit
   mode, not global Do Not Disturb** (H4). Deactivate with `INTERRUPTION_FILTER_ALL`; never "restore a
@@ -244,12 +248,15 @@ dart run flutter_launcher_icons
 signed release build, the E2E emulator run, MobSF. Both branches sit on one linear history; there
 has never been a merge commit, and `master` is only ever a fast-forward of `dev`.
 
-This is not bookkeeping, it is money and meaning. The pipeline is scaled by branch (see below): a
+This is not bookkeeping, it is time and meaning. The pipeline is scaled by branch (see below): a
 push to `dev` costs roughly 8 minutes of CI, a push to `master` roughly 45, because `master`
 additionally runs the security gate, a **22-minute Android emulator E2E run**, the signed build and
-MobSF. On a private repository those are billed minutes. In September 2026 this was gotten backwards
-- thirteen commits went straight to `master`, nineteen full runs, and the account's Actions minutes
-appear to have run out: every job began failing after seconds with no step executed. Committing to
+MobSF. While the repository was private (until 2026-09-20, `docs/TODO.md` T-34) those were billed
+minutes, and in September 2026 this was gotten backwards - thirteen commits went straight to
+`master`, nineteen full runs, and the account's Actions minutes appear to have run out: every job
+began failing after seconds with no step executed. The repository is public now, so standard
+GitHub-hosted runners no longer cost money, but a `master` run still takes ~45 minutes and holds
+runner capacity. Committing to
 `dev` is also what keeps `master` meaning "this passed the gate" rather than "this is the newest
 thing somebody wrote".
 
@@ -265,8 +272,9 @@ design, not a mistake. Promote with `git -C /mnt/wakeywakey merge --ff-only dev`
 
 **Promoting to `master` now requires waiting for `dev`'s own CI run to finish (2026-09-24,
 docs/TODO.md T-40).** A GitHub ruleset on `refs/heads/master` (`gh api repos/.../rulesets/23728728`)
-requires `ci.yml`'s seven `dev`-push checks - all six `Analyze & Test (TZ=...)` timezone legs plus
-`Build Android (development)` - to already show `success` for a commit's SHA before that commit can
+requires seven of `ci.yml`'s `dev`-push checks - the original six `Analyze & Test (TZ=...)` timezone
+legs (UTC, Berlin, Tokyo, St. John's, Chatham, Lord Howe; the four DST-shape legs added 2026-09-28
+are not required, see below) plus `Build Android (development)` - to already show `success` for a commit's SHA before that commit can
 be fast-forwarded onto `master`. This is enforceable specifically because it targets checks that run
 on `dev` (already complete by promotion time, since promoting is a later, separate action from the
 `dev` push) rather than `master`'s own checks, which cannot possibly exist before the push that would
@@ -337,7 +345,9 @@ Four workflows under `.github/workflows/`:
   `test/no_proprietary_dependencies_test.dart` cannot see, and exactly how `mobile_scanner` brought
   in ML Kit before T-33 removed it.
 - **`release.yml`** is triggered by a `v*.*.*` tag or `workflow_dispatch` and gates its signed
-  build on **both** `e2e-tests` and `security-gate`.
+  build on **both** `e2e-tests` and `security-gate`. It attaches exactly one asset to the GitHub
+  Release, `crescendo-alarm-vX.Y.Z.apk` (named by the workflow itself since v1.4.0 - never Flutter's
+  generic `app-release.apk`).
 
   **Process rule, not a GitHub-enforced one (docs/TODO.md T-40, decided 2026-09-24): never tag a
   release until `ci.yml`'s own `master`-push run for that exact commit is confirmed green.** Nothing
@@ -348,7 +358,7 @@ Four workflows under `.github/workflows/`:
   gap left open by oversight. `release.yml` re-verifies everything independently at tag time
   regardless (it calls its own `security-gate`/`e2e-tests`, not `ci.yml`'s results), so a bad tag
   still cannot produce a signed release - this rule isn't about that safety, which already exists.
-  It's about not burning the ~45-minute/billed-minutes `master` gate a second time, on a tag, for a
+  It's about not burning the ~45-minute `master` gate (billed minutes while the repository was private) a second time, on a tag, for a
   commit already known to be red on `master` - precisely the mistake that emptied this account's
   Actions minutes in September 2026 (see "Branches and where work happens" above). Deliberately kept
   as a process rule rather than a second GitHub ruleset on `refs/tags/v*.*.*` (which would be
@@ -385,8 +395,10 @@ Two things about the test job that are easy to undo by accident:
 `.github/scripts/run_e2e_tests.sh` sets the emulator's timezone to `Europe/Berlin` before the app
 first runs - injecting `deviceUtcOffset` in a test is **not** a substitute, because that value only
 travels through the domain layer while `alarmPlatformTime` reads the real device zone. It also runs
-`check_alarm_survival.sh` (reboot/force-stop evidence via `dumpsys alarm`, deliberately
-non-gating until it has been green once - `docs/TODO.md` T-93).
+`check_alarm_survival.sh` (reboot/force-stop evidence via `dumpsys alarm`, non-gating -
+`docs/TODO.md` T-93; and per T-131 it structurally cannot go green there, because `flutter test`
+uninstalls the app, and Android drops its alarms with it, before the measurement - R3 is measured
+on a real phone instead, see below).
 
 `scripts/security-scan.sh` mirrors part of the pipeline locally (analyze + osv-scanner against
 `pubspec.lock` + `trufflehog git` against the full history) but is narrower than CI - no
@@ -451,9 +463,9 @@ Run the E2E suite locally with a connected device or running emulator:
 | Flutter | 3.47.2 (stable) | `fvm` used to pin this on the dev VM |
 | Dart | 3.13.2 | bundled with the above Flutter |
 | JDK | 17 (OpenJDK) | required by AGP 9.x / Gradle 9.x |
-| Gradle | 9.3.1 | `android/gradle/wrapper/gradle-wrapper.properties` |
-| Android Gradle Plugin (AGP) | 9.1.0 | `android/settings.gradle.kts` |
-| Kotlin Gradle Plugin | 2.4.0 | `android/settings.gradle.kts` |
+| Gradle | 9.7.1 | `android/gradle/wrapper/gradle-wrapper.properties` |
+| Android Gradle Plugin (AGP) | 9.4.1 | `android/settings.gradle.kts` |
+| Kotlin Gradle Plugin | 2.4.20 | `android/settings.gradle.kts` |
 | compileSdk | 36 (Flutter default) | no override any more - see "compileSdk override ... (removed)" below |
 | minSdk | 24 (pinned explicitly) | `android/app/build.gradle.kts` - was intended to stay below Flutter's own default (also 24, coincidentally, on current Flutter) for older-device support, but MobSF found the *compiled* APK's merged manifest already enforced minSdk=24 regardless, because several plugins (`image_picker_android`, `shared_preferences_android`, `flutter_plugin_android_lifecycle`) declare `minSdk=24` in their own Gradle modules, and manifest merging always takes the highest value across the app + all dependencies. Pinned explicitly to 24 to match the real enforced floor instead of leaving a misleadingly lower number. Also: this value has silently regressed to `flutter.minSdkVersion` (dropping any pin at all) more than once in this project's history - if you ever intend to actually push it lower than 24 again, you'd first need to downgrade those three plugins, not just change this line. |
 | targetSdk | 36 (Flutter default, `flutter.targetSdkVersion`) | |
@@ -509,8 +521,8 @@ standing rules rather than history:
   `pubspec.yaml` and every import in `lib/` - adding a name to its list is a licence decision, and
   each entry says why.
 - **Corresponding Source is provided by making the repository public at the first public release**
-  (T-34), not by a written offer. Until that release nothing is conveyed: builds go to the
-  maintainer's own test devices.
+  (T-34), not by a written offer. Met since 2026-09-20: the repository is public, and every GitHub
+  Release (v1.0.0 onward, v1.4.0 the latest) is built by `release.yml` from a tagged commit in it.
 
 ## PII policy
 
@@ -523,9 +535,9 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **786 tests across 115 files** (2026-09-28, T-206), and CI runs them ten times over -
+`flutter test` currently runs **786 tests across 115 files** (2026-09-29, T-206; CI run 36577695280), and CI runs them ten times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
-tests for native code (29 as of T-198, `SleepTimeDndPolicyTest`), run with
+tests for native code (27 as of T-203, `SleepTimeDndPolicyTest`), run with
 `cd android && ./gradlew :app:testDebugUnitTest` (locally from the native-filesystem worktree, and in
 `ci.yml`'s `build-dev-apk` job).
 
@@ -650,6 +662,12 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   `replan_notifications_test.dart`, `app_state_scheduling_v2_test.dart`, `day_marker_test.dart`,
   `stored_values_test.dart`, `handler_replan_wiring_test.dart`,
   `handler_on_alarm_handled_test.dart`, `sleep_reminder_always_scheduled_test.dart`) is written
+  test-first against `docs/scheduling-v2-spec.md`, with at least one `test()` per FR. Several files
+  are named after the `docs/TODO.md` item whose regression they pin down - keep that convention,
+  it is how a finding stays fixed. Note in particular that timezone/DST tests build their fixtures
+  as `tz.TZDateTime`, **not** `DateTime.utc`: the dev VM runs at UTC+0, so UTC-tagged fixtures
+  silently cannot reproduce the frame and DST bug classes at all (that is exactly how the first
+  attempts at T-61 and T-74d passed while the bug was still there).
 
 - T-206 (DST within one zone): the spec's verbatim bullets are in `scheduling_v2_test.dart` and
   `replan_test.dart`'s Checkpoint 2 group; derived pure cases in `t206_dst_planning_test.dart`
@@ -673,13 +691,7 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   through for its simplest case, and three of the four deviations lived in the part the worked
   example never reaches (a ΔT=0 point at position 2 rather than 1; the notification duty on the
   branch that assigns a hardFloor directly; the valve after it has already fired). Every group in
-  those two files carries at least one counter-test against overcorrection.
-  test-first against `docs/scheduling-v2-spec.md`, with at least one `test()` per FR. Several files
-  are named after the `docs/TODO.md` item whose regression they pin down - keep that convention,
-  it is how a finding stays fixed. Note in particular that timezone/DST tests build their fixtures
-  as `tz.TZDateTime`, **not** `DateTime.utc`: the dev VM runs at UTC+0, so UTC-tagged fixtures
-  silently cannot reproduce the frame and DST bug classes at all (that is exactly how the first
-  attempts at T-61 and T-74d passed while the bug was still there).
+  those files carries at least one counter-test against overcorrection.
 
 - `test/widget_test.dart`: a real, passing smoke test (builds `MyApp` under its required
   `ChangeNotifierProvider<AppState>`, mocks `SharedPreferences`, checks the splash screen renders).
@@ -758,7 +770,8 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   layer (persistence, scheduling filter, tile colour, tap-to-toggle UI), the same shape as the
   disabledDays/FR-21 tests elsewhere in this list.
 - `integration_test/app_test.dart`: real end-to-end tests, driven against an actual Android
-  emulator in `.github/workflows/release.yml`'s `e2e-tests` job, gating the signed release build.
+  emulator by the reusable `.github/workflows/e2e-tests.yml` - on every `master` push (`ci.yml`) and
+  in `release.yml`, gating the signed release build in both.
   Seven scenarios are covered. Three predate scheduling-v2: a manual alarm firing and being
   dismissed via the default overlay, one dismissed via an injected QR scan result, and a created
   alarm read back after app state is rebuilt (see `docs/TODO.md` T-04 for why that last one proves
@@ -773,9 +786,10 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   and its detection patterns are still being locked down against real evidence, T-99).
   `integration_test/silent_notification_test.dart` (T-62) is likewise a one-test, non-gating leg:
   it schedules a real title/body-less notification and waits for `onNotificationCreatedMethod` to
-  rewrite a sentinel value, confirming on a real device that FR-16 Checkpoint 2's entry point
-  actually fires at all - previously only "verified from the package source" with no device to
-  check it on.
+  rewrite a sentinel value. It cannot confirm FR-16 Checkpoint 2 at bedtime: per T-199 the callback
+  already fires when the notification is *scheduled*, so the leg cannot tell "fires at scheduling"
+  from "fires when due". It has not passed in CI so far either (it failed in run 36408813857, the
+  v1.4.0 `master` gate) - T-62 stays open.
   All seven `app_test.dart` scenarios **have now run green on a real emulator** (CI run
   34532845207, `🎉 7 tests passed`, with `applyPlannedAlarms: removed 0, added 7` in the device
   log) - that run is what closed T-91, so don't describe the engine as never having been on a
@@ -787,21 +801,29 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   emulator-based suite (the CI emulator has no real camera to point at a code).
   `docs/device-trial-checklist.md` is the manual counterpart for exactly those gaps.
 - A real on-device run now happens on every release build - do not describe Android verification as
-  "build success plus static analysis only" going forward; that was true before the E2E work below
+  "build success plus static analysis only" going forward; that was true before the E2E work above
   and no longer is.
 
 ## Current APK
 
 **After every newly built feature, a `current.apk` is placed at the repository root** so the
 maintainer can flash the latest state without hunting for a CI artifact. It is gitignored - a
-build output, ~80 MB, changing with every feature.
+build output, ~190 MB as a debug build, changing with every feature.
 
-It is always *the current one*: overwrite it, never add versioned names beside it. Take the
-`app-production-apk` artifact from the newest **green** CI run containing the feature
-(`gh run download <run-id> -n app-production-apk`), verify it with `apksigner verify`, and report
-the SHA-256 so it is clear whether the file on disk is the one just described. Building locally is
-a fallback for when CI has not run yet - the CI build is the signed release build the release path
-actually produces.
+It is always *the current one* and always the **development build of `dev`** (maintainer decision,
+2026-09-26: the phone runs the newest `dev` features, not the last `master`/release state):
+overwrite it, never add versioned names beside it. Take the `app-development-apk` artifact from the
+newest **green** `dev` CI run containing the feature (`gh run download <run-id> -n
+app-development-apk` - `ci.yml`'s `build-dev-apk`, `flutter build apk --debug`, kept 5 days), not a
+`master` run's `app-production-apk`. Verify it with `apksigner verify --print-certs`: the signer must
+be the shared dev key (T-187; `CN=Android Debug`, certificate SHA-256
+`2336317c646fbe706ed36ef52b57c2abaf17bb06b7b71ccef5fde935f24b5dfc`) - only that signature updates
+the installed app in place, any other one fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` until the
+app is uninstalled (losing its data). Report the APK's SHA-256 so it is clear whether the file on
+disk is the one just described. Building locally (`flutter build apk --debug` in the
+native-filesystem worktree) is the fallback when CI has not run yet, and carries that signature only
+with `android/app/keystore/crescendo-alarm-dev.jks` in place (see `build-dev-apk` above). Signed
+production APKs are what `release.yml` attaches to a GitHub Release, not `current.apk`.
 
 ## Quality baseline snapshot
 
@@ -821,7 +843,11 @@ production push), `licence-position.md` (the tracked GPLv3 decision for R8/R9 - 
 position" above), `TODO.md` (every known open task, prioritised, with evidence and an acceptance
 criterion - the living record of what's actually wrong or missing, as opposed to the two frozen
 snapshots above), `device-trial-checklist.md` (the manual counterpart to the E2E suite, with a
-result field per line), `scheduling-v2-spec.md` (FR-1 … FR-21), plus `personas.md`, `use-cases.md`
+result field per line), `scheduling-v2-spec.md` (FR-1 … FR-21; FR-19 was discarded, T-134),
+`timezone-requirements.md` (TZ-1 … TZ-9, what is and is not promised about daylight saving and
+travel), `t206-dst-requirements.md` (T-206's requirement/test ids cited in tests and `lib/`),
+`USER_GUIDE.md` (every screen and control, for end users), the point-in-time
+`security-assessment-2026-09.md`, plus `personas.md`, `use-cases.md`
 and `choice-of-technologies.md` from the original project planning. Those three markdown documents
 predate the finished app and have been annotated inline where they describe features that were
 planned but never implemented (e.g. NFC-tag deactivation) or claims that no longer hold - don't
@@ -921,7 +947,7 @@ of judgement, not diligence.
 **Mandate:** given one specific SAST/security finding, determine whether it is a real, exploitable
 risk or a scanner false-positive/theoretical-only finding, and recommend one of exactly two
 outcomes: **accept** it into `.github/security-exceptions.json` with a dated, technically-grounded
-rationale (the established pattern - see that file's own two existing entries), or **fix** it, with
+rationale (the established pattern - see that file's existing entries), or **fix** it, with
 a concrete description of what the fix would look like and what it would cost to build and maintain.
 No third option ("investigate further later") unless the finding is genuinely still unresolved after
 real technical digging - Philipp's whole value is closing that loop, not deferring it again.

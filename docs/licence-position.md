@@ -45,10 +45,12 @@ entry says why.
 
 The remaining direct dependencies are BSD-3, MIT or Apache-2.0 - the permissive licences GPLv3
 absorbs without further conditions. That includes the Flutter SDK and first-party plugins
-(`shared_preferences`, `permission_handler`), `alarm`, `audioplayers`, `device_calendar`,
+(`shared_preferences`, `path_provider`), `permission_handler`, `alarm`, `audioplayers`, `device_calendar`,
 `awesome_notifications`, `provider`, `timezone`, `intl`, `qr_flutter`, `uuid`,
 `flutter_colorpicker`, `flutter_markdown_plus`, and the two replacements themselves,
-`calendar_view` and `flutter_zxing`. (`camera` and `image_picker` are no longer declared directly -
+`calendar_view` and `flutter_zxing`. `file_picker` (MIT, `docs/TODO.md` T-146, the custom-tone
+import) and `flutter_launcher_icons` (MIT, icon-generation tooling declared as a main dependency
+but never imported by `lib/`) are direct dependencies too. (`camera` and `image_picker` are no longer declared directly -
 they arrive with `flutter_zxing`. The two permissions stripped from the manifest both come from
 `camera_android_camerax`, not from `image_picker`; see `docs/TODO.md` T-49.)
 
@@ -65,12 +67,14 @@ test alone to catch: `barcode`/`pdf_widget_wrapper` (Apache-2.0), `bidi`/`path_p
 GPLv3-compatible.
 
 `flutter_zxing` additionally compiles third-party C/C++ into the app - zxing-cpp (including its
-bundled "librscpp" Reed-Solomon implementation) under Apache-2.0, and zint under BSD-3. All
-GPLv3-compatible, so the claim above holds for them too. (An earlier pass through this document
-also listed "libzueci" as a fourth, separately-vendored body under BSD-3 - re-checked against
-`flutter_zxing` 3.0.1's actual vendored source for T-142 and found to be a misreading: zint's own
-BSD-3 files reference "zueci-compatible" data tables in a comment, but no separate zueci source
-or build target is vendored at all. Two bodies, not four.)
+bundled "librscpp" Reed-Solomon implementation) under Apache-2.0, **libzueci** (BSD-3-Clause,
+"Copyright (C) 2022 gitlost", `core/src/libzueci/zueci.c`, built by `core/CMakeLists.txt` whenever
+readers are enabled) and zint under BSD-3. All GPLv3-compatible, so the claim above holds for them
+too. *(Corrected 2026-10-01: an earlier version of this paragraph said, after a re-check for
+T-142, that no separate zueci source is vendored - that was wrong; `flutter_zxing` 3.0.1 vendors and
+compiles it. Its BSD-3 notice is therefore still missing from `assets/text/NativeCodeNotices.txt`,
+as are those of smaller embedded pieces the 2026-10-01 FOSS audit found - a notice gap, not a
+licence conflict.)*
 
 What this document does **not** claim: that every transitive dependency has been individually
 audited. R8 scopes that out deliberately. The claim is narrower and checkable - no dependency in
@@ -91,10 +95,12 @@ GitHub Release the same day - a signed, `apksigner`-verified production APK (the
 key, not the debug key), built from the tagged commit. Before that, nothing had been conveyed to
 third parties: builds went only to the maintainer's own test devices, which is not distribution.
 
-Three further pieces of the same obligation, tracked separately because they are real work rather
-than decisions: the app still has no in-app licence/notice surface for its dependencies
-(`docs/TODO.md` T-36), the per-file licence headers question is open (T-48), and the notices for
-the statically linked native code (`docs/TODO.md` T-142) - **fixed 2026-09-19**. Flutter's licence
+Three further pieces of the same obligation, tracked separately because they were real work rather
+than decisions - all three done: an in-app licence/notice surface (`docs/TODO.md` T-36, **fixed
+2026-09-18** - the About page links the project's own GPLv3 text and Flutter's collected
+third-party notices), per-file GPLv3 headers in every `lib/` source (T-48, **fixed 2026-09-19**,
+guarded by `test/licence_header_test.dart`), and the notices for the statically linked native code
+(`docs/TODO.md` T-142) - **fixed 2026-09-19**. Flutter's licence
 collector reads package-root `LICENSE` files and cannot see C++ compiled by CMake, so this needed
 its own surface: `assets/text/NativeCodeNotices.txt`, hand-assembled from the vendored source's own
 SPDX headers and licence files, reproducing the full Apache-2.0 text (zxing-cpp/librscpp) and the
@@ -103,6 +109,9 @@ Notices" button, the same pattern T-36 established for this app's own GPLv3 text
 
 ## Bundled assets
 
-Separate from code licensing and still open: the provenance of `assets/sounds/*.mp3` and the icon
-assets is not recorded (`docs/TODO.md` T-29, requirement R10). Nothing here asserts they are
-cleared.
+Separate from code licensing, and **not met** (requirement R10): the six bundled alarm tones
+(`assets/sounds/*.mp3`) are Mixkit items under the Mixkit Sound Effects Free License, which forbids
+redistributing an item on its own - so they are **not free** and are to be replaced
+(`docs/TODO.md` T-212). (They replaced, on 2026-09-17, earlier files with no licence at all, which
+were also removed from git history - T-29.) The icon assets are the maintainer's own
+(AI-generated) content.

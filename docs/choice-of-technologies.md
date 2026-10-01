@@ -30,10 +30,13 @@
 - **`shared_preferences`** is the only persistence layer: every piece of app state -
   settings, the scheduled/manual alarm lists, the deactivation code, the diagnostics
   log's ring buffer - is stored as on-device key-value pairs, read back through
-  `AppState`. No SQL/NoSQL database, no ORM, no schema migrations.
+  `AppState`. No SQL/NoSQL database, no ORM, no schema migrations. (The one exception:
+  imported custom alarm tones are copied as files into the app's own documents directory,
+  `docs/TODO.md` T-146.)
 - **The `alarm` plugin** (a thin wrapper around Android's own `AlarmManager`) is what
   actually "stores and serves" a wake-up: registering a real platform alarm that
-  survives reboot and force-stop (R3), not an app-level timer.
+  survives a reboot, not an app-level timer (R3 - whether it survives a force-stop is still
+  unresolved there).
 - **`awesome_notifications`** schedules the bedtime reminder (and the silent notification
   FR-16's Checkpoint 2 hangs off - but see docs/TODO.md T-199: its `onNotificationCreatedMethod`
   fires when a notification is scheduled, not when it comes due) via Android's own local

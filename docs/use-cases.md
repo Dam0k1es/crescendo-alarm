@@ -1,9 +1,8 @@
 > Note (2026-09): items marked **not implemented** below were planned but
-> didn't make it into the shipped app. A few other items are annotated as
-> shipped but not working as described (a UI control exists but the
-> underlying behaviour is a no-op, or a stub) - those are tracked as bugs in
-> `docs/TODO.md`, not planning gaps. Everything else reflects real,
-> implemented, working features.
+> didn't make it into the shipped app. Two items were once annotated as
+> shipped but not working (the disable switch, the share/print stub); both
+> have since been fixed, as their annotations say. Everything else reflects
+> real, implemented, working features.
 
 # FEATURES
 
@@ -30,8 +29,9 @@
 
 - Edit alarm
 
-- Disable alarm (**shipped as a UI switch, but currently a no-op** - toggling it off does not
-  actually cancel the underlying alarm; see `docs/TODO.md` T-03)
+- Disable alarm (**fixed 2026-09-16**, `docs/TODO.md` T-03 / FR-21: the switch used to be a no-op;
+  switching off now cancels the armed alarm, for scheduled and manual alarms alike, and it stays off
+  across re-plans and restarts)
 
 - Remove alarm
 
@@ -46,6 +46,9 @@
 - Preview of the Calendar to Sync with
 
 - Algorithm to calculate alarm time based on sleep goal, duration to wake up and duration to get ready
+  (**as shipped, the Sleep Goal does not feed the alarm time** - it only sets the bedtime for the
+  reminder and Do Not Disturb; the alarm time comes from the earliest appointment minus the two
+  durations, and the preferred wake-up time on days without one)
 
   
 
@@ -76,9 +79,9 @@
 - Disable Deactivation Code (**not implemented as distinct from removing it** - there is Generate
   and Remove, no way to keep a code stored but temporarily inactive)
 - Remove Deactivation Codes
-- Print Deactivation Code as QR Code (="QR Code") (**partially implemented**: the code is rendered
-  and displayed as a QR image on-screen; the "share/print" action is an explicit stub that shows
-  "This is a future feature!" and does nothing)
+- Print Deactivation Code as QR Code (="QR Code") (**implemented**, `docs/TODO.md` T-182: the code is
+  shown as a QR image, and **Share** (Android's share sheet) and **Print** (Android's print
+  framework) export it as a PNG)
 - Scan QR Code (**two roles, both implemented, and not limited to QR**: with a code already
   stored, a scan validates against it (the "guaranteed wake-up" gate); with none stored yet, a scan
   **adopts whatever code was just scanned as the new deactivation code, verbatim and with no

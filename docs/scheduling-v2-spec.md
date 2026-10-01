@@ -2,8 +2,9 @@
 
 > Status: designed, simulated multiple times, and checked for feasibility against the actual
 > code/real dependencies (Android, Flutter, `device_calendar`, `awesome_notifications`, `alarm`,
-> `timezone`). **Phases 0–5 implemented and subsequently consolidated (2026-09).**
-> 21 functional requirements (FR-1–21), each with an exact formula/exact procedure and at least
+> `timezone`). **Phases 0–6 implemented and subsequently consolidated (2026-09).**
+> 20 functional requirements (FR-1–FR-21; FR-19, a weekday/weekend concept, was discarded -
+> `docs/TODO.md` T-134), each with an exact formula/exact procedure and at least
 > one fully worked test case. Fully replaces `lib/models/scheduling/scheduling.dart`'s
 > `getEarliestEvent`/`adjustAlarmTimes`/`getStartTimeForDate`, not just in part.
 > In keeping with the project-wide TDD principle (`CLAUDE.md`, "Development process"), each FR
@@ -42,7 +43,10 @@
 >
 > **Still open:** `docs/TODO.md` T-62 (whether `onNotificationCreatedMethod` is actually triggered
 > by a silent notification is not yet confirmed on a real or emulated device - "recommended" per
-> spec, not a TDD blocker) and Phase 6 (retiring the old `Scheduler`, `docs/TODO.md` T-64/T-86).
+> spec, not a TDD blocker) and T-199 (per the plugin's source, that callback fires when a
+> notification is *scheduled*, in the main isolate - so FR-16's Checkpoint 2 does not run at the
+> bedtime instant). Phase 6 (retiring the old `Scheduler`, `docs/TODO.md` T-64/T-86) is done:
+> `scheduling.dart` no longer exists.
 >
 > **T-206 (2026-09-28): daylight saving within one zone.** FR-1 is rewritten; FR-2, FR-3, FR-4,
 > FR-5, FR-6, FR-10, FR-11, FR-16 and FR-21 are amended. Planned wall-clock values are planned as
@@ -559,14 +563,17 @@ actually reachable - not immediate in the literal sense.
 
 ## FR-13 — `getStartTimeForDate` with several appointments
 
+*(Named after the removed old engine's function; the rule now lives in `hardFloor`, FR-2.)*
+
 Unchanged: if a day has several non-all-day appointments, only the earliest counts toward
 `hardFloor`.
 
 ## FR-14 — `durationToWakeUp`/`durationToGetReady`
 
 Unchanged, already decided before this document: `durationToWakeUp` is only counted under the
-assumption of an existing snooze mechanism (`docs/TODO.md` T-18, unimplemented) - the exact
-calculation itself is not the subject of this specification.
+assumption of an existing snooze mechanism - since implemented as FR-20 (`docs/TODO.md` T-138,
+which superseded T-18), with `durationToWakeUp` as its budget. The exact calculation itself is not
+the subject of this specification.
 
 ## FR-15 — `ManualAlarm` isolation
 
@@ -595,7 +602,8 @@ comparison), and compared with the offset at the previous checkpoint:
    `lib/screens/sleep_habits/screen_sleephabits.dart`) - **regardless of** whether the bedtime
    notification itself is enabled. Triggers **only** the time zone comparison and, on a detected
    change, the re-resolution below - **no** replanning, **no** calendar access. With an unchanged
-   offset it writes nothing but the offset.
+   offset it writes nothing but the offset. *(Not met as built: the checkpoint runs whenever a
+   notification is scheduled, not at this instant - `docs/TODO.md` T-199, open.)*
 
 **One rules source (T-206):** both checkpoints, and the planning they protect, take the offset from
 the **same** injected rules function (instant → UTC offset). Checkpoint 2 reads its offset as that
@@ -662,7 +670,10 @@ something actually appears in the status bar). This callback runs in its own bac
 **without** `AppState`/`Provider` access - `pendingDayValues`/`lastCheckedUtcOffset` must be
 read/written directly via `SharedPreferences`. **Newly found caveat:** if the app has been fully
 terminated (force-quit), notification events are, per the package docs, only caught up at the next
-foreground/background start, not at the scheduled instant - see FR-17.
+foreground/background start, not at the scheduled instant - see FR-17. *(`docs/TODO.md` T-199,
+from the plugin's own bytecode: for a scheduled notification the callback fires at scheduling time,
+in the main isolate - never in a background isolate - and a silent notification produces no
+callback at all when it comes due.)*
 
 **Clarification (`docs/TODO.md` T-85d):** the registered listener fires for **every** notification
 created, not just the bedtime notification - also for the FR-6/FR-9/FR-12 warnings and (in debug
@@ -771,6 +782,7 @@ Platform entry points (existing code, adapted)
  lib/main.dart                    initState() / didChangeApp…    -> appForeground
  lib/screens/sleep_habits/…       every planning-relevant        -> settingsChanged
  lib/screens/settings/page_…      setting (tone, volume)
+ lib/screens/alarms/screen_alarms Sync button                    -> manualSync
  lib/utils/notifications.dart     onNotificationCreatedMethod()  -> checkpoint 2 only
         │ calls
 THE entry point (lib/models/scheduling/checkpoint.dart)
@@ -783,7 +795,8 @@ AppState-aware orchestration (lib/models/scheduling/replan.dart)
  replan(AppState)                 reads the calendar uncached (T-60), calls FR-8,
                                   day-advance (FR-9/FR-12), applies FR-18
  runTimezoneCheckpoint2(...)      FR-16 checkpoint 2 - reads/writes
-                                  SharedPreferences directly (background isolate)
+                                  SharedPreferences directly (built for a background
+                                  isolate; runs in the main one, T-199)
         │ calls
 Pure domain logic (lib/models/scheduling/scheduling_v2.dart)
  hardFloor, eventsForDay (FR-2) · distribute (FR-6) · groupTarget (FR-5)
@@ -810,12 +823,13 @@ flowchart TD
     A["Alarm rings<br/>Handler.handleAlarm()"] -->|alarmRing| RC[runSchedulingCheckpoint]
     B["App foreground<br/>initState() / Resume"] -->|"appForeground<br/>(lastReplanDate ≠ today?)"| RC
     S["Setting changed"] -->|settingsChanged| RC
+    M["Sync button"] -->|manualSync| RC
     RC --> TZ["FR-16 checkpoint 1:<br/>record offset"]
     RC --> RP["replan():<br/>read calendar (uncached) + FR-8"]
     RP --> AP["applyPlannedAlarms<br/>(FR-18)"]
     RC --> NO["report FR-6/9/12"]
     RC --> SR["bedtime notification<br/>(FR-16 precondition)"]
-    C["Bedtime instant<br/>onNotificationCreatedMethod()<br/>(background isolate)"] --> TZ2["FR-16 checkpoint 2:<br/>time zone check ONLY"]
+    C["Notification scheduled (T-199: not at<br/>the bedtime instant)<br/>onNotificationCreatedMethod()"] --> TZ2["FR-16 checkpoint 2:<br/>time zone check ONLY"]
     RP --> PD[(pendingDayValues<br/>pendingDayInstantAnchored<br/>lastReplanDate<br/>lastProcessedConcludedDay)]
     AP --> AL[(ScheduledAlarms<br/>+ alarm plugin)]
     SR --> C
@@ -825,14 +839,14 @@ flowchart TD
 ```
 
 No dedicated trigger exists for calendar changes themselves (FR-11) - a changed appointment takes
-effect at the next checkpoint. All nine new `AppState` fields (FR-3) persist following an
+effect at the next checkpoint. All of FR-3's `AppState` fields persist following an
 already-proven pattern: `int`/`bool`/`String` directly via `setInt`/`setBool`/`setString`,
 `pendingDayValues`, `pendingDayInstantAnchored` and (T-206) `pendingDayClockTimes` via
 `jsonEncode`/`jsonDecode` (like `_scheduledAlarms` today) - no new persistence idea needed.
 
-**What disappears:** `lib/models/scheduling/scheduling.dart`'s current `getEarliestEvent`,
-`adjustAlarmTimes`, `getStartTimeForDate`, and the private `Scheduler` class. `docs/TODO.md` T-02
-and T-32 become moot as a result.
+**What disappeared** (Phase 6, 2026-09-10): `lib/models/scheduling/scheduling.dart`'s
+`getEarliestEvent`, `adjustAlarmTimes`, `getStartTimeForDate`, and the private `Scheduler` class.
+`docs/TODO.md` T-02 and T-32 became moot as a result.
 
 ## Implementation order
 
@@ -1035,7 +1049,8 @@ user to bed for a wake-up that never comes. Until this requirement, that functio
 ignoring of `enabled` as deliberate, precisely *because* the flag was known to be inert app-wide;
 that reasoning ends here.
 
-**Boundary:** `repeatOnDays` stays inert and is a separate matter (`docs/TODO.md` T-14). A
+**Boundary:** `repeatOnDays` stays inert and is a separate matter (`docs/TODO.md` T-14 - since
+resolved: repeat days are honoured and a repeating alarm re-arms itself on every dismiss). A
 switched-off alarm stays in the list and keeps its time — switching off is not deleting.
 
 - **Test:** switch a manual alarm off → the platform alarm with its id is stopped, no new one is

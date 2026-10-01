@@ -69,12 +69,15 @@ stay as they are. What changes is only what the app promises (`README.md`, `docs
       2026c) by a minute scan of both formulas: Europe/Berlin 25 Oct 2026 02:00 - old 00:00 UTC,
       corrected 01:00 UTC; Africa/Cairo 29 Oct 2026 23:00 (repeated 23:00-23:59) - old 20:00 UTC,
       corrected 21:00 UTC; every other reading checked (inside and outside both ranges, skipped
-      readings) is unchanged. `localWallClockInstant` gives the corrected values in both zones. `localWallClockInstant` (`lib/utils/wall_clock.dart`) implements R, correct
-    by proof under one assumption: a zone changes its offset at most once within ±30 h of the
-    reading (tzdata 2026c: the smallest spacing anywhere is 167 h). Since T-206 that body is
-    `resolveWallClock(w, offsetAt)`, which takes the zone's rules as a parameter and is the one
-    implementation of R; `localWallClockInstant` is a thin wrapper over the device's rules. The scheduling engine resolves its planned values with R as well, with the single
-    exception stated in TZ-2a.
+      readings) is unchanged. `localWallClockInstant` gives the corrected values in both zones.
+  - **Implementation.** `resolveWallClock(w, offsetAt)` (`lib/utils/wall_clock.dart`) implements R,
+    correct by proof under one assumption: a zone changes its offset at most once within ±30 h of the
+    reading (tzdata 2026c: the smallest spacing anywhere is 167 h). Since T-206 it takes the zone's
+    rules as a parameter and is the one implementation of R (its body was `localWallClockInstant`'s
+    until then; that is now a thin wrapper over the device's rules with no production caller, used
+    by tests only). Production code reaches R through `resolvePlannedClockTime` (R_plan) - the
+    scheduling engine's planned values and manual alarms alike - with the single exception stated
+    in TZ-2a.
   - Note: platform defaults do **not** match these rules (`java.time`: repeated hour → earlier
     occurrence, gap → shifted by the gap length, i.e. 03:30). The app must resolve these cases
     explicitly rather than relying on a default.
@@ -177,24 +180,26 @@ stay as they are. What changes is only what the app promises (`README.md`, `docs
   - Real-device evidence stays a manual step (`docs/device-trial-checklist.md`): the tests cannot
     show that Dart's local conversion reflects the phone's own tz database for future instants.
 
-State (2026-09-28):
+State (2026-09-29):
 
 - **TZ-1 - met** (`docs/TODO.md` T-202). Appointment/planned alarms keep their exact instant through
   every hand-off to the platform (the alarm plugin, including its own persisted copy; the app's
   alarm list; the Do Not Disturb window; the bedtime reminder). Manual alarms resolve the repeated
   and the skipped hour by the rule above, in one place (`lib/utils/wall_clock.dart`,
-  `localWallClockInstant`), using the device's zone rules.
+  `resolveWallClock`, reached through `resolvePlannedClockTime` since T-206), using the device's
+  zone rules.
 - **TZ-8 (DST part) - met for the change hour** (same fix): the window and the reminder are derived
   from the same instants as the alarms.
-- **TZ-2 / TZ-2a - met** (`docs/TODO.md` T-206, implemented 2026-09-28; **pending independent
-  review and the maintainer's acceptance**, and not yet confirmed on a device - the checklist line in
-  `docs/device-trial-checklist.md`). The planning engine plans wall-clock values as local readings
+- **TZ-2 / TZ-2a - met** (`docs/TODO.md` T-206, implemented 2026-09-29 and reviewed independently
+  the same day - "go with changes", both blocking items fixed; **not yet in a release, the
+  maintainer's acceptance is not recorded, and not yet confirmed on a device** - the checklist lines
+  F3/F4 in `docs/device-trial-checklist.md`). The planning engine plans wall-clock values as local readings
   and resolves each day with that day's own rules (`resolvePlannedClockTime`, R_plan), caps at an
   appointment on instants after that, measures `maxDailyDelta` and FR-6's warning on readings,
   assigns an appointment by the rules at its own instant, stores each day's planned clock time
   (`pendingDayClockTimes`), and FR-16's Checkpoint 2 re-resolves those instead of shifting by the
-  offset difference. Manual alarms use R_plan too (TZ-2a's scope). Until T-206's review closes,
-  "met" means: in code and in tests, all ten CI legs.
+  offset difference. Manual alarms use R_plan too (TZ-2a's scope). Until a real change has been
+  watched on a device, "met" means: in code and in tests, all ten CI legs.
 - **TZ-9 (DST part) - met, with one known limitation.** Tests derive the process zone's own
   2026/27 transitions at runtime and run under all ten CI zones; fixtures are `tz.TZDateTime` or
   injected zone rules. The all-zone sweep (`test/t206_dst_sweep_test.dart`, every zone with a

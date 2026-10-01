@@ -15,6 +15,7 @@ the point you actually need it:
   Alarms** on the **Alarms** tab.
 - **Exact-alarm scheduling** and **notifications** - requested upfront, since the app cannot do its
   one job (ring an alarm) without them.
+- **Do Not Disturb access** - only when you first switch on Sleep Habits > **Do Not Disturb**.
 
 ## Alarms
 
@@ -26,11 +27,12 @@ Alarms the app itself worked out from your calendar - see "How scheduling works"
 
 - **Toggle one off** with its switch - it stays in the list (so you can turn it back on), it just
   won't ring.
-- **Swipe right** on one to delete it outright.
+- **Swipe right** on one to delete it. The next re-plan (see below) creates it again from your
+  calendar and settings - to skip a day for good, use its switch instead.
 - **Swipe left** to delete every scheduled alarm at once (asks for confirmation first).
 - Tap the **sync** button (bottom right) to re-check your calendar and re-plan immediately, instead
-  of waiting for the next automatic checkpoint (an alarm ringing, the bedtime reminder, or opening
-  the app). This is also one of the two moments calendar access is requested, if you haven't
+  of waiting for the next automatic checkpoint (an alarm ringing, opening the app - at most once a
+  day - or changing a relevant setting). This is also one of the two moments calendar access is requested, if you haven't
   granted it yet.
 
 You cannot edit a scheduled alarm directly - it's recomputed from your calendar and Sleep Habits
@@ -44,8 +46,9 @@ Alarms you create yourself, independent of any calendar.
 - Tap **+** (bottom right) to add one.
 - Tap an existing alarm to edit it.
 - **Swipe right** to delete one, **swipe left** to delete all manual alarms (with confirmation).
-- The **switch** enables/disables it - unlike a scheduled alarm's switch, this one genuinely cancels
-  the underlying platform alarm.
+- The **switch** enables/disables it - like a scheduled alarm's switch, switching off cancels the
+  underlying platform alarm right away and the alarm stays in the list; switching on arms it for its
+  next occurrence.
 - A row of small day letters under the time shows which days it repeats on.
 
 **The add/edit dialog** offers:
@@ -197,13 +200,15 @@ Four tabs.
 ### Alarm Tones
 
 - Every bundled tone and every custom tone you've imported gets its own row: tap it to preview,
-  flip its switch to select it as your default tone (used by newly-created alarms and shown as an
-  option in every alarm's own tone picker).
+  flip its switch to select it as your default tone (used by scheduled alarms and newly-created
+  manual alarms, and shown as an option in every alarm's own tone picker).
 - **Add custom tone** (always at the bottom of the list) opens the system file picker
   (`.mp3`/`.wav`/`.m4a`/`.aac`/`.ogg`), then asks you to name it - pre-filled with the file's own
   name, so you usually don't need to type anything. You can import as many as you like; each one
   gets its own row.
-- **Volume** and **Vibration** apply to every alarm that doesn't override them individually.
+- **Volume** and **Vibration** are the defaults: scheduled alarms always use them, and a new manual
+  alarm starts with them. An existing manual alarm keeps the values it was created with (its own
+  Volume can be changed in its dialog).
 
 ### Appearance
 
@@ -218,7 +223,8 @@ compiled directly into the QR scanner).
 ### Diagnostics
 
 A local, privacy-free event log for troubleshooting - readable here and exportable via the
-clipboard if you need to report a problem. It never records anything that could identify you (no
+clipboard (**Copy**) if you need to report a problem. Recording is **off by default**: switch on
+**Record diagnostics** to start it; **Clear** deletes everything recorded so far. It never records anything that could identify you (no
 calendar titles, no account names, no exception text) - see the export's own header for exactly
 what mode produced it. Most of the log only ever records bucketed differences, never a clock time.
 
@@ -266,9 +272,13 @@ then included in anything you copy and share from this screen.
 
 ## When an alarm rings
 
-A full-screen ringing display shows the alarm's title, the current time, and:
+A full-screen ringing display shows today's date, the current time, and:
 
 - **Snooze** (if enabled and budget remains) - postpones the alarm by your configured snooze
   interval.
-- **Stop** - a big button that ends the alarm... unless a deactivation code is set, in which case it
-  opens the QR scanner instead, and you have to scan your code to actually stop it.
+- **Stop** - a big button that ends the alarm.
+
+If a deactivation code is set and the alarm requires it (every scheduled alarm; a manual alarm only
+with **Deactivation Code Required** on), the QR scanner appears instead of this display - with
+**Snooze** there too - and only scanning your code stops the alarm (see "Scan Code" above for the
+broken-camera fail-safe). The alarm's title is shown in its ringing notification.

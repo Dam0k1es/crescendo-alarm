@@ -12,9 +12,11 @@ what "should" be true.
 No SAST, SCA, or secret-scan finding at severity "high" or above may be outstanding.
 Medium/informational findings don't block a release but must be recorded and revisited.
 
-- **Checked by:** `flutter analyze`, `osv-scanner` and `trufflehog` run in the reusable
+- **Checked by:** `osv-scanner` and `trufflehog` run in the reusable
   `.github/workflows/security-gate.yml`, which both `ci.yml` (on `master`) and `release.yml` (on a
-  tag) call - so the tag path can no longer skip them (`docs/TODO.md` T-92). `mobsfscan` runs in
+  tag) call - so the tag path can no longer skip them (`docs/TODO.md` T-92). `flutter analyze` is
+  not part of that gate: it runs in `ci.yml`'s UTC `analyze-and-test` leg (every push) and in
+  `release.yml`'s build job. `mobsfscan` runs in
   the same gate and **is** gating since 2026-09: it runs with `--no-fail` only because its own exit
   code cannot tell an accepted finding from a new one, and `scripts/mobsfscan_check.py` then fails
   the job for anything not listed in `.github/security-exceptions.json`. The full MobSF scan of the
@@ -72,8 +74,9 @@ with the calendar screen.
     `_adjustAlarmTimes`' "discard most days and possibly schedule nothing" behaviour.
   - Checkpoints do **not** need the app to be open or the calendar screen visited: the primary one
     runs when an alarm actually rings (FR-8), in the process the alarm itself started. A second one
-    hangs off the bedtime notification (FR-16 Checkpoint 2, timezone check only), and a third runs
-    on app foreground as recovery after a reboot or force-quit (FR-17).
+    hangs off the bedtime notification (FR-16 Checkpoint 2, timezone check only - and, per
+    `docs/TODO.md` T-199, it actually fires when a notification is *scheduled*, not when it comes
+    due), and a third runs on app foreground as recovery after a reboot or force-quit (FR-17).
   - There is deliberately **no** periodic background worker - `docs/choice-of-technologies.md` and
     FR-16 both argue against one (battery, OEM-specific background limits); every checkpoint hangs
     off an event that is already scheduled anyway.
@@ -152,7 +155,10 @@ valve never needs to fire at all).
   an actual ring - that makes "alarm is registered" distinguishable from "no alarm registered",
   with no waiting time. It runs in the E2E job, **not yet gating**, because this behaviour on this
   emulator image has never been measured, and an unverified leg must not block a release.
-  `docs/device-trial-checklist.md` section C runs the same check on a real device.
+  `docs/device-trial-checklist.md` section C runs the same check on a real device. *(Answered
+  since, `docs/TODO.md` T-131: in CI the leg structurally cannot measure anything - `flutter test`
+  uninstalls the app, and Android drops its alarms with it, before the measurement - so R3 is
+  measured on a real phone with `scripts/verify-alarm-survival.sh`.)*
 - **First real run (34566962847, 2026-09-11): unusable as a measurement.** The counting pattern
   matched a foreign app's alarms (Google's `DailyLoggingAlarmReceiver`, via the substring
   `AlarmReceiver`) and reported a FAIL that proved nothing - the app's own alarm had never been
@@ -160,10 +166,11 @@ valve never needs to fire at all).
   instead of guessing from text, and the script checks itself against recorded output before every
   measurement. **The question therefore remains unanswered** - it has only become measurable. Read
   this requirement's status as "still not measured", not "fails reboot".
-- **Already derivable from the code:** the app has **no** `BootReceiver` of its own; the `alarm`
-  plugin registers one and re-arms the stored alarms after boot via
-  `setExactAndAllowWhileIdle(RTC_WAKEUP, …)`. Reboot survival is implemented there - only the
-  evidence is missing.
+- **Already derivable from the code:** the `alarm` plugin registers a `BootReceiver` and re-arms the
+  stored alarms after boot via `setExactAndAllowWhileIdle(RTC_WAKEUP, …)`. Reboot survival is
+  implemented there. *(Since 2026-09-20 the app also has a receiver of its own,
+  `DirectBootReceiver`, for the locked-after-reboot fallback below (T-158) and for re-arming the
+  sleep-time Do Not Disturb alarms (T-198); and the reboot leg has real-device evidence, above.)*
 - **Adjacent defect found and fixed (2026-09-18, `docs/TODO.md` T-147):** not a triggering failure,
   but the same "still ready after the app was left alone" theme on the tail end - an alarm stopped
   via its notification (swipe-dismiss, no app UI open) left the ring screen stuck showing on
@@ -313,8 +320,8 @@ and the calendar entries the user explicitly grants access to.
 
 - **Checked by:** manual security review, findings recorded here directly rather than in an
   untracked file:
-  - No network SDKs are used from `lib/` (though see R7 on the app's declared `INTERNET`
-    permission).
+  - No network SDKs are used from `lib/`, and the release build declares no `INTERNET`
+    permission (see R7).
   - No filesystem access outside the app's own sandbox. The QR-from-gallery path that
     `READ_EXTERNAL_STORAGE` existed for is gone (`docs/TODO.md` T-44), and the replacement
     scanner's own gallery button is switched off; `WRITE_EXTERNAL_STORAGE`, which its transitive
@@ -352,9 +359,10 @@ No user data leaves the device. The app must be GDPR-compliant.
   audio stack) and `awesome_notifications`' transitive transport libraries, neither used by
   anything network-related in this app, and stripped with `tools:node="remove"` the same way
   `RECORD_AUDIO`/`WRITE_EXTERNAL_STORAGE`/`READ_EXTERNAL_STORAGE` already were. Confirmed absent
-  from a real release build's manifest; **not yet confirmed that removing it leaves tone/gentle-wake/
-  custom-tone playback unaffected on a real device** - `media3` uses `ConnectivityManager`
-  internally, so this is a real, if small, risk rather than a formality. A network capture during
+  from a real release build's manifest, and **confirmed on a real device the same day**
+  (`docs/TODO.md` T-49): `media3` uses `ConnectivityManager` internally, so the maintainer ran tone
+  selection, the gentle-wake ramp and a custom tone in four real-device scenarios on that build, and
+  audio played correctly in every one. A network capture during
   an E2E run remains the other piece that would close this requirement fully. GDPR compliance
   otherwise follows straightforwardly from "no data ever leaves the device," but this hasn't been
   reviewed by anyone with actual legal expertise - treat "met" here as a technical assessment, not
@@ -404,7 +412,9 @@ licensing obligations must be met.
   Apache-2.0/BSD-3 notices for `flutter_zxing`'s compiled-in native code (zxing-cpp/librscpp, zint)
   were also missing - invisible to Flutter's own licence collector, which only reads package-root
   `LICENSE` files, not CMake-compiled C/C++ - and are now shipped as a hand-assembled asset,
-  reachable from the same About page (`docs/TODO.md` T-142). **Fixed (2026-09-19):** every `.dart`
+  reachable from the same About page (`docs/TODO.md` T-142) - *except libzueci (BSD-3), which
+  `flutter_zxing` also compiles in and whose notice is still missing (found 2026-10-01, see
+  `docs/licence-position.md`)*. **Fixed (2026-09-19):** every `.dart`
   source under `lib/` now carries a GPLv3 copyright/licence header, guarded against regressing by
   `test/licence_header_test.dart` (`docs/TODO.md` T-48). An automated `license_checker`-style scan
   remains worth adding as a second line of defence for the dependency tree specifically.
@@ -414,7 +424,11 @@ licensing obligations must be met.
 Images, audio, and other bundled assets (`assets/`) must be used with proper rights/licensing.
 
 - **Checked by:** not currently automated or documented.
-- **Status: met (2026-09-18).** `assets/sounds/*.mp3`: all six bundled tones were traced by
+- **Status: not met - non-free, to be replaced (`docs/TODO.md` T-212; corrected 2026-10-01).** The
+  six bundled tones are Mixkit items under the Mixkit Sound Effects Free License, which forbids
+  redistributing an item on its own; that is not a free licence, and `assets/sounds/CREDITS.md`'s
+  "the only restriction is reselling" understated it. The "met" recorded below rested on that
+  reading. History: all six bundled tones were traced by
   metadata (ID3 tags identified a YouTube-rip and a meme remix with no redistribution licence among
   them - see `docs/TODO.md` T-29) and replaced with Mixkit Sound Effects Free License tracks,
   recorded per-file in `assets/sounds/CREDITS.md`. The old, unlicensed blobs were also removed from
@@ -456,6 +470,14 @@ working contact method.
   own "met" status had been carried forward against a policy that misnamed the product it describes.
   Fixed, and now guarded by `test/privacy_policy_branding_test.dart` so a future rename cannot miss
   this file silently again.
+- **Corrected again (2026-10-01, documentation review):** the policy still described the
+  diagnostics log as always kept, although all diagnostics recording has been off by default since
+  `docs/TODO.md` T-173 (2026-09-25); it called the deactivation code "locally-generated" and the
+  camera a validation-only tool, although a code can be imported from any scanned code (R13); it did
+  not mention imported custom tones (T-146), the calendar/event choices (T-53, T-149) or the code's
+  note (T-150) it stores; and its "declares no internet-access permission" holds for the release
+  build only - debug builds carry Flutter's development `INTERNET` permission. All fixed in
+  `assets/text/Privacy.md`.
 
 ## R12 - The project is human-readable and quickly understandable
 
@@ -506,8 +528,8 @@ match any particular format or symbology.
 
 ---
 
-**Summary of open gaps (R3, R4 partial, R7 partial):** R1 is **no longer** among them (2026-09-24) -
-see R1's own status below; R2 is **no longer** among them either - the scheduling-v2 rebuild (2026-09)
+**Summary of open gaps (R3, R4 partial, R7 partial, R10):** R1 is **no longer** among them (2026-09-24) -
+see R1's own status above; R2 is **no longer** among them either - the scheduling-v2 rebuild (2026-09)
 replaced the old engine wholesale and is covered by unit tests; see R2 above for the one remaining
 caveat, which is really R3. R3 and part of R4 are no longer explained by "no build has ever run on a
 device or emulator" - that build now happens on every release and has surfaced what's actually still
@@ -521,6 +543,8 @@ are not open-source, and GPLv3 obligations for the distributed APK were unaddres
 resolved as of 2026-09-17: both dependencies were replaced rather than covered by a licence
 exception, and `docs/licence-position.md` records the decision. R9's one remaining condition -
 the repository has to be public before the APK reaches anyone else - is met as of 2026-09-20
-(`docs/TODO.md` T-34): the repository is public and `v1.0.0` has been released. R10 remains a separate, still-open documentation gap (asset provenance). See
+(`docs/TODO.md` T-34): the repository is public and `v1.0.0` has been released (`v1.4.0` is the
+latest). R10 is **not met**: the bundled Mixkit tones are non-free and are to be replaced
+(`docs/TODO.md` T-212). See
 `docs/TODO.md` for the full, prioritised, evidence-backed list every one of these gaps is now
 tracked under.

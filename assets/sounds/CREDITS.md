@@ -1,9 +1,17 @@
 # Sound credits
 
 All six alarm tones bundled here are from [Mixkit](https://mixkit.co/), under the
-[Mixkit Sound Effects Free License](https://mixkit.co/license/#sfxFree) (free for personal and
-commercial use, no attribution required; the only restriction is reselling a Mixkit file
-unmodified as a standalone product, which does not apply to bundling it as an app asset).
+[Mixkit Sound Effects Free License](https://mixkit.co/license/#sfxFree). Each file is byte-identical
+to the Mixkit preview listed below.
+
+**That licence is not a free licence** (corrected 2026-10-01, `docs/TODO.md` T-212). An earlier
+version of this file said its only restriction was reselling a file unmodified; that was wrong. The
+licence text says "You can't redistribute the Item on its own, as stock, in a tool or template, or
+with source files", and Mixkit's user terms grant only a non-exclusive, terminable licence and
+forbid making an item available to third parties. A public source repository and an F-Droid source
+tarball do exactly that. These files therefore have to be replaced with freely licensed tones
+(CC0, CC-BY or CC-BY-SA) before the app can be submitted to F-Droid; until then they are tracked as
+a licence defect, not as accepted.
 
 | File | Mixkit title | Source |
 |---|---|---|
