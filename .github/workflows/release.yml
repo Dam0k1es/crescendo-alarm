@@ -39,7 +39,7 @@ jobs:
       # implies read, so no separate contents: read entry is needed).
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -162,7 +162,7 @@ jobs:
       contents: read
       actions: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Delete superseded release.yml artifacts
         env:
           GH_TOKEN: ${{ github.token }}
