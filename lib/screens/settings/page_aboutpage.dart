@@ -23,7 +23,10 @@ import 'package:crescendo_alarm/screens/settings/page_native_notices.dart';
 
 /// Settings > About: the bundled privacy policy (`assets/text/Privacy.md`),
 /// plus the app's own licence, Flutter's collected third-party licences and
-/// the native-code notices (docs/TODO.md T-36, T-142).
+/// the native-code notices (docs/TODO.md T-36, T-142). Notices the collector
+/// cannot find itself (native code, Material Icons, Android libraries, media
+/// credits) are added to that list by lib/utils/licence_notices.dart
+/// (T-213).
 class PageAboutpage extends StatelessWidget {
   const PageAboutpage({super.key});
 

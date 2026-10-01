@@ -96,6 +96,10 @@ jobs:
           "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --verbose \
             build/app/outputs/flutter-apk/app-release.apk
 
+      - name: No dependency-metadata block in the APK (F-Droid, T-213)
+        # docs/TODO.md T-213: see ci.yml's build-android-release job.
+        run: python3 scripts/check_apk_dependency_block.py build/app/outputs/flutter-apk/app-release.apk
+
       - name: Scan native Android dependencies (osv-scanner)
         # docs/TODO.md T-148: see ci.yml's build-android-release job for the
         # full rationale - the pubspec.lock-only osv-scanner step never
@@ -109,6 +113,23 @@ jobs:
         # docs/TODO.md T-144: see ci.yml's build-android-release job for the
         # full rationale - reuses the SBOM generated above.
         run: python3 scripts/check_proprietary_native_deps.py build/app/reports/cyclonedx/bom.json
+
+      - name: Android library notices match the SBOM (T-213)
+        # docs/TODO.md T-213: see ci.yml's build-android-release job.
+        run: |
+          python3 scripts/gen_android_library_notices.py \
+            build/app/reports/cyclonedx/bom.json \
+            --check assets/text/licences/AndroidLibraries.txt
+
+      - name: Upload SBOM
+        # docs/TODO.md T-213 (G3): the native dependency set of the release.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-sbom
+          path: build/app/reports/cyclonedx/bom.json
+          if-no-files-found: warn
+          retention-days: 90
 
       - name: Clean up signing key
         if: always()

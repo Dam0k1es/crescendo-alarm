@@ -343,7 +343,14 @@ Four workflows under `.github/workflows/`:
   proprietary Android artifact (Google ML Kit, Syncfusion) arriving through a plugin's own
   `build.gradle` rather than anything in the Dart dependency graph - the exact channel
   `test/no_proprietary_dependencies_test.dart` cannot see, and exactly how `mobile_scanner` brought
-  in ML Kit before T-33 removed it.
+  in ML Kit before T-33 removed it. Since T-213 it denies whole groups (all of
+  `com.google.android.gms`, Firebase, Play, datatransport, UMP, Crashlytics/Fabric, Huawei HMS/
+  AGConnect), and the SBOM's scope also covers `coreLibraryDesugaring`. The same jobs also run
+  `scripts/gen_android_library_notices.py --check` (the in-app Java/Kotlin library notice list must
+  match the SBOM - regenerate with `./gradlew cyclonedxBom` and the script after a dependency
+  change) and `scripts/check_apk_dependency_block.py` (the APK must not carry AGP's encrypted
+  dependency-metadata block, which F-Droid rejects; `dependenciesInfo` disables it), and upload the
+  SBOM as the `android-sbom` artifact.
 - **`release.yml`** is triggered by a `v*.*.*` tag or `workflow_dispatch` and gates its signed
   build on **both** `e2e-tests` and `security-gate`. It attaches exactly one asset to the GitHub
   Release, `crescendo-alarm-vX.Y.Z.apk` (named by the workflow itself since v1.4.0 - never Flutter's
@@ -519,7 +526,11 @@ standing rules rather than history:
   Kit binaries) were replaced by `calendar_view` and `flutter_zxing` accordingly
   (`docs/TODO.md` T-05, T-33). `test/no_proprietary_dependencies_test.dart` enforces this against
   `pubspec.yaml` and every import in `lib/` - adding a name to its list is a licence decision, and
-  each entry says why.
+  each entry says why. Since T-213 it also has prefix rules for whole proprietary SDK families
+  (`syncfusion_`, `firebase_`, `google_mlkit_`, ads, in-app review/update/purchase, Huawei, ...).
+  Media count too: every file under `assets/sounds/` and `assets/icons/` needs a row with a free
+  licence in its folder's `CREDITS.md` (`test/media_credits_test.dart`), and the app shows both
+  files in its licence notices.
 - **Corresponding Source is provided by making the repository public at the first public release**
   (T-34), not by a written offer. Met since 2026-09-20: the repository is public, and every GitHub
   Release (v1.0.0 onward, v1.4.0 the latest) is built by `release.yml` from a tagged commit in it.
@@ -535,7 +546,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status (as of September 2026)
 
-`flutter test` currently runs **786 tests across 115 files** (2026-09-29, T-206; CI run 36577695280), and CI runs them ten times over -
+`flutter test` currently runs **812 tests across 118 files** (2026-10-01, T-213), and CI runs them ten times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
 tests for native code (27 as of T-203, `SleepTimeDndPolicyTest`), run with
 `cd android && ./gradlew :app:testDebugUnitTest` (locally from the native-filesystem worktree, and in

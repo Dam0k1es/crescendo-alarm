@@ -66,6 +66,15 @@
         android:icon="@mipmap/ic_launcher"
         android:label="Crescendo Alarm"
         android:allowBackup="false">
+        <!-- docs/TODO.md T-213: image_picker_android merges a disabled
+             Google Play services stub (ModuleDependencies) that only asks
+             Play services to install the back-ported photo picker. No GMS
+             code ships; removed so the merged manifest carries no GMS
+             reference at all. Without it the picker falls back to the
+             system document picker on devices without the photo picker. -->
+        <service
+            android:name="com.google.android.gms.metadata.ModuleDependencies"
+            tools:node="remove" />
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"

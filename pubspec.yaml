@@ -154,6 +154,14 @@ flutter:
     # app - invisible to Flutter's own licence collector, which only reads
     # package-root LICENSE files. page_native_notices.dart reads this.
     - assets/text/NativeCodeNotices.txt
+    # docs/TODO.md T-213: licence texts Flutter's collector cannot find on
+    # its own (Material Icons CC-BY-4.0, the generated Android library list,
+    # desugar_jdk_libs' GPL-2.0 + Classpath Exception, protobuf, and the
+    # extra notices of archive/image/mime), plus the media credits.
+    # lib/utils/licence_notices.dart registers them with LicenseRegistry.
+    - assets/text/licences/
+    - assets/icons/CREDITS.md
+    - assets/sounds/CREDITS.md
     # docs/TODO.md T-36: the root LICENSE file itself, bundled directly
     # (not copied into assets/) so there is exactly one copy to keep in
     # sync - page_license.dart reads it straight from here.

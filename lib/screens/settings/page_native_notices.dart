@@ -19,13 +19,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:crescendo_alarm/screens/settings/page_license.dart';
 
-/// docs/TODO.md T-142: `flutter_zxing` compiles third-party C/C++ (zxing-cpp,
-/// including its bundled "librscpp", plus zint) into the app at build time -
-/// invisible to Flutter's own licence collector (`showLicensePage`, reachable
-/// from the About page), which only reads package-root `LICENSE` files, not
-/// CMake-compiled native code. This page reproduces those notices by hand
-/// from `assets/text/NativeCodeNotices.txt`, the same way [PageLicense]
-/// reproduces this app's own GPLv3 licence.
+/// docs/TODO.md T-142, T-213: `flutter_zxing` compiles third-party C/C++
+/// (zxing-cpp with its bundled librscpp and libzueci, zint with its embedded
+/// font data, and code by Bjoern Hoehrmann and Project Nayuki inside them)
+/// into the app at build time - invisible to Flutter's own licence collector
+/// (`showLicensePage`, reachable from the About page), which only reads
+/// package-root `LICENSE` files, not CMake-compiled native code. This page
+/// reproduces those notices from `assets/text/NativeCodeNotices.txt`, the
+/// same way [PageLicense] reproduces this app's own GPLv3 licence; the same
+/// text is also registered under "flutter_zxing" in the licence list
+/// (lib/utils/licence_notices.dart). test/native_code_notices_test.dart
+/// checks the file against what flutter_zxing's CMake actually compiles.
 ///
 /// Plain text, not Markdown, for the same reason as [PageLicense]: a licence
 /// text's own indentation and line breaks are part of the document.

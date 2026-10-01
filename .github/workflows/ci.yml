@@ -103,6 +103,15 @@ jobs:
       - name: Proprietary native dependency detection self-test
         if: matrix.tz == 'UTC'
         run: python3 scripts/check_proprietary_native_deps.py --self-test
+      # docs/TODO.md T-213: the two other verdict-producing checks added
+      # with it (dependency-metadata block in an APK; Android library notice
+      # list vs. SBOM) prove their own logic here, on synthetic input - the
+      # real inputs (an APK, an SBOM) only exist in the Android build jobs.
+      - name: APK dependency-block and library-notice self-tests
+        if: matrix.tz == 'UTC'
+        run: |
+          python3 scripts/check_apk_dependency_block.py --self-test
+          python3 scripts/gen_android_library_notices.py --self-test
       - name: Analyze
         # Frame-independent, hence only in the UTC leg - running it in
         # every leg would be waste with no additional signal.
@@ -178,6 +187,13 @@ jobs:
 
       - run: flutter pub get
       - run: flutter build apk --debug
+
+      # docs/TODO.md T-213 (F-1): AGP writes its encrypted dependency-metadata
+      # block only into release builds, so this is expected to pass here; it
+      # runs anyway (milliseconds) so a debug build that starts carrying the
+      # block is caught on dev, not first on master.
+      - name: No dependency-metadata block in the APK (F-Droid)
+        run: python3 scripts/check_apk_dependency_block.py build/app/outputs/flutter-apk/app-debug.apk
 
       # docs/TODO.md T-198: JVM unit tests for the native half of the
       # sleep-time Do Not Disturb trigger (android/app/src/test,
@@ -285,6 +301,12 @@ jobs:
           "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --verbose \
             build/app/outputs/flutter-apk/app-release.apk
 
+      - name: No dependency-metadata block in the APK (F-Droid, T-213)
+        # AGP's encrypted dependency list (signing-block ID 0x504b4453) is
+        # off in android/app/build.gradle.kts (dependenciesInfo); this proves
+        # the signed APK actually agrees.
+        run: python3 scripts/check_apk_dependency_block.py build/app/outputs/flutter-apk/app-release.apk
+
       - name: Scan native Android dependencies (osv-scanner)
         # docs/TODO.md T-148: security-gate's own osv-scanner step only ever
         # covered pubspec.lock (the Dart side) - the native Android
@@ -310,6 +332,28 @@ jobs:
         # either. This reuses the SBOM generated above instead of resolving
         # the dependency tree a second time.
         run: python3 scripts/check_proprietary_native_deps.py build/app/reports/cyclonedx/bom.json
+
+      - name: Android library notices match the SBOM (T-213)
+        # assets/text/licences/AndroidLibraries.txt is the in-app list of the
+        # shipped Java/Kotlin libraries, generated from this same SBOM. A
+        # dependency bump that changes the list fails here until the asset is
+        # regenerated (see the script's docstring), so the notices shown in
+        # the app cannot silently drift from what ships.
+        run: |
+          python3 scripts/gen_android_library_notices.py \
+            build/app/reports/cyclonedx/bom.json \
+            --check assets/text/licences/AndroidLibraries.txt
+
+      - name: Upload SBOM
+        # docs/TODO.md T-213 (G3): the native dependency set of a gated
+        # build, kept so it can be audited after the fact.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-sbom
+          path: build/app/reports/cyclonedx/bom.json
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Clean up signing key
         if: always()

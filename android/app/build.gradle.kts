@@ -98,6 +98,16 @@ android {
         }
     }
 
+    // docs/TODO.md T-213 (F-1): without this, AGP writes the resolved
+    // dependency list into the APK Signing Block (ID 0x504b4453), encrypted
+    // with a key only Google holds. F-Droid rejects that block - nobody else
+    // can read or verify it. scripts/check_apk_dependency_block.py checks
+    // every APK CI builds, so a DSL change that silently re-enables it fails.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
@@ -131,8 +141,14 @@ flutter {
 // against it. Scoping here, not by hand-listing every such CVE as an
 // exception, keeps the gate meaningful as those dependencies' versions
 // change.
+//
+// docs/TODO.md T-213: `coreLibraryDesugaring` too, because desugar_jdk_libs
+// ships (as the APK's classes2.dex, GPL-2.0 with the Classpath Exception)
+// but lives in its own configuration, outside releaseRuntimeClasspath.
+// scripts/gen_android_library_notices.py turns this SBOM into the in-app
+// list of Android libraries (assets/text/licences/AndroidLibraries.txt).
 tasks.named<org.cyclonedx.gradle.CyclonedxDirectTask>("cyclonedxDirectBom") {
-    includeConfigs.set(listOf("releaseRuntimeClasspath"))
+    includeConfigs.set(listOf("releaseRuntimeClasspath", "coreLibraryDesugaring"))
 }
 
 // docs/TODO.md T-148: the one real finding the scoped SBOM above turned up -

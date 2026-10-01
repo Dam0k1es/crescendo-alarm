@@ -1,26 +1,63 @@
 THIRD-PARTY NATIVE CODE NOTICES
 ================================
 
-docs/TODO.md T-142: this app's QR-code scanner uses the Dart package
-flutter_zxing, which compiles third-party C/C++ source into the app at
-build time. Flutter's own licence collector (see "Third-Party Licenses" on
-the About page) only reads package-root LICENSE files - it cannot see this
-native code at all, so its notices are reproduced here instead. All of it
-is compatible with this app's own GPLv3 licence; see docs/licence-position.md
-for that determination.
+docs/TODO.md T-142, T-213: this app's QR-code scanner uses the Dart package
+flutter_zxing (3.0.1), which compiles third-party C/C++ source into the app
+at build time (libflutter_zxing.so). Flutter's own licence collector (see
+"Third-Party Licenses" on the About page) only reads package-root LICENSE
+files - it cannot see this native code at all, so its notices are reproduced
+here instead. All of it is compatible with this app's own GPLv3 licence; see
+docs/licence-position.md for that determination.
 
-Two bodies of code are vendored:
+test/native_code_notices_test.dart checks this file against what
+flutter_zxing's CMake build actually compiles: every vendored library and
+every copyright holder named in a compiled source file has to appear here.
 
-  - zxing-cpp (including its bundled "librscpp" Reed-Solomon
-    implementation) - Apache License, Version 2.0. Representative copyright
-    lines found in the vendored source:
+The following vendored code is compiled in:
+
+  - zxing-cpp (the barcode reader/writer core) - Apache License 2.0.
+    Copyright lines found in the compiled source:
       Copyright 2016 ZXing authors
       Copyright 2017-2026 Axel Waggershauser
+      Copyright 2016 Nu-book Inc.
+      Copyright 2016-2017 Huy Cuong Nguyen
+      Copyright 2006-2007 Jeremias Maerki
+      Copyright 2021-2022 gitlost
+      Copyright 2023 siiky
+      Copyright 2023 Antoine Mérino
+      Copyright 2025 wooyechan
     The full licence text is reproduced below.
 
-  - zint (libzint, the open source barcode library) - a 3-clause BSD
-    licence. Its own copyright notice and licence text are reproduced
-    below, taken directly from its vendored source files.
+  - librscpp (zxing-cpp's bundled Reed-Solomon implementation) - Apache
+    License 2.0, Copyright 2016 ZXing authors, Copyright 2017-2026 Axel
+    Waggershauser. Same licence text as zxing-cpp.
+
+  - libzueci (UTF-8 to/from ECI conversion, adapted from libzint) -
+    3-clause BSD licence, Copyright (C) 2022 gitlost. Its notice is
+    reproduced below.
+
+  - zint (libzint, the open source barcode library) - 3-clause BSD licence,
+    Copyright (C) 2008-2025 Robin Stuart, with portions Copyright (C) 2004
+    Grandzebu, Copyright (C) 2006 Kentaro Fukuchi and
+    Copyright Antoine Merino (as spelled in dxfilmedge.c). Its notice and
+    licence text are reproduced below, taken from its vendored source files.
+
+  - Bjoern Hoehrmann's UTF-8 decoder (embedded in zxing-cpp's Utf.cpp, in
+    libzueci's zueci.c and in zint's common.c) - MIT licence.
+
+  - Project Nayuki's QR Code mode optimisation (embedded in zint's qr.c) -
+    MIT licence.
+
+  - Font data embedded by zint for drawing human-readable text under a
+    barcode: Arimo (Latin-1 subset, fonts/normal_woff2.h), Copyright 2013
+    Steve Matteson, Apache License 2.0; and OCR-B (EAN/UPC subset,
+    fonts/upcean_woff2.h and raster_font.h), Copyright Matthew Skala (2011),
+    based on code by Norbert Schwarz (1986, 2011), released for unrestricted
+    use. Both notices are reproduced below.
+
+  - Two GS1 DataBar functions in zint's rss.c, published by BSI; the terms
+    under which zint uses them are reproduced below.
+
 
 
 ================================================================================
@@ -206,7 +243,7 @@ Apache License 2.0 (zxing-cpp / librscpp)
 
 
 ================================================================================
-BSD 3-Clause License (zint / libzint)
+BSD 3-Clause License (zint / libzint, including its font headers)
 ================================================================================
 
     libzint - the open source barcode library
@@ -236,3 +273,148 @@ BSD 3-Clause License (zint / libzint)
     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
     OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
     SUCH DAMAGE.
+
+
+================================================================================
+BSD 3-Clause License (libzueci)
+================================================================================
+
+    libzueci - an open source UTF-8 ECI library adapted from libzint
+    Copyright (C) 2022 gitlost
+
+    The vendored files carry the SPDX identifier BSD-3-Clause only
+    ("SPDX-License-Identifier: BSD-3-Clause"); this is that licence's
+    standard text:
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived from
+       this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+    IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+    THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+================================================================================
+MIT License (Bjoern Hoehrmann's UTF-8 decoder)
+================================================================================
+
+    Copyright (c) 2008-2009 Bjoern Hoehrmann <bjoern@hoehrmann.de>
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to permit
+    persons to whom the Software is furnished to do so, subject to the
+    following conditions:
+
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software.
+
+    See https://bjoern.hoehrmann.de/utf-8/decoder/dfa/ for details.
+
+
+================================================================================
+MIT License (Project Nayuki, in zint's qr.c)
+================================================================================
+
+    Copyright (c) Project Nayuki. (MIT License)
+    https://www.nayuki.io/page/qr-code-generator-library
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to permit
+    persons to whom the Software is furnished to do so, subject to the
+    following conditions:
+    - The above copyright notice and this permission notice shall be
+      included in all copies or substantial portions of the Software.
+
+
+================================================================================
+Arimo font data (zint fonts/normal_woff2.h) - Apache License 2.0
+================================================================================
+
+    Copyright 2013 Steve Matteson
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    (The full Apache License 2.0 text is reproduced above.)
+
+
+================================================================================
+OCR-B font data (zint fonts/upcean_woff2.h, raster_font.h)
+================================================================================
+
+    Adapted from OCR-B font version 0.2 Matthew Skala
+      https://tsukurimashou.osdn.jp/ocr.php.en
+
+    Copyright Matthew Skala (2011); based on code by Norbert Schwarz (1986,
+    2011)
+
+    "The version in this package descends from a set of Metafont
+     definitions by Norbert Schwarz of Ruhr-Universitaet Bochum,
+     bearing dates ranging from 1986 to 2010. He originally
+     distributed it under a "non-commercial use only"
+     restriction but has since released it for unrestricted use
+     and distribution. See the README file for more details."
+
+    The README states (http://mirrors.ctan.org/fonts/ocr-b.zip)
+
+    "As far as the digitization in METAFONT input which I have
+     developed, you may freely use, modify, and/or distribute any of
+     these files or the resulting fonts, without limitation.  A previous
+     release of ocr-b only granted rights for non-commercial use; that
+     restriction is now lifted."
+
+
+================================================================================
+BSI notice (zint rss.c, functions "dbar_combins" and "dbar_getWidths")
+================================================================================
+
+    The functions "dbar_combins" and "dbar_getWidths" are copyright BSI and
+    are released with permission under the following terms:
+
+    "Copyright subsists in all BSI publications. BSI also holds the
+    copyright, in the UK, of the international standardisation bodies.
+    Except as permitted under the Copyright, Designs and Patents Act 1988 no
+    extract may be reproduced, stored in a retrieval system or transmitted
+    in any form or by any means - electronic, photocopying, recording or
+    otherwise - without prior written permission from BSI.
+
+    "This does not preclude the free use, in the course of implementing the
+    standard, of necessary details such as symbols, and size, type or grade
+    designations. If these details are to be used for any other purpose than
+    implementation then the prior written permission of BSI must be
+    obtained."
+
+    The date of publication for these functions is 30 November 2006

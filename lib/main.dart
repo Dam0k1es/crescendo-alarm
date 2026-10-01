@@ -36,6 +36,7 @@ import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 import 'package:crescendo_alarm/screens/settings/screen_settings.dart';
 import 'package:crescendo_alarm/screens/sleep_habits/screen_sleephabits.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
+import 'package:crescendo_alarm/utils/licence_notices.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
 import 'package:crescendo_alarm/utils/permissions.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
@@ -53,6 +54,11 @@ Future<void> main() async {
   if (kReleaseMode) {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
+
+  // docs/TODO.md T-213: notices Flutter's own licence collector cannot see
+  // (native code, Material Icons, Android libraries, media credits). Lazy -
+  // nothing is read until the licence page is opened.
+  registerAppLicences();
 
   final appState = AppState();
   await appState.initialized;

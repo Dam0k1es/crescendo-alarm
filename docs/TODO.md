@@ -1711,9 +1711,9 @@ rather than expanded into more scope here: see T-185.
     the synthesised default, the band-limited (11 kHz source) klaxon, and the loop point of the
     continuous clock ring.
 
-### T-213 · Licence notices, F-Droid build hygiene and proprietary-dependency guards are incomplete (P1, open)
+### T-213 · Licence notices, F-Droid build hygiene and proprietary-dependency guards are incomplete (P1) — RESOLVED (2026-10-01)
 
-- [ ] Found by the FOSS audit of 2026-10-01. No proprietary code ships (no GMS, Firebase, ML Kit,
+- [x] Found by the FOSS audit of 2026-10-01. No proprietary code ships (no GMS, Firebase, ML Kit,
   Play Core or analytics in pubspec.lock, the native classpath, the DEX or the native libraries;
   zxing-cpp is compiled from source). What is missing are notices and checks:
 - **Notices:** libzueci (BSD-3) and Bjoern Hoehrmann's UTF-8 decoder (MIT) are compiled into
@@ -1738,6 +1738,43 @@ rather than expanded into more scope here: see T-185.
 - *Done when:* the notices are complete and shown in the app, the dependency block is disabled and
   verified absent from a built APK, and both deny-lists cover the missing families, each with a
   failing-first test.
+- **Maintainer decision (2026-10-01):** `flutter_launcher_icons` stays under `dependencies:` ("Flutter
+  launcher icons sind dependencies") - not a finding.
+- **Resolved (2026-10-01), each test red first:**
+  - **Notices:** `assets/text/NativeCodeNotices.txt` completed (libzueci, Hoehrmann, Nayuki, Fukuchi,
+    BSI note, Arimo, OCR-B, every zxing-cpp/zint copyright holder; verbatim from `flutter_zxing`
+    3.0.1); `test/native_code_notices_test.dart` (G5) follows the CMake build into zint's backend
+    and was red on libzueci plus 15 holders. `lib/utils/licence_notices.dart`
+    (`registerAppLicences()`, called in `main()`) registers Material Icons (CC BY 4.0), the native
+    notices, `assets/text/licences/AndroidLibraries.txt` (146 libraries, generated from the SBOM by
+    `scripts/gen_android_library_notices.py`), `desugar_jdk_libs` (GPL-2.0 + Classpath Exception),
+    Protocol Buffers, the extra notices of `archive`/`image`/`mime` (their code ships in
+    `libapp.so`) and both media `CREDITS.md` files (`lib/utils/media_credits.dart`;
+    `test/media_credits_test.dart`, G4).
+  - **Build:** `dependenciesInfo { includeInApk = false; includeInBundle = false }`;
+    `scripts/check_apk_dependency_block.py` fails on the v1.4.0 APK (block `0x504b4453` present) and
+    passes on a fresh release build; it runs on the dev and release APKs in CI. The
+    `image_picker_android` GMS stub is removed with `tools:node="remove"` (0 GMS references in the
+    merged manifest and the APK; devices without the system photo picker fall back to the document
+    picker).
+  - **Guards:** G1 prefix rules (`test/no_proprietary_dependencies_test.dart`, 20 fixture names that
+    exact matching missed); G2 whole-group bans in `scripts/check_proprietary_native_deps.py` (15
+    self-test cases red first; the current SBOM passes); G3 the SBOM (now also covering
+    `coreLibraryDesugaring`, so osv-scanner sees it too) is uploaded as `android-sbom` from the
+    master and release builds, which also run the notice list's `--check`.
+  - Follow-up: T-220 (GPL-2.0 source obligation for `desugar_jdk_libs`).
+
+### T-220 · `desugar_jdk_libs` (GPL-2.0 with Classpath Exception): is a source link enough? (P3, open question)
+
+- [ ] Raised by T-213 (2026-10-01). The APK contains `desugar_jdk_libs` (core-library desugaring),
+  licensed GPL-2.0 with the Classpath Exception. The exception covers linking it with this app; the
+  library itself is still distributed in binary form, and GPL-2.0 section 3 asks for the
+  corresponding source to accompany it, a written offer, or equivalent access "from the same
+  place". The in-app notice now carries the licence text and a link to the upstream source.
+- **Question:** is that enough for GitHub releases and F-Droid, or should the release (or the
+  repository) carry the exact source archive of the version shipped? F-Droid builds from source
+  and fetches the artifact from Maven Central, which usually settles it there.
+- *Done when:* decided and recorded in `docs/licence-position.md`.
 
 ### T-214 · The app icon's provenance and licence are not recorded (P1) — RESOLVED (2026-10-01)
 

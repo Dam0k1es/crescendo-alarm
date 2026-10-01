@@ -17,8 +17,8 @@ Usage: python3 scripts/check_proprietary_native_deps.py <bom.json>
 
 `--self-test` needs no SBOM file and no network access - it checks `_offense()`
 against synthetic components covering every `FORBIDDEN` entry, plus the
-precision cases that make this a (group, name-prefix) match rather than a
-whole-group ban. Added because an independent audit found this was the one
+precision cases that keep a group match on dot boundaries (free Google
+libraries such as Material Components, Gson and Guava must pass). Added because an independent audit found this was the one
 verdict-producing script in the project without a self-test of its own kind
 (docs/TODO.md T-144) - unlike `.github/scripts/alarm_detection.sh`'s
 `self_test()`, which this mirrors: a future typo in `FORBIDDEN` or a broken
@@ -29,10 +29,18 @@ to catch pre-merge.
 import json
 import sys
 
-# (group, name-prefix) pairs, not a whole-group ban where that would be too
-# broad: com.google.android.gms is a large, otherwise-legitimate group, so
-# only its specific ML Kit "unbundled" artifact family is forbidden, not
-# every artifact under that group.
+# (group, name-prefix) pairs. A group matches itself and its subgroups on a
+# dot boundary (`com.google.firebase` also covers `com.google.firebase.x`,
+# but `com.google.android.gms` never covers `com.google.android.gmsx`); an
+# empty name-prefix bans the whole group.
+#
+# docs/TODO.md T-213 (G2): this used to forbid only ML Kit's
+# `play-services-mlkit*` inside com.google.android.gms and treated the rest of
+# that group as legitimate. It is not: every com.google.android.gms artifact
+# is Google Play Services client code under Google's proprietary terms, and
+# F-Droid rejects all of it. The same holds for the groups below. Free Google
+# libraries live in other groups (com.google.android.material,
+# com.google.code.gson, com.google.guava, com.android.tools) and stay allowed.
 FORBIDDEN = [
     (
         "com.google.mlkit",
@@ -41,9 +49,50 @@ FORBIDDEN = [
     ),
     (
         "com.google.android.gms",
-        "play-services-mlkit",
-        "Google ML Kit's \"unbundled\" Play Services variant - still "
+        "",
+        "Google Play Services (including ML Kit's \"unbundled\" variant, "
+        "Maps, Ads, Auth) - proprietary.",
+    ),
+    (
+        "com.google.firebase",
+        "",
+        "Firebase Android SDK - depends on proprietary Play Services.",
+    ),
+    (
+        "com.google.android.play",
+        "",
+        "Google Play Core (review, app-update, integrity, asset delivery) - "
         "proprietary.",
+    ),
+    (
+        "com.google.android.datatransport",
+        "",
+        "Google's telemetry transport used by Firebase - proprietary.",
+    ),
+    (
+        "com.google.android.ump",
+        "",
+        "Google User Messaging Platform (ads consent) - proprietary.",
+    ),
+    (
+        "com.crashlytics.sdk.android",
+        "",
+        "Crashlytics (Fabric era) - proprietary crash reporting.",
+    ),
+    (
+        "io.fabric.sdk.android",
+        "",
+        "Fabric SDK - proprietary.",
+    ),
+    (
+        "com.huawei.hms",
+        "",
+        "Huawei Mobile Services - proprietary.",
+    ),
+    (
+        "com.huawei.agconnect",
+        "",
+        "Huawei AppGallery Connect - proprietary.",
     ),
     (
         "com.syncfusion",
@@ -54,9 +103,13 @@ FORBIDDEN = [
 ]
 
 
+def _group_matches(group: str, forbidden_group: str) -> bool:
+    return group == forbidden_group or group.startswith(forbidden_group + ".")
+
+
 def _offense(group: str, name: str) -> str | None:
     for forbidden_group, name_prefix, reason in FORBIDDEN:
-        if group != forbidden_group:
+        if not _group_matches(group, forbidden_group):
             continue
         if name_prefix and not name.startswith(name_prefix):
             continue
@@ -113,12 +166,42 @@ def self_test() -> int:
     check("Syncfusion (any name)", "com.syncfusion", "flutter_syncfusion",
           True)
 
-    # Precision cases: this is (group, name-prefix), not a whole-group ban -
-    # these must NOT fire, or the check would be too broad to ship.
-    check("gms group, unrelated artifact", "com.google.android.gms",
-          "play-services-maps", False)
-    check("gms group, near-miss prefix", "com.google.android.gms",
-          "play-services-ml", False)
+    # docs/TODO.md T-213 (G2): whole proprietary groups. Every
+    # com.google.android.gms artifact is Google Play Services (proprietary);
+    # the earlier precision case that ALLOWED play-services-maps was wrong.
+    check("GMS maps", "com.google.android.gms", "play-services-maps", True)
+    check("GMS base", "com.google.android.gms", "play-services-base", True)
+    check("GMS ads", "com.google.android.gms", "play-services-ads-lite",
+          True)
+    check("Firebase", "com.google.firebase", "firebase-messaging", True)
+    check("Firebase Crashlytics", "com.google.firebase",
+          "firebase-crashlytics", True)
+    check("Play Core", "com.google.android.play", "core", True)
+    check("Play review", "com.google.android.play", "review", True)
+    check("Play integrity", "com.google.android.play", "integrity", True)
+    check("datatransport", "com.google.android.datatransport",
+          "transport-runtime", True)
+    check("UMP consent SDK", "com.google.android.ump", "user-messaging-platform",
+          True)
+    check("Crashlytics (Fabric era)", "com.crashlytics.sdk.android",
+          "crashlytics", True)
+    check("Fabric", "io.fabric.sdk.android", "fabric", True)
+    check("Huawei HMS", "com.huawei.hms", "push", True)
+    check("Huawei AGConnect", "com.huawei.agconnect", "agconnect-core", True)
+    check("subgroup of a forbidden group", "com.google.firebase.crashlytics",
+          "x", True)
+
+    # Precision cases: a group-prefix match on dot boundaries, never a bare
+    # string prefix - these free libraries must NOT fire, or the check would
+    # be too broad to ship. All four ship in this app today.
+    check("Material Components", "com.google.android.material", "material",
+          False)
+    check("Gson", "com.google.code.gson", "gson", False)
+    check("Guava", "com.google.guava", "guava", False)
+    check("desugar_jdk_libs", "com.android.tools", "desugar_jdk_libs", False)
+    check("near-miss group name", "com.google.android.gmsx", "thing", False)
+    check("near-miss play group", "com.google.android.player", "thing",
+          False)
     check("unrelated group entirely", "com.example.totally.fine", "thing",
           False)
     check("empty bom", "", "", False)

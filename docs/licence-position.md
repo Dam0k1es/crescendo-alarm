@@ -72,9 +72,22 @@ bundled "librscpp" Reed-Solomon implementation) under Apache-2.0, **libzueci** (
 readers are enabled) and zint under BSD-3. All GPLv3-compatible, so the claim above holds for them
 too. *(Corrected 2026-10-01: an earlier version of this paragraph said, after a re-check for
 T-142, that no separate zueci source is vendored - that was wrong; `flutter_zxing` 3.0.1 vendors and
-compiles it. Its BSD-3 notice is therefore still missing from `assets/text/NativeCodeNotices.txt`,
-as are those of smaller embedded pieces the 2026-10-01 FOSS audit found - a notice gap, not a
-licence conflict.)*
+compiles it.)* Since 2026-10-01 (`docs/TODO.md` T-213) `assets/text/NativeCodeNotices.txt` also
+carries libzueci, Bjoern Hoehrmann's UTF-8 decoder (MIT, in zxing-cpp's `Utf.cpp`, `zueci.c` and
+zint's `common.c`), Project Nayuki's QR code (MIT, zint `qr.c`), Kentaro Fukuchi's `qr.h`, a BSI
+permission note (zint `rss.c`), and the embedded Arimo (Apache-2.0) and OCR-B font data, verbatim
+from the vendored `flutter_zxing` 3.0.1; `test/native_code_notices_test.dart` checks the file
+against what `flutter_zxing`'s CMake build actually compiles, so a gap like libzueci's cannot recur.
+
+**Other shipped notices (T-213).** `lib/utils/licence_notices.dart` registers, under "Third-Party
+Licenses": the Material Icons font (CC BY 4.0, shipped tree-shaken), the native notices above, the
+shipped Java/Kotlin libraries (`assets/text/licences/AndroidLibraries.txt`, generated from the
+CycloneDX SBOM by `scripts/gen_android_library_notices.py` and checked against it in CI's release
+builds), `desugar_jdk_libs` (GPL-2.0 with the Classpath Exception, with a source link), Protocol
+Buffers (BSD-3), the extra notices of `archive`, `image` and `mime` (whose code does ship) and both
+media `CREDITS.md` files (tones, icon). Open point: whether `desugar_jdk_libs`'s source link
+satisfies GPL-2.0 section 3 for the binary in the APK, or a written offer / bundled source is
+needed (`docs/TODO.md` T-220).
 
 What this document does **not** claim: that every transitive dependency has been individually
 audited. R8 scopes that out deliberately. The claim is narrower and checkable - no dependency in
