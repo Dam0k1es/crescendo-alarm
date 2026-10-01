@@ -109,9 +109,14 @@ Notices" button, the same pattern T-36 established for this app's own GPLv3 text
 
 ## Bundled assets
 
-Separate from code licensing, and **not met** (requirement R10): the six bundled alarm tones
-(`assets/sounds/*.mp3`) are Mixkit items under the Mixkit Sound Effects Free License, which forbids
-redistributing an item on its own - so they are **not free** and are to be replaced
-(`docs/TODO.md` T-212). (They replaced, on 2026-09-17, earlier files with no licence at all, which
-were also removed from git history - T-29.) The icon assets are the maintainer's own
-(AI-generated) content.
+Separate from code licensing (requirement R10, met since 2026-10-01): the six bundled alarm tones
+(`assets/sounds/*.mp3`) are freely licensed - five edited Wikimedia Commons recordings under
+CC BY 4.0, CC BY-SA 4.0 or US-government public domain, and the default tone synthesised by
+`scripts/gen_tones.py` under GPL-3.0-or-later; `assets/sounds/CREDITS.md` records each file's
+source, author, licence and changes, and the app shows it in its licence notices. CC BY-SA 4.0 is
+one-way compatible with GPLv3. They replaced Mixkit items (`docs/TODO.md` T-212), whose licence
+forbids redistributing an item on its own and is therefore not free; those had replaced, on
+2026-09-17, earlier files with no licence at all, which were removed from git history (T-29). The
+Mixkit files stay in git history by the maintainer's decision. The icon assets were created by the maintainer
+with ChatGPT and are licensed under CC BY-SA 4.0 (one-way compatible with GPLv3), recorded in
+`assets/icons/CREDITS.md` (`docs/TODO.md` T-214).

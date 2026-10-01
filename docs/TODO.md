@@ -1669,9 +1669,9 @@ rather than expanded into more scope here: see T-185.
   their tests retargeted at `computeWeekPlan`), `localWallClockInstant` is removed or documented as
   a test helper, and the stale names are renamed - with the full suite green in all ten zones.
 
-### T-212 · The six bundled alarm tones are not freely licensed (P0, licence defect, open)
+### T-212 · The six bundled alarm tones are not freely licensed (P0) — RESOLVED (2026-10-01)
 
-- [ ] Found by the FOSS audit of 2026-10-01 (every shipped library and media file checked against
+- [x] Found by the FOSS audit of 2026-10-01 (every shipped library and media file checked against
   F-Droid's inclusion rules).
 - **Finding:** all six `assets/sounds/*.mp3` are byte-identical to the Mixkit preview files listed in
   `assets/sounds/CREDITS.md` (SHA-256 compared). The Mixkit Sound Effects Free License says "You can't
@@ -1693,6 +1693,23 @@ rather than expanded into more scope here: see T-185.
 - *Done when:* every bundled tone has a recorded source, author and free licence in
   `assets/sounds/CREDITS.md`, any CC-BY attribution is shown in the app's licence notices, and the
   Mixkit files are gone from the shipped assets.
+- **Resolved (2026-10-01).** Maintainer decisions: CC0, CC-BY and CC-BY-SA sources allowed ("Auch
+  CC-BY/CC-BY-SA erlaubt"); only the current state replaced, git history left as is. File names
+  kept, so no code changed:
+  - `lollipop.mp3` (default, "Playful Chime"): synthesised by the new `scripts/gen_tones.py`
+    (Python stdlib + ffmpeg, deterministic, 4.0 s seamless loop), GPL-3.0-or-later.
+  - `annoying_alarm.mp3`, `old_telephone_ring.mp3`: Work With Sounds / Technical Museum of
+    Slovenia recordings on Wikimedia Commons, CC BY 4.0.
+  - `wake_up.mp3` (Jeuwre) and `wakeywakey.mp3` (Filo gèn'): Wikimedia Commons, CC BY-SA 4.0;
+    the edited versions stay CC BY-SA 4.0.
+  - `wakeywakey2.mp3`: a US Navy klaxon recording on Wikimedia Commons, public domain.
+  - Each source's SHA-1 was checked against Commons; trims, crossfades and a linear loudness
+    normalisation to about -10 LUFS (true peak at most -1.5 dBTP, so the old telephone file no
+    longer clips) are listed per file in `assets/sounds/CREDITS.md`, which the app now shows in its
+    licence notices (T-213) and `test/media_credits_test.dart` checks.
+  - **Not verified by ear:** nobody has listened to the new tones on a phone yet - in particular
+    the synthesised default, the band-limited (11 kHz source) klaxon, and the loop point of the
+    continuous clock ring.
 
 ### T-213 · Licence notices, F-Droid build hygiene and proprietary-dependency guards are incomplete (P1, open)
 
@@ -1722,15 +1739,21 @@ rather than expanded into more scope here: see T-185.
   verified absent from a built APK, and both deny-lists cover the missing families, each with a
   failing-first test.
 
-### T-214 · The app icon's provenance and licence are not recorded (P1, open, maintainer input needed)
+### T-214 · The app icon's provenance and licence are not recorded (P1) — RESOLVED (2026-10-01)
 
-- [ ] Found by the FOSS audit of 2026-10-01. `assets/icons/icon.png` and everything generated from it
+- [x] Found by the FOSS audit of 2026-10-01. `assets/icons/icon.png` and everything generated from it
   (`icon_no_shadow.png`, which ships in the APK's assets, the launcher, notification and iOS icons)
   carry no authoring metadata and no declared licence. The only record is the maintainer's
   statement that the artwork is AI-generated (T-29, `docs/REQUIREMENTS.md` R10); the generator and
   its output terms are not recorded, and some generators' free tiers attach non-commercial terms.
 - *Done when:* `assets/icons/CREDITS.md` records the tool, the plan/terms under which the image was
   made and an explicit free licence for the artwork - or the icon is redrawn under a free licence.
+- **Resolved (2026-10-01, maintainer):** the icon is the maintainer's own, generated with ChatGPT
+  ("Das App Icon kommt von mir", "ChatGPT generiertes Icon"; OpenAI's terms assign the output's
+  rights to the user), and is licensed under CC BY-SA 4.0 (maintainer's choice). Recorded in
+  `assets/icons/CREDITS.md`, which also covers the derived launcher, notification and iOS icons;
+  `docs/REQUIREMENTS.md` R10 and `docs/licence-position.md` updated. Shown in the app's licence
+  notices with T-213.
 
 ### T-215 · The QR scanner's emergency stop can be withdrawn again after it appeared (P1, bug, open)
 
