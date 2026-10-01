@@ -124,7 +124,7 @@ jobs:
       - name: Upload SBOM
         # docs/TODO.md T-213 (G3): the native dependency set of the release.
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-sbom
           path: build/app/reports/cyclonedx/bom.json
@@ -135,7 +135,7 @@ jobs:
         if: always()
         run: rm -rf android/app/keystore android/key.properties
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
