@@ -56,6 +56,7 @@ import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
 import 'package:crescendo_alarm/utils/wall_clock.dart';
 
+import 'support/fake_alarm_platform.dart';
 import 'support/local_zone_transitions.dart';
 import 'support/zone_rules.dart';
 
@@ -528,6 +529,9 @@ void main() {
       final next = dayMarker(dw, 1);
       final rang = _at(before, f.hour, f.minute);
       final appState = await _freshAppState();
+      // A platform that answers, so "not armed" can be asserted directly
+      // (T-221: a switched-off day stays listed as inactive).
+      final platform = FakeAlarmPlatform()..attach(appState);
       appState.lastProcessedConcludedDay = before;
       appState.pendingDayValues = {isoDate(before): rang.millisecondsSinceEpoch};
 
@@ -555,10 +559,15 @@ void main() {
           todayAlreadyRang: false);
       expect(appState.disabledDays, contains(isoDate(dw)));
       expect(appState.disabledDays, isNot(contains(isoDate(next))));
-      expect(
-          appState.scheduledAlarms
-              .where((a) => a.time.millisecondsSinceEpoch == expected),
-          isEmpty,
+      // docs/TODO.md T-221: the switched-off day stays listed, as inactive,
+      // and is not armed.
+      final offEntries = appState.scheduledAlarms
+          .where((a) => a.time.millisecondsSinceEpoch == expected)
+          .toList();
+      expect(offEntries, hasLength(1),
+          reason: '$t: the switched-off day is listed as inactive');
+      expect(offEntries.single.enabled, isFalse);
+      expect(platform.armedAt(_local(expected)), isFalse,
           reason: '$t: the switched-off day must not be armed');
       expect(
           appState.scheduledAlarms.where((a) => isoDate(a.time) == isoDate(next)),
@@ -571,9 +580,11 @@ void main() {
           todayAlreadyRang: false);
       expect(appState.pendingDayValues[isoDate(dw)], expected);
       expect(
-          appState.scheduledAlarms
-              .where((a) => a.time.millisecondsSinceEpoch == expected),
+          appState.scheduledAlarms.where((a) =>
+              a.time.millisecondsSinceEpoch == expected && a.enabled),
           isNotEmpty,
+          reason: '$t: switched back on, the planned day is listed enabled');
+      expect(platform.armedAt(_local(expected)), isTrue,
           reason: '$t: switched back on, the planned day is armed again');
 
       // (3) It rings (22:59 on the planned day): that day is the rung day,
