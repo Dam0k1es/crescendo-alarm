@@ -903,8 +903,9 @@ class AppState extends ChangeNotifier {
   /// Adds [alarm] - an equal entry already in the list is replaced, not
   /// duplicated - and arms it. A [ManualAlarm] is resolved to its next
   /// occurrence ([_getAlarmTime]) and armed only while enabled (FR-21); a
-  /// [ScheduledAlarm] is kept and armed only if its time is not already
-  /// before [now]. Returns `{'success': bool, 'errMsg': String}`; `success`
+  /// [ScheduledAlarm] is kept only if its time is not already before [now],
+  /// and armed only while enabled (a switched-off planned day's listed
+  /// entry, docs/TODO.md T-221). Returns `{'success': bool, 'errMsg': String}`; `success`
   /// stays `false` for a past `ScheduledAlarm`.
   Future<Map<String, dynamic>> addAlarm(
     MyAlarm alarm, {
@@ -998,7 +999,11 @@ class AppState extends ChangeNotifier {
           'success': true,
           'errMsg': '',
         };
-        await _setAlarm(newAlarm, alarm.time);
+        // FR-21, docs/TODO.md T-221: a switched-off planned day keeps a
+        // listed, disabled entry - which must never reach the platform.
+        if (newAlarm.enabled) {
+          await _setAlarm(newAlarm, alarm.time);
+        }
       }
     }
 
@@ -1038,7 +1043,14 @@ class AppState extends ChangeNotifier {
     return {'success': false, 'errMsg': 'Alarm not found'};
   }
 
+  /// Stops [alarm] on the platform first and only then drops it from the
+  /// list (docs/TODO.md T-221, review finding N1): if the stop throws, the
+  /// entry stays listed - still enabled, because it still rings - and the
+  /// exception propagates, so the next replan sees it and retries. Removing
+  /// it first left an armed orphan that no list entry pointed at any more,
+  /// while a disabled entry for the same day claimed it was off.
   Future<void> removeAlarm(MyAlarm alarm) async {
+    await _platformStop(alarm.id);
     if (alarm is ManualAlarm) {
       _manualAlarms.remove(alarm);
       _saveManualAlarms();
@@ -1046,8 +1058,11 @@ class AppState extends ChangeNotifier {
       _scheduledAlarms.remove(alarm);
       _saveScheduledAlarms();
     }
-
-    await _stopAlarm(alarm.id);
+    // After the list changed, not inside the stop: both are computed from
+    // the lists, and the direct-boot mirror must not keep pointing at the
+    // alarm just removed.
+    refreshDirectBootFallback();
+    unawaited(refreshSleepTimeDnd());
     notifyListeners();
   }
 
@@ -1152,6 +1167,24 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  /// Test seams for the `alarm` plugin, which has no channel in
+  /// `flutter test` (docs/TODO.md T-221): [_setAlarm], [_stopAlarm] and
+  /// [platformAlarms] go through these when set, so a test can observe what
+  /// is really armed - a disabled `ScheduledAlarm` must never be. `null` (the
+  /// only value outside tests) means the real plugin calls; nothing else
+  /// about the arm/cancel path changes.
+  @visibleForTesting
+  Future<void> Function(AlarmSettings settings)? debugPlatformSet;
+  @visibleForTesting
+  Future<void> Function(int id)? debugPlatformStop;
+  @visibleForTesting
+  Future<List<AlarmSettings>> Function()? debugPlatformGetAll;
+
+  /// What the platform really has armed (`Alarm.getAlarms()`) - read by
+  /// FR-18's reconciliation (`applyPlannedAlarms`).
+  Future<List<AlarmSettings>> platformAlarms() =>
+      (debugPlatformGetAll ?? Alarm.getAlarms)();
+
   Future<void> _setAlarm(MyAlarm alarm, DateTime alarmDateTime) async {
     final alarmSettings = buildRingingAlarmSettings(
       id: alarm.id,
@@ -1168,7 +1201,12 @@ class AppState extends ChangeNotifier {
       vibrate: alarm.vibrate,
     );
 
-    await Alarm.set(alarmSettings: alarmSettings);
+    final platformSet = debugPlatformSet;
+    if (platformSet != null) {
+      await platformSet(alarmSettings);
+    } else {
+      await Alarm.set(alarmSettings: alarmSettings);
+    }
     refreshDirectBootFallback();
     // docs/TODO.md T-198: the same "every real arm/cancel" hook - see
     // refreshSleepTimeDnd.
@@ -1212,10 +1250,20 @@ class AppState extends ChangeNotifier {
   Future<void> stopPlatformAlarm(int id) => _stopAlarm(id);
 
   Future<void> _stopAlarm(int id) async {
-    await Alarm.stop(id);
+    await _platformStop(id);
     refreshDirectBootFallback();
     unawaited(refreshSleepTimeDnd());
   }
+
+  Future<void> _platformStop(int id) async {
+    final platformStop = debugPlatformStop;
+    if (platformStop != null) {
+      await platformStop(id);
+    } else {
+      await Alarm.stop(id);
+    }
+  }
+
 
   /// docs/TODO.md T-158: recomputes the next moment a real alarm is
   /// expected to ring - the same instant [nextWakeUpTime] already computes
@@ -1244,6 +1292,7 @@ class AppState extends ChangeNotifier {
     final nowFn = now ?? DateTime.now;
     unawaited(direct_boot_mirror.mirrorDirectBootFallback(nextWakeUpTime(
       pendingDayValues: _pendingDayValues,
+      disabledDays: _disabledDays,
       manualAlarms: _manualAlarms,
       now: nowFn(),
     )));

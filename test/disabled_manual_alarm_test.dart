@@ -179,6 +179,7 @@ void main() {
     test('a switched-off manual alarm does not feed nextWakeUpTime', () {
       final result = nextWakeUpTime(
         pendingDayValues: const <String, int?>{},
+        disabledDays: const {},
         manualAlarms: [
           _alarmAt(const TimeOfDay(hour: 7, minute: 0), id: 1, enabled: false),
           _alarmAt(const TimeOfDay(hour: 9, minute: 0), id: 2),
@@ -196,6 +197,7 @@ void main() {
       // manual source altogether.
       final result = nextWakeUpTime(
         pendingDayValues: const <String, int?>{},
+        disabledDays: const {},
         manualAlarms: [_alarmAt(const TimeOfDay(hour: 7, minute: 0))],
         now: now,
       );
@@ -207,6 +209,7 @@ void main() {
       final planned = DateTime(2026, 3, 11, 8, 0);
       final result = nextWakeUpTime(
         pendingDayValues: {'2026-03-11': planned.millisecondsSinceEpoch},
+        disabledDays: const {},
         manualAlarms: [
           _alarmAt(const TimeOfDay(hour: 7, minute: 0), enabled: false),
         ],

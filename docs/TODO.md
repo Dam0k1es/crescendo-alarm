@@ -1877,6 +1877,98 @@ rather than expanded into more scope here: see T-185.
   traps delete `/tmp/ww_ui.xml`, which is never created locally; the self-test of
   `check_proprietary_native_deps.py` leaves temp files behind.
 
+### T-221 · Switching a scheduled alarm off deleted it from the list (P1, bug) — FIXED (2026-10-03, on `dev`)
+
+- [x] Maintainer request (verbatim): *"Wenn ich einen scheduled alarm deaktiviere (schieber
+      umlegen) wird er nicht nur deaktiviert, sondern auch gelöscht. Ich will, dass der alarm als
+      inaktiv gelistet wird."* (When I switch off a scheduled alarm with the toggle, it is not only
+      deactivated but deleted. I want it listed as inactive.)
+- **Cause:** the Scheduled tab's switch writes the day into `AppState.disabledDays`
+  (`setDayEnabled(isoDate(alarm.time), false)`) and runs a `settingsChanged` checkpoint.
+  `planAlarmSync` (`lib/models/scheduling/apply_alarms.dart`) skipped a disabled day when building
+  its desired set exactly like an unplanned one, so the day's existing `ScheduledAlarm` landed in
+  `toRemove` and `applyPlannedAlarms` removed it from `AppState.scheduledAlarms`. FR-21 promised
+  "switched off is not deleted" only for the planned *value*, and `docs/USER_GUIDE.md` already
+  (wrongly) said the alarm stays in the list.
+- **Fix:** FR-21 gained the boundary (spec, "Planned alarms"): FR-18 keeps exactly one entry per
+  planned future day - armed and enabled for an enabled day, unarmed with `enabled = false` for a
+  switched-off one.
+  - `planAlarmSync` sorts each future planned value into `desired` (armed) or `desiredDisabled`
+    (listed only, new `AlarmSyncPlan.toAddDisabled`). Only an *enabled* entry can match an enabled
+    day; only a *disabled* entry that is not on the platform can match a switched-off day (absent
+    from the platform is its correct state, not T-74e's "missing"; an entry marked disabled that
+    *is* armed is replaced, which stops it). Ring properties are not compared for disabled entries
+    (no churn on a tone change). T-116's claim-once rule and FR-18's "never remove a past alarm"
+    apply unchanged, the disabled entries in a claim set of their own.
+  - `AppState.addAlarm` arms a `ScheduledAlarm` only while enabled, like a `ManualAlarm` since
+    T-03; `applyPlannedAlarms` adds `toAddDisabled` as disabled entries. `Diag.alarmSync`'s
+    `desiredAlarms` now counts armed alarms only.
+  - The switch no longer flips `alarm.enabled` in place: an entry saying "disabled" while still
+    armed would have been kept as the day's inactive entry and rung (and one saying "enabled"
+    without being armed would pass as armed while the platform state is unknown). The screen keeps
+    the new switch position in a widget-local map until the checkpoint has finished, so the switch
+    does not lag; the reconciliation replaces the entry.
+  - Consumer audit (every reader of `scheduledAlarms` / `pendingDayValues` that is about waking):
+    `nextWakeUpTime()` now takes a required `disabledDays` and skips those days - so the bedtime
+    reminder and the **direct-boot fallback mirror** no longer target a switched-off day (both did
+    before this entry: a reboot with the phone left locked could have started the fallback siren
+    for a day the user switched off; T-198 decision 3 had recorded the reminder half as a known
+    inconsistency). `sleepTimeWindow` now relies on the same rule instead of its own filter.
+    `Handler.onAlarmHandled` re-arms only enabled `ManualAlarm`s (unchanged, now pinned for a
+    disabled `ScheduledAlarm`); `Handler.handleAlarm`/snooze react only to an id that actually
+    rang, and a disabled entry's id is never armed (it is always a fresh id from `getRandom()`);
+    `pruneScheduledAlarms` (T-141) is day-based and treats disabled entries alike;
+    `_worstPlatformDriftMinutes` skips ids absent from the platform; `removeAllAlarms`/swipe-delete
+    are user deletions and remove disabled entries too (the next replan lists them again, as for
+    any scheduled alarm); `Diag.boot`'s `scheduledAlarmCount` stays the list length.
+  - A test seam: `AppState.debugPlatformSet`/`debugPlatformStop`/`debugPlatformGetAll`
+    (`@visibleForTesting`, `null` in production) and `AppState.platformAlarms()`, which
+    `applyPlannedAlarms` now reads instead of `Alarm.getAlarms()` directly - the real plugin has no
+    channel in `flutter test`, so nothing could say before whether an alarm was really armed.
+    `test/support/fake_alarm_platform.dart` uses it.
+- **T-208 interaction (not fixed here, not made worse):** the toggle is still keyed by
+  `isoDate(alarm.time)`. For T-208's cross-date value (planned for day X, local reading on X-1) the
+  veto lands on X-1, day X stays enabled, and the reconciliation therefore keeps (or restores) the
+  armed, *enabled* entry - after the checkpoint the switch springs back on. Before this entry the
+  switch was flipped in place and stayed off while the alarm still rang; now it shows what will
+  happen. The veto on X-1 still applies to X-1's own planned value, which is now listed inactive
+  instead of vanishing. Do Not Disturb still targets day X's alarm, correctly, since it rings.
+- **Tests (red first against the old code, 21 of 34; the rest are counter-tests):**
+  `test/scheduled_alarm_listed_inactive_test.dart` (25: `planAlarmSync` cases incl. platform
+  known/unknown, plan change while off, re-enable, T-116 duplicates, a past disabled entry, no
+  churn on a tone change; `applyPlannedAlarms` against a fake platform with an injected `now` -
+  listed and unarmed, a fixed point over several replans, re-enable arms exactly once and at the
+  current value, the other day stays armed; persistence across a restart; the full `replan()` path;
+  the T-141 prune), `test/scheduled_alarm_inactive_consumers_test.dart` (7: `nextWakeUpTime`,
+  `sleepTimeWindow`, the direct-boot mirror, the bedtime reminder, `Handler.onAlarmHandled`), and
+  `test/screen_alarms_scheduled_inactive_test.dart` (2: the inactive entry is listed with its
+  switch off; the switch writes the day veto, shows off at once and leaves the entry to FR-18).
+  `test/disabled_day_test.dart`'s "the next planning run does not arm it again" now expects one
+  disabled entry instead of none (matched by instant, not by `isoDate` of the local reading).
+  Mutations checked: dropping the `enabled` check in `matchesPlan`, the platform check in the
+  disabled match, `addAlarm`'s arming guard, or `nextWakeUpTime`'s skip each turns 1-6 tests red.
+- **Not covered:** a real device. The switch's behaviour against the real `alarm` plugin is
+  `docs/device-trial-checklist.md` B9/B10 (added with this entry, not yet run).
+- **Review (Günther, 2026-10-03): "go with changes", nothing blocking.**
+  - **N1, fixed in the same change:** `AppState.removeAlarm` dropped the entry from the list before
+    stopping it on the platform. When the stop threw, the armed alarm became an orphan no entry
+    pointed at, while a fresh disabled entry for the day said "inactive" - an alarm that still rang,
+    shown as off, and not healed by later replans. It now stops first and removes after; a failing
+    stop keeps the entry listed as enabled (true: it still rings) and the next replan retries. The
+    direct-boot mirror and the DND window are recomputed after the list changed, not inside the
+    stop, so a deleted alarm is not mirrored. Tests: "a platform stop that fails keeps the armed
+    entry listed as enabled ..." (`scheduled_alarm_listed_inactive_test.dart`, red against the old
+    order) and "removeAlarm: the mirror no longer points at the alarm just removed"
+    (`app_state_direct_boot_fallback_test.dart`, red when the mirror is refreshed inside the stop).
+  - **N2 (belongs to T-208):** in the cross-date case the veto lands on date X-1, which also
+    switches off X-1's own planned alarm - pre-existing, now visible.
+  - **N3 (cosmetic):** a fast off/on double tap can show a stale switch until the second
+    checkpoint finishes; the armed state always follows `disabledDays`. No end-to-end widget test
+    covers toggle -> checkpoint -> map cleanup.
+  - **N4 (pre-existing):** switching off today's alarm once its minute has passed changes nothing
+    (FR-18 never touches a past alarm), and the switch springs back without an explanation.
+- **Requirement:** R3; FR-18, FR-21.
+
 ### T-204 · Release v1.4.0 published — DONE (2026-09-28)
 
 - [x] Maintainer request: "bewege den stand auf master und baue einen neuen release mit bugfixes
@@ -2255,7 +2347,8 @@ rather than expanded into more scope here: see T-185.
 3. **Disabled planned days:** a planned day switched off in the alarm list (FR-21 `disabledDays`) is
    not "the next alarm" for the window - nothing rings then, so it cannot be the first ring. The
    reminder (unchanged) still counts such days; that inconsistency predates this entry and is left as
-   is.
+   is. *(Resolved by T-221, 2026-10-03: `nextWakeUpTime()` itself now skips switched-off days, so
+   the reminder and the direct-boot mirror agree with the window.)*
 4. **Past start:** switching on, or any push, while already inside sleep time → DND comes on about two
    minutes later (T-110's "now + 2 minutes", as instructed), and a catch-up already armed is kept so
    repeated pushes cannot keep postponing it. If the alarm is less than two minutes away, nothing is

@@ -77,8 +77,9 @@ typedef SleepTimeWindow = ({DateTime start, DateTime end});
 /// actually ring and that the user has not excluded:
 ///
 /// - planned days switched off in the alarm list ([disabledDays], FR-21)
-///   are left out: nothing rings on them, so they cannot be "the very first
-///   ring" that ends sleep time (the reminder, unchanged, still counts them);
+///   are left out (by `nextWakeUpTime` itself since docs/TODO.md T-221, so
+///   the bedtime reminder agrees): nothing rings on them, so they cannot be
+///   "the very first ring" that ends sleep time;
 /// - manual alarms with [ManualAlarm.excludeFromSleepTime] are left out (R5).
 ///   `nextWakeUpTime` already ignores switched-off manual alarms.
 ///
@@ -103,9 +104,9 @@ SleepTimeWindow? sleepTimeWindow({
   final target = nextWakeUpTime(
     pendingDayValues: {
       for (final entry in pendingDayValues.entries)
-        if (!disabledDays.contains(entry.key))
-          entry.key: _ringMinuteMillis(entry.value),
+        entry.key: _ringMinuteMillis(entry.value),
     },
+    disabledDays: disabledDays,
     manualAlarms: [
       for (final alarm in manualAlarms)
         if (!alarm.excludeFromSleepTime) alarm,

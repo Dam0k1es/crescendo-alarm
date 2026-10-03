@@ -762,6 +762,8 @@ planned values:
   guaranteed wake-up. Cleaning up genuinely stale alarms remains `Handler.handleAlarm`'s own job
   (`isAlarmStale`).
 - Already-past planned values are not re-set (FR-11: the triggered value is fixed).
+- A day the user switched off (FR-21) keeps one **unarmed, disabled** entry at its planned value
+  instead of an armed one - listed, never rung (`docs/TODO.md` T-221).
 - `ManualAlarm`s are never read or written in the process (FR-15).
 
 - **Test:** a planned future value with no existing alarm → exactly one `ScheduledAlarm` is
@@ -1016,6 +1018,21 @@ decision.
 - A switched-off day that has passed is cleaned up along with `pendingDayValues` (the same
   retention bound, T-82) — otherwise the set grows without limit.
 - **Snooze (FR-20) is unaffected:** there is nothing to postpone that does not ring.
+- **A switched-off planned alarm stays listed as inactive, not removed** (`docs/TODO.md` T-221,
+  maintainer request: *"Wenn ich einen scheduled alarm deaktiviere (schieber umlegen) wird er nicht
+  nur deaktiviert, sondern auch gelöscht. Ich will, dass der alarm als inaktiv gelistet wird."* -
+  switching a scheduled alarm off deleted it; it should be listed as inactive). FR-18's
+  reconciliation keeps exactly one entry per planned future day: armed and `enabled` for an enabled
+  day, **unarmed** and `enabled = false` for a switched-off one. The disabled entry follows plan
+  changes of its day (new time, still disabled) and disappears with the day's planned value, like
+  any other entry; its absence from the platform is its correct state, never a "missing" alarm to
+  re-arm, and an entry marked disabled that *is* armed on the platform is replaced (which stops it).
+  Switching the day back on replaces the disabled entry by an armed one at the day's **current**
+  planned value. FR-18's other rules hold unchanged for it: at most one entry per planned value
+  (T-116), never removed while in the past.
+- **Nothing that is about waking up reads a switched-off day as a wake-up:** not the arming, not
+  `nextWakeUpTime()` (so neither the bedtime reminder nor the direct-boot fallback mirror), not the
+  Do Not Disturb sleep-time window (`docs/TODO.md` T-221; until then only the window skipped it).
 
 - **Test:** switch tomorrow's alarm off → `Alarm.getAlarms()` no longer contains it; a following
   checkpoint (ring, settings change, sync button) does **not** re-arm it; after an app restart it
@@ -1023,6 +1040,13 @@ decision.
 - **Test:** the same day switched back on → the planned value is unchanged and armed again.
 - **Test:** a switched-off day does **not** change the other days' wake times — it remains an anchor
   of the curve.
+- **Test (T-221):** switch tomorrow's alarm off → its entry is still in the alarm list, once, at the
+  day's planned time, with `enabled = false`, and nothing is armed for it; further re-plans change
+  neither the entry nor the platform; after an app restart it is still listed disabled; a plan
+  change of that day moves the entry and keeps it disabled; switched back on, it is armed exactly
+  once at the current planned value. Counter-tests: the other days stay armed, and a day that loses
+  its planned value loses its entry. A switched-off day does not feed `nextWakeUpTime()`, the
+  bedtime reminder, the direct-boot mirror or the sleep-time window.
 
 ### Manual alarms
 

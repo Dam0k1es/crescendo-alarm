@@ -46,6 +46,12 @@ import 'package:crescendo_alarm/models/scheduling/stored_values.dart';
 /// have let the bedtime reminder recommend sleep for a "tomorrow" wake-up
 /// that `repeatOnDays` says will not actually ring.
 ///
+/// [disabledDays] (FR-21, the planned days switched off in the alarm list)
+/// are skipped for the same reason as a switched-off manual alarm below:
+/// nothing rings on them (docs/TODO.md T-221 - until then only the Do Not
+/// Disturb window left them out, while the bedtime reminder and the
+/// direct-boot fallback mirror still counted them).
+///
 /// `enabled` **is** consulted since FR-21 (docs/TODO.md T-03): a switched-off
 /// alarm does not ring, and a bedtime reminder computed from it would send the
 /// user to bed for a wake-up that never comes. Until FR-21 this function
@@ -57,6 +63,7 @@ import 'package:crescendo_alarm/models/scheduling/stored_values.dart';
 /// decide what to do with that (see `scheduleSleepReminder`'s fallback).
 DateTime? nextWakeUpTime({
   required Map<String, int?> pendingDayValues,
+  required Set<String> disabledDays,
   required List<ManualAlarm> manualAlarms,
   required DateTime now,
 }) {
@@ -69,7 +76,13 @@ DateTime? nextWakeUpTime({
     }
   }
 
-  for (final millis in pendingDayValues.values) {
+  for (final MapEntry(key: day, value: millis) in pendingDayValues.entries) {
+    // FR-21, docs/TODO.md T-221: a switched-off planned day does not ring.
+    // Its value stays in `pendingDayValues` (an anchor for the smoothing),
+    // so it has to be skipped here - otherwise the bedtime reminder sends
+    // the user to bed for it and the direct-boot mirror arms its fallback
+    // siren for it.
+    if (disabledDays.contains(day)) continue;
     // localFromStored (docs/TODO.md T-83): local-tagged like the manual-alarm
     // side below (`nextManualOccurrence`), so the result has the same frame
     // whichever source wins - callers read it as local wall clock. The

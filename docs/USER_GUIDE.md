@@ -25,8 +25,11 @@ Two tabs: **Scheduled** (calendar-derived) and **Manual** (alarms you set yourse
 
 Alarms the app itself worked out from your calendar - see "How scheduling works" below. You can:
 
-- **Toggle one off** with its switch - it stays in the list (so you can turn it back on), it just
-  won't ring.
+- **Toggle one off** with its switch - it stays in the list as an inactive alarm, with its switch
+  off, so you can turn it back on; it just won't ring. While it is off it still follows your plan
+  (if a calendar change moves that day's wake-up time, the inactive entry moves with it), and
+  turning it back on arms it for the day's current planned time. A day you switched off is also
+  left out of the bedtime reminder and of Do Not Disturb's sleep time.
 - **Swipe right** on one to delete it. The next re-plan (see below) creates it again from your
   calendar and settings - to skip a day for good, use its switch instead.
 - **Swipe left** to delete every scheduled alarm at once (asks for confirmation first).

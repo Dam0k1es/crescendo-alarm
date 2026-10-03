@@ -59,6 +59,7 @@ Future<void> scheduleSleepReminder(
       // (a week out), which still leaves FR-16 Checkpoint 2 a hook.
       dateTime = nextWakeUpTime(
             pendingDayValues: appState.pendingDayValues,
+            disabledDays: appState.disabledDays,
             manualAlarms: appState.manualAlarms,
             now: DateTime.now(),
           ) ??

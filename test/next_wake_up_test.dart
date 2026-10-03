@@ -27,6 +27,7 @@ void main() {
           _iso(soon): soon.millisecondsSinceEpoch,
           _iso(later): later.millisecondsSinceEpoch,
         },
+        disabledDays: const {},
         manualAlarms: const [],
         now: now,
       );
@@ -44,6 +45,7 @@ void main() {
           '2026-03-10': null,
           _iso(future): future.millisecondsSinceEpoch,
         },
+        disabledDays: const {},
         manualAlarms: const [],
         now: now,
       );
@@ -54,6 +56,7 @@ void main() {
     test('only a ManualAlarm, time still ahead today -> today', () {
       final result = nextWakeUpTime(
         pendingDayValues: const {},
+        disabledDays: const {},
         manualAlarms: [ManualAlarm(time: const TimeOfDay(hour: 8, minute: 15))],
         now: now, // 06:00
       );
@@ -64,6 +67,7 @@ void main() {
     test('only a ManualAlarm, time already past today -> tomorrow', () {
       final result = nextWakeUpTime(
         pendingDayValues: const {},
+        disabledDays: const {},
         manualAlarms: [ManualAlarm(time: const TimeOfDay(hour: 5, minute: 0))],
         now: now, // 06:00
       );
@@ -76,6 +80,7 @@ void main() {
 
       final result = nextWakeUpTime(
         pendingDayValues: {_iso(planned): planned.millisecondsSinceEpoch},
+        disabledDays: const {},
         manualAlarms: [ManualAlarm(time: const TimeOfDay(hour: 9, minute: 0))],
         now: now,
       );
@@ -88,6 +93,7 @@ void main() {
 
       final result = nextWakeUpTime(
         pendingDayValues: {_iso(planned): planned.millisecondsSinceEpoch},
+        disabledDays: const {},
         manualAlarms: [ManualAlarm(time: const TimeOfDay(hour: 6, minute: 30))],
         now: now,
       );
@@ -98,6 +104,7 @@ void main() {
     test('several ManualAlarms -> the earliest counts', () {
       final result = nextWakeUpTime(
         pendingDayValues: const {},
+        disabledDays: const {},
         manualAlarms: [
           ManualAlarm(time: const TimeOfDay(hour: 9, minute: 0)),
           ManualAlarm(time: const TimeOfDay(hour: 7, minute: 45)),
@@ -111,6 +118,7 @@ void main() {
     test('no source yields anything -> null', () {
       final result = nextWakeUpTime(
         pendingDayValues: const {'2026-03-11': null},
+        disabledDays: const {},
         manualAlarms: const [],
         now: now,
       );
@@ -134,6 +142,7 @@ void main() {
 
       final result = nextWakeUpTime(
         pendingDayValues: const {},
+        disabledDays: const {},
         manualAlarms: [alarm],
         now: now,
       );

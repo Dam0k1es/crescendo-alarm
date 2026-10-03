@@ -56,6 +56,8 @@ things it structurally **cannot** show, and those are exactly what's here:
 | B6 | Delete the appointment, sync again | the day drifts toward the preferred wake-up time, or drops out | |
 | B7 | Create an appointment with a **foreign time zone** (e.g. Asia/Tokyo) | the alarm follows the **device's** zone, not the appointment's zone (FR-2) | |
 | B8 | Create an all-day appointment | ignored, the day stays a gap day (FR-2) | |
+| B9 | Switch tomorrow's scheduled alarm off, then press sync; check `dumpsys alarm` (C1's command) | the alarm stays in the Scheduled list with its switch off, at the same time; its platform entry is gone; still listed off after restarting the app (FR-21, T-221) | |
+| B10 | Switch it back on | listed on, armed again (one more platform entry), rings at the day's planned time | |
 
 ## C — Survival (R3)
 

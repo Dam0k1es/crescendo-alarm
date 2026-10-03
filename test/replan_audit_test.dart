@@ -1,3 +1,4 @@
+import 'support/fake_alarm_platform.dart';
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,6 +31,11 @@ Future<AppState> _freshAppState() async {
   await appState.initialized;
   appState.durationToWakeUp = const TimeOfDay(hour: 0, minute: 0);
   appState.durationToGetReady = const TimeOfDay(hour: 0, minute: 0);
+  // The `alarm` plugin has no channel in `flutter test`, so a real
+  // `Alarm.stop` throws. Since T-221 `removeAlarm` only drops an entry once
+  // its platform stop succeeded (a failed stop keeps it listed), so the
+  // T-117 replacement check needs a platform that answers.
+  FakeAlarmPlatform().attach(appState);
   return appState;
 }
 

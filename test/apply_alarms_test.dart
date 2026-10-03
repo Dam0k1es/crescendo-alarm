@@ -1,3 +1,4 @@
+import 'support/fake_alarm_platform.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
@@ -33,6 +34,11 @@ Future<AppState> _freshAppState() async {
   SharedPreferences.setMockInitialValues({});
   final appState = AppState();
   await appState.initialized;
+  // The `alarm` plugin has no channel in `flutter test`, so a real
+  // `Alarm.stop` throws. Since T-221 `removeAlarm` only drops an entry once
+  // its platform stop succeeded (a failed stop keeps it listed), so these
+  // list-level tests need a platform that answers.
+  FakeAlarmPlatform().attach(appState);
   return appState;
 }
 

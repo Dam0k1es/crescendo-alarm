@@ -1,3 +1,4 @@
+import 'support/fake_alarm_platform.dart';
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -110,5 +111,29 @@ void main() {
     expect(mirrored, isNull,
         reason: 'clearing the stored due time is what tells the native '
             'receiver there is nothing left to arm a fallback for');
+  });
+
+  test('removeAlarm: the mirror no longer points at the alarm just removed',
+      () async {
+    // docs/TODO.md T-221, review finding N1: removeAlarm now stops on the
+    // platform before it drops the entry; the mirror must be recomputed
+    // after the list changed, or a deleted manual alarm would still arm
+    // the direct-boot siren.
+    final appState = await _freshAppState();
+    FakeAlarmPlatform().attach(appState);
+    final alarm = ManualAlarm(
+      time: const TimeOfDay(hour: 7, minute: 0),
+      enabled: true,
+      gentlewake: false,
+      tone: 'assets/sounds/lollipop.mp3',
+      id: 1,
+    );
+    appState.manualAlarms.add(alarm);
+    appState.refreshDirectBootFallback();
+    expect(mirrored, isNotNull);
+
+    await appState.removeAlarm(alarm);
+
+    expect(mirrored, isNull);
   });
 }

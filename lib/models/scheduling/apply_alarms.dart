@@ -23,7 +23,6 @@
 // Split deliberately: planAlarmSync() is pure (no AppState, no plugin, fully
 // unit-testable), applyPlannedAlarms() is the thin AppState-facing applier.
 
-import 'package:alarm/alarm.dart';
 import 'package:flutter/foundation.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
@@ -35,15 +34,25 @@ import 'package:crescendo_alarm/utils/utils.dart';
 /// The difference between the alarms that currently exist and the ones
 /// scheduling-v2's plan calls for.
 class AlarmSyncPlan {
-  const AlarmSyncPlan({required this.toRemove, required this.toAdd});
+  const AlarmSyncPlan({
+    required this.toRemove,
+    required this.toAdd,
+    this.toAddDisabled = const [],
+  });
 
   /// Existing `ScheduledAlarm`s that no longer correspond to a planned value
-  /// (a revised day, a day that became a gap day/safety-valve `null`, or a
-  /// stale alarm that already lies in the past).
+  /// (a revised day, a day that became a gap day/safety-valve `null`), or
+  /// whose enabled state no longer matches their day's (docs/TODO.md T-221:
+  /// the armed entry of a day just switched off, the disabled entry of a day
+  /// just switched back on). Removing one also stops its platform alarm.
   final List<ScheduledAlarm> toRemove;
 
-  /// Planned wake times that have no matching alarm yet.
+  /// Planned wake times that have no matching alarm yet - to be armed.
   final List<DateTime> toAdd;
+
+  /// Planned wake times of switched-off days (FR-21) that have no matching
+  /// disabled entry yet - listed, never armed.
+  final List<DateTime> toAddDisabled;
 }
 
 /// Truncates to minute precision **in one common frame** - `AppState._setAlarm`
@@ -72,6 +81,10 @@ DateTime _toMinute(DateTime t) {
 /// past times anyway. A `null` value (FR-9's safety valve, or FR-10's cold
 /// start without a `preferredWakeUpTime`) means "no alarm planned for that day", so any
 /// existing alarm for it gets removed rather than kept.
+///
+/// A day in [disabledDays] (FR-21) keeps exactly one entry too, but a
+/// disabled, unarmed one ([AlarmSyncPlan.toAddDisabled]) - switched off is
+/// listed as inactive, not deleted (docs/TODO.md T-221).
 ///
 /// **Past-dated existing alarms are deliberately never removed.** This sync
 /// runs (via `replan()`) from `Handler.handleAlarm()`'s ring checkpoint, i.e.
@@ -112,10 +125,14 @@ AlarmSyncPlan planAlarmSync({
   required DateTime now,
   Set<int>? platformAlarmIds,
   /// FR-21: days for which the user has explicitly switched off the alarm.
-  /// They are treated as if nothing were planned for them - but the value
-  /// itself stays in place (switched off is not deleted), so it applies
-  /// again immediately when switched back on, and the smoothing can keep
-  /// using it as an anchor.
+  /// Nothing is armed for them - but the value itself stays in place
+  /// (switched off is not deleted), so it applies again immediately when
+  /// switched back on, and the smoothing can keep using it as an anchor.
+  ///
+  /// docs/TODO.md T-221: such a day is still LISTED - one entry with
+  /// `enabled == false` at its planned value ([AlarmSyncPlan.toAddDisabled]),
+  /// never armed. It used to be skipped like an unplanned day, so switching
+  /// a scheduled alarm off deleted it from the list.
   Set<String>? disabledDays,
   String? tone,
   double? volume,
@@ -126,12 +143,8 @@ AlarmSyncPlan planAlarmSync({
   final nowMinute = _toMinute(now);
 
   final desired = <DateTime>[];
+  final desiredDisabled = <DateTime>[];
   for (final entry in pendingDayValues.entries) {
-    // FR-21: the user has said "don't wake me" for this day. This must
-    // apply HERE, not only at arming time: `applyPlannedAlarms` rebuilds the
-    // alarm set from this list on every replan, so a bare `Alarm.stop()` at
-    // the surface wouldn't last until the next checkpoint.
-    if (disabledDays != null && disabledDays.contains(entry.key)) continue;
     final millis = entry.value;
     // localFromStored, not instantFromStored (docs/TODO.md T-83): these
     // values land in ScheduledAlarm.time, and its title (formatDateTime) as
@@ -139,10 +152,21 @@ AlarmSyncPlan planAlarmSync({
     final value = localFromStored(millis);
     if (value == null) continue;
     if (!_toMinute(value).isAfter(nowMinute)) continue;
-    desired.add(value);
+    // FR-21: the user has said "don't wake me" for this day. This must
+    // apply HERE, not only at arming time: `applyPlannedAlarms` rebuilds the
+    // alarm set from this list on every replan, so a bare `Alarm.stop()` at
+    // the surface wouldn't last until the next checkpoint. The day keeps a
+    // listed, unarmed entry (T-221) - a separate list, so nothing that arms
+    // from `desired` can ever see it.
+    if (disabledDays != null && disabledDays.contains(entry.key)) {
+      desiredDisabled.add(value);
+    } else {
+      desired.add(value);
+    }
   }
 
   final desiredMinutes = desired.map(_toMinute).toSet();
+  final desiredDisabledMinutes = desiredDisabled.map(_toMinute).toSet();
 
   bool onPlatform(ScheduledAlarm alarm) =>
       platformAlarmIds == null || platformAlarmIds.contains(alarm.id);
@@ -161,10 +185,32 @@ AlarmSyncPlan planAlarmSync({
 
   /// An existing alarm is only "good enough to keep" if it is planned, still
   /// present on the platform, and carries the properties the plan calls for.
+  ///
+  /// Only an ENABLED entry can be the armed alarm of an enabled day
+  /// (docs/TODO.md T-221): a disabled entry on an enabled day - the day was
+  /// just switched back on - is replaced by a freshly armed one, also when
+  /// the platform state is unknown (`onPlatform` would vouch for it then).
   bool matchesPlan(ScheduledAlarm alarm) =>
+      alarm.enabled &&
       desiredMinutes.contains(_toMinute(alarm.time)) &&
       onPlatform(alarm) &&
       propertiesMatch(alarm);
+
+  /// docs/TODO.md T-221: the counterpart for a switched-off day. Its entry
+  /// is kept if it is disabled and sits on the day's planned minute. Absent
+  /// from the platform is its correct state, not a "missing" alarm to re-arm
+  /// (T-74e's rule is about enabled entries only). An entry that says
+  /// "disabled" but IS on the platform would ring, so it is replaced - its
+  /// removal stops the platform alarm. Its tone/volume are irrelevant (it
+  /// does not ring) and deliberately not compared, so a settings change does
+  /// not churn it; switching the day back on replaces it anyway.
+  ///
+  /// An ENABLED entry never matches a switched-off day, whatever the minute:
+  /// that entry is the armed alarm, and only removing it stops it.
+  bool matchesDisabledPlan(ScheduledAlarm alarm) =>
+      !alarm.enabled &&
+      desiredDisabledMinutes.contains(_toMinute(alarm.time)) &&
+      !(platformAlarmIds?.contains(alarm.id) ?? false);
 
   // Every planned value can be claimed by at most ONE alarm
   // (docs/TODO.md T-116).
@@ -183,7 +229,11 @@ AlarmSyncPlan planAlarmSync({
   // (`applyPlannedAlarms` -> `appState.removeAlarm`), so it matters that the
   // survivor specifically is NOT in `toRemove` - otherwise removal would
   // stop it on the platform too.
+  //
+  // The same "claimed at most once" rule holds for the disabled entries of
+  // switched-off days (T-221), in a set of their own.
   final claimedMinutes = <DateTime>{};
+  final claimedDisabledMinutes = <DateTime>{};
   final toRemove = <ScheduledAlarm>[];
   for (final alarm in existingScheduledAlarms) {
     final minute = _toMinute(alarm.time);
@@ -193,14 +243,21 @@ AlarmSyncPlan planAlarmSync({
     // only ever contains instants after now anyway.
     if (!minute.isAfter(nowMinute)) continue;
     if (matchesPlan(alarm) && claimedMinutes.add(minute)) continue;
+    if (matchesDisabledPlan(alarm) && claimedDisabledMinutes.add(minute)) {
+      continue;
+    }
     toRemove.add(alarm);
   }
 
   final toAdd = desired
       .where((value) => !claimedMinutes.contains(_toMinute(value)))
       .toList();
+  final toAddDisabled = desiredDisabled
+      .where((value) => !claimedDisabledMinutes.contains(_toMinute(value)))
+      .toList();
 
-  return AlarmSyncPlan(toRemove: toRemove, toAdd: toAdd);
+  return AlarmSyncPlan(
+      toRemove: toRemove, toAdd: toAdd, toAddDisabled: toAddDisabled);
 }
 
 /// docs/TODO.md T-141: `planAlarmSync`'s removal loop above deliberately
@@ -255,7 +312,7 @@ Future<void> applyPlannedAlarms(
   Set<int>? platformIds;
   Map<int, DateTime> platformTimes = const <int, DateTime>{};
   try {
-    final platformAlarms = await Alarm.getAlarms();
+    final platformAlarms = await appState.platformAlarms();
     platformIds = platformAlarms.map((a) => a.id).toSet();
     platformTimes = {for (final a in platformAlarms) a.id: a.dateTime};
   } catch (e) {
@@ -294,12 +351,18 @@ Future<void> applyPlannedAlarms(
   }
 
   var addFailures = 0;
-  for (final value in plan.toAdd) {
+  // docs/TODO.md T-221: enabled values are armed, switched-off ones only
+  // listed - `AppState.addAlarm` arms a ScheduledAlarm only while enabled.
+  final additions = [
+    for (final value in plan.toAdd) (time: value, enabled: true),
+    for (final value in plan.toAddDisabled) (time: value, enabled: false),
+  ];
+  for (final (time: value, :enabled) in additions) {
     try {
       await appState.addAlarm(
           ScheduledAlarm(
             time: value,
-            enabled: true,
+            enabled: enabled,
             gentlewake: appState.gentleWakeUpEnabled,
             gentleWakeDuration: appState.gentleWakeUpDuration,
             tone: appState.selectedTone,
@@ -322,8 +385,12 @@ Future<void> applyPlannedAlarms(
   // docs/TODO.md T-89: T-64 would have been immediately visible here as a
   // large `toRemove` with `toAdd == 0`, T-74e as `platformStateUnknown` or
   // as a divergence between `existingAlarms` and what the platform knows.
+  // docs/TODO.md T-221: `desiredAlarms` counts the ARMED alarms the sync
+  // aims for - a switched-off day's listed entry is deliberately left out,
+  // so a large `toRemove` with nothing armed still stands out (T-64).
   Diag.alarmSync(
-    desiredAlarms: plan.toAdd.length + existing.length - plan.toRemove.length,
+    desiredAlarms: plan.toAdd.length +
+        existing.where((a) => a.enabled && !plan.toRemove.contains(a)).length,
     existingAlarms: existing.length,
     platformStateUnknown: platformIds == null,
     toRemove: plan.toRemove.length,
@@ -335,7 +402,7 @@ Future<void> applyPlannedAlarms(
   );
 
   debugPrint(
-      "=====applyPlannedAlarms: removed ${plan.toRemove.length}, added ${plan.toAdd.length}");
+      "=====applyPlannedAlarms: removed ${plan.toRemove.length}, added ${plan.toAdd.length}, listed disabled ${plan.toAddDisabled.length}");
 }
 
 /// The largest deviation between a `ScheduledAlarm` in `AppState` and what

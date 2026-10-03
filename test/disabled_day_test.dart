@@ -114,13 +114,19 @@ void main() {
         todayAlreadyRang: true,
       );
 
-      expect(
-        appState.scheduledAlarms.where((a) => isoDate(a.time) == isoDate(tomorrow)),
-        isEmpty,
-        reason: 'FR-21: the next planning run must not repeat it',
-      );
       expect(appState.pendingDayValues[isoDate(tomorrow)], isNotNull,
           reason: 'the planned value stays - switched off is not deleted');
+      // docs/TODO.md T-221: the day's entry stays listed - disabled, never
+      // armed (that half is test/scheduled_alarm_listed_inactive_test.dart,
+      // against a fake platform). Matched by instant, not by `isoDate` of
+      // the local reading, which names another date in some CI zones.
+      final planned = appState.pendingDayValues[isoDate(tomorrow)]!;
+      final entries = appState.scheduledAlarms
+          .where((a) => a.time.millisecondsSinceEpoch == planned);
+      expect(entries, hasLength(1),
+          reason: 'T-221: switched off is listed as inactive, not deleted');
+      expect(entries.single.enabled, isFalse,
+          reason: 'FR-21: the next planning run must not repeat it');
     });
 
     test('the state survives a restart', () async {

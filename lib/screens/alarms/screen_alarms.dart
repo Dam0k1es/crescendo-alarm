@@ -56,6 +56,12 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
   late TabController _tabController;
   late final AppState _appState;
 
+  /// docs/TODO.md T-221: what the user just switched a scheduled alarm to,
+  /// by alarm id, until the checkpoint that applies it has finished. The
+  /// alarm object itself is deliberately not flipped (see the toggle below);
+  /// this only keeps the switch from lagging behind the finger meanwhile.
+  final Map<int, bool> _pendingScheduledToggles = {};
+
   @override
   bool get wantKeepAlive => true;
 
@@ -194,7 +200,10 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                   ],
                 ),
                 trailing: Switch(
-                  value: alarms[index].enabled,
+                  value: (alarms[index] is ScheduledAlarm
+                          ? _pendingScheduledToggles[alarms[index].id]
+                          : null) ??
+                      alarms[index].enabled,
                   onChanged: (bool value) async {
                     final alarm = alarms[index];
                     if (alarm is ScheduledAlarm) {
@@ -202,10 +211,23 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                       // toggle is a statement about the DAY, not about the
                       // object - otherwise the next re-plan would overwrite
                       // it, because FR-18 rebuilds the alarm set every time.
-                      setState(() => alarm.enabled = value);
+                      //
+                      // docs/TODO.md T-221: the checkpoint's reconciliation
+                      // (planAlarmSync) then replaces the entry - an armed
+                      // one by a listed, disabled, unarmed one, or back.
+                      // The entry is NOT flipped here: one that says
+                      // "disabled" while its platform alarm is still armed
+                      // would be kept as the day's inactive entry and ring,
+                      // and one that says "enabled" without being armed
+                      // could pass as armed while the platform state is
+                      // unknown. The switch shows the new position meanwhile.
+                      setState(() => _pendingScheduledToggles[alarm.id] = value);
                       _appState.setDayEnabled(isoDate(alarm.time), value);
-                      runCheckpointSafely(_appState,
+                      await runCheckpointSafely(_appState,
                           trigger: CheckpointTrigger.settingsChanged);
+                      if (mounted) {
+                        setState(() => _pendingScheduledToggles.remove(alarm.id));
+                      }
                       return;
                     }
                     // FR-21, manual alarms: the object itself is the durable

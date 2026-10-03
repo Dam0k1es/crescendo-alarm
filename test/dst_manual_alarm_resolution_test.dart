@@ -235,6 +235,7 @@ void main() {
         final now = _local(t.firstPassMs(wall) - 3 * _hour);
         final result = nextWakeUpTime(
           pendingDayValues: const {},
+          disabledDays: const {},
           manualAlarms: [ManualAlarm(time: _timeOf(wall), repeatOnDays: _allDays)],
           now: now,
         );
