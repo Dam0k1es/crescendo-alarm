@@ -73,7 +73,7 @@ jobs:
         run: python3 scripts/mobsfscan_check.py mobsfscan-report.json .github/security-exceptions.json
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mobsfscan-report
           path: mobsfscan-report.json
