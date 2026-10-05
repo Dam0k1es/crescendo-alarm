@@ -107,11 +107,14 @@ jobs:
       # with it (dependency-metadata block in an APK; Android library notice
       # list vs. SBOM) prove their own logic here, on synthetic input - the
       # real inputs (an APK, an SBOM) only exist in the Android build jobs.
-      - name: APK dependency-block and library-notice self-tests
+      - name: APK, permission, notice and MobSF-gate self-tests
         if: matrix.tz == 'UTC'
         run: |
           python3 scripts/check_apk_dependency_block.py --self-test
           python3 scripts/gen_android_library_notices.py --self-test
+          python3 scripts/check_manifest_permissions.py --self-test
+          python3 scripts/mobsf_summary.py --self-test
+          python3 scripts/mobsfscan_check.py --self-test
       - name: Analyze
         # Frame-independent, hence only in the UTC leg - running it in
         # every leg would be waste with no additional signal.
@@ -194,6 +197,13 @@ jobs:
       # block is caught on dev, not first on master.
       - name: No dependency-metadata block in the APK (F-Droid)
         run: python3 scripts/check_apk_dependency_block.py build/app/outputs/flutter-apk/app-debug.apk
+
+      # Same allow-list on the debug APK, so a plugin bump that merges in a
+      # new permission is caught on dev, not first on master. `--variant
+      # debug` additionally allows only INTERNET (Flutter's debug manifest,
+      # for the tool connection). aapt2, under a second.
+      - name: Permissions match the allow-list (R6/R7, T-49)
+        run: python3 scripts/check_manifest_permissions.py --variant debug build/app/outputs/flutter-apk/app-debug.apk
 
       # docs/TODO.md T-198: JVM unit tests for the native half of the
       # sleep-time Do Not Disturb trigger (android/app/src/test,
@@ -301,6 +311,14 @@ jobs:
           "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --verbose \
             build/app/outputs/flutter-apk/app-release.apk
 
+      - name: Permissions match the allow-list (R6/R7, T-49)
+        # Exact match against scripts/check_manifest_permissions.py's
+        # allow-list, read from the signed APK with aapt2: fails on any
+        # permission a plugin merges in (INTERNET above all - R7's offline
+        # claim had no automated guard before) and on a needed one going
+        # missing (WRITE_CALENDAR, which device_calendar requires to read).
+        run: python3 scripts/check_manifest_permissions.py build/app/outputs/flutter-apk/app-release.apk
+
       - name: No dependency-metadata block in the APK (F-Droid, T-213)
         # AGP's encrypted dependency list (signing-block ID 0x504b4453) is
         # off in android/app/build.gradle.kts (dependenciesInfo); this proves
@@ -386,32 +404,13 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: app-production-apk
-      - name: Start MobSF
-        run: |
-          docker run -d --name mobsf -p 8000:8000 opensecurity/mobile-security-framework-mobsf:latest
-          for i in $(seq 1 30); do
-            if curl -sf -m 5 http://localhost:8000/ -o /dev/null; then
-              echo "MobSF is up"
-              break
-            fi
-            sleep 5
-          done
       - name: Scan APK
-        run: |
-          API_KEY=$(docker logs mobsf 2>&1 | grep "REST API Key" | tail -1 | grep -oE '[0-9a-f]{64}')
-          echo "Uploading APK..."
-          UPLOAD=$(curl -s -X POST "http://localhost:8000/api/v1/upload" \
-            -H "Authorization: $API_KEY" \
-            -F "file=@app-release.apk")
-          echo "$UPLOAD"
-          HASH=$(echo "$UPLOAD" | python3 -c "import sys,json; print(json.load(sys.stdin)['hash'])")
-          echo "Scanning (hash=$HASH)..."
-          curl -s -X POST "http://localhost:8000/api/v1/scan" \
-            -H "Authorization: $API_KEY" \
-            -F "hash=$HASH" -F "scan_type=apk" -F "file_name=app-release.apk" \
-            -o mobsf-report.json
-          python3 "$GITHUB_WORKSPACE/scripts/mobsf_summary.py" mobsf-report.json \
-            "$GITHUB_WORKSPACE/.github/security-exceptions.json"
+        # The whole scan (start MobSF, upload, scan, gate) lives in
+        # .github/scripts/mobsf_scan.sh, shared with release.yml so the APK
+        # attached to a GitHub Release gets exactly the same scan. It fails
+        # closed: no MobSF, an HTTP error or a report that is not a complete
+        # scan of this APK is red, not "HIGH: 0" (audit of 2026-10-05).
+        run: bash .github/scripts/mobsf_scan.sh app-release.apk mobsf-report.json
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
@@ -436,6 +435,3 @@ jobs:
           else
             echo "app-production-apk artifact not found (already deleted, or never uploaded)."
           fi
-      - name: Stop MobSF
-        if: always()
-        run: docker rm -f mobsf || true

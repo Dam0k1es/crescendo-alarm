@@ -96,6 +96,12 @@ jobs:
           "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --verbose \
             build/app/outputs/flutter-apk/app-release.apk
 
+      - name: Permissions match the allow-list (R6/R7, T-49)
+        # See ci.yml's build-android-release job: exact allow-list, fails on
+        # INTERNET or any other merged-in permission and on a needed one
+        # going missing.
+        run: python3 scripts/check_manifest_permissions.py build/app/outputs/flutter-apk/app-release.apk
+
       - name: No dependency-metadata block in the APK (F-Droid, T-213)
         # docs/TODO.md T-213: see ci.yml's build-android-release job.
         run: python3 scripts/check_apk_dependency_block.py build/app/outputs/flutter-apk/app-release.apk
@@ -134,6 +140,25 @@ jobs:
       - name: Clean up signing key
         if: always()
         run: rm -rf android/app/keystore android/key.properties
+
+      - name: MobSF full static scan of the release APK (R1)
+        # The APK this job attaches to the GitHub Release used to be the one
+        # build that was never MobSF-scanned - ci.yml scans master's own
+        # build, a different file (audit of 2026-10-05). Same script as
+        # ci.yml's mobsf-full-scan job, so both gates stay identical; it
+        # runs before the artifact upload and the release attachment below,
+        # so a red scan leaves neither behind. Adds roughly 5-10 minutes to
+        # the release path only.
+        run: bash .github/scripts/mobsf_scan.sh build/app/outputs/flutter-apk/app-release.apk mobsf-report.json
+
+      - name: Upload MobSF report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobsf-report
+          path: mobsf-report.json
+          if-no-files-found: warn
+          retention-days: 90
 
       - uses: actions/upload-artifact@v4
         with:

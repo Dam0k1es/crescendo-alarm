@@ -61,6 +61,49 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
 
+    <!-- docs/TODO.md T-49 (maintainer decision 2026-10-05: remove permissions
+         that are unused and break no feature). The sixteen launcher-badge
+         permissions below come from me.leolin:ShortcutBadger 1.1.22, a
+         runtime dependency of awesome_notifications' native core
+         (me.carda:AndroidAwnCore 0.12.1). Its only caller is AwnCore's
+         BadgeManager, reached from NotificationBuilder.setBadge only when a
+         notification carries a `badge` value or its channel sets
+         `channelShowBadge: true` - this app does neither (the one channel in
+         lib/utils/notifications.dart leaves channelShowBadge at the plugin's
+         default, false, and no NotificationContent sets `badge`) - and from
+         the plugin's set/increment/decrement/resetGlobalBadgeCounter methods,
+         which nothing in lib/ calls. Even on that path ShortcutBadger.applyCount
+         catches a missing permission and returns false. Since Android 8 the
+         launcher's own notification dots need no permission at all.
+         (ShortcutBadger's four com.android.launcher.* lines are XML comments
+         in its manifest, not permissions - they never reached the APK.) -->
+    <uses-permission android:name="com.sec.android.provider.badge.permission.READ" tools:node="remove" />
+    <uses-permission android:name="com.sec.android.provider.badge.permission.WRITE" tools:node="remove" />
+    <uses-permission android:name="com.htc.launcher.permission.READ_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="com.htc.launcher.permission.UPDATE_SHORTCUT" tools:node="remove" />
+    <uses-permission android:name="com.sonyericsson.home.permission.BROADCAST_BADGE" tools:node="remove" />
+    <uses-permission android:name="com.sonymobile.home.permission.PROVIDER_INSERT_BADGE" tools:node="remove" />
+    <uses-permission android:name="com.anddoes.launcher.permission.UPDATE_COUNT" tools:node="remove" />
+    <uses-permission android:name="com.majeur.launcher.permission.UPDATE_BADGE" tools:node="remove" />
+    <uses-permission android:name="com.huawei.android.launcher.permission.CHANGE_BADGE" tools:node="remove" />
+    <uses-permission android:name="com.huawei.android.launcher.permission.READ_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="com.huawei.android.launcher.permission.WRITE_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_APP_BADGE" tools:node="remove" />
+    <uses-permission android:name="com.oppo.launcher.permission.READ_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="com.oppo.launcher.permission.WRITE_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="me.everything.badger.permission.BADGE_COUNT_READ" tools:node="remove" />
+    <uses-permission android:name="me.everything.badger.permission.BADGE_COUNT_WRITE" tools:node="remove" />
+
+    <!-- docs/TODO.md T-49: BROADCAST_CLOSE_SYSTEM_DIALOGS comes from
+         awesome_notifications' own manifest. AOSP declares it
+         protectionLevel="signature|privileged|recents" (frameworks/base
+         core/res/AndroidManifest.xml, "@hide ... Not for use by third-party
+         applications"), so it can never be granted to this app - requesting
+         it does nothing. Its only user, AwnCore's
+         StatusBarManager.closeStatusBar, sends ACTION_CLOSE_SYSTEM_DIALOGS
+         only when SDK_INT < 31, where the broadcast needed no permission. -->
+    <uses-permission android:name="android.permission.BROADCAST_CLOSE_SYSTEM_DIALOGS" tools:node="remove" />
+
     <application
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
@@ -218,6 +261,14 @@
     </queries>
 
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- The app never writes to a calendar, but WRITE_CALENDAR is NOT
+         removable: device_calendar 4.3.3's arePermissionsGranted()
+         (CalendarDelegate.kt) requires BOTH calendar permissions to be
+         granted before retrieveCalendars/retrieveEvents run, and its
+         requestPermissions() asks for WRITE_CALENDAR first and only checks
+         that first result. Undeclared, it can never be granted, so every
+         calendar read would fail with NOT_AUTHORIZED (docs/TODO.md T-49).
+         scripts/check_manifest_permissions.py fails if it goes missing. -->
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

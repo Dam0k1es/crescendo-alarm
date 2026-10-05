@@ -26,6 +26,21 @@ so the files can ship inside the app. The CC BY 4.0 files also require the credi
 page) and is in the public domain, so the credit for it is a courtesy. Filo gèn' also offers
 `Rooster_crowing.ogg` under the GFDL and earlier CC BY-SA versions; this file uses CC BY-SA 4.0.
 
+## File hashes
+
+The SHA-256 of each shipped file, so a credit row stays tied to the exact file it describes.
+`test/media_credits_test.dart` compares these with the files; a replaced file fails until its credit
+row has been re-checked and its new hash recorded here.
+
+| File | SHA-256 |
+|---|---|
+| `annoying_alarm.mp3` | `43905144c8a734304f3a321e64ffc5752aa35c7b2d4aad553138770f827e05f3` |
+| `lollipop.mp3` | `2e269275c57064627ac9dc26c5f777f76f10c672402984e9a40e8e727962b4ba` |
+| `old_telephone_ring.mp3` | `460f3cbd77c8a01ffde867db1ebf6ff696ea78d7c4304e54b04748746d5febf1` |
+| `wake_up.mp3` | `27bf2cdb8ce52f22bd77ec1b7f77075b4003ae96421e8084813f6e32fbb24b55` |
+| `wakeywakey.mp3` | `8c99fe1571f06cbb1d1f479ee4a73c79ef2749b6dd1480a1e908b45b58324a7a` |
+| `wakeywakey2.mp3` | `f2c20ac1e5395d53a824aea0aa6cd1abfb992983157f3e9d1dd8bc28ff9f23df` |
+
 ## Original downloads
 
 These were downloaded from Wikimedia Commons on 2026-10-01. Each file's SHA-1 matched the SHA-1
