@@ -44,7 +44,7 @@ Tom's irregular sleep pattern and frequent travel make it difficult to maintain 
 Tom wants to use an alarm app that helps him adjust his sleep schedule and adapt to different time zones while on business trips. He is looking for a solution that wakes him gently and effectively to start the day, even when suffering from jet lag and having had little sleep.
 
 > **Note (2026-09):** The app reads the device's current UTC offset at its scheduling
-> checkpoints (an alarm ringing, the app being opened - FR-16/FR-17) and interprets calendar
+> checkpoints (a scheduled alarm ringing, the app being opened - FR-16/FR-17) and interprets calendar
 > entries accordingly - this is standard behaviour for any calendar-based app, not a dedicated
 > jet-lag feature. There is no algorithm that actively helps users adjust
 > to a new time zone (e.g. gradual wake-time shifting, warnings on time zone change). Tom's

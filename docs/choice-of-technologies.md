@@ -27,12 +27,16 @@
 > original planning above never anticipated it, not because any of this was a later
 > substitute for Firebase specifically.
 
-- **`shared_preferences`** is the only persistence layer: every piece of app state -
-  settings, the scheduled/manual alarm lists, the deactivation code, the diagnostics
-  log's ring buffer - is stored as on-device key-value pairs, read back through
-  `AppState`. No SQL/NoSQL database, no ORM, no schema migrations. (The one exception:
-  imported custom alarm tones are copied as files into the app's own documents directory,
-  `docs/TODO.md` T-146.)
+- **`shared_preferences`** is the app's main persistence layer: every piece of Dart-side app
+  state - settings, the scheduled/manual alarm lists, the deactivation code, the diagnostics
+  log's ring buffers - is stored as on-device key-value pairs, read back through
+  `AppState`. No SQL/NoSQL database, no ORM, no schema migrations. Three exceptions:
+  imported custom alarm tones are copied as files into the app's own documents directory
+  (`docs/TODO.md` T-146); the two native Kotlin channels below keep their own Android
+  `SharedPreferences` in **device-protected storage** (`direct_boot_fallback` - the next
+  alarm's due time for the locked-after-reboot fallback, T-158; `sleep_time_dnd` - the Do Not
+  Disturb window, T-198), which is readable before the device's first unlock by design;
+  and the `alarm`/`awesome_notifications` plugins persist their own scheduled entries.
 - **The `alarm` plugin** (a thin wrapper around Android's own `AlarmManager`) is what
   actually "stores and serves" a wake-up: registering a real platform alarm that
   survives a reboot, not an app-level timer (R3 - whether it survives a force-stop is still

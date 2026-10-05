@@ -105,9 +105,9 @@ implemented test-first against it. In short: the earliest non-all-day appointmen
 upper bound ("be up by then"), days without appointments drift gradually towards a preferred
 wake-up time instead of jumping, and a wake-up time that has to move a long way is spread evenly
 over the days leading up to it rather than dumped on one night. Re-planning happens at events that
-occur anyway - when an alarm rings, when the app is opened (at most once a day), when a relevant
-setting changes, and on the alarm list's sync button - so there is no battery-draining background
-worker.
+occur anyway - when a scheduled alarm rings (a manual alarm's ring does not re-plan), when the app
+is opened (at most once a day), when a relevant setting changes, and on the alarm list's sync
+button - so there is no battery-draining background worker.
 
 ### Quality & Testing
 

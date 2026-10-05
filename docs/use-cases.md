@@ -97,13 +97,18 @@
 - Appearance
 - Tone
 - About 
-  - About this app (Versioning, Build number)
+  - About this app (Versioning, Build number) - **not implemented**: the About page shows no app
+    version or build number (maintainer decision 2026-10-05: not claimed in the user guide).
   - Privacy Policy
 - Diagnostics (**not in the original plan** - added later: a local, PII-free event log for
   troubleshooting, exportable via the clipboard, with its own switch for including clock times.
   See `CLAUDE.md`, "Diagnostics log".)
 - Licence (**not in the original plan** - the project's own GPLv3 text and Flutter's collected
-  third-party notices, added for `docs/REQUIREMENTS.md` R9's in-app notice obligation)
-- Native Code Notices (**not in the original plan** - the Apache-2.0/BSD-3 notices for
-  `flutter_zxing`'s compiled-in native code, which Flutter's own licence collector cannot see)
+  third-party notices, added for `docs/REQUIREMENTS.md` R9's in-app notice obligation; since
+  `docs/TODO.md` T-213 these also include the Android libraries, `desugar_jdk_libs`, the Material
+  Icons font, and the credits of the bundled alarm tones and app icon)
+- Native Code Notices (**not in the original plan** - the notices for `flutter_zxing`'s
+  compiled-in native code, which Flutter's own licence collector cannot see: zxing-cpp and librscpp
+  (Apache-2.0), libzueci and zint (BSD-3-Clause), two embedded MIT pieces, zint's embedded fonts
+  (Apache-2.0, and an unrestricted-use OCR-B), and the BSI terms for two GS1 DataBar functions)
 

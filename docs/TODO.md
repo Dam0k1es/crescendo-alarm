@@ -36,7 +36,7 @@ Conventions:
 
 ## Waiting on a decision, not on work
 
-Nine items are investigated, reproduced, and **not** implemented, because in every one of them the
+Eight items are investigated, reproduced, and **not** implemented, because in every one of them the
 code follows the spec and the *requirement* has the gap. They need a decision from the project owner,
 not further analysis — each item names the question, the possible readings, and what each one costs:
 
@@ -48,16 +48,22 @@ not further analysis — each item names the question, the possible readings, an
 | **T-120** | Which day does a wake value belong to when the lead times push it back past midnight? |
 | **T-121** | Does an appointment inside the window also disable FR-9's valve for the days **after** it? |
 | **T-122** | Is anchoring decided by a value's origin, or by its meaning? |
-| **T-139** | May a `ΔT=0` point end FR-7's feasibility lookahead, or only the run? (Otherwise an "early appointment - free days - early appointment" week exceeds `maxDailyDelta` by half and warns.) |
 | **T-207** | Should a masked gap day still anchor the next day, or the cold start after it skip FR-6's jump warning? |
 | **T-208** | May an evening appointment more than 12 h after the wake time pull the wake time "earlier"? |
 
 The **decided** part of the six remaining 2026-09-11 cases (T-112 … T-122) is pinned down by tests
-(T-118, T-123 … T-128) - that is the basis a decision can be formulated against. T-139 (from a device
-log) and T-207/T-208 (from the T-206 simulation) are reproduced in their entries, not yet by tests.
+(T-118, T-123 … T-128) - that is the basis a decision can be formulated against. T-207/T-208 (from
+the T-206 simulation) are reproduced in their entries, not yet by tests.
 
 **Decided since:** T-119 (2026-09-28, yes - each appointment is assigned by the zone's rules at its
-own instant; implemented with T-206, 718e4a5).
+own instant; implemented with T-206, 718e4a5). T-139 (2026-10-05, the jump should not occur at all:
+a `ΔT=0` point no longer ends FR-7's lookahead; fixed on `dev` after three independent reviews - see its entry).
+
+**Also waiting on a decision (2026-10-05), outside the table's "code follows the spec" shape:**
+T-223 (should FR-10's cold start follow the same smoothing and notification rules as normal
+planning?), T-217 (what should happen to an alarm that became due while the phone was off or
+locked - ring once on unlock, only within some window?) and T-220 (is a source link enough for
+`desugar_jdk_libs`' GPL-2.0, or must the exact source archive ship?), and T-225 (which date does a night-shift wake time belong to?).
 
 ---
 
@@ -600,7 +606,7 @@ own instant; implemented with T-206, 718e4a5).
   requirement), but touches the same PII boundary as R11/the Privacy Policy - see that document's
   own update.
 
-### T-164 · A scripted, repeatable long-idle alarm survival check — TOOL BUILT (2026-09-24), not yet run
+### T-164 · A scripted, repeatable long-idle alarm survival check — TOOL BUILT (2026-09-24), first real run invalid (2026-10-04), question still open
 
 - [x] Maintainer question: how long would the app need to be inactive for a real-device alarm-
   survival test to be robust evidence, and could it be turned into a script they can run themselves?
@@ -659,6 +665,11 @@ own instant; implemented with T-206, 718e4a5).
 - **Postponed to the next version (maintainer, 2026-09-24):** not a blocker for the current release
   state - the maintainer plans to run it with an idle period longer than the 24h minimum this tool
   was built for.
+- **First real run (2026-10-02 to 2026-10-04): invalid, recorded 2026-10-05.** The app was opened on
+  the phone before `check` ran, so the run no longer measured "the app never reopened" - opening it
+  triggers FR-17's recovery, which re-arms every alarm on its own. The result says nothing either
+  way; the long-idle question (T-04/T-93, R3) remains unanswered. A valid run needs the phone left
+  completely untouched between `arm` and `check`.
 - **Requirement:** R3
 
 ### T-165 · The `alarm` plugin's exported `AlarmReceiver` could silence a ringing alarm without the QR code — FIXED (2026-09-24), build-verified
@@ -1570,6 +1581,12 @@ rather than expanded into more scope here: see T-185.
   with (`package:timezone`, see "Known limitation" above), in CI's UTC leg, with the system tzdata
   compared informationally; (8) all ten CI
   legs green, `flutter analyze` clean.
+- **Deviation from criterion (1), recorded 2026-10-05 (documentation audit):** "fail first and
+  then pass" was **not** met as written. Stages S1-S4 were implemented together, not red-first per
+  stage (see "Verification (implementation review)" above); the tests' bite was established
+  afterwards by mutating the code instead. That is equivalent evidence that the tests detect the
+  defect classes, not evidence that they were written before the fix. Criteria (2)-(8) are
+  unaffected.
 
 ### T-205 · Travelling across time zones: requirements recorded, provisional, not promised (P2, open)
 
@@ -1623,21 +1640,31 @@ rather than expanded into more scope here: see T-185.
   the UI under `isoDate(alarm.time)` = X-1 (FR-21), while the planned-day entry X stays active, so
   the Sleep-time Do Not Disturb window (`sleepTimeWindow`) still targets the switched-off alarm;
   and a capped value on such a cross-date day is not flagged as instant-anchored.
+- **Partly overtaken by T-221 (2026-10-05):** the "switched off under X-1 while X stays active"
+  symptom above describes the state before T-221. Since T-221 the switch no longer flips the entry
+  in place: the reconciliation keeps day X's armed, enabled entry, so the switch springs back on
+  after the checkpoint and shows what will ring. The veto on X-1 still switches off X-1's own
+  planned value (T-221 review, N2); the underlying cross-date question is unchanged.
 - **Question:** should an appointment late in the day be allowed to act as a wake constraint at all
   (for example only appointments before some cut-off, or only when `hardFloor` is before the
   planned value on the same date), or is a real evening event a legitimate "earlier" target?
 - *Done when:* decided together with T-112/T-115, specified, and pinned down by a regression test
   with an evening appointment in the window.
 
-### T-209 · `_timeOfDayMicros` drops the milliseconds (P3, bug)
+### T-209 · `_timeOfDayMicros` drops the milliseconds (P3, bug) — FIXED (2026-10-05, on `dev`)
 
-- [ ] Found by the T-206 persona-Tom simulation (2026-09-29); already present at 8ac1d9e.
+- [x] Found by the T-206 persona-Tom simulation (2026-09-29); already present at 8ac1d9e.
 - **Situation:** `lib/models/scheduling/scheduling_v2.dart` `_timeOfDayMicros` computes
   `((h*60+m)*60+s)*1e6 + t.microsecond`, but `DateTime.microsecond` is only the 0-999 part within
   the millisecond; `t.millisecond * 1000` is missing. A spec-exact reference differs in 60 values
   of the simulation by at most about 0.4 s; no alarm moved to another minute.
 - *Done when:* a regression test with a sub-second reading (e.g. 07:00:00.500) goes red, the
   milliseconds are added, and the full suite stays green in all ten CI zones.
+- **Fixed (2026-10-05) with T-139:** the new property test found it (19 windows); red first
+  (`readingDelta` of 500 ms read as 0, a drift landing at 07:00:00.999), then the milliseconds were
+  added. FR-1 now says times of day are compared at full resolution. Stored values are milliseconds
+  since epoch, so an anchor stored before the fix reads differently by under a second - no format
+  change.
 
 ### T-210 · Nuuk spring night: a late-handled 22:59 ring counts for the next day (P3, observation)
 
@@ -1711,6 +1738,10 @@ rather than expanded into more scope here: see T-185.
     the synthesised default, the band-limited (11 kHz source) klaxon, and the loop point of the
     continuous clock ring.
 
+- **Scope of "resolved" (2026-10-05):** on `dev` only. `master` (5f576e9) and the published
+  v1.4.0 release - and every earlier release - still ship the Mixkit tones until the next release;
+  verified with `git merge-base --is-ancestor` (the T-212/T-214 commit 5ad6287 commit is in neither).
+
 ### T-213 · Licence notices, F-Droid build hygiene and proprietary-dependency guards are incomplete (P1) — RESOLVED (2026-10-01)
 
 - [x] Found by the FOSS audit of 2026-10-01. No proprietary code ships (no GMS, Firebase, ML Kit,
@@ -1764,6 +1795,10 @@ rather than expanded into more scope here: see T-185.
     master and release builds, which also run the notice list's `--check`.
   - Follow-up: T-220 (GPL-2.0 source obligation for `desugar_jdk_libs`).
 
+- **Scope of "resolved" (2026-10-05):** on `dev` only. `master` (5f576e9) and the published
+  v1.4.0 release - and every earlier release - still ship without these notices and with AGP's dependency block until the next release;
+  verified with `git merge-base --is-ancestor` (the T-213 commit f420315 commit is in neither).
+
 ### T-220 · `desugar_jdk_libs` (GPL-2.0 with Classpath Exception): is a source link enough? (P3, open question)
 
 - [ ] Raised by T-213 (2026-10-01). The APK contains `desugar_jdk_libs` (core-library desugaring),
@@ -1791,6 +1826,10 @@ rather than expanded into more scope here: see T-185.
   `assets/icons/CREDITS.md`, which also covers the derived launcher, notification and iOS icons;
   `docs/REQUIREMENTS.md` R10 and `docs/licence-position.md` updated. Shown in the app's licence
   notices with T-213.
+
+- **Scope of "resolved" (2026-10-05):** on `dev` only. `master` (5f576e9) and the published
+  v1.4.0 release - and every earlier release - record no icon licence until the next release;
+  verified with `git merge-base --is-ancestor` (the T-212/T-214 commit 5ad6287 commit is in neither).
 
 ### T-215 · The QR scanner's emergency stop can be withdrawn again after it appeared (P1, bug, open)
 
@@ -1860,7 +1899,9 @@ rather than expanded into more scope here: see T-185.
   EET/EEST to Europe/Istanbul.
 - **Dead or misleading code:** `isSameDate`, an empty `initState` and `actions: null` in
   `page_import_qr.dart`, a one-page `PageView`; `durationFromString`, `convertToTZDateTime`,
-  `convertFromTZDateTime` (unused) and the misnamed `generateRandomHash` in `utils.dart`;
+  `convertFromTZDateTime` (unused) in `utils.dart` and the misnamed `generateRandomHash`
+  (*location corrected 2026-10-05: it is `DeactivationCode.generateRandomHash` in
+  `lib/models/scan_code/deactivation_code.dart`, not in `utils.dart`*);
   `_requestPermissions` always returns true; random ids are never checked for collisions;
   commented-out code in `calendar.dart` (`addToCalendar`, kept as the mirror of
   `no_calendar_write_test.dart`'s fixture), `meeting_data.dart` (`meetingToEvent`),
@@ -1967,7 +2008,87 @@ rather than expanded into more scope here: see T-185.
     covers toggle -> checkpoint -> map cleanup.
   - **N4 (pre-existing):** switching off today's alarm once its minute has passed changes nothing
     (FR-18 never touches a past alarm), and the switch springs back without an explanation.
+- **Verification (recorded 2026-10-05):** the fix commit `0948608` went **red** in CI (run
+  37093501369, only the `Analyze & Test (TZ=America/Nuuk)` leg failed, test T54 in
+  `test/replan_dst_test.dart`): T54 still expected a switched-off Nuuk day to be
+  absent from the list rather than listed inactive. The local runs before the commit had used only
+  UTC and Europe/Berlin, which cannot reach that case. Fixed by `55b4ce9` (T54 now expects the
+  inactive entry); its CI run 37094269828 is green in every leg. Lesson for this list: a change to
+  what FR-18 keeps is a frame-sensitive change - run at least the Nuuk leg locally.
 - **Requirement:** R3; FR-18, FR-21.
+
+### T-222 · FR-12 warned about a "possibly missed appointment" for switched-off days (P1, bug) — FIXED (2026-10-05, on `dev`)
+
+- [x] Found on the maintainer's phone (device report 2026-10-04): scheduled alarms switched off
+      for Thursday and Friday, the app first opened again on Sunday evening - the day advance
+      raised FR-12 ("A newly-added appointment may not have been accounted for by your last
+      alarm.") for days whose alarm never rang.
+- **Cause:** the day advance in `replan()` (`lib/models/scheduling/replan.dart`) flagged any
+  concluded day with a `hardFloor` earlier than its stored value - and also any day with no stored
+  value at all - without asking whether that day's alarm could have rung. FR-12 is about a day
+  whose alarm *rang*; a day switched off under FR-21 had its alarm cancelled.
+- **Fix (narrowed after review, 2026-10-05):** a concluded day that is in `disabledDays` is no
+  longer checked. **Current behaviour kept on purpose:** a day **without** a planned value (FR-9's
+  valve fired, or `scheduleOnGapDays` off) that later gets an earlier appointment is still flagged
+  - narrowing that further would change what the user is warned about and needs the maintainer's
+  OK first; that question has not been put to the maintainer yet. Spec FR-12 amended accordingly
+  (its wording follows the narrowed fix: only switched-off days are exempt).
+- **Tests (red first):** `test/replan_test.dart`, group "FR-12: only a day whose alarm could have
+  rung is checked" - the reported Thursday/Friday case with no notification, and a counter-check
+  where a late appointment earlier than a day that did ring still notifies.
+- **Not covered:** a real-device re-run of the reported sequence.
+- **Requirement:** R2; FR-12, FR-21.
+
+### T-223 · FR-10's cold start can jump hours without smoothing or an FR-6 notice (P2, open question to the maintainer)
+
+- [ ] Found by the spec audit of 2026-10-05 while closing T-139.
+- **Finding:** with no anchor (`lastEffectiveWakeTime` absent - a fresh install, or after data
+  loss), FR-10 sets the first real `hardFloor` on its own day and anchors everything after it
+  there. Two consequences that contradict the rules normal planning follows:
+  - A *later* appointment pulls the wake time later - e.g. 07:00, 07:00, 07:00, then 11:00 on the
+    appointment's day, and drifting back afterwards - which FR-5's precondition and T-132 exclude
+    everywhere else.
+  - An *earlier* appointment (e.g. 04:00 after 07:00 days from `preferredWakeUpTime`) gives a
+    3-hour jump with **no** FR-6 notification - the one silent jump path left after T-105 and T-133
+    closed the others.
+- **Question:** should the cold start follow the same rules as normal planning (treat
+  `preferredWakeUpTime`, where set, as the anchor; smooth toward the first `hardFloor` and notify
+  on an overrun), or is a cold start allowed to jump because there is no previous wake time to
+  protect?
+- *Done when:* decided, specified in FR-10, and pinned by a test with both the later and the
+  earlier first appointment.
+- **Requirement:** R2; FR-5, FR-6, FR-10.
+
+### T-224 · `awesome_notifications`' native core exports a NotificationListenerService without a permission (P3, open observation)
+
+- [ ] Observed while removing the unused permissions (T-49, 2026-10-05): the merged manifest
+  contains an exported `NotificationListenerService` from `me.carda:AndroidAwnCore` 0.12.1 with no
+  `android:permission`; MobSF reports it as a WARNING (not gating under R1). Checked in the AAR's
+  own `AndroidManifest.xml`: `me.carda.awesome_notifications.core.managers.StatusBarManager`,
+  `android:exported="true"`, intent filter
+  `android.service.notification.NotificationListenerService`, no permission attribute.
+- **To review:** whether that service is reachable or useful to another app at all (a
+  notification listener only binds after the user grants notification access in system settings,
+  and the platform binds it with `BIND_NOTIFICATION_LISTENER_SERVICE`), whether this app ever
+  uses it, and accordingly either remove it with `tools:node="remove"` or record an accepted
+  exception in `.github/security-exceptions.json` with a dated rationale.
+- *Done when:* one of the two is done and checked against a release build's merged manifest.
+- **Requirement:** R1, R6.
+
+### T-225 · Which date does a night-shift wake time belong to? (P2, open spec decision)
+
+- [ ] Found by the T-139 work and its reviews (2026-10-05); present at 8ac1d9e already.
+- **Situation:** across midnight, FR-1's ±12-hour wrap and the per-day date convention disagree. A
+  02:00 hardFloor and a 20:00 value on the same date are 18 hours apart but read as "6 hours
+  later", so the plan jumps at the cap without smoothing. Anchors whose reading lies on the
+  previous evening (T-118b) put `groupTarget`'s curve one date off, so FR-5 step 2 may group across
+  a ΔT=0 point there. Night shifts still get alarms on the evening before their day (e.g. 22:30 for
+  a day whose shift started at 21:00 the previous evening). The property test excludes
+  midnight-crossing smoothness until this is decided; those weeks are checked for FR-2 and timing
+  only.
+- **Question:** does a wake time belong to the date it rings on, or to the shift/day it prepares
+  for - and how should FR-1's wrap and FR-5's grouping treat values that cross midnight?
+- *Done when:* decided, specified in FR-1/FR-5, and the property test's midnight exclusion removed.
 
 ### T-204 · Release v1.4.0 published — DONE (2026-09-28)
 
@@ -4042,7 +4163,7 @@ defects found and fixed in the follow-up commit:**
 - **Done when:** a first-run user can read what is collected before granting anything.
 - **Requirement:** R7, R11
 
-### T-49 · Requirement claims about permissions do not match the built APK — PARTIALLY RESOLVED (2026-09-08, again 2026-09-17)
+### T-49 · Requirement claims about permissions do not match the built APK — PARTIALLY RESOLVED (2026-09-08, again 2026-09-17 and 2026-10-05)
 
 - [x] The merged manifest is now compared against what the app actually does, not just read. The
       scanner swap (T-33) changed the set in three ways, found by diffing `aapt2 dump permissions`
@@ -4105,7 +4226,56 @@ defects found and fixed in the follow-up commit:**
 - **Still open:** neither requirement yet names *every* permission the shipped app holds
   exhaustively, and no traffic capture during an E2E run has been added as positive evidence for
   the offline claim (a code/CI change).
-- **Requirement:** R4, R7
+- [x] **Unused permissions removed, every remaining one named and enforced (2026-10-05, on `dev`,
+      review pending).** Maintainer decision (verbatim): *"ja entferne ungenutzte berechtigungen,
+      wenn die nicht genutzt werden und kein feature brechen"* (yes, remove unused permissions if
+      they are not used and break no feature). In `android/app/src/main/AndroidManifest.xml`, with
+      `tools:node="remove"` and a comment per group:
+  - the **16 launcher-badge permissions** from `me.leolin:ShortcutBadger` (a runtime dependency of
+    `awesome_notifications`' native core `me.carda:AndroidAwnCore`). Its only caller is used when a
+    notification carries a `badge` or its channel sets `channelShowBadge: true`, and from the
+    global badge-counter methods - nothing in `lib/` does either;
+  - **`BROADCAST_CLOSE_SYSTEM_DIALOGS`** (from `awesome_notifications`' manifest): AOSP declares it
+    `signature|privileged`, so it can never be granted to this app.
+  - **Not** removed: `WRITE_CALENDAR`. The app never writes a calendar (guarded by
+    `test/no_calendar_write_test.dart`), but `device_calendar` 4.3.3's `arePermissionsGranted()`
+    (`CalendarDelegate.kt`) requires both calendar permissions before any read, so removing it would
+    make every calendar read fail.
+  - The audit's "launcher `READ_SETTINGS`/`WRITE_SETTINGS`, `INSTALL_SHORTCUT`/`UNINSTALL_SHORTCUT`"
+    were XML **comments** in ShortcutBadger's manifest, never permissions - they never reached the
+    APK, so there was nothing to remove.
+  - Release APK permissions: **31 → 14.** The table, as enforced by the allow-list in
+    `scripts/check_manifest_permissions.py`:
+
+    | Permission | Why |
+    |---|---|
+    | `READ_CALENDAR` | calendar-derived wake times |
+    | `WRITE_CALENDAR` | never used to write; `device_calendar` requires it granted before any read |
+    | `RECEIVE_BOOT_COMPLETED` | re-arming alarms after a reboot |
+    | `WAKE_LOCK` | ringing with the screen off |
+    | `VIBRATE` | alarm vibration |
+    | `USE_FULL_SCREEN_INTENT` | ring screen over the lock screen |
+    | `FOREGROUND_SERVICE` | alarm and Direct-Boot fallback services |
+    | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | the mediaPlayback type of those services |
+    | `POST_NOTIFICATIONS` | alarm and reminder notifications |
+    | `USE_EXACT_ALARM` | exact alarms, API 33+ |
+    | `SCHEDULE_EXACT_ALARM` | exact alarms, API 31-32 |
+    | `ACCESS_NOTIFICATION_POLICY` | sleep-time Do Not Disturb (T-198) |
+    | `CAMERA` | scanning the deactivation code |
+    | `<package>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | androidx.core's signature-level guard for non-exported receivers on API < 33 |
+
+  - **Enforced, not just listed:** `scripts/check_manifest_permissions.py` compares the APK's
+    `aapt2 dump permissions` with that allow-list exactly, in both directions (an extra permission
+    fails, a missing needed one fails; `INTERNET` is named explicitly as breaking R7; `--variant
+    debug` additionally allows only Flutter's debug `INTERNET`), fails closed on unreadable input,
+    and has a `--self-test` (run in `ci.yml`'s UTC leg). It runs on the dev debug APK
+    (`build-dev-apk`) and on the signed release APK in `ci.yml`'s `build-android-release` and
+    `release.yml`.
+  - Verified once locally on a fresh release-type build: 14 permissions, check green.
+- **Still open (2026-10-05):** a traffic capture during an E2E run (positive evidence for the
+  offline claim), and one real-device check that notifications (alarm notification, bedtime
+  reminder) still show on a build without the removed permissions. Related observation: T-224.
+- **Requirement:** R4, R6, R7
 
 ---
 
@@ -4996,6 +5166,8 @@ defects found and fixed in the follow-up commit:**
   "physical code in another room" premise. It is also the reason the app requests gallery access.
 - **Evidence:** `lib/screens/scan_code/scanner_button_widgets.dart:5-49`; no instantiation anywhere
   in `lib/`.
+  *(2026-10-05: that file no longer exists - deleted with the scanner swap, T-33, commit `46de6d9`;
+  the line range is historical.)*
 - **Done when:** the code is gone, or it exists only on the import screen and cannot reach the
   dismissal path.
 - **Requirement:** R4
@@ -5324,6 +5496,10 @@ defects found and fixed in the follow-up commit:**
   - resolved automatically the next time `master` is fast-forwarded to a `dev` commit at or after
   the replacement, which needs to happen before `master` is built from again regardless.
 - `flutter analyze`/`flutter test` unaffected by the sound swap (confirmed).
+- **Superseded (2026-10-01, see T-212):** "free commercial use" understated the Mixkit Sound Effects
+  Free License - it forbids redistributing an item on its own, so it is not a free licence. T-212
+  replaced all six tones with freely licensed ones (on `dev`; the published releases up to v1.4.0
+  still carry the Mixkit files).
 - **Requirement:** R10
 
 ### T-30 · Annotate or retire the planning artifacts — RESOLVED (2026-09-20)
@@ -5936,6 +6112,9 @@ defects found and fixed in the follow-up commit:**
 - **Evidence:** `grep -rn "replan(\|runAlarmRingCheckpoint(\|runForegroundCheckpointSafely(" lib/` →
   only `lib/main.dart:207` and `Handler.handleAlarm()`; `AppState`'s setters for those four fields
   only persist and `notifyListeners()`.
+  *(2026-10-05: historical - `runAlarmRingCheckpoint`, `runForegroundCheckpointSafely`,
+  `settings_changed.dart` and `test/settings_changed_test.dart` no longer exist since T-87; the
+  settings path is `CheckpointTrigger.settingsChanged`.)*
 - **Done when:** changing any of the four re-plans (and re-applies, FR-18) immediately, covered by a
   test, and the spec records the trigger.
 
@@ -6131,9 +6310,9 @@ defects found and fixed in the follow-up commit:**
   directly.
 - **Requirement:** R2
 
-### T-139 · FR-5's ΔT=0 rule cuts off the lookahead — `maxDailyDelta` gets blown by 50% as a result — OPEN SPEC DECISION
+### T-139 · FR-5's ΔT=0 rule cuts off the lookahead — `maxDailyDelta` gets blown by 50% as a result — RESOLVED (2026-10-05, on `dev`)
 
-- [ ] Decide FR-5/FR-7, THEN fix test-driven.
+- [x] Decide FR-5/FR-7, THEN fix test-driven. *(Decided 2026-10-05, see the status lines at the end.)*
 - **Where from:** the first diagnostics log from the device with clock-time logging enabled
   (T-135) — the feature found a bug on its very first use that the suite doesn't have.
 - **Reported plan** (preferred wake-up time 09:00, `maxDailyDelta` 90min, lead times 30min):
@@ -6172,6 +6351,60 @@ defects found and fixed in the follow-up commit:**
   can be fixed test-driven is not a blocker for the current release state.
 - **Status (2026-10-01):** undecided; FR-5 step 2 is unchanged by T-206, and no test pins this case.
   Now listed in "Waiting on a decision" at the top.
+- **Decided (maintainer, 2026-10-05, verbatim):** *"Das klingt falsch, es sollte jede Zeit jedes
+  Tages getestet werden und der Sprung eigentlich gar nicht auftreten."* (That sounds wrong - every
+  time of every day should be tested, and the jump should not occur at all.) Removed from "Waiting
+  on a decision".
+- **Status (2026-10-05): fixed on `dev`; three independent reviews (Günther).** Two changes, both in
+  `lib/models/scheduling/scheduling_v2.dart` and in `docs/scheduling-v2-spec.md`:
+  - (a) FR-5 step 2 no longer cuts the candidate list at the first `ΔT=0` point
+    (`_groupTargetFromReading`). A reached point is still never grouped with a following *later*
+    point - step 1's violation check already rejects that curve - but a following *earlier* point
+    is grouped through it. This reverses the cut-off T-104 introduced (see T-104's own status line).
+  - (b) FR-7's feasibility check (`_planGapOrRunStartDayReading`, `reachesEveryPoint`) now tests
+    every remaining earlier point, not only the run's target `F`: a drift toward a later
+    `preferredWakeUpTime` must leave each nearer, stricter point reachable within `maxDailyDelta`
+    per remaining day. This second gap was found by the new property test, not by the device log
+    (anchor 05:04, `maxDailyDelta` 60 min, `preferredWakeUpTime` 06:30, hardFloors 04:36 in two
+    days and 03:42 in three: the drift to 05:42 left a 66-minute step; now it stops at 05:36).
+  - **Tests:** a new seeded property test, `test/scheduling_v2_smoothness_property_test.dart`
+    (4000 random windows; invariants: FR-2 always, and no step above `maxDailyDelta` and no
+    overrun notification whenever a smooth curve exists), taking the maintainer's "every time of
+    every day" literally instead of adding one more worked example; the reported week and the
+    drift case as their own groups in `test/scheduling_v2_audit_test.dart`; and full-week
+    assertions for the spec bullets' tests in `test/scheduling_v2_test.dart` (FR-1, FR-5, the
+    FR-7 worked examples), so a bullet's later days can no longer go unchecked. The T-206 legacy
+    snapshot `test/support/scheduling_v2_legacy_8ac1d9e.dart` stays byte-verbatim; the cases where
+    the T-139 behaviour deliberately diverges from it are listed in an explicit, frozen allowlist
+    instead.
+  - **Review rounds (2026-10-05).** Round 1: (b) measured reachability on 12-hour-wrapped readings
+    while `groupTarget` compares instants, pulling evening-anchor weeks earlier for no gain (anchor
+    18:23 planned to 17:48); the feasibility check now works in `groupTarget`'s frame, and the
+    snapshot was restored byte-verbatim with a frozen allowlist instead of being edited. Round 2
+    (blocking B1): the veto then also fired for points `groupTarget` cannot target, so a
+    night-to-day rota change (differential case #49: anchor 21:46, floors 19:04 day 3 and 07:43
+    day 5, md 90) got two 316-minute steps; the veto is now limited to points FR-1 reads as earlier
+    than yesterday's value, and #49 is back to the pre-T-139 plan (its overrun is unavoidable: 843
+    minutes in six days at 90 per day). Round 3: go - all 265 cases that now differ from 8ac1d9e
+    are equal (65) or better (200: fewer over-limit steps or no overrun), none worse; the test-only
+    gaps it found (the oracle's "too late" side missed an engine that never starts a run, in the
+    night-shift family) were closed.
+  - **Tests:** `test/scheduling_v2_smoothness_property_test.dart` (9,000 seeded windows in six
+    families - day, evening, rota, night shift, DST, DST night - with random seconds) checks the
+    plan against `test/support/plan_invariants.dart`, an oracle restated from the spec (FR-2,
+    smoothness, two-sided FR-7 timing) rather than from the engine; `scheduling_v2_audit_test.dart`
+    pins #22, #49 and a hand-made night-shift week. T-206's differential test keeps the 8ac1d9e
+    snapshot verbatim and freezes the 265 divergent case indices.
+  - **Also fixed:** T-209 (milliseconds were dropped when comparing times of day), found by the
+    property test.
+  - **Same pass, other spec-audit gaps closed (2026-10-05, on `dev`, review pending):** FR-16's
+    "re-resolve only on a detected offset change" rule is now pinned
+    (`test/replan_dst_test.dart`); FR-1/FR-5/FR-15 spec bullets have verbatim tests; a stored
+    `maxDailyDelta` below FR-3's 15-minute minimum is clamped on load, not only by the setter
+    (`lib/app_state.dart`, `test/app_state_scheduling_v2_test.dart`); FR-21's text for manual
+    alarms now describes the repeat-day resolution T-14 already implemented; stale spec references
+    (T-62, the pre-T-87 checkpoint function names, the background-isolate wording T-199 overtook)
+    were corrected.
 - **Requirement:** R2
 
 ### T-138 · Snooze (FR-20) — IMPLEMENTED (2026-09-12)
@@ -6483,6 +6716,10 @@ defects found and fixed in the follow-up commit:**
   a test result`, together with `adb devices -l` for diagnosis. On success it logs the device's
   API level - previously the evidence nowhere recorded which Android version the measurement was
   taken on.
+- **Note (2026-10-05):** the two commits cited above (`6aa2325`, `b0d6662`) no longer exist in the
+  repository (`git cat-file -e` fails for both). Most likely they were rewritten by the 2026-09-18
+  history rewrite (T-29), which changed every commit hash from before that date. The argument stands
+  as recorded; the hashes can no longer be used to re-run the diff.
 - **Requirement:** R3
 
 ### T-123 to T-128 · Six further uncovered properties — RESOLVED (2026-09-11)
@@ -6983,6 +7220,13 @@ red and that stays invisible in the rest of the suite today.
 - **Test:** `test/scheduling_v2_audit_test.dart`, group "FR-5 step 2" - four cases, including two
   counter-tests against overcorrection (without a ΔT=0 point, grouping still extends to the last
   point; a ΔT=0 point keeps shrinking further if it violates an intermediate point).
+- **Superseded in part (2026-10-05, T-139):** the cut-off at the first ΔT=0 point is gone - it hid
+  every later, earlier point from FR-7's lookahead. This entry's evidence case (`t2=07:00` with
+  ΔT=0 at position 2, `t3=05:00`) now groups through to `t3`, and its expectation "`t2` is
+  required" is replaced in the same group (now "FR-5 step 2: a ΔT=0 point (T-104, revised by
+  T-139)") by "ΔT=0 at position 2 no longer hides the earlier point behind it". The position-1
+  rule this entry generalised - a reached point is never grouped with a following *later* point -
+  still holds, through step 1's violation check.
 - **Requirement:** R2
 
 ### T-103 · The alarm survival measurement reported a FAIL it could not substantiate — RESOLVED (2026-09-11)

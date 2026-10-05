@@ -51,8 +51,13 @@ absorbs without further conditions. That includes the Flutter SDK and first-part
 `calendar_view` and `flutter_zxing`. `file_picker` (MIT, `docs/TODO.md` T-146, the custom-tone
 import) and `flutter_launcher_icons` (MIT, icon-generation tooling declared as a main dependency
 but never imported by `lib/`) are direct dependencies too. (`camera` and `image_picker` are no longer declared directly -
-they arrive with `flutter_zxing`. The two permissions stripped from the manifest both come from
-`camera_android_camerax`, not from `image_picker`; see `docs/TODO.md` T-49.)
+they arrive with `flutter_zxing`. `RECORD_AUDIO` and `WRITE_EXTERNAL_STORAGE`, two of the
+permissions stripped from the manifest, both come from `camera_android_camerax`, not from
+`image_picker`. *(2026-10-05: "the two permissions stripped" was stale - the manifest now strips
+more, from other sources too: `READ_EXTERNAL_STORAGE` from `alarm`, `ACCESS_NETWORK_STATE` from
+`media3-common`, and 16 launcher-badge permissions plus `BROADCAST_CLOSE_SYSTEM_DIALOGS` from
+`awesome_notifications`' native core; see the comments in `android/app/src/main/AndroidManifest.xml`
+and `docs/TODO.md` T-49.)*)
 
 **`docs/TODO.md` T-182** added three more, each checked against pub.dev's own published licence
 text before adding, not assumed from reputation: `share_plus` (BSD-3, `fluttercommunity.dev`,
@@ -72,14 +77,14 @@ bundled "librscpp" Reed-Solomon implementation) under Apache-2.0, **libzueci** (
 readers are enabled) and zint under BSD-3. All GPLv3-compatible, so the claim above holds for them
 too. *(Corrected 2026-10-01: an earlier version of this paragraph said, after a re-check for
 T-142, that no separate zueci source is vendored - that was wrong; `flutter_zxing` 3.0.1 vendors and
-compiles it.)* Since 2026-10-01 (`docs/TODO.md` T-213) `assets/text/NativeCodeNotices.txt` also
+compiles it.)* Since 2026-10-01 (`docs/TODO.md` T-213; on `dev`, not in `v1.4.0`) `assets/text/NativeCodeNotices.txt` also
 carries libzueci, Bjoern Hoehrmann's UTF-8 decoder (MIT, in zxing-cpp's `Utf.cpp`, `zueci.c` and
 zint's `common.c`), Project Nayuki's QR code (MIT, zint `qr.c`), Kentaro Fukuchi's `qr.h`, a BSI
 permission note (zint `rss.c`), and the embedded Arimo (Apache-2.0) and OCR-B font data, verbatim
 from the vendored `flutter_zxing` 3.0.1; `test/native_code_notices_test.dart` checks the file
 against what `flutter_zxing`'s CMake build actually compiles, so a gap like libzueci's cannot recur.
 
-**Other shipped notices (T-213).** `lib/utils/licence_notices.dart` registers, under "Third-Party
+**Other shipped notices (T-213; on `dev` since 2026-10-01, not yet in any published release - `v1.4.0` predates them).** `lib/utils/licence_notices.dart` registers, under "Third-Party
 Licenses": the Material Icons font (CC BY 4.0, shipped tree-shaken), the native notices above, the
 shipped Java/Kotlin libraries (`assets/text/licences/AndroidLibraries.txt`, generated from the
 CycloneDX SBOM by `scripts/gen_android_library_notices.py` and checked against it in CI's release
@@ -122,7 +127,8 @@ Notices" button, the same pattern T-36 established for this app's own GPLv3 text
 
 ## Bundled assets
 
-Separate from code licensing (requirement R10, met since 2026-10-01): the six bundled alarm tones
+Separate from code licensing (requirement R10, met on `dev` since 2026-10-01 - published releases
+up to `v1.4.0` still ship the earlier Mixkit tones and lack the T-213 notices): the six bundled alarm tones
 (`assets/sounds/*.mp3`) are freely licensed - five edited Wikimedia Commons recordings under
 CC BY 4.0, CC BY-SA 4.0 or US-government public domain, and the default tone synthesised by
 `scripts/gen_tones.py` under GPL-3.0-or-later; `assets/sounds/CREDITS.md` records each file's

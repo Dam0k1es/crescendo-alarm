@@ -30,10 +30,10 @@
 /// (docs/TODO.md T-167, maintainer request) - the two that used to be named
 /// after the app itself ("WakeyWakey", "WakeyWakey 2") described neither the
 /// sound nor anything a user could act on. `assets/sounds/CREDITS.md` has
-/// each file's real Mixkit source title, which these names are grounded in
-/// rather than invented. The file names/paths themselves are unchanged - see
-/// that same CREDITS.md for why (kept identical to the audio-only swap
-/// docs/TODO.md T-29 already made once).
+/// each file's real source title (Wikimedia Commons recordings and one
+/// synthesised tone since docs/TODO.md T-212), and the names fit what each
+/// file actually plays. The file names/paths themselves are unchanged
+/// through both audio-only swaps (T-29, T-212) - see that CREDITS.md.
 const List<(String, String)> bundledTones = [
   ('Annoying Alarm', 'assets/sounds/annoying_alarm.mp3'),
   ('Playful Chime', 'assets/sounds/lollipop.mp3'),

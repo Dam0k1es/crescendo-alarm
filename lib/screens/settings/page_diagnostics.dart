@@ -115,8 +115,9 @@ class _PageDiagnosticsState extends State<PageDiagnostics> {
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Also record wake and appointment times'),
                     subtitle: const Text(
-                      'Off by default. Adds each day\'s planned wake time, '
-                      'plus the start and end time of every calendar event '
+                      'Off by default. Adds each day\'s planned wake time '
+                      'and your preferred wake-up time, plus the start and '
+                      'end time of every calendar event '
                       'that day (still never its title, description, '
                       'attendees or location), so a week\'s plan can be '
                       'checked against what the calendar actually held. '

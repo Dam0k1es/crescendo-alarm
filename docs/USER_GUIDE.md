@@ -34,8 +34,8 @@ Alarms the app itself worked out from your calendar - see "How scheduling works"
   calendar and settings - to skip a day for good, use its switch instead.
 - **Swipe left** to delete every scheduled alarm at once (asks for confirmation first).
 - Tap the **sync** button (bottom right) to re-check your calendar and re-plan immediately, instead
-  of waiting for the next automatic checkpoint (an alarm ringing, opening the app - at most once a
-  day - or changing a relevant setting). This is also one of the two moments calendar access is requested, if you haven't
+  of waiting for the next automatic checkpoint (a scheduled alarm ringing - a manual alarm's ring
+  does not re-plan - opening the app - at most once a day - or changing a relevant setting). This is also one of the two moments calendar access is requested, if you haven't
   granted it yet.
 
 You cannot edit a scheduled alarm directly - it's recomputed from your calendar and Sleep Habits
@@ -58,8 +58,9 @@ Alarms you create yourself, independent of any calendar.
 
 - **Time** - tap the time to open a picker.
 - **Title** - shown on the alarm list and as the ringing notification's text.
-- **Gentle Wake Up** - ramps the volume up gradually instead of starting at full volume (see Sleep
-  Habits for how long the ramp takes).
+- **Gentle Wake Up** - ramps the volume up gradually instead of starting at full volume. The ramp
+  length is copied from Sleep Habits' **Ramp duration** when the alarm is created; changing that
+  setting later does not change existing manual alarms.
 - **Tone** - pick from the bundled tones or any custom tone you've imported (Settings > Alarm
   Tones).
 - **Volume**.
@@ -87,8 +88,8 @@ A calendar view of your upcoming week, and the wake-up times the app has planned
 - **Calendars** button (the note icon) - choose which of your device's calendars feed both this
   view and the scheduling itself. Deselecting one hides its events and stops them from influencing
   your alarm times.
-- **Tap an event** to ignore or un-ignore it for scheduling purposes. An ignored event is grayed out
-  with an X - it still shows on your calendar, but the app treats the day as if that appointment
+- **Tap an event** to open a small sheet with an **Ignore for scheduling** switch for it. An ignored
+  event is grayed out with an X - it still shows on your calendar, but the app treats the day as if that appointment
   weren't there.
 
 ### How scheduling works
@@ -122,7 +123,13 @@ requires it - the idea being that if it's stuck somewhere across the room, you h
 
 **If your camera can't decode anything at all** (a hardware kill-switch, a covered lens, or a
 broken sensor), a "Camera not working - Stop alarm" button appears automatically after about 30
-seconds of trying, so you're never physically trapped by a broken gate.
+seconds of trying, so you're never physically trapped by a broken gate. If the camera never starts
+at all (no picture ever reaches the scanner), the same button appears after about 10 seconds.
+
+**If the ringing screen cannot be shown at all** (for example the app is still starting up when the
+alarm fires), the app retries five times, three seconds apart, and then stops the alarm rather than
+leave it ringing with nothing on screen to stop it. This fail-safe means a ring can, rarely, end
+without a scan.
 
 ## Sleep Habits
 
@@ -208,7 +215,8 @@ Four tabs.
 - **Add custom tone** (always at the bottom of the list) opens the system file picker
   (`.mp3`/`.wav`/`.m4a`/`.aac`/`.ogg`), then asks you to name it - pre-filled with the file's own
   name, so you usually don't need to type anything. You can import as many as you like; each one
-  gets its own row.
+  gets its own row. An imported tone cannot be removed again from inside the app yet.
+- The default tone on a fresh install is **Playful Chime**.
 - **Volume** and **Vibration** are the defaults: scheduled alarms always use them, and a new manual
   alarm starts with them. An existing manual alarm keeps the values it was created with (its own
   Volume can be changed in its dialog).
@@ -219,20 +227,21 @@ Dark mode (or follow the system setting) and an accent colour.
 
 ### About Page
 
-App version/build number, the privacy policy, this project's own GPLv3 licence text, third-party
-licence notices (everything the app depends on), and native code notices (the third-party C/C++
-compiled directly into the QR scanner).
+The privacy policy, this project's own GPLv3 licence text, third-party licence notices (everything
+the app depends on, plus the credits and licences of the bundled alarm tones and the app icon), and
+native code notices (the third-party C/C++ compiled directly into the QR scanner). The app version
+and build number are not shown here.
 
 ### Diagnostics
 
-A local, privacy-free event log for troubleshooting - readable here and exportable via the
+A local, PII-free event log for troubleshooting - readable here and exportable via the
 clipboard (**Copy**) if you need to report a problem. Recording is **off by default**: switch on
 **Record diagnostics** to start it; **Clear** deletes everything recorded so far. It never records anything that could identify you (no
 calendar titles, no account names, no exception text) - see the export's own header for exactly
 what mode produced it. Most of the log only ever records bucketed differences, never a clock time.
 
 A separate, off-by-default switch lets you additionally include **exact clock times** (minute-of-
-day, no date), for two things:
+day, no date), for three things:
 
 - Each window day's planned wake time and its earliest appointment, so a bug report can show *why*
   a day was planned the way it was.
@@ -240,8 +249,11 @@ day, no date), for two things:
   picked as earliest - so a wrong pick can be checked against what the calendar actually held that
   day. This is still never the event's title, description, attendees, location, or which calendar
   it came from - only its timing. That boundary does not move, opt-in or not.
+- Your **preferred wake-up time**, as part of the planning inputs (the other inputs - maximum daily
+  shift and the two lead times - are durations, not clock times, and are recorded whenever
+  diagnostics are on).
 
-Both are real clock times, and together with the rest of the log they amount to a sleep pattern and
+All three are real clock times, and together with the rest of the log they amount to a sleep pattern and
 a daily routine - that is exactly why the switch is off by default and separate from ordinary
 diagnostics. Turn it on only while actively investigating a scheduling problem, and remember it is
 then included in anything you copy and share from this screen.

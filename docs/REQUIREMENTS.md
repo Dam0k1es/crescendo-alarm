@@ -35,8 +35,22 @@ Medium/informational findings don't block a release but must be recorded and rev
   timezone leg failed as expected, and `security-gate`, `e2e-tests` and both Android build jobs all
   came back **skipped**, never run at all. The `needs:` chain holds transitively, not only at the
   one job (`build-android-release`) this was originally checked against.
-- **Status: met.** All gating tools are currently green against the recorded exceptions - and WARNING-
-  level MobSF findings (currently 15) were never gating under this requirement's own "high-or-above"
+  **Changed on `dev` (2026-10-05, audit of the same day):** both MobSF gates now **fail closed**.
+  The full scan lives in one shared script, `.github/scripts/mobsf_scan.sh`, used by `ci.yml`'s
+  `mobsf-full-scan` and - new - by `release.yml`'s `build-signed-release`, which now MobSF-scans the
+  release APK *before* uploading it as an artifact or attaching it to the GitHub Release (until then
+  the APK attached to a release was the one build that was never MobSF-scanned; this adds roughly
+  5-10 minutes to the release path). MobSF not starting, an HTTP error, a reply without a hash, or a
+  report that is not a complete scan of that very APK (`scripts/mobsf_summary.py --apk` compares
+  the report's SHA-256 with the file) is now red - the old inline step had no `curl -f`, so an error
+  reply could be summarised as "HIGH: 0". `scripts/mobsfscan_check.py` likewise fails on a
+  malformed or missing report, and `mobsfscan` exceptions in `.github/security-exceptions.json` are
+  now **file-scoped**: an accepted rule is accepted only in the listed files, so a new instance of
+  the same rule elsewhere fails. All three scripts' `--self-test`s run in `ci.yml`'s UTC leg.
+- **Status: met** (as measured on `master` 5f576e9, the v1.4.0 commit - "currently green" means
+  that run, not every later `dev` commit). All gating tools were green there against the recorded
+  exceptions - and WARNING-
+  level MobSF findings (14 in that run; an earlier count said 15) were never gating under this requirement's own "high-or-above"
   bar to begin with; only HIGH/ERROR findings block. Three findings are *accepted* rather than
   fixed, and therefore carry a dated rationale in `.github/security-exceptions.json`: `mobsfscan`'s
   one ERROR (`android_task_hijacking2`, a StrandHogg-style task-hijacking pattern), MobSF's one HIGH
@@ -72,8 +86,14 @@ with the calendar screen.
     Days without a calendar appointment are no longer discarded: they are smoothed towards the
     user's preferred wake-up time (FR-4/FR-6), which is what replaced the old
     `_adjustAlarmTimes`' "discard most days and possibly schedule nothing" behaviour.
-  - Checkpoints do **not** need the app to be open or the calendar screen visited: the primary one
-    runs when an alarm actually rings (FR-8), in the process the alarm itself started. A second one
+  - Checkpoints do **not** need the calendar screen visited: the primary one runs when a
+    *scheduled* alarm rings (FR-8; a manual alarm's ring deliberately does not advance the chain,
+    `lib/models/alarms/handler.dart`, T-73). **Corrected 2026-10-05 (audit):** an earlier version
+    said "in the process the alarm itself started", without the app open. That overstated it: the
+    `alarm` plugin rings natively and never starts a Flutter engine (`docs/TODO.md` T-198, H3), so
+    with the app process dead, Dart - and therefore this checkpoint - only runs once the ring's
+    full-screen intent (or the user) launches the app's activity; if the phone is in use and the
+    intent is shown only as a heads-up notification, it runs when the user opens the app. A second one
     hangs off the bedtime notification (FR-16 Checkpoint 2, timezone check only - and, per
     `docs/TODO.md` T-199, it actually fires when a notification is *scheduled*, not when it comes
     due), and a third runs on app foreground as recovery after a reboot or force-quit (FR-17).
@@ -95,6 +115,11 @@ with the calendar screen.
   chain is ever fully broken *and* the app is never opened - the realistic case being a reboot that
   loses the platform alarms (that is R3, still unverified) - nothing re-plans until the next app
   start. FR-9's safety valve can no longer cause this (`docs/TODO.md` T-78).
+- **Second caveat (2026-10-05):** "without requiring the app to be open" holds only in the sense
+  that the user need not open it themselves *while the full-screen ring intent launches the app's
+  activity*. The ring-triggered replan runs in Dart, and Dart runs only when that activity starts
+  (T-198 H3 above); when the system shows the ring as a heads-up notification instead (phone in
+  use), the replan waits for the next app start. The alarm itself still rings natively either way.
 
 ## R3 - The app is always ready to trigger an alarm
 
@@ -144,7 +169,12 @@ valve never needs to fire at all).
   question (a longer post-force-stop wait, ideally cross-checked against an actual ring, not only
   `dumpsys` registration) logged via `docs/device-trial-checklist.md`'s table template, and the E2E
   suite still doesn't exercise reboot or force-stop at all (structurally can't, for the reasons
-  `docs/TODO.md` T-93/T-131 record). A missed alarm is a total failure of the app's core purpose, so
+  `docs/TODO.md` T-93/T-131 record). The tool for the real-ring half of that re-measurement exists:
+  `scripts/verify-long-idle-alarm-survival.sh` (`docs/TODO.md` T-164) arms an alarm through the UI,
+  reboots, force-stops, and checks 24 h later whether it actually rang with the phone untouched.
+  **Result of its first attempt (2026-10-02 to 2026-10-04): invalid** - the app was opened before
+  the check, which triggers FR-17's recovery and so answers a different question. The force-stop
+  question therefore remains **unresolved** (`docs/TODO.md` T-04/T-164). A missed alarm is a total failure of the app's core purpose, so
   closing this gap remains the single highest-priority open item in this document.
   **Fixed (2026-09-18):** a `SharedPreferences` load failure could block app startup entirely
   instead of degrading to defaults - see `docs/TODO.md` T-45. (The per-alarm enable/disable switch
@@ -181,7 +211,9 @@ valve never needs to fire at all).
   longer receives `BOOT_COMPLETED` afterwards until the user starts the app again. "Surviving a
   force-stop" is therefore not an achievable goal but a platform boundary - R3 should track it as
   that boundary, not as a deficiency. What the app can do, and per FR-17 does: re-arm everything the
-  next time the app is opened.
+  next time the app is opened. *(Superseded 2026-09-19, restated 2026-10-05: this "platform
+  boundary" reading is contradicted by the 2026-09-19 measurement below; the force-stop half of R3
+  is **unresolved**, `docs/TODO.md` T-04/T-164 - not settled either way.)*
 - **Real-device confirmation (2026-09-18): force-stopping the app during a scheduled alarm indeed
   loses it - no ring.** This is the boundary above actually observed, not just reasoned from the
   code, and was believed to be Android's own platform guarantee for what `am force-stop` does to a
@@ -207,6 +239,9 @@ valve never needs to fire at all).
   the force-stop boundary itself doesn't cover - "the alarm survives force-stop" is impossible by
   design, but "the app recovers as soon as it's opened again" is the real guarantee R3 depends on
   for that path, and it now has real-device evidence rather than only a code-reading inference.
+  *(2026-10-05: "impossible by design" is not established - whether an alarm survives a force-stop
+  with the app never reopened is unresolved, `docs/TODO.md` T-04/T-164. The FR-17 recovery
+  evidence stands.)*
 - **Narrowed further (2026-09-19, `docs/TODO.md` T-04):** the maintainer confirmed on a real device
   that reboot, closing the app, and a force-stop all still let the alarm ring **provided the app
   gets reopened at some point before the alarm is due** (which is exactly the FR-17 recovery path
@@ -220,7 +255,8 @@ valve never needs to fire at all).
   `AlarmManager` entries after a reboot) listens only for `BOOT_COMPLETED`, which Android withholds
   entirely from non-direct-boot-aware apps until the device's first unlock after that boot - not
   merely delays. This is a genuine, ordinary-use failure mode (an overnight OTA reboot with the
-  phone left locked on a nightstand), unlike the `am force-stop` boundary below.
+  phone left locked on a nightstand), unlike the `am force-stop` case above (unresolved, not a
+  settled boundary - see there).
 - **Fixed and confirmed on a real device (2026-09-20, `docs/TODO.md` T-158):** a Direct-Boot-aware
   fallback now arms itself while the device stays locked - a native, self-contained path that never
   touches the real ring pipeline (custom tone, gentle-wake ramp, QR gate) or any credential-encrypted
@@ -240,16 +276,21 @@ camera for QR deactivation).
 
 - **Checked by:** manual security/code review of `lib/models/alarms/handler.dart`,
   `lib/utils/permissions.dart`, and the `alarm`/`awesome_notifications` plugin integration, plus an
-  automated E2E test on a real Android emulator covering permission grants and both dismissal
-  overlays (`integration_test/app_test.dart`). **Since 2026-09-20 (`docs/TODO.md` T-157):**
+  automated E2E test on a real Android emulator covering both dismissal overlays
+  (`integration_test/app_test.dart`). *(Corrected 2026-10-05: an earlier version said it also
+  covered "permission grants". It does not exercise the in-app grant flow: `.github/scripts/
+  run_e2e_tests.sh` installs the APK with every runtime permission pre-granted (`adb install -g`)
+  and allows `SCHEDULE_EXACT_ALARM` via `appops` before the app first runs, precisely so no
+  permission dialog appears. The request/denial paths are covered only by widget tests through the
+  `permissions.dart` seams and by hand on a device.)* **Since 2026-09-20 (`docs/TODO.md` T-157):**
   camera and calendar permissions are no longer requested upfront in a batch on first launch -
   camera is requested lazily from `QrScanner.initState` (both the initial-scan and
   deactivate-alarm paths) and calendar lazily on first Schedule-tab visit or a manual reload, via
   the same `requestCameraPermission`/`requestCalendarPermission` seams in `permissions.dart`. The
   requirement itself is unaffected - the permission is still obtained before the path that needs
   it runs, just closer to that point instead of at app start.
-- **Status: partially met.** Permissions and overlay display are now exercised on real hardware and
-  pass. **Resolved (2026-09-20, `docs/TODO.md` T-15):** the gentle wake-up volume ramp
+- **Status: partially met.** Overlay display (with permissions already granted, see above) is now
+  exercised on an emulator and passes. **Resolved (2026-09-20, `docs/TODO.md` T-15):** the gentle wake-up volume ramp
   (`VolumeSettings.fade`) has been manually validated on a real device by the maintainer - the fade
   path runs and audibly ramps rather than jumping to full volume. This is real-device evidence, not
   an automated one: the CI emulator still runs without audio, so a regression here still would not
@@ -336,7 +377,53 @@ and the calendar entries the user explicitly grants access to.
     ProGuard rules don't disable meaningful obfuscation. The on-screen deactivation QR code is
     intentionally unprotected against screenshots - the user is meant to photograph or print it for
     physical placement, by design, not a gap.
-- **Status:** met, per static analysis. Not independently verified via dynamic/runtime testing.
+  - *(Source correction, 2026-10-05:)* `WRITE_EXTERNAL_STORAGE` comes from the camera plugin
+    (`camera_android_camerax`, pulled in by `flutter_zxing`), not from `image_picker`, whose own
+    manifest declares no permissions; `READ_EXTERNAL_STORAGE` came from the `alarm` plugin. Both are
+    removed - see the comments in `android/app/src/main/AndroidManifest.xml`.
+- **One deliberate, opt-in exception: Sleep-time Do Not Disturb (`docs/TODO.md` T-198, recorded
+  2026-10-05).** This requirement's "must not modify the device" did not mention it, but the app can
+  change a device-wide setting: with the Sleep Habits "Do Not Disturb" switch on, and only after the
+  user has granted "Do Not Disturb access" (`ACCESS_NOTIFICATION_POLICY`) in system Settings,
+  `SleepTimeDnd.kt` switches the interruption filter to "alarms only" for the sleep window and back
+  to `INTERRUPTION_FILTER_ALL` at the alarm. On Android 14 and older that is the **global** Do Not
+  Disturb state; on Android 15+ (this app targets 36) it is an app-owned implicit mode (CLAUDE.md,
+  "Sleep-time Do Not Disturb"). Off by default and revocable by the user; read this requirement as
+  "no change to the device beyond that one, user-enabled setting".
+- **Enforced automatically since 2026-10-05 (on `dev`, `docs/TODO.md` T-49):**
+  `scripts/check_manifest_permissions.py` reads the built APK with `aapt2 dump permissions` and
+  fails unless its permissions match an explicit allow-list **exactly, in both directions** - an
+  extra permission merged in by a plugin fails, and so does a needed one going missing. It runs on
+  every `dev` debug APK (`--variant debug`, which additionally allows only `INTERNET`, Flutter's
+  debug tool connection) and on the signed release APK in `ci.yml` (`master`) and `release.yml`;
+  its `--self-test` runs in `ci.yml`'s UTC leg. The same change removed 17 unused permissions with
+  `tools:node="remove"` (16 launcher-badge permissions from `me.leolin:ShortcutBadger`, a dependency
+  of `awesome_notifications`' native core, used only for badges this app never sets; and
+  `BROADCAST_CLOSE_SYSTEM_DIALOGS`, which is `signature|privileged` and could never be granted).
+  Release APK: 31 permissions before, 14 after (counted once on a local release-type build). The
+  allowed set:
+
+  | Permission | Why |
+  |---|---|
+  | `READ_CALENDAR` | calendar-derived wake times |
+  | `WRITE_CALENDAR` | never used to write (`test/no_calendar_write_test.dart`), but `device_calendar` 4.3.3 requires both calendar permissions granted before any read; without it every read fails with `NOT_AUTHORIZED` |
+  | `RECEIVE_BOOT_COMPLETED` | re-arming alarms after a reboot |
+  | `WAKE_LOCK` | ringing with the screen off |
+  | `VIBRATE` | alarm vibration |
+  | `USE_FULL_SCREEN_INTENT` | ring screen over the lock screen |
+  | `FOREGROUND_SERVICE` | alarm and Direct-Boot fallback services |
+  | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | those services' foreground-service type |
+  | `POST_NOTIFICATIONS` | alarm and reminder notifications |
+  | `USE_EXACT_ALARM` | exact alarms, API 33+ |
+  | `SCHEDULE_EXACT_ALARM` | exact alarms, API 31-32 |
+  | `ACCESS_NOTIFICATION_POLICY` | sleep-time Do Not Disturb (T-198) |
+  | `CAMERA` | scanning the deactivation code |
+  | `<package>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | androidx.core's signature-level guard for non-exported receivers on API < 33 |
+
+- **Status:** met, per static analysis and (for permissions) an automated check of the built APK,
+  with the Do Not Disturb exception above. Not independently verified via dynamic/runtime testing.
+  Not yet verified on a device after the 2026-10-05 permission removals: that notifications still
+  show (`docs/TODO.md` T-49).
 
 ## R7 - No data extraction; GDPR-compliant, privacy-friendly
 
@@ -362,11 +449,22 @@ No user data leaves the device. The app must be GDPR-compliant.
   from a real release build's manifest, and **confirmed on a real device the same day**
   (`docs/TODO.md` T-49): `media3` uses `ConnectivityManager` internally, so the maintainer ran tone
   selection, the gentle-wake ramp and a custom tone in four real-device scenarios on that build, and
-  audio played correctly in every one. A network capture during
+  audio played correctly in every one. *(Source correction, 2026-10-05: per the comments in
+  `android/app/src/main/AndroidManifest.xml`, `ACCESS_NETWORK_STATE` reaches the build through
+  `media3-common` pulled in by the camera plugin's CameraX video module, not the `alarm` plugin; the
+  Google transport libraries that also contributed it when T-49 traced it are no longer in the
+  build.)* **Checked automatically since 2026-10-05 (on `dev`):** `scripts/check_manifest_permissions.py`
+  (see R6) names `INTERNET` and `ACCESS_NETWORK_STATE` explicitly as claim-breaking - a release APK
+  in `ci.yml` (`master`) or `release.yml` that holds either fails, and the `dev` debug APK may hold
+  only `INTERNET` (Flutter's debug tool connection) beyond the allow-list. Until then this claim had
+  no automated guard. A network capture during
   an E2E run remains the other piece that would close this requirement fully. GDPR compliance
   otherwise follows straightforwardly from "no data ever leaves the device," but this hasn't been
   reviewed by anyone with actual legal expertise - treat "met" here as a technical assessment, not
-  legal sign-off.
+  legal sign-off. *(2026-10-05:)* "No user data leaves the device" means the app sends nothing by
+  itself. Two user-initiated paths do hand data on: the deactivation code's Share/Print actions
+  (`docs/TODO.md` T-182, `share_plus`/`printing` - the OS share sheet or print framework, passing the
+  code to an app or printer the user picks) and copying the diagnostics log to the clipboard.
 
 ## R8 - All dependencies are open-source and trustworthy
 
@@ -377,7 +475,10 @@ reasonable trust assessment is.
   `test/no_proprietary_dependencies_test.dart`, which fails the suite if either of the two
   offenders below is declared again, resolves back in transitively (`docs/TODO.md` T-144, since
   2026-09-24 - the earlier version only ever read `pubspec.yaml`, missing a transitive return with
-  no direct line), or is imported anywhere in `lib/`. `scripts/check_proprietary_native_deps.py`
+  no direct line), or is imported anywhere in `lib/`. *(2026-10-05: it guards more than those two
+  names - since T-213 it also forbids whole package families by name prefix, e.g. `syncfusion_`,
+  `firebase_`, `google_mlkit_`, `huawei_`, `facebook_` and the Play Core/Billing/Ads/Maps/Sign-In
+  plugins, so the next proprietary package in a known family fails without being listed first.)* `scripts/check_proprietary_native_deps.py`
   (also T-144) covers the channel that guard still can't see - a proprietary Android artifact
   arriving through a plugin's own `build.gradle`, exactly how ML Kit arrived via `mobile_scanner`
   before this was fixed - by checking the CycloneDX SBOM `ci.yml`/`release.yml` already generate for
@@ -418,6 +519,14 @@ licensing obligations must be met.
   source under `lib/` now carries a GPLv3 copyright/licence header, guarded against regressing by
   `test/licence_header_test.dart` (`docs/TODO.md` T-48). An automated `license_checker`-style scan
   remains worth adding as a second line of defence for the dependency tree specifically.
+- **Two qualifications to "met" (2026-10-05, audit):**
+  1. **The T-213 notice work exists on `dev` only.** Every published release up to and including
+     `v1.4.0` predates it and ships without those notices (libzueci and the other embedded native
+     pieces, the Android library list, `desugar_jdk_libs`, the media credits); they reach users
+     with the next release.
+  2. **One open question:** `desugar_jdk_libs` (GPL-2.0 with the Classpath Exception) is compiled
+     into the APK and its notice carries a source link; whether that link satisfies GPL-2.0
+     section 3, or a written offer / bundled source is needed, is undecided (`docs/TODO.md` T-220).
 
 ## R10 - All bundled assets are properly licensed for use
 
@@ -425,7 +534,10 @@ Images, audio, and other bundled assets (`assets/`) must be used with proper rig
 
 - **Checked by:** `test/media_credits_test.dart` (every file under `assets/sounds/` and
   `assets/icons/` has exactly one row with an allowed free licence in its `CREDITS.md`); the
-  credits are shown in the app's licence notices (`docs/TODO.md` T-213).
+  credits are shown in the app's licence notices (`docs/TODO.md` T-213). *(Since 2026-10-05, on
+  `dev`:)* each `CREDITS.md` also carries a `| File | SHA-256 |` table and the test hashes every
+  asset file and compares, so a file swapped for a different one under the same name fails instead
+  of silently inheriting the old row's licence.
 - **Status: met (2026-10-01, `docs/TODO.md` T-212).** All six tones are now freely licensed: five
   edited Wikimedia Commons recordings (CC BY 4.0, CC BY-SA 4.0, US-government public domain) and
   the default tone, synthesised by `scripts/gen_tones.py` (GPL-3.0-or-later); per-file source,
@@ -442,6 +554,9 @@ Images, audio, and other bundled assets (`assets/`) must be used with proper rig
   (`assets/icons/icon.png`, `icon_no_shadow.png`, `icon_foreground.png` and the launcher icons
   generated from them) were created by the maintainer with ChatGPT and are licensed under
   CC BY-SA 4.0, recorded in `assets/icons/CREDITS.md` (2026-10-01, `docs/TODO.md` T-214).
+- **Scope of "met" (2026-10-05, audit):** met on `dev`. Every published release up to and
+  including `v1.4.0` still ships the Mixkit tones (and none of the T-213 credits/notices); R10 is
+  met for users only from the next release on.
 
 ## R11 - The privacy policy is accurate and complete
 
@@ -484,6 +599,17 @@ working contact method.
   note (T-150) it stores; and its "declares no internet-access permission" holds for the release
   build only - debug builds carry Flutter's development `INTERNET` permission. All fixed in
   `assets/text/Privacy.md`.
+- **Corrected again (2026-10-05, audit):** the policy omitted the sleep-time Do Not Disturb
+  feature and the "Do Not Disturb access" it needs (T-198); that the next alarm's time and the Do Not
+  Disturb window's start/end are also kept in Android's device-protected storage
+  (`DirectBootFallback.kt`, `SleepTimeDnd.kt`, `createDeviceProtectedStorageContext()`), which is
+  readable before the device's first unlock after a reboot - by design, so the locked-device
+  fallback and the Do Not Disturb alarms work then; the bedtime reminder notifications; and the
+  deactivation code's Share/Print actions (T-182). Its sentence that the app "has no code path that
+  could send data anywhere" was untrue because of that share sheet (the data goes only to an app or
+  printer the user picks), and "the most recent few hundred entries" for the diagnostics log
+  understated it: 512 entries per buffer, in two buffers (main and background isolate,
+  `lib/utils/diag/diag_log.dart`). All fixed in `assets/text/Privacy.md`.
 
 ## R12 - The project is human-readable and quickly understandable
 
@@ -534,13 +660,15 @@ match any particular format or symbology.
 
 ---
 
-**Summary of open gaps (R3, R4 partial, R7 partial, R10):** R1 is **no longer** among them (2026-09-24) -
+**Summary of open gaps (R3, R4 partial, R7 partial; 2026-10-05: R10 removed from this list - it is
+met on `dev`, see R10 - and R9/R10 reach users only with the next release, see their own
+entries):** R1 is **no longer** among them (2026-09-24) -
 see R1's own status above; R2 is **no longer** among them either - the scheduling-v2 rebuild (2026-09)
 replaced the old engine wholesale and is covered by unit tests; see R2 above for the one remaining
 caveat, which is really R3. R3 and part of R4 are no longer explained by "no build has ever run on a
 device or emulator" - that build now happens on every release and has surfaced what's actually still
 missing: no reboot/force-stop survival test over a long, never-reopened stretch (R3, `docs/TODO.md`
-T-04), and R4 is now only partial because of the QR gate's own `debugScanStreamOverride` seam
+T-04/T-164), and R4 is now only partial because of the QR gate's own `debugScanStreamOverride` seam
 remaining a plain mutable static rather than an injected dependency (`docs/TODO.md` T-16) - the
 gentle-wake ramp (T-15), the real camera decode path (T-143), and the `alarm` plugin's exported-
 receiver bypass (T-165) have all since been confirmed on real hardware or build-verified, so this
@@ -550,7 +678,8 @@ resolved as of 2026-09-17: both dependencies were replaced rather than covered b
 exception, and `docs/licence-position.md` records the decision. R9's one remaining condition -
 the repository has to be public before the APK reaches anyone else - is met as of 2026-09-20
 (`docs/TODO.md` T-34): the repository is public and `v1.0.0` has been released (`v1.4.0` is the
-latest). R10 is met again since 2026-10-01: the non-free Mixkit tones were replaced with freely licensed
-ones (`docs/TODO.md` T-212). See
+latest). R10 is met again since 2026-10-01 on `dev`: the non-free Mixkit tones were replaced with freely
+licensed ones (`docs/TODO.md` T-212) - published releases up to `v1.4.0` still ship the Mixkit tones.
+R9 additionally has one open question, `desugar_jdk_libs`'s GPL-2.0 source obligation (T-220). See
 `docs/TODO.md` for the full, prioritised, evidence-backed list every one of these gaps is now
 tracked under.

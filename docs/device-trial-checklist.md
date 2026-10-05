@@ -40,8 +40,8 @@ things it structurally **cannot** show, and those are exactly what's here:
 | A2 | Set a manual alarm for +2 min | rings, overlay appears | |
 | A3 | Switch off via "Stop" | overlay gone, no alarm still active | |
 | A4 | Sound audible? Volume as set? | yes | |
-| A5 | Enable gentle wake (default ramp 1 min), repeat the alarm | volume rises over ~60 s up to the set volume | |
-| A6 | Set "Ramp duration" to 5 min, repeat the alarm | the ramp now takes ~5 min, no longer 1 min (T-96) | |
+| A5 | Gentle wake is on by default with a 5-min ramp (T-170); create a new manual alarm, let it ring | volume rises over ~5 min up to the set volume | |
+| A6 | Set "Ramp duration" to 1 min, create a **new** manual alarm, let it ring | the ramp now takes ~1 min (T-96); an alarm created before the change keeps its own 5-min ramp | |
 | A7 | Try setting the ramp below 1 min | not possible: 00:00 is raised to 00:01 (the minimum is stated in the option's **?** help, T-166) | |
 
 ## B — Calendar-derived wake-up (the actual product path)
@@ -114,6 +114,23 @@ written cannot pass until T-199 is resolved; do not record a missing bedtime ent
 | F2 | Check the diagnostics log after F1 | `timezoneCheck` with `offsetChangeShape=3` (otherChange) | |
 | F3 | Set the device clock to the day before a daylight-saving transition (automatic time off, device zone Europe/Berlin), `preferredWakeUpTime` 07:00, no appointment; let the day's alarm ring (or trigger a Sync) | the transition day's scheduled alarm reads **07:00** in the alarm list, not 08:00 (spring) / 06:00 (autumn), and so does every day after it (T-206; before it, a known one-hour error) | |
 | F4 | A3 (`docs/TODO.md` T-206): after F3, before and after the transition, `adb shell dumpsys alarm` for the app's package | the armed alarm's trigger time is 07:00 **local** on the transition day - proving that Dart's local conversion on the phone applies the transition to a *future* instant (`deviceOffsetAt`), which no test can show. Run once around the March and once around the October transition | |
+
+## G — Sleep-time Do Not Disturb (T-198)
+
+The two Android models behave differently and must be recorded separately - a result on one never
+covers the other (`CLAUDE.md`, "Sleep-time Do Not Disturb"). Fill the header's Android version in.
+
+| # | Check | Expectation | Result |
+|---|---|---|---|
+| G1 | Sleep Habits → switch on **Do Not Disturb** for the first time | Android's Do Not Disturb access screen opens; without granting it the switch stays off | |
+| G2 | Next alarm in more than one Sleep Goal: wait for (or move the alarm towards) bedtime = alarm − Sleep Goal, app closed | DND switches on at bedtime, "alarms only" | |
+| G3 | Let that alarm ring | DND switches off at the first ring, not at Stop; a snooze does not switch it on again | |
+| G4 | Next alarm **less** than one Sleep Goal away (e.g. a backup alarm +10 min) | after the first ring DND comes back on about two minutes later until that alarm rings (T-203) | |
+| G5 | Same as G4, but the closer manual alarm has **Exclude from Sleep Time** on | that alarm neither starts nor ends sleep time; DND follows the next non-excluded alarm | |
+| G6 | Switch the Do Not Disturb setting off during sleep time | DND off right away | |
+| G7 | Reboot during sleep time without opening the app | DND window still ends at the alarm's first ring (re-armed by `DirectBootReceiver`) | |
+| G8 | **Android 15 and newer:** check Settings → Modes and the quick-settings DND tile during sleep time | the app's own mode is on; the global DND tile is not; your own DND and other modes untouched | |
+| G9 | **Android 14 and older:** switch DND on by hand before bedtime | the app leaves it alone and does not switch it off in the morning | |
 
 ## Findings
 
