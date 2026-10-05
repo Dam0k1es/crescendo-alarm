@@ -29,19 +29,25 @@ Meeting _meetingAt(DateTime from) => Meeting(
     );
 
 void main() {
-  group('FR-5 step 2: a ΔT=0 point ends the run at itself (T-104)', () {
-    // The spec sentence carries no positional caveat:
+  group('FR-5 step 2: a ΔT=0 point (T-104, revised by T-139)', () {
+    // T-104 (2026-09-11) read the spec sentence "a point with ΔT=0 ... is
+    // never grouped with a following point" without a positional caveat and
+    // cut the candidates at the first ΔT=0 point wherever it sat. That cut
+    // also cut off FR-7's lookahead (docs/TODO.md T-139): an already-reached
+    // point hid a later, earlier one, and the run toward it started too late
+    // - two steps of twice maxDailyDelta in the spec's own FR-7 example.
     //
-    //   "A point with `ΔT=0` relative to `A` ends the run immediately at
-    //    itself - it never counts as compatible with either direction, and
-    //    is NEVER grouped with a following point."
-    //
-    // The spec's own test bullet places the ΔT=0 point at position 1
-    // (`A=07:00, t1(Tue)=07:00, t2(Fri)=09:00`) - exactly where a check on
-    // `points.first` alone would already suffice. If it sits further back,
-    // the same sentence still applies.
+    // Maintainer decision, 2026-10-05: the smooth week of that example is the
+    // intended behaviour. FR-5 step 2 now says what remains of the rule: a
+    // ΔT=0 point is never grouped with a following LATER point (step 1's
+    // violation check already guarantees that - the curve would rise above
+    // the point's own hardFloor), but a following EARLIER point is grouped
+    // through it.
 
-    test('ΔT=0 at position 2 ends the run just as it does at position 1', () {
+    test('ΔT=0 at position 2 no longer hides the earlier point behind it', () {
+      // T-104's own evidence case. It used to require t2; under the decision
+      // the farthest non-violating point t3 is the target - the curve
+      // 07:00 -> 05:00 passes t1 (08:00) and t2 (07:00) below both.
       final result = groupTarget(
         anchor: _utc(7, 0),
         points: [
@@ -53,9 +59,35 @@ void main() {
         offsetAt: fixedOffset(Duration.zero),
       );
 
-      // The run must not be grouped past the ΔT=0 point.
-      expect(result.dayOffset, 2);
-      expect(result.value, _utc(7, 0, day: 3));
+      expect(result.dayOffset, 3);
+      expect(result.value, _utc(5, 0, day: 4));
+    });
+
+    test('the same case over the whole week: no step above maxDailyDelta', () {
+      // What the plan actually does with it. FR-7 still starts the run as
+      // late as possible, so the week is the same as under T-104's cut:
+      // 07:00, 06:00, 05:00 - steps 0, 60, 60 against an allowed 60.
+      final window = [for (var d = 2; d <= 4; d++) _utc(0, 0, day: d)];
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(7, 0),
+        allEvents: [
+          _meetingAt(_utc(8, 0, day: 2)),
+          _meetingAt(_utc(7, 0, day: 3)),
+          _meetingAt(_utc(5, 0, day: 4)),
+        ],
+        offsetAt: fixedOffset(Duration.zero),
+        durationToWakeUp: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
+        preferredWakeUpTime: null,
+        maxDailyDelta: const Duration(minutes: 60),
+        gapDayCounter: 0,
+        scheduleOnGapDays: true,
+      );
+
+      expect(result.valuesByDay.values.toList(),
+          [_utc(7, 0, day: 2), _utc(6, 0, day: 3), _utc(5, 0, day: 4)]);
+      expect(result.overrunNotificationNeeded, isFalse);
     });
 
     test('the spec\'s own case (ΔT=0 at position 1) stays unchanged', () {
@@ -747,6 +779,12 @@ void main() {
         expect(result.valuesByDay[day]!.hour, lessThanOrEqualTo(7),
             reason: 'no day may move later than the preferredWakeUpTime');
       }
+      // The precondition's bullet 1 says "every day 07:00 ... NO overrun
+      // notification" - both halves asserted, every day exactly.
+      for (final day in window) {
+        expect(result.valuesByDay[day], _utc(7, 0, day: day.day));
+      }
+      expect(result.overrunNotificationNeeded, isFalse);
     });
 
     test('a single later appointment does not consume the free days before it',
@@ -799,6 +837,246 @@ void main() {
       expect(result.valuesByDay[window[1]], _utc(6, 0, day: 13));
       expect(result.valuesByDay[window[2]], _utc(5, 30, day: 14));
       expect(result.valuesByDay[window[3]], _utc(5, 0, day: 15));
+    });
+  });
+
+  group('FR-7: an already-reached point must not end the lookahead (T-139)',
+      () {
+    // The diagnostics log that found T-139 (preferredWakeUpTime 09:00,
+    // maxDailyDelta 90min, 30min lead time; earliest appointments 05:00,
+    // 08:00, 12:00, 10:00, 08:00, 05:00, 05:00 from Thursday on), anchored on
+    // its own Thursday's 04:30. The engine planned Sun 09:00 -> Mon 06:45 ->
+    // Tue 04:30, two steps of 2:15 against an allowed 1:30, and notified: on
+    // Sunday Monday's 07:30 had ΔT=0 and hid Tuesday. The rule-compliant plan
+    // the TODO entry names holds Sunday at 07:30.
+    test('the reported week: Sunday held at 07:30, every step within 90min',
+        () {
+      final window = [for (var d = 16; d <= 22; d++) _utc(0, 0, day: d)];
+      final result = computeWeekPlan(
+        window: window, // Fri 16 .. Thu 22
+        lastEffectiveWakeTime: _utc(4, 30, day: 15), // Thu
+        allEvents: [
+          _meetingAt(_utc(8, 0, day: 16)),
+          _meetingAt(_utc(12, 0, day: 17)),
+          _meetingAt(_utc(10, 0, day: 18)),
+          _meetingAt(_utc(8, 0, day: 19)),
+          _meetingAt(_utc(5, 0, day: 20)),
+          _meetingAt(_utc(5, 0, day: 21)),
+        ],
+        offsetAt: fixedOffset(Duration.zero),
+        durationToWakeUp: const Duration(minutes: 30),
+        durationToGetReadyForDay: (_) => Duration.zero,
+        preferredWakeUpTime: const TimeOfDay(hour: 9, minute: 0),
+        maxDailyDelta: const Duration(minutes: 90),
+        gapDayCounter: 0,
+        scheduleOnGapDays: true,
+      );
+
+      expect(result.valuesByDay.values.toList(), [
+        _utc(6, 0, day: 16), // Fri
+        _utc(7, 30, day: 17), // Sat
+        _utc(7, 30, day: 18), // Sun - not 09:00
+        _utc(6, 0, day: 19), // Mon
+        _utc(4, 30, day: 20), // Tue
+        _utc(4, 30, day: 21), // Wed
+        _utc(6, 0, day: 22), // Thu
+      ]);
+      expect(result.overrunNotificationNeeded, isFalse);
+    });
+  });
+
+  group('FR-7: a drift must leave every nearer point reachable (T-139)', () {
+    // Found by test/scheduling_v2_smoothness_property_test.dart (its case
+    // 360, here at UTC+0). FR-7's feasibility was checked against F alone -
+    // the farthest point a smooth curve reaches. Anchor 05:04,
+    // preferredWakeUpTime 06:30, maxDailyDelta 60, hardFloors 04:36 (day 2)
+    // and 03:42 (day 3): the drift to 05:42 still reached F (120min over two
+    // days), but left 66 minutes into day 2's 04:36. The drift is now capped
+    // where every point stays reachable: 05:36 (32 minutes; day 2 needs
+    // 05:36 - 04:36 = 60).
+    test('the drift stops where the nearer, stricter point is still reachable',
+        () {
+      final window = [for (var d = 2; d <= 8; d++) _utc(0, 0, day: d)];
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(5, 4),
+        allEvents: [
+          _meetingAt(_utc(4, 36, day: 3)),
+          _meetingAt(_utc(3, 42, day: 4)),
+        ],
+        offsetAt: fixedOffset(Duration.zero),
+        durationToWakeUp: Duration.zero,
+        durationToGetReadyForDay: (_) => Duration.zero,
+        preferredWakeUpTime: const TimeOfDay(hour: 6, minute: 30),
+        maxDailyDelta: const Duration(minutes: 60),
+        gapDayCounter: 0,
+        scheduleOnGapDays: true,
+      );
+
+      expect(result.valuesByDay.values.toList(), [
+        _utc(5, 36, day: 2),
+        _utc(4, 36, day: 3), // its own hardFloor, 60 minutes down
+        _utc(3, 42, day: 4),
+        _utc(4, 42, day: 5), // FR-4 drifts back toward 06:30
+        _utc(5, 42, day: 6),
+        _utc(6, 30, day: 7),
+        _utc(6, 30, day: 8),
+      ]);
+      expect(result.overrunNotificationNeeded, isFalse);
+    });
+  });
+
+  group('FR-7: reachability is checked in groupTarget\'s frame (T-139 review)',
+      () {
+    // The first version of T-139's fix (b) measured "is every point still
+    // reachable?" on readings with FR-1's 12-hour wrap, while groupTarget's
+    // violation check places the curve at the anchor reading's date + the
+    // point's offset and compares instants. Where the anchor's reading lies
+    // on the date BEFORE its day - a night shift: the alarm for a 00:00
+    // shift rings at 22:00 the evening before (T-118b) - the two disagree by
+    // a day: a daytime appointment two days on read as "11 hours earlier,
+    // one day left", nothing was feasible, and the run started at once. FR-7
+    // says a run starts as late as possible; these days lost up to 35
+    // minutes of sleep for no gain at all (Günther's review, differential
+    // case #22).
+
+    test('differential case #22: the evening anchor is held, not pulled '
+        'earlier', () {
+      final window = [
+        for (var d = 30; d <= 36; d++) DateTime.utc(2027, 10, d)
+      ];
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: DateTime.utc(2027, 10, 28, 18, 23),
+        allEvents: [
+          _meetingAt(DateTime.utc(2027, 10, 31, 12, 16)),
+          _meetingAt(DateTime.utc(2027, 11, 5, 16, 24)),
+        ],
+        offsetAt: fixedOffset(Duration.zero),
+        durationToWakeUp: const Duration(minutes: 120),
+        durationToGetReadyForDay: (_) => Duration.zero,
+        preferredWakeUpTime: null,
+        maxDailyDelta: const Duration(minutes: 90),
+        gapDayCounter: 1,
+        scheduleOnGapDays: false,
+      );
+      // scheduleOnGapDays off: only the two appointment days carry a value.
+      // Oct 31 holds 18:23 (on the 30th - the anchor's frame), as the
+      // pure layer before T-139 did; not 17:48.
+      expect(result.valuesByDay[DateTime.utc(2027, 10, 31)],
+          DateTime.utc(2027, 10, 30, 18, 23));
+    });
+
+    test('a night-shift week: 22:00 the evening before is held all week', () {
+      // Shift at 00:00 on Jan 10, two hours to wake up -> the anchor rang
+      // at 22:00 on Jan 9. A daytime appointment at 13:00 on Jan 12 (wake
+      // 11:00) and one at 23:00 on Jan 17 (wake 21:00). Every day's 22:00
+      // the evening before lies long before both; nothing has to move.
+      final window = [for (var d = 11; d <= 17; d++) _utc(0, 0, day: d)];
+      final result = computeWeekPlan(
+        window: window,
+        lastEffectiveWakeTime: _utc(22, 0, day: 9),
+        allEvents: [
+          _meetingAt(_utc(13, 0, day: 12)),
+          _meetingAt(_utc(23, 0, day: 17)),
+        ],
+        offsetAt: fixedOffset(Duration.zero),
+        durationToWakeUp: const Duration(hours: 2),
+        durationToGetReadyForDay: (_) => Duration.zero,
+        preferredWakeUpTime: null,
+        maxDailyDelta: const Duration(minutes: 60),
+        gapDayCounter: 0,
+        scheduleOnGapDays: true,
+      );
+      expect(result.valuesByDay.values.toList(),
+          [for (var d = 10; d <= 16; d++) _utc(22, 0, day: d)]);
+      expect(result.overrunNotificationNeeded, isFalse);
+    });
+  });
+
+  group('FR-7: a run starts only for a point it can aim at (T-139 review B1)',
+      () {
+    // Second review, blocking: holding was vetoed by a point that FR-1 reads
+    // as LATER (it lies more than 12 hours earlier by the clock, so the
+    // 12-hour wrap turns it round), while the run's target F still came from
+    // FR-1's wrapped ΔT and was a different, nearer point. The run then did
+    // nothing for the vetoing point and suppressed the FR-4 drift that would
+    // have helped. A night-to-day shift change - Marie's case
+    // (docs/personas.md).
+    //
+    // Night to day, UTC: anchor 21:46, appointments 19:04 (day 3) and 07:43
+    // (day 5), maxDailyDelta 90, preferredWakeUpTime 14:27. The first
+    // version planned 21:05, 20:25, 19:44, 18:14, 12:58, 07:43 - two steps
+    // of 316 minutes. The drift toward 14:27 is feasible for 19:04 and is the
+    // plan: 20:16, 18:46. From 18:46 on, 07:43 is within 12 hours and reads
+    // EARLIER - now it is a target, and the run spreads what is left of the
+    // 14-hour change evenly: 16:00:15, 13:14:30, 10:28:45, 07:43 (165:45 a day -
+    // more than maxDailyDelta, unavoidable, and reported: no curve can cover
+    // 14 hours in six days at 90 minutes). This is also the pure layer's plan
+    // before T-139 (differential case #49).
+    WeekPlanResult nightToDay(TimeOfDay? preferred) => computeWeekPlan(
+          window: [for (var d = 2; d <= 8; d++) _utc(0, 0, day: d)],
+          lastEffectiveWakeTime: _utc(21, 46, day: 1),
+          allEvents: [
+            _meetingAt(_utc(19, 4, day: 5)),
+            _meetingAt(_utc(7, 43, day: 7)),
+          ],
+          offsetAt: fixedOffset(Duration.zero),
+          durationToWakeUp: Duration.zero,
+          durationToGetReadyForDay: (_) => Duration.zero,
+          preferredWakeUpTime: preferred,
+          maxDailyDelta: const Duration(minutes: 90),
+          gapDayCounter: 0,
+          scheduleOnGapDays: true,
+        );
+
+    test('with a preferredWakeUpTime: FR-4 drifts until 07:43 is in reach',
+        () {
+      final result = nightToDay(const TimeOfDay(hour: 14, minute: 27));
+      expect(result.valuesByDay.values.take(6).toList(), [
+        _utc(20, 16, day: 2),
+        _utc(18, 46, day: 3),
+        DateTime.utc(2026, 1, 4, 16, 0, 15),
+        DateTime.utc(2026, 1, 5, 13, 14, 30),
+        DateTime.utc(2026, 1, 6, 10, 28, 45),
+        _utc(7, 43, day: 7),
+      ]);
+      expect(result.overrunNotificationNeeded, isTrue);
+    });
+
+    test('without one: the anchor is held until 19:04 needs it', () {
+      // 21:46 -> 19:04 is 162 minutes over three days; holding two days and
+      // stepping 90 + 72 (FR-7's run of N=2 from day 2) is as late as it
+      // gets - not 41-81 minutes earlier on days 0-1.
+      final result = nightToDay(null);
+      expect(result.valuesByDay[_utc(0, 0, day: 2)], _utc(21, 46, day: 2));
+      expect(result.valuesByDay[_utc(0, 0, day: 3)], _utc(21, 46, day: 3));
+    });
+  });
+
+  group('FR-1: ΔT at full resolution (T-139 review)', () {
+    // The time of day ΔT is taken from dropped the milliseconds (hour,
+    // minute, second and only the microsecond FIELD, 0-999), so a value
+    // carrying milliseconds - every value FR-7's bisection produces - was
+    // misread by up to 999 ms: a drift to the preferred time then landed
+    // 0.999 s past it and stayed there. Found by the property test's
+    // full-resolution comparison.
+    test('milliseconds count', () {
+      expect(
+          readingDelta(DateTime.utc(2026, 1, 1, 7, 0, 0, 0),
+              DateTime.utc(2026, 1, 2, 7, 0, 0, 500)),
+          const Duration(milliseconds: 500));
+    });
+
+    test('a drift from a value with milliseconds lands exactly on the '
+        'preferred time', () {
+      final v = applyGapDayDrift(
+        v: DateTime.utc(2026, 1, 1, 6, 59, 44, 999, 999),
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
+        maxDailyDelta: const Duration(minutes: 30),
+        offsetAt: fixedOffset(Duration.zero),
+      );
+      expect(v, DateTime.utc(2026, 1, 2, 7, 0));
     });
   });
 

@@ -34,6 +34,58 @@ Meeting _meetingAt(DateTime from, {bool isAllDay = false}) {
 }
 
 void main() {
+  group('FR-1: shifts are measured on readings', () {
+    test(
+        'anchor 22:00, hardFloor the next day at 05:00 -> ΔT = 7h, direction '
+        '"later", not 17h "earlier"', () {
+      final anchor = _utc(22, 0, day: 1);
+      final floor = _utc(5, 0, day: 2);
+      expect(readingDelta(anchor, floor), const Duration(hours: 7));
+      // Observable: a run toward it moves LATER, one hour a day, across
+      // midnight onto each day's own date.
+      final run = distribute(
+        anchor: anchor,
+        target: floor,
+        n: 7,
+        maxDailyDelta: const Duration(hours: 1),
+        offsetAt: fixedOffset(Duration.zero),
+      );
+      expect(run.overrunNotificationNeeded, isFalse);
+      expect(run.valuesByDayOffset[1], _utc(23, 0, day: 2));
+      expect(run.valuesByDayOffset[2], _utc(0, 0, day: 4));
+      expect(run.valuesByDayOffset[7], _utc(5, 0, day: 9));
+    });
+
+    test(
+        'anchor 07:00 before a zone change (CET), hardFloor afterwards 07:00 '
+        'in the new zone (JST, +8h) -> ΔT = 8h, not 0', () {
+      // Both read under the rules after the change: the anchor (07:00 CET =
+      // 06:00 UTC) reads 15:00 JST, the hardFloor (next day 07:00 JST =
+      // 22:00 UTC the same day) reads 07:00 JST.
+      final jst = fixedOffset(const Duration(hours: 9));
+      final anchor = _utc(6, 0, day: 1);
+      final floor = _utc(22, 0, day: 1);
+      expect(
+          readingDelta(readingOf(anchor, jst), readingOf(floor, jst)).abs(),
+          const Duration(hours: 8));
+      // Observable: a one-day run is an 8-hour jump - within an 8h bound,
+      // over a bound one minute smaller.
+      for (final (bound, overrun) in [
+        (const Duration(hours: 8), false),
+        (const Duration(hours: 7, minutes: 59), true),
+      ]) {
+        final run = distribute(
+            anchor: anchor,
+            target: floor,
+            n: 1,
+            maxDailyDelta: bound,
+            offsetAt: jst);
+        expect(run.valuesByDayOffset[1], floor);
+        expect(run.overrunNotificationNeeded, overrun, reason: 'bound $bound');
+      }
+    });
+  });
+
   group('distribute (FR-6)', () {
     // docs/TODO.md T-206: `_t` builds LOCAL fixtures, so the rules are the
     // process zone's, and the UTC-tagged result instants are compared in the
@@ -291,6 +343,55 @@ void main() {
 
       expect(result, t1);
     });
+
+    // docs/TODO.md T-139 (maintainer, 2026-10-05: "every time of every day
+    // should be tested"): the same bullet worked through the whole week, not
+    // only the chosen target. A=07:00 (Sun), t1(Tue)=07:00, t2(Fri)=09:00,
+    // no preferredWakeUpTime. t2 is later than every value, so - FR-5's
+    // precondition (T-132) - it is never a target: "t2 starts a new run" is
+    // a run of length zero, every day holds 07:00 and Friday's 09:00 is only
+    // a cap. No day moves, no notification.
+    test('the same bullet over the whole week: every day holds 07:00', () {
+      final result = _utcWeek(
+        anchor: _utc(7, 0, day: 1), // Sun
+        events: [
+          _meetingAt(_utc(7, 0, day: 3)), // Tue, ΔT = 0
+          _meetingAt(_utc(9, 0, day: 6)), // Fri
+        ],
+        maxDailyDelta: maxDailyDelta,
+      );
+      _expectUtcWeek(result, [
+        for (var d = 2; d <= 7; d++) _utc(7, 0, day: d),
+      ], overrun: false);
+    });
+  });
+
+  group('FR-5 precondition: only a binding point is a target (T-132)', () {
+    // Bullet 2, verbatim: same anchor (A=06:45, preferredWakeUpTime=07:00,
+    // maxDailyDelta=30min), a single appointment at 05:00 in four days ->
+    // "run toward earlier: 06:18 / 05:52 / 05:26 / 05:00, then drifts back
+    // toward preferredWakeUpTime". The spec shows minutes; the exact even
+    // steps are 105min / 4 = 26:15, so the values carry seconds (06:18:45,
+    // 05:52:30, 05:26:15). The drift back is FR-4's 30-minute steps.
+    test('a single earlier appointment in four days: an even run, then back',
+        () {
+      final result = _utcWeek(
+        anchor: _utc(6, 45, day: 1),
+        events: [_meetingAt(_utc(5, 0, day: 5))],
+        preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
+        maxDailyDelta: const Duration(minutes: 30),
+        days: 7,
+      );
+      _expectUtcWeek(result, [
+        DateTime.utc(2026, 1, 2, 6, 18, 45),
+        DateTime.utc(2026, 1, 3, 5, 52, 30),
+        DateTime.utc(2026, 1, 4, 5, 26, 15),
+        _utc(5, 0, day: 5),
+        _utc(5, 30, day: 6),
+        _utc(6, 0, day: 7),
+        _utc(6, 30, day: 8),
+      ], overrun: false);
+    });
   });
 
   group('planGapOrRunStartDay (FR-7)', () {
@@ -301,7 +402,9 @@ void main() {
     test('one hardFloor point: Monday drifts, Tuesday starts the run', () {
       const preferredWakeUpTime = TimeOfDay(hour: 10, minute: 0);
       const maxDailyDelta = Duration(minutes: 30);
-      final f = _utc(5, 0); // Saturday, 05:00
+      // On its real date (v.day + 6), as HardFloorPoint requires - the
+      // reachability check (T-139) compares it as an instant.
+      final f = _utc(5, 0, day: 7); // Saturday, 05:00
 
       // remainingPoints' dayOffset is relative to v (the real calendar-day
       // distance from v to F) - groupTarget/distribute necessarily need it
@@ -336,6 +439,25 @@ void main() {
       expect(tuesday.overrunNotificationNeeded, isFalse);
     });
 
+    // docs/TODO.md T-139: every day of the bullet, not only Monday/Tuesday -
+    // "Tue=07:00, Wed=06:30, Thu=06:00, Fri=05:30, Sat=05:00".
+    test('one hardFloor point: the whole week as the bullet lists it', () {
+      final result = _utcWeek(
+        anchor: _utc(7, 0, day: 1), // Sun
+        events: [_meetingAt(_utc(5, 0, day: 7))], // Sat
+        preferredWakeUpTime: const TimeOfDay(hour: 10, minute: 0),
+        maxDailyDelta: const Duration(minutes: 30),
+      );
+      _expectUtcWeek(result, [
+        _utc(7, 30, day: 2), // Mon
+        _utc(7, 0, day: 3), // Tue
+        _utc(6, 30, day: 4), // Wed
+        _utc(6, 0, day: 5), // Thu
+        _utc(5, 30, day: 6), // Fri
+        _utc(5, 0, day: 7), // Sat
+      ], overrun: false);
+    });
+
     test(
         'two hardFloor points, FR-5 target ≠ next point: Monday starts immediately',
         () {
@@ -361,6 +483,32 @@ void main() {
 
       expect(monday.value, _utc(6, 30, day: 2));
       expect(monday.overrunNotificationNeeded, isFalse);
+    });
+
+    // docs/TODO.md T-139, decided by the maintainer on 2026-10-05: "every
+    // time of every day should be tested, and the jump should not occur at
+    // all". This bullet's own week - Mon=06:30 ... Sat=04:00 in 30-minute
+    // steps, no notification - is the intended behaviour. Before the fix
+    // the engine planned Mon 06:30, Tue 06:00, Wed 06:00, Thu 06:00, Fri
+    // 05:00, Sat 04:00 with an overrun: from Tuesday on, Friday's 06:00 has
+    // ΔT=0 and FR-5 step 2 cut Saturday out of FR-7's lookahead.
+    test('two hardFloor points: the whole week as the bullet lists it', () {
+      final result = _utcWeek(
+        anchor: _utc(7, 0, day: 1), // Sun
+        events: [
+          _meetingAt(_utc(6, 0, day: 6)), // Fri, loose
+          _meetingAt(_utc(4, 0, day: 7)), // Sat, strict
+        ],
+        maxDailyDelta: const Duration(minutes: 30),
+      );
+      _expectUtcWeek(result, [
+        _utc(6, 30, day: 2), // Mon
+        _utc(6, 0, day: 3), // Tue
+        _utc(5, 30, day: 4), // Wed
+        _utc(5, 0, day: 5), // Thu
+        _utc(4, 30, day: 6), // Fri
+        _utc(4, 0, day: 7), // Sat
+      ], overrun: false);
     });
   });
 
@@ -692,8 +840,9 @@ void main() {
       expect(result.valuesByDay.values.every((v) => v != null), isTrue,
           reason: 'every window day keeps a value, '
               'got ${result.valuesByDay}');
-      // FR-4 keeps drifting toward 09:00, in 30-minute steps.
+      // FR-4 keeps drifting toward 09:00, in 30-minute steps - every day.
       expect(result.valuesByDay[day(1)], _utc(7, 30, day: 1));
+      expect(result.valuesByDay[day(2)], _utc(8, 0, day: 2));
       expect(result.valuesByDay[day(3)], _utc(8, 30, day: 3));
     });
   });
@@ -740,6 +889,41 @@ void main() {
   // docs/TODO.md T-206: the daylight-saving "Test:" bullets added to the spec
   // on 2026-09-28, verbatim (same zones, dates and numbers).
   _t206SpecBullets();
+}
+
+/// A week planned at a fixed UTC+0 offset, no lead times: the window is the
+/// [days] days after [anchor]'s own date (docs/TODO.md T-139's full-week
+/// assertions).
+WeekPlanResult _utcWeek({
+  required DateTime anchor,
+  required List<Meeting> events,
+  TimeOfDay? preferredWakeUpTime,
+  required Duration maxDailyDelta,
+  int days = 6,
+}) =>
+    computeWeekPlan(
+      window: [
+        for (var i = 1; i <= days; i++)
+          DateTime.utc(anchor.year, anchor.month, anchor.day + i)
+      ],
+      lastEffectiveWakeTime: anchor,
+      allEvents: events,
+      offsetAt: fixedOffset(Duration.zero),
+      durationToWakeUp: Duration.zero,
+      durationToGetReadyForDay: (_) => Duration.zero,
+      preferredWakeUpTime: preferredWakeUpTime,
+      maxDailyDelta: maxDailyDelta,
+      gapDayCounter: 0,
+      scheduleOnGapDays: true,
+    );
+
+/// Asserts EVERY day of [result] (in window order) and the overrun flag.
+void _expectUtcWeek(WeekPlanResult result, List<DateTime> expected,
+    {required bool overrun}) {
+  final actual = result.valuesByDay.values.toList();
+  expect(actual, expected,
+      reason: 'every day of the week, in order (got $actual)');
+  expect(result.overrunNotificationNeeded, overrun);
 }
 
 // ---------------------------------------------------------------------------
@@ -1043,8 +1227,12 @@ void _t206SpecBullets() {
         rules: _berlinRules,
         preferred: const TimeOfDay(hour: 2, minute: 30),
       );
-      expect(result.valuesByDay[window[0]], DateTime.utc(2026, 10, 25, 1, 30));
-      expect(result.valuesByDay[window[1]], DateTime.utc(2026, 10, 26, 1, 30));
+      // Every day, not only the first two (docs/TODO.md T-139's "every
+      // time of every day"): 02:30 CET, the later occurrence on Sunday.
+      _expectValues(result, window, [
+        for (var d = 25; d <= 31; d++) DateTime.utc(2026, 10, d, 1, 30),
+      ]);
+      expect(result.overrunNotificationNeeded, isFalse);
     });
 
     test(
@@ -1127,7 +1315,12 @@ void _t206SpecBullets() {
           events: [_event(f, _berlin)],
           maxDeltaMinutes: md,
         );
-        expect(result.valuesByDay[window[0]], f, reason: 'F $f, md $md');
+        // Every day: F on its own day, then F's reading held (no
+        // preferredWakeUpTime, nothing further in the window).
+        _expectValues(result, window, [
+          for (var i = 0; i < 7; i++)
+            DateTime.utc(2026, 3, 29 + i, f.hour, f.minute),
+        ]);
         expect(result.overrunNotificationNeeded, notify,
             reason: 'F $f, md $md');
       }

@@ -143,6 +143,90 @@ void main() {
           _utc(7, 0, day: 10).millisecondsSinceEpoch);
     });
 
+    // FR-12 false positive (device report, 2026-10-04): scheduled alarms
+    // switched off (FR-21) for Thursday and Friday, the app not opened until
+    // Sunday evening - opening it produced "A newly-added appointment may not
+    // have been accounted for by your last alarm." FR-12 is about a day whose
+    // alarm RANG ("after a day's alarm has rung"); a switched-off day had no
+    // alarm that could have missed anything.
+    group('FR-12: only a day whose alarm could have rung is checked', () {
+      // Wed 11 Mar rings: an empty calendar, preferredWakeUpTime 07:00 ->
+      // Thu 12 .. Wed 18 planned at 07:00.
+      Future<AppState> plannedWeek({bool scheduleOnGapDays = true}) async {
+        final appState = await _freshAppState();
+        appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
+        appState.scheduleOnGapDays = scheduleOnGapDays;
+        await replan(
+          appState,
+          now: () => _utc(7, 0, day: 11),
+          offsetAt: fixedOffset(Duration.zero),
+          fetchEvents: (start, end) async => [],
+          todayAlreadyRang: true,
+        );
+        return appState;
+      }
+
+      // Sun 15 Mar, 20:00: the app is opened (FR-17; Sunday's 07:00 has
+      // rung by then, but no ring checkpoint ran - so this is the day
+      // advance over Thu..Sat). Appointments for Thu and Fri at 05:00 were
+      // entered after Wednesday's plan.
+      Future<ReplanResult> openOnSundayEvening(AppState appState,
+              List<Meeting> events) =>
+          replan(
+            appState,
+            now: () => _utc(20, 0, day: 15),
+            offsetAt: fixedOffset(Duration.zero),
+            fetchEvents: (start, end) async => events,
+          );
+
+      final lateThuFri = [
+        _meetingAt(_utc(5, 0, day: 12)),
+        _meetingAt(_utc(5, 0, day: 13)),
+      ];
+
+      test('switched-off days are not reported', () async {
+        final appState = await plannedWeek();
+        expect(appState.pendingDayValues['2026-03-12'],
+            _utc(7, 0, day: 12).millisecondsSinceEpoch);
+        appState.setDayEnabled('2026-03-12', false);
+        appState.setDayEnabled('2026-03-13', false);
+
+        final result = await openOnSundayEvening(appState, lateThuFri);
+
+        expect(result.possiblyMissedAppointment, isFalse,
+            reason: 'Thursday and Friday were switched off - no alarm rang');
+      });
+
+      test('counter-test: a day with no planned value is still reported',
+          () async {
+        // scheduleOnGapDays off: an appointment-free day gets no alarm at
+        // all (T-52.1), so Thursday and Friday have no value. An appointment
+        // that surfaces for such a day later is still worth the warning -
+        // only switched-off days are excluded (the device report was about
+        // those; narrowing further needs the maintainer's decision).
+        final appState = await plannedWeek(scheduleOnGapDays: false);
+        expect(appState.pendingDayValues['2026-03-12'], isNull);
+
+        final result = await openOnSundayEvening(appState, lateThuFri);
+
+        expect(result.possiblyMissedAppointment, isTrue);
+      });
+
+      test('counter-test: a late appointment on a day that rang still is',
+          () async {
+        final appState = await plannedWeek();
+        appState.setDayEnabled('2026-03-12', false);
+        appState.setDayEnabled('2026-03-13', false);
+
+        // Saturday was not switched off; its 07:00 rang, and a 05:00
+        // appointment entered later would have needed an earlier alarm.
+        final result = await openOnSundayEvening(
+            appState, [...lateThuFri, _meetingAt(_utc(5, 0, day: 14))]);
+
+        expect(result.possiblyMissedAppointment, isTrue);
+      });
+    });
+
     test(
         'a multi-day gap (e.g. a reboot): gapDayCounter is advanced individually for each skipped day',
         () async {
@@ -460,6 +544,30 @@ void main() {
       expect(appState.manualAlarms, [manualAlarm]);
       expect(appState.manualAlarms.single.time,
           const TimeOfDay(hour: 3, minute: 0));
+    });
+
+    test(
+        'FR-15 (the spec bullet itself): a ManualAlarm at 03:00 on a day whose '
+        'curve gives 07:00 - the planned value stays exactly 07:00', () async {
+      final appState = await _freshAppState();
+      appState.preferredWakeUpTime = const TimeOfDay(hour: 7, minute: 0);
+      // An enabled manual alarm at 03:00 - it would be "the earliest alarm"
+      // of every day if anything here read manual alarms.
+      appState.manualAlarms.add(
+          ManualAlarm(time: const TimeOfDay(hour: 3, minute: 0), enabled: true));
+
+      await replan(
+        appState,
+        now: () => _utc(0, 0, day: 10),
+        offsetAt: fixedOffset(Duration.zero),
+        fetchEvents: (start, end) async => [],
+      );
+
+      for (var d = 10; d <= 16; d++) {
+        expect(appState.pendingDayValues[isoDate(_utc(0, 0, day: d))],
+            _utc(7, 0, day: d).millisecondsSinceEpoch,
+            reason: 'day $d: the manual 03:00 must not enter the plan');
+      }
     });
   });
 

@@ -847,6 +847,40 @@ void main() {
       });
     }
 
+    test('re-resolution only on a detected offset change: with the offset '
+        'unchanged, an intact pair stays as stored even where R_plan under '
+        'today\'s rules would differ (FR-16, T206-R14)', () async {
+      // The pair stands for what a time zone database update between
+      // planning and now looks like: planned clock time Mon 30 Mar 07:00,
+      // value 06:00 UTC (07:00 under +1), while today's Berlin rules resolve
+      // 07:00 on that day to 05:00 UTC. FR-16: "only on a detected offset
+      // change, never unconditionally" - the next replan corrects it, not
+      // checkpoint 2. The baseline equals the current offset (+2 at Sun
+      // 03:30 CEST), so nothing may be written but the offset.
+      SharedPreferences.setMockInitialValues({
+        'lastCheckedUtcOffsetMinutes': 120,
+        'pendingDayValues': jsonEncode({'2026-03-30': _ms(3, 30, 6)}),
+        'pendingDayInstantAnchored': jsonEncode({'2026-03-30': false}),
+        'pendingDayClockTimes': jsonEncode(
+            {'2026-03-30': clockTimeEntry(3, 30, 7, _ms(3, 30, 6))}),
+      });
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+          resolvePlannedClockTime(
+                  DateTime.utc(2026, 3, 30, 7), berlinRules)
+              .millisecondsSinceEpoch,
+          _ms(3, 30, 5),
+          reason: 'precondition: re-resolving WOULD change the value');
+
+      await runTimezoneCheckpoint2(
+          offsetAt: berlinRules, prefs: prefs, now: sunday0330);
+
+      expect(_json(prefs, 'pendingDayValues')['2026-03-30'], _ms(3, 30, 6));
+      expect(_json(prefs, 'pendingDayClockTimes')['2026-03-30'],
+          clockTimeEntry(3, 30, 7, _ms(3, 30, 6)));
+      expect(prefs.getInt('lastCheckedUtcOffsetMinutes'), 120);
+    });
+
     test('T50: legacy branch - with no pendingDayClockTimes key at all (a plan '
         'from before T-206) the old shift still applies', () async {
       SharedPreferences.setMockInitialValues(

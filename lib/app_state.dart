@@ -1755,7 +1755,12 @@ class AppState extends ChangeNotifier {
       _preferredWakeUpTime = _loadPreferredWakeUpTime();
       final maxDailyDeltaMinutes = _prefs.getInt('maxDailyDeltaMinutes');
       if (maxDailyDeltaMinutes != null) {
-        _maxDailyDelta = Duration(minutes: maxDailyDeltaMinutes);
+        // FR-3's 15-minute minimum holds for a stored value too, not only
+        // for the setter (an older version, or a hand-edited preference,
+        // could hold less - at 0 the smoothing has no effect left).
+        final loaded = Duration(minutes: maxDailyDeltaMinutes);
+        _maxDailyDelta =
+            loaded < _maxDailyDeltaMinimum ? _maxDailyDeltaMinimum : loaded;
       }
     } catch (e) {
       debugPrint("=====_loadFromPreferences: Error loading preferences: ${e.runtimeType}");

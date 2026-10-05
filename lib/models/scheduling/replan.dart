@@ -239,8 +239,18 @@ Future<ReplanResult> replan(
       // false positive on a fresh install. Keyed on the progress marker (T-75),
       // i.e. "has any day ever been processed", not on "did a checkpoint run
       // today" - the latter is true even on the first run of the day.
+      //
+      // FR-12 is about a day whose alarm RANG ("after a day's alarm has
+      // rung"). A day the user switched off (FR-21) had its alarm cancelled -
+      // it cannot have missed anything, and flagging it produced a false
+      // "possibly missed appointment" on a real phone (2026-10-04: Thursday
+      // and Friday switched off, the app opened again on Sunday evening). A
+      // day with NO planned value (the valve, or scheduleOnGapDays off) is
+      // still reported when an appointment surfaces for it later: narrowing
+      // that needs the maintainer's decision.
       if (lastProcessedDay != null &&
           hf != null &&
+          !appState.isDayDisabled(isoDate(day)) &&
           (storedValue == null || hf.isBefore(storedValue))) {
         // FR-12: a real appointment surfaced too late to have been honored
         // for a day that already rang.

@@ -41,12 +41,12 @@
 >   `pendingDayValues` is bounded from below, and tone/volume/gentle-wake are part of the FR-18
 >   reconciliation (previously every planned alarm rang with the 0.6 default).
 >
-> **Still open:** `docs/TODO.md` T-62 (whether `onNotificationCreatedMethod` is actually triggered
-> by a silent notification is not yet confirmed on a real or emulated device - "recommended" per
-> spec, not a TDD blocker) and T-199 (per the plugin's source, that callback fires when a
-> notification is *scheduled*, in the main isolate - so FR-16's Checkpoint 2 does not run at the
-> bedtime instant). Phase 6 (retiring the old `Scheduler`, `docs/TODO.md` T-64/T-86) is done:
-> `scheduling.dart` no longer exists.
+> **Still open:** `docs/TODO.md` T-199 (per the plugin's source, `onNotificationCreatedMethod`
+> fires when a notification is *scheduled*, in the main isolate - so FR-16's Checkpoint 2 does not
+> run at the bedtime instant). T-62 (does a silent notification trigger that callback at all?) is
+> answered by T-199: it does, at scheduling time, never when the notification comes due. Phase 6
+> (retiring the old `Scheduler`, `docs/TODO.md` T-64/T-86) is done: `scheduling.dart` no longer
+> exists.
 >
 > **T-206 (2026-09-28): daylight saving within one zone.** FR-1 is rewritten; FR-2, FR-3, FR-4,
 > FR-5, FR-6, FR-10, FR-11, FR-16 and FR-21 are amended. Planned wall-clock values are planned as
@@ -109,7 +109,9 @@ hours apart.
 - **On readings:** the **size and the sign** of a daily shift: `ΔT` in FR-4 to FR-7, the
   `maxDailyDelta` limit and FR-6's notification. `ΔT` between two readings is the difference of
   their times of day, resolved across at most one midnight: the variant with `|Δ| ≤ 12h` wins (the
-  exact-12h case is `docs/TODO.md` T-115). An instant enters this arithmetic as its reading L(t),
+  exact-12h case is `docs/TODO.md` T-115). Times of day are compared at full resolution,
+  milliseconds included (until the T-139 review they were dropped, misreading a bisected value by
+  up to 999 ms). An instant enters this arithmetic as its reading L(t),
   or, for a day that has one, as its stored planned clock time (FR-3).
 
 Within one zone the two views agree except across a daylight-saving change. There a constant
@@ -191,7 +193,7 @@ real zone's rules.
 
 | Field | Type | Note |
 |---|---|---|
-| `maxDailyDelta` | `Duration` | `> 0`; a system minimum of **15 minutes** is enforced (at 0 the parameter would have no effect left on `hardFloor` segments - it would only apply where it's least needed) |
+| `maxDailyDelta` | `Duration` | `> 0`; a system minimum of **15 minutes** is enforced - by the setter and on loading a stored value (a stored value below it loads as 15 minutes) (at 0 the parameter would have no effect left on `hardFloor` segments - it would only apply where it's least needed) |
 | `preferredWakeUpTime` | `TimeOfDay?` | a bare time of day, **not** an instant, **not** a date/zone - is only combined with a day at the point of use and resolved by R_plan with that day's own zone rules (FR-1, FR-4, FR-10, FR-16); that's why FR-16 doesn't "carry over" anything onto `preferredWakeUpTime` itself on a time zone change |
 | `lastCheckedUtcOffset` | `Duration` | the offset at the last FR-16 checkpoint: the device zone's rules evaluated at that checkpoint's own instant |
 | `gapDayCounter` | `int` | rolling safety-valve counter (FR-9) |
@@ -313,8 +315,22 @@ warns against. They are excluded only as a *target*.
    of `A` without actually being violated - a directional filter would have wrongly excluded it.
    `hardFloor` is exclusively an upper bound (FR-2), never a directional requirement - the violation
    check alone suffices.
-2. A point with `ΔT=0` relative to `A` ends the run immediately at itself - it never counts as
-   compatible with either direction, and is never grouped with a following point.
+2. A point with `ΔT=0` relative to `A` has already been reached. It is never grouped with a
+   following **later** point where `A` and the point lie on their own dates - that curve would
+   rise above the point's own `hardFloor`, which is `A`'s reading, so step 1's violation check
+   already rejects it. (Where `A`'s reading lies on a different date than its day - a night
+   shift's alarm the evening before, T-118b - step 1 compares the curve one date off and may let
+   such a grouping through; which date a night shift's wake time belongs to is an open decision.) It does **not** end the
+   lookahead: a following **earlier** point is grouped through it (the curve passes below it,
+   which FR-2 always allows), so an already-reached point never hides a stricter one behind it.
+   *(Changed by `docs/TODO.md` T-139, maintainer decision 2026-10-05: "every time of every day
+   should be tested, and the jump should not occur at all" - FR-7's second worked example below is
+   the intended behaviour. Until then this step read: "A point with `ΔT=0` relative to `A` ends
+   the run immediately at itself - it never counts as compatible with either direction, and is
+   never grouped with a following point", and T-104 applied that at every position. That cut
+   FR-7's lookahead at the reached point: in FR-7's second example Friday's 06:00 has `ΔT=0` from
+   Tuesday on, Saturday's 04:00 vanished from the check, and the plan held 06:00 until Thursday and
+   then took two 60-minute steps against an allowed 30, with a notification.)*
 3. `A→t_m` is distributed per FR-6. `t_m`'s day becomes the new anchor for the next run, starting at
    `t_{m+1}`. Back to step 1.
 4. Once all real points have been processed, FR-4 applies to every day after that.
@@ -331,6 +347,12 @@ anchor - to determine which target FR-7 must use.
   `t2`.
 - **Test (`ΔT=0`):** `A=07:00`, `t1(Tue)=07:00`, `t2(Fri)=09:00` → `t1` ends its own run right at
   itself; `t2` starts a completely new run with anchor=`t1`.
+  Worked through the week (no `preferredWakeUpTime`): `t2` is later than every value, so by the
+  precondition above it is never a target - **every day 07:00**, Friday's 09:00 acts only as a
+  cap, no notification.
+- **Test (`ΔT=0` does not hide an earlier point, T-139):** `A=07:00`, `t1(+1)=08:00`,
+  `t2(+2)=07:00` (`ΔT=0`), `t3(+3)=05:00` → `t_m=t3` (the curve passes `t1` and `t2` below both).
+  The week, `maxDailyDelta=60min`, no `preferredWakeUpTime`: 07:00, 06:00, 05:00, no notification.
 
 ## FR-6 — Distribution within a run
 
@@ -423,9 +445,31 @@ unaffected by this and applies as normal as soon as FR-6 itself is called with `
 
 - Check `|today's value − F| / N_remaining ≤ maxDailyDelta` for the intended value (holding, or a
   full `preferredWakeUpTime` step) - here too FR-6's clarification applies: the difference is
-  time-of-day-based, not calendar-based:
+  time-of-day-based, not calendar-based - **and the same bound against every remaining point
+  `t_k` that FR-1 reads as earlier than yesterday's value** - exactly the points FR-5 can make a
+  target, `F` included: falling by `maxDailyDelta` every day from the intended value must reach
+  `t_k`'s `hardFloor` by its day. A point more than 12 hours earlier by the clock reads as later
+  under FR-1 and is not checked: no run aims at it, so none may start on its account - it only
+  caps its own day (FR-2) until the value has come within 12 hours of it (T-139 review B1: a
+  night-to-day change, 21:46 with a 07:43 appointment five days on, otherwise started a run
+  toward a nearer point, suppressed the drift, and took two 316-minute steps). That descent is placed where FR-5 places its curve - the intended
+  value's reading date plus the days left - resolved by R_plan and compared with `t_k`'s instant
+  (FR-1: upper bounds on instants). For a value and points on their own dates this is exactly
+  `(value − t_k) / (N_k − i) ≤ maxDailyDelta` on times of day. Of the time-of-day check against
+  `F` only the other side remains: a drift toward an earlier `preferredWakeUpTime` may not
+  overshoot `F` by more than `N_remaining` days can bring back. *(Added by `docs/TODO.md` T-139: a
+  seeded property test found anchor 05:04, `maxDailyDelta=60min`, `preferredWakeUpTime=06:30`,
+  `hardFloor`s 04:36 in two days and 03:42 in three - checked against `F` alone, the drift to
+  05:42 left a 66-minute step into 04:36; now it stops at 05:36. Placed in FR-5's frame after
+  review: measured on times of day with FR-1's 12-hour wrap, a night shift's anchor that reads on
+  the date before its day (22:00 for a 00:00 shift, T-118b) saw a daytime appointment two days on
+  as "11 hours earlier, one day left" and started its run at once, up to 35 minutes earlier for no
+  gain. The two frames agree for values on their own dates; which date a night shift's wake time
+  belongs to is not otherwise decided by this spec.)*
   - **Satisfied:** today stays a gap day, FR-4 applies unchanged.
-  - **Already violated by holding:** today is **day 1 of the run** - FR-6 applied directly, with
+  - **Already violated by holding** (against `F` or any `t_k` FR-1 reads as earlier - each one a
+    point FR-5 can aim at, so the run toward `F` passes below it): today is **day 1 of the
+    run** toward `F` - FR-6 applied directly, with
     `N = N_F − i + 1` (not `N_remaining` - that deliberately reserves one day of buffer, so that a
     single `preferredWakeUpTime` step doesn't unnoticed eat exactly the reserve the day after next
     still needs).
@@ -448,7 +492,9 @@ than `V` symmetrically - no separate policy for either direction.
     later than `t1`'s 06:00) → `F=t2, N_F=6`.
   - Monday (`i=1, N_remaining=5`): holding at 07:00 already violates `36min>30min` (even though
     `t1` alone would falsely suggest 15min/day) → **immediately day 1 of the run**, `N=6`:
-    **Mon=06:30, Tue=06:00, Wed=05:30, Thu=05:00, Fri=04:30, Sat=04:00.**
+    **Mon=06:30, Tue=06:00, Wed=05:30, Thu=05:00, Fri=04:30, Sat=04:00**, **no** notification -
+    every day re-derives `F=t2`: from Wednesday on Friday's 06:00 has `ΔT=0` and is passed below
+    (FR-5 step 2, T-139), it does not end the lookahead.
 
 ## FR-8 — No extended computation horizon
 
@@ -561,6 +607,20 @@ dedicated "possibly missed appointment" notification - distinguishable from FR-6
 notifications. For lack of live detection (FR-11), the next re-read is the earliest instant
 actually reachable - not immediate in the literal sense.
 
+**A switched-off day is not checked** (device report 2026-10-04): a day the user switched off
+(FR-21) had its alarm cancelled - it did not ring, so it cannot have missed an appointment. *(The
+code had flagged switched-off days like any other: with Thursday and Friday switched off and the
+app not opened until Sunday evening, opening it reported a "possibly missed appointment".)* A day
+with **no** planned value (FR-9's valve, or `scheduleOnGapDays` off) is still checked: an
+appointment that surfaces for it later still produces the notification - whether that should
+change is open, pending the maintainer's decision.
+
+- **Test:** Thursday and Friday switched off, appointments for both entered after the plan, the
+  day advance runs on Sunday evening → **no** notification.
+- **Test (counter-checks):** the same, plus a late appointment earlier than Saturday's rung value →
+  notification; and with no planned value for Thursday and Friday (`scheduleOnGapDays` off), not
+  switched off → notification.
+
 ## FR-13 — `getStartTimeForDate` with several appointments
 
 *(Named after the removed old engine's function; the rule now lives in `hardFloor`, FR-2.)*
@@ -650,6 +710,11 @@ ringing. But checkpoint 2 fires right after every replan (T-85d below), and it r
 (`docs/TODO.md` T-113), so it would become the most frequent writer of the plan with no way to keep
 the armed alarms in step. The next replan corrects a database update anyway.
 
+- **Test:** the offset unchanged since the last checkpoint (+2, Europe/Berlin, Sun 29 Mar 2026
+  03:30 CEST), an intact pair for Mon 30 Mar (planned clock time 07:00, value 06:00 UTC) whose
+  R_plan under the current rules would be 05:00 UTC → value and pair stay as stored; only the
+  offset is written.
+
 **Why the re-resolution is needed for daylight saving at all (T-206).** Checkpoint 2 fires when a
 notification is **created**, not when it is due (`docs/TODO.md` T-199), and most creations happen
 inside the checkpoint sequence right after checkpoint 1 has recorded the current offset - there
@@ -666,9 +731,11 @@ and with the reminder disabled, nothing at all gets scheduled on the device toda
 (verified against the package source, high confidence): a `NotificationContent` **without**
 `title`/`body` creates a "background notification" (never visible), which triggers
 `onNotificationCreatedMethod` (**not** `onNotificationDisplayedMethod` - that only fires when
-something actually appears in the status bar). This callback runs in its own background isolate
-**without** `AppState`/`Provider` access - `pendingDayValues`/`lastCheckedUtcOffset` must be
-read/written directly via `SharedPreferences`. **Newly found caveat:** if the app has been fully
+something actually appears in the status bar). This callback was designed for a background isolate
+**without** `AppState`/`Provider` access - `pendingDayValues`/`lastCheckedUtcOffset` are therefore
+read/written directly via `SharedPreferences`. (As built it runs in the main isolate when a
+notification is scheduled - `docs/TODO.md` T-199, see the note at the end of this paragraph - and
+the direct `SharedPreferences` access stays correct there too.) **Newly found caveat:** if the app has been fully
 terminated (force-quit), notification events are, per the package docs, only caught up at the next
 foreground/background start, not at the scheduled instant - see FR-17. *(`docs/TODO.md` T-199,
 from the plugin's own bytecode: for a scheduled notification the callback fires at scheduling time,
@@ -876,12 +943,17 @@ needs only Phase 0.
 **Phase 4 - AppState orchestration + calendar fix:** (13) fix T-60 first (calendar cache bypass,
 independent of the rest) - test: two `replan()` calls with different fake calendar data, the second
 result must reflect the new data. (14) `replan(AppState)` - needs 10,13. (15) FR-11 behaviour -
-needs 14. (16) FR-12 behaviour - needs 14/15. (17) `runAlarmRingCheckpoint()` - needs 12,14. (18)
-`onAppForegroundCheckpoint()` FR-17 - needs 17.
+needs 14. (16) FR-12 behaviour - needs 14/15. (17) the ring checkpoint - needs 12,14. (18)
+the app-foreground checkpoint, FR-17 - needs 17. *(Built first as `runAlarmRingCheckpoint()` and
+`onAppForegroundCheckpoint()`; `docs/TODO.md` T-87 folded both into the one entry point
+`runSchedulingCheckpoint(trigger: …)` in `checkpoint.dart`, with `CheckpointTrigger.alarmRing` and
+`CheckpointTrigger.appForeground`. Neither old function exists any more.)*
 
-**Phase 5 - Platform wiring:** (19) `Handler.handleAlarm()` → `runAlarmRingCheckpoint()` - needs 17
+**Phase 5 - Platform wiring:** (19) `Handler.handleAlarm()` → the ring checkpoint (today
+`runSchedulingCheckpoint(trigger: CheckpointTrigger.alarmRing)`) - needs 17
 - test first: in particular the 3s overlay-timeout regression test (fails against unmodified code).
-(20) `initState()` → `onAppForegroundCheckpoint()` - needs 18. (21∥) always schedule the bedtime
+(20) `initState()` → the app-foreground checkpoint (today `CheckpointTrigger.appForeground`) -
+needs 18. (21∥) always schedule the bedtime
 notification, regardless of `reminderEnabled` - test first (fails against unmodified code, since
 `setSleepReminder()` today is only called when the reminder is enabled). (22) build
 `onNotificationCreatedMethod` + wire up `setListeners` - needs 21,12 - **recommended beforehand**
@@ -1058,8 +1130,13 @@ thing missing was that nobody ever acted on it.
 What the toggle must do:
 
 - **Off:** cancel the platform alarm carrying this alarm's id, and persist `enabled = false`.
-- **On:** arm it again for the **next occurrence** of its `TimeOfDay` — today at that time if that
-  is still ahead, otherwise tomorrow. This is the same resolution used when the alarm was created,
+- **On:** arm it again for the **next occurrence** of its `TimeOfDay` on a day its `repeatOnDays`
+  selects — the first selected day, from today on, on which that time is still ahead (with no day
+  selected at all: today if still ahead, otherwise tomorrow). *(Until `docs/TODO.md` T-14 was
+  resolved this read "today at that time if that is still ahead, otherwise tomorrow", from when
+  `repeatOnDays` was inert; the code, `nextManualOccurrence` in
+  `lib/models/alarms/manual_alarm_enable.dart`, honours the repeat days.)* This is the same
+  resolution used when the alarm was created,
   so switching off and on again may not silently move the alarm to a different day than a freshly
   created one with the same time would get.
 - Creating or editing an alarm that is switched off must **not** arm it. Otherwise the defect
@@ -1073,14 +1150,16 @@ user to bed for a wake-up that never comes. Until this requirement, that functio
 ignoring of `enabled` as deliberate, precisely *because* the flag was known to be inert app-wide;
 that reasoning ends here.
 
-**Boundary:** `repeatOnDays` stays inert and is a separate matter (`docs/TODO.md` T-14 - since
-resolved: repeat days are honoured and a repeating alarm re-arms itself on every dismiss). A
+**Boundary:** `repeatOnDays` itself is not this requirement's subject (`docs/TODO.md` T-14): repeat
+days are honoured - by the next occurrence above - and a repeating alarm re-arms itself on every
+dismiss. *(Earlier text: "`repeatOnDays` stays inert and is a separate matter", written while it
+was.)* A
 switched-off alarm stays in the list and keeps its time — switching off is not deleting.
 
 - **Test:** switch a manual alarm off → the platform alarm with its id is stopped, no new one is
   armed, and `enabled` is `false` after reloading the persisted state.
 - **Test:** switch it back on → it is armed for the next occurrence of its time; with the time
-  already past today, that is tomorrow, not today.
+  already past today (and every day selected), that is tomorrow, not today.
 - **Test:** a switched-off manual alarm does not feed the bedtime reminder — `nextWakeUpTime()`
   skips it and returns the next one that will actually ring.
 - **Test (counter-check against over-correction):** a switched-on manual alarm is still armed, and

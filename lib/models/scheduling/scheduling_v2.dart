@@ -81,8 +81,14 @@ class DistributionResult {
 
 /// The wall-clock-of-day (time only, no date) microseconds-since-midnight
 /// reading of [t].
+///
+/// Milliseconds included (T-139 review): `DateTime.microsecond` is only the
+/// 0-999 microsecond field, so without them a value from FR-7's bisection
+/// was misread by up to 999 ms.
 int _timeOfDayMicros(DateTime t) =>
-    ((t.hour * 60 + t.minute) * 60 + t.second) * 1000000 + t.microsecond;
+    ((t.hour * 60 + t.minute) * 60 + t.second) * 1000000 +
+    t.millisecond * 1000 +
+    t.microsecond;
 
 /// FR-1's single-step wraparound resolution, applied to a **wall-clock-only**
 /// delta: [target]'s own real calendar date is irrelevant here - only its
@@ -321,29 +327,24 @@ HardFloorPoint _groupTargetFromReading({
   assert(
       points.isNotEmpty, 'groupTarget needs at least one real hardFloor point');
 
-  // FR-5 step 2: a ΔT=0 point (same wall-clock reading as the anchor - real
-  // calendar dates necessarily differ, since points are always strictly ahead
-  // of the anchor) ends its own run immediately and "is never grouped with
-  // a following point".
+  // FR-5 step 2 (docs/TODO.md T-139, maintainer decision 2026-10-05): a
+  // ΔT=0 point - one the anchor has already reached - is NOT a cut-off for
+  // the candidates. Until T-139 the list was cut at the first such point
+  // (T-104), and that hid every later, earlier point from FR-7's lookahead:
+  // anchor Sun 07:00, Fri 06:00, Sat 04:00, maxDailyDelta 30 held Tuesday's
+  // 06:00 on Wednesday and Thursday (from Wednesday on - its anchor is
+  // Tuesday's 06:00 - Friday had ΔT=0) and then needed two 60-minute
+  // steps for Saturday - the spec's own FR-7 example, which promises 30-minute
+  // steps throughout.
   //
-  // That sentence carries no positional caveat, so the run is capped at the
-  // FIRST such point wherever it sits - not only when it happens to be
-  // points.first. The spec's own worked example puts it at position 1, which
-  // is exactly the case a `points.first` check already covers; an independent
-  // review found the same wording violated from position 2 onwards
-  // (docs/TODO.md T-104).
-  //
-  // Capping rather than returning: step 1's shrinking still applies below the
-  // cap. A ΔT=0 target yields a flat curve, and a flat curve can perfectly
-  // well violate a stricter intermediate point - then t_m has to shrink
-  // further, exactly as for any other target.
-  final zeroDeltaIndex = points.indexWhere((p) =>
-      _wallClockDelta(anchorReading, _reading(p.value, offsetAt)) ==
-      Duration.zero);
-  final candidates =
-      zeroDeltaIndex == -1 ? points : points.sublist(0, zeroDeltaIndex + 1);
-  for (var m = candidates.length; m >= 1; m--) {
-    final target = candidates[m - 1];
+  // What step 2 is still for needs no rule of its own: grouping a ΔT=0 point
+  // with a following LATER point would raise the curve above the ΔT=0 point's
+  // own hardFloor (it IS the anchor's reading), and step 1's violation check
+  // below already rejects exactly that. A following EARLIER point lowers the
+  // curve below it, which FR-2 always allows - that is the case that must be
+  // grouped through.
+  for (var m = points.length; m >= 1; m--) {
+    final target = points[m - 1];
     final curve = _distributeReadings(
       anchor: anchorReading,
       target: _reading(target.value, offsetAt),
@@ -353,7 +354,7 @@ HardFloorPoint _groupTargetFromReading({
 
     var violated = false;
     for (var j = 0; j < m - 1; j++) {
-      final intermediate = candidates[j];
+      final intermediate = points[j];
       // FR-1/FR-5 (T-206): an upper bound is compared on INSTANTS - the
       // curve's reading resolved first, then against the hardFloor instant.
       final interpolated = resolvePlannedClockTime(
@@ -368,7 +369,7 @@ HardFloorPoint _groupTargetFromReading({
 
   // Unreachable: m=1 has no intermediate points to violate, so the loop
   // above always returns by then.
-  return candidates.first;
+  return points.first;
 }
 
 /// FR-5: picks the farthest point from [points] (chronological, all relative
@@ -502,14 +503,74 @@ GapOrRunStartResult _planGapOrRunStartDayReading({
   // - "feasible" means "a fresh N_Rest-day distribute() from candidate to F
   // would not need to exceed maxDailyDelta". Readings only, nothing resolved
   // inside the bisection below (docs/TODO.md T-206): feasibility is ΔT and n.
-  bool feasible(DateTime candidate) => !_distributeReadings(
-        anchor: candidate,
-        target: f,
-        n: nRest,
-        maxDailyDelta: maxDailyDelta,
-      ).overrunNotificationNeeded;
+  //
+  // docs/TODO.md T-139: and against EVERY remaining point, not only F. F is
+  // only the farthest point a smooth curve from TODAY'S value can reach; a
+  // nearer, stricter point between today and F still has to be reachable
+  // from the candidate within maxDailyDelta per day. Checked against F alone,
+  // a drift toward a later preferredWakeUpTime could spend exactly the reserve
+  // that point needed (anchor 05:04, maxDailyDelta 60, preferredWakeUpTime
+  // 06:30, hardFloors 04:36 in two days and 03:42 in three: the drift to 05:42
+  // passed F's check and left a 66-minute step into 04:36).
+  //
+  // Checked in groupTarget's frame, not on readings with FR-1's wrap: the
+  // fastest descent from the candidate is placed exactly where groupTarget
+  // places its curve (the candidate's reading date + the days left), resolved,
+  // and compared with the point's instant. A first version compared
+  // readings: where the anchor's reading lies on the date before its day (a
+  // night shift's 22:00 alarm for a 00:00 shift, T-118b), a daytime
+  // appointment two days on then read as "11 hours earlier, one day left",
+  // nothing was feasible, and the run started at once - up to 35 minutes
+  // earlier for no gain (T-139 review, differential case #22).
+  //
+  // Only for a point FR-5 could make a target from today's anchor - one FR-1
+  // reads as EARLIER than yesterday's value (T-139 review B1). A point more
+  // than 12 hours earlier by the clock reads as later under FR-1's wrap: FR-5
+  // never aims at it, so a run started on its account would aim at some other
+  // point and not help it, while suppressing the FR-4 drift that would (a
+  // night-to-day shift change: 21:46 with a 07:43 appointment five days on).
+  // The set is fixed by the anchor, not by each candidate - otherwise a drift
+  // that brings such a point within 12 hours would veto itself, and the
+  // value would stall exactly 12 hours from it. Once the anchor itself has
+  // come within 12 hours, the point is a target and vetoes like any other;
+  // until then it is only its own day's cap (FR-2).
+  final targetable = [
+    for (final point in remainingPoints)
+      if (_wallClockDelta(vReading, _reading(point.value, offsetAt)).isNegative)
+        point,
+  ];
+  bool reachesEveryPoint(DateTime candidate) {
+    for (final point in targetable) {
+      final daysLeft = point.dayOffset - 1;
+      final fastest = resolvePlannedClockTime(
+          _readingDaysLater(candidate, daysLeft)
+              .subtract(maxDailyDelta * daysLeft),
+          offsetAt);
+      if (fastest.isAfter(point.value)) return false;
+    }
+    return true;
+  }
 
-  if (!feasible(vReading)) {
+  // F itself is one of the remaining points, so `reachesEveryPoint` already
+  // decides the side that matters - can today's value still come down to F
+  // in time - in the same frame as every other point (T-139 review: the
+  // time-of-day check alone gave a night shift's evening anchor one day less
+  // than groupTarget's frame and started runs that were not yet needed).
+  // What remains of the time-of-day check is the other side: a drift toward
+  // an earlier preferredWakeUpTime may not overshoot F by more than the
+  // remaining days can bring back.
+  bool overshootsF(DateTime candidate) {
+    final delta = _wallClockDelta(candidate, f);
+    return !delta.isNegative &&
+        delta.inMicroseconds > maxDailyDelta.inMicroseconds * nRest;
+  }
+
+  bool feasible(DateTime candidate) =>
+      reachesEveryPoint(candidate) && !overshootsF(candidate);
+
+  // Holding means today's reading at yesterday's time of day: the date
+  // matters to `reachesEveryPoint`, which places the descent on real dates.
+  if (!feasible(_readingDaysLater(vReading, 1))) {
     // Already violated by mere holding: today is day 1 of the run.
     final n = nRest + 1; // FR-7: N = N_F - i + 1, today-relative = nRest + 1.
     final curve = _distributeReadings(
@@ -863,9 +924,14 @@ WeekPlanResult computeWeekPlan({
         // clock. Removing the preferredWakeUpTime later re-arms the valve immediately,
         // since the counter itself keeps counting regardless.
         preferredWakeUpTime == null) {
-      // FR-9: safety valve - no future anchor visible anywhere in the
-      // window, and already 7 elapsed appointment-free days. Stop auto-continuing.
-      // No value, so no planned clock time either (T206-R9).
+      // FR-9: safety valve - no appointment on this day or on any LATER
+      // window day, and already 7 elapsed appointment-free days. Stop
+      // auto-continuing. Note what this condition does not require: an
+      // appointment on an EARLIER window day does not stop it, so the days
+      // after the last in-window appointment are emptied too (the valve's
+      // asymmetry, an open spec decision - docs/TODO.md T-121; deliberately
+      // unchanged here). No value, so no planned clock time either
+      // (T206-R9).
       valuesByDay[day] = null;
       safetyValveTriggered = true;
       continue;

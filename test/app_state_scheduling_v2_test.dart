@@ -220,6 +220,30 @@ void main() {
       second.maxDailyDelta = const Duration(minutes: 5);
       expect(second.maxDailyDelta, const Duration(minutes: 15));
     });
+
+    // FR-3: "a system minimum of 15 minutes is enforced". The setter did,
+    // the load did not - a stored value below it (written by an older
+    // version, or by hand) came back unclamped, and at 0 the whole smoothing
+    // has no effect left. Clamped on load the same way the setter clamps.
+    for (final stored in [5, 0, -30]) {
+      test('maxDailyDelta (FR-3) - a stored $stored minutes loads as 15',
+          () async {
+        SharedPreferences.setMockInitialValues({'maxDailyDeltaMinutes': stored});
+        final appState = AppState();
+        await appState.initialized;
+        expect(appState.maxDailyDelta, const Duration(minutes: 15));
+      });
+    }
+
+    test('maxDailyDelta (FR-3) - a stored value at or above 15 loads as is',
+        () async {
+      for (final stored in [15, 16, 90]) {
+        SharedPreferences.setMockInitialValues({'maxDailyDeltaMinutes': stored});
+        final appState = AppState();
+        await appState.initialized;
+        expect(appState.maxDailyDelta, Duration(minutes: stored));
+      }
+    });
   });
 
   group('FR-3 fields without a round-trip test (T-108)', () {

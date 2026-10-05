@@ -272,9 +272,9 @@ void main() {
   // "Manual alarms: yes"): a manual alarm whose reading falls into a gap
   // that ends at midnight rings at the minute before the gap on its own
   // date - R_plan, exactly like a scheduled value - while
-  // `localWallClockInstant` itself stays plain TZ-1 R for every other
-  // caller. Found generically, so it runs in the America/Nuuk leg and skips
-  // everywhere else.
+  // `localWallClockInstant` itself stays plain TZ-1 R (it has no production
+  // caller left since this switch - docs/TODO.md T-211). Found generically,
+  // so it runs in the America/Nuuk leg and skips everywhere else.
   final laterDateGaps =
       gaps.where((t) => resolvesOntoLaterDate(t, t.wallMiddleMs)).toList();
   test('T55: a manual 23:30 in the midnight-ending gap rings at 22:59 on the '
