@@ -31,6 +31,7 @@ import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
 import 'package:crescendo_alarm/models/scan_code/deactivation_stop.dart';
 import 'package:crescendo_alarm/models/scan_code/scan_result.dart';
 import 'package:crescendo_alarm/utils/permissions.dart';
+import 'package:crescendo_alarm/utils/ring_notification.dart';
 
 /// Pure comparison at the heart of the "guaranteed wake-up" gate: does the
 /// scanned payload match the stored deactivation code? Extracted out of
@@ -179,6 +180,9 @@ class _QrScannerState extends State<QrScanner> {
   /// fallback.
   RingingWatch? _ringingWatch;
 
+  /// docs/TODO.md T-229: only for a ringing alarm, like [_ringingWatch].
+  RingNotificationQuieter? _notificationQuieter;
+
   /// Guards `widget.alarmId` specifically against a double
   /// `Handler.onAlarmHandled` call - see `_handleAlarmOnce`.
   bool _ringingAlarmHandled = false;
@@ -211,6 +215,7 @@ class _QrScannerState extends State<QrScanner> {
           _closeView();
         },
       );
+      _notificationQuieter = RingNotificationQuieter(ringingId);
     }
 
     // No lifecycle observer any more: ReaderWidget starts and stops its own
@@ -248,6 +253,7 @@ class _QrScannerState extends State<QrScanner> {
     _proofOfLifeTimer?.cancel();
     _maxScanDurationTimer?.cancel();
     _ringingWatch?.cancel();
+    _notificationQuieter?.dispose();
 
     // Stop listening to the injected events, if any. ReaderWidget disposes of
     // its own camera controller.

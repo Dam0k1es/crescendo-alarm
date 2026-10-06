@@ -24,6 +24,21 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
+    // docs/TODO.md T-229: whether this activity (and with it the ring screen)
+    // is in front of the user - RingNotificationPolicy quiets the ringing
+    // notification only then.
+    private var resumed = false
+
+    override fun onResume() {
+        super.onResume()
+        resumed = true
+    }
+
+    override fun onPause() {
+        resumed = false
+        super.onPause()
+    }
+
     // docs/TODO.md T-158: this activity is not direct-boot-aware, so reaching
     // it means the device has been unlocked at least once since boot and the
     // real ring pipeline (or the user themselves) can take over. Stop the
@@ -101,6 +116,23 @@ class MainActivity: FlutterActivity() {
                     "clearLegacy" ->
                         result.success(SleepTimeDnd.clearLegacy(applicationContext))
                     else -> result.notImplemented()
+                }
+            }
+
+        // docs/TODO.md T-229: the ring screens (ScreenAlarmActive, QrScanner)
+        // call this when they appear and on every resume, to take the
+        // plugin's ringing notification out of the heads-up over them.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, RingNotification.CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "quiet") {
+                    val alarmId = call.argument<Number>("alarmId")?.toInt()
+                    if (alarmId == null) {
+                        result.success("NO_ID")
+                    } else {
+                        result.success(RingNotification.quiet(applicationContext, alarmId, resumed))
+                    }
+                } else {
+                    result.notImplemented()
                 }
             }
     }

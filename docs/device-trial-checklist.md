@@ -132,7 +132,7 @@ covers the other (`CLAUDE.md`, "Sleep-time Do Not Disturb"). Fill the header's A
 | G8 | **Android 15 and newer:** check Settings → Modes and the quick-settings DND tile during sleep time | the app's own mode is on; the global DND tile is not; your own DND and other modes untouched | |
 | G9 | **Android 14 and older:** switch DND on by hand before bedtime | the app leaves it alone and does not switch it off in the morning | |
 
-## H — v1.5.0: restart/force-stop fallback, tones, permissions, tabs (T-217, T-212, T-228)
+## H — v1.5.0: restart/force-stop fallback, tones, permissions, tabs, ring notification (T-217, T-212, T-228, T-229)
 
 Android 15+ re-sends the boot broadcasts on the first launch after a force-stop (`docs/TODO.md`
 T-217), so H1–H5 cover a launch after a force-stop as well as a real reboot. Fill in the header's
@@ -149,6 +149,11 @@ Android version - Android 14 and older are not covered by a result on 15+.
 | H7 | Settings → Alarm Tones: preview every bundled tone by ear, and let one ring for a minute | each tone plays, sounds like its name, no clipping, no audible click at the loop point (the clock ring especially) | |
 | H8 | Alarms screen | **Manual** is the left tab, **Scheduled** the right one; the screen opens on Scheduled; the bottom-right button is **+** on Manual and **Sync** on Scheduled | |
 | H9 | After installing over v1.4.0 (14 permissions instead of 31): let an alarm ring, wait for the bedtime reminder, trigger an FR-6 notice | every notification still appears | |
+| H10 | Unlocked phone, **app open**: let a manual alarm +1 min ring (no QR code, then again with one) (T-229) | the ring screen shows **without** a notification banner over its top; the tone (and vibration, if on) keeps playing; the notification is in the shade (silent section) | |
+| H11 | Unlocked phone, **another app** in front when the alarm rings (T-229) | a heads-up appears as before (the way to the ring screen); tapping it opens the ring screen, and the banner is then gone; tone continues | |
+| H12 | **Locked** phone, screen off, alarm rings (T-229) | the ring screen launches full-screen over the lock screen exactly as before (R4); tone continues | |
+| H13 | While ringing with the ring screen open: pull down the shade, swipe the alarm notification away (T-229, T-147) | the alarm keeps ringing; the notification comes back (the banner may reappear until the app is next brought to the front - known limit) | |
+| H14 | Settings → Apps → Crescendo Alarm → Notifications after H10 (T-229) | a new channel "Ringing alarm (alarm screen open)" exists, set to silent; "Alarm Notification" unchanged | |
 
 ## Findings
 

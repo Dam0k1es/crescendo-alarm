@@ -2199,6 +2199,63 @@ rather than expanded into more scope here: see T-185.
   until then.
 - **Requirement:** R2; FR-8.
 
+### T-229 · Ring notification pops up as a banner over the ring screen — FIXED on `dev` (2026-10-06), device checks outstanding (P1)
+
+- [ ] Maintainer report (2026-10-06, verbatim): *"Die Benachrichtigung ist nicht stumm. Ich will
+  nicht, dass sie beim Wecker Bildschirm in den Alarm reinragt."* (The notification is not silent.
+  I don't want it to reach into the alarm on the ring screen.) Which one: the alarm's own "Your
+  Alarm is ringing" notification. Desired: *"In der Benachrichtigungsleiste. Der Wecker-Ton soll
+  natürlich weiter laufen."* (In the notification shade. The alarm tone must of course keep playing.)
+- **Cause (from source):** the `alarm` plugin (5.12.0, `NotificationService.kt`) posts the ring
+  notification on its own channel `alarm_plugin_channel` at `IMPORTANCE_HIGH` (channel sound
+  `null`, channel vibration off - the vibration is `VibrationService`'s, the tone `AudioService`'s,
+  both owned by the foreground service, not the notification) with `PRIORITY_MAX`, `CATEGORY_ALARM`
+  and a full-screen intent. On an unlocked phone in use SystemUI shows a heads-up instead of
+  launching the full-screen intent (AOSP `FullScreenIntentDecisionProvider`,
+  `NO_FSI_EXPECTED_TO_HUN`), and a heads-up carrying a full-screen intent is **sticky**
+  (`HeadsUpManagerImpl.HeadsUpEntry.isSticky()` → `hasFullScreenIntent`): it never times out and
+  covers the top of the ring screen for the whole ring. "Not silent" is that heads-up and the
+  notification sitting in the alerting rather than the silent section - nothing audible.
+- **Options weighed:** (c) lowering the plugin channel's importance - rejected: SystemUI drops a
+  full-screen intent below `IMPORTANCE_HIGH` (`NO_FSI_NOT_IMPORTANT_ENOUGH`), which would break the
+  locked-screen launch (R4); an app cannot lower an existing channel's importance anyway.
+  `setSilent` on the plugin's notification - same problem (`NO_FSI_SUPPRESSIVE_SILENT_NOTIFICATION`).
+  (b) bringing the activity to front - it already is in front; the sticky heads-up stays regardless.
+  (d) a plugin fork - unnecessary maintenance for a fix the app can make from outside.
+  **(a) chosen:** while the ring screen is in front, re-post the plugin's own notification (same id,
+  via `Notification.Builder.recoverBuilder`) on a new `IMPORTANCE_LOW` channel with
+  `setOnlyAlertOnce(true)` and without the (then inert) full-screen intent. AOSP
+  `ActiveServices.applyForegroundServiceNotificationLocked` keeps it the foreground service's
+  notification; `HeadsUpCoordinator.onEntryUpdated` removes the heads-up because the update no longer
+  qualifies (`PeekNotImportantSuppressor`).
+- **Fix:** `RingNotification.kt` + pure `RingNotificationPolicy.kt` (never on a locked device, never
+  while the app is in the background - there the heads-up is the way to the ring screen - and only
+  for the plugin's own notification, and only while its foreground service still owns it -
+  `FLAG_FOREGROUND_SERVICE`; a re-post that no service claimed because Stop raced it is cancelled
+  again, `RingNotificationPolicy.isOrphan`), method channel `.../ring_notification` in `MainActivity`
+  (which tracks resumed state); `lib/utils/ring_notification.dart`'s `RingNotificationQuieter`, used
+  by `ScreenAlarmActive` and `QrScanner` (ringing only): asks on appearing and on every resume.
+- **Tests (red first):** `test/ring_notification_quiet_test.dart` (both ring screens ask once when
+  shown and on resume; a plain import scan never; nothing after the screen is gone),
+  `test/ring_notification_contract_test.dart` (channel/method names, LOW + no sound/vibration +
+  only-alert-once, the plugin channel id read from the plugin's own source, the plugin's HIGH +
+  full-screen intent, `androidFullScreenIntent`/`androidStopAlarmOnDismiss` unchanged),
+  `RingNotificationPolicyTest` (JVM, 10). The contract test pins the exact native call shapes
+  (`decide(activityResumed, keyguard.isKeyguardLocked, channelId, flags)`,
+  `quiet(applicationContext, alarmId, resumed)`, the onResume/onPause bookkeeping); mutating the
+  lock check to `false && ...`, passing `true` for `resumed`, or never setting it each turn it red
+  (checked by hand, 2026-10-06). `docs/USER_GUIDE.md` "When an alarm rings" says where the
+  notification went.
+- **Known limit:** the plugin keeps its own copy and re-posts it after a swipe from the shade
+  (`restoreNotification`, T-147) or when another alarm's start command arrives mid-ring
+  (`fulfillForegroundObligation`) - the banner can then return until the app is next resumed.
+  Re-quieting on an `Alarm.ringing` change would not catch the second case: with
+  `allowAlarmOverlap` at its default (`false`, not set by the app) a second alarm arriving
+  mid-ring is queued or dropped without changing `Alarm.ringing`, while the re-post still happens.
+- **Device checks outstanding:** `docs/device-trial-checklist.md` H10-H14 (no banner over the ring
+  screen, tone continues, heads-up still shown when another app is in front, locked-screen launch
+  unchanged, notification in the shade).
+
 ### T-228 · Alarms screen: "Manual" tab on the left, "Scheduled" on the right — DONE (2026-10-06, on `dev`)
 
 - [x] Maintainer request (2026-10-06, verbatim): *"Schiebe manual alarms nach links und scheduled

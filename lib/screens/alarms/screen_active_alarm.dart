@@ -25,6 +25,7 @@ import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/handler.dart';
 import 'package:crescendo_alarm/models/alarms/ringing_watch.dart';
 import 'package:crescendo_alarm/screens/alarms/snooze_button.dart';
+import 'package:crescendo_alarm/utils/ring_notification.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
 /// The default ring screen for alarm [alarmId], shown by
@@ -65,6 +66,10 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
   late final Animation<double> _animation;
   late final Timer _timer;
   late final RingingWatch _ringingWatch;
+
+  /// docs/TODO.md T-229: keeps the plugin's notification out of the
+  /// heads-up over this screen.
+  late final RingNotificationQuieter _notificationQuieter;
   late TimeOfDay _currentTime;
   late DateTime _currentDateTime;
 
@@ -130,6 +135,7 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
         _pop();
       },
     );
+    _notificationQuieter = RingNotificationQuieter(widget.alarmId);
     _currentTime = TimeOfDay.now();
     _currentDateTime = DateTime.now();
     // The alarm plugin may fire a few seconds before the minute it was set
@@ -160,6 +166,7 @@ class _ScreenAlarmActiveState extends State<ScreenAlarmActive>
     _controller.dispose();
     _timer.cancel();
     _ringingWatch.cancel();
+    _notificationQuieter.dispose();
     super.dispose();
   }
 

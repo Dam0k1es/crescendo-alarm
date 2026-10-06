@@ -606,10 +606,10 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status
 
-`flutter test` currently runs **903 tests across 124 files** (2026-10-06, v1.5.0), and CI runs them ten times over -
+`flutter test` currently runs **913 tests across 126 files** (2026-10-06, v1.5.0), and CI runs them ten times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
-tests for native code (46 as of T-217: 27 in `SleepTimeDndPolicyTest`, 19 in
-`DirectBootFallbackPolicyTest`), run with
+tests for native code (56 as of T-229: 27 in `SleepTimeDndPolicyTest`, 19 in
+`DirectBootFallbackPolicyTest`, 10 in `RingNotificationPolicyTest`), run with
 `cd android && ./gradlew :app:testDebugUnitTest` (locally from the native-filesystem worktree, and in
 `ci.yml`'s `build-dev-apk` job).
 

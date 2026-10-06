@@ -299,6 +299,10 @@ with **Deactivation Code Required** on), the QR scanner appears instead of this 
 **Snooze** there too - and only scanning your code stops the alarm (see "Scan Code" above for the
 broken-camera fail-safe). The alarm's title is shown in its ringing notification.
 
+Once the ringing display is open, the alarm's notification no longer appears as a banner over it;
+it stays silently in the notification shade while the alarm keeps ringing. If you leave the app
+while the alarm rings, that notification (or the app in recent apps) leads back to the display.
+
 ## If the phone restarts, or the app is stopped
 
 - **Restart, phone left locked.** Until you unlock the phone for the first time after a restart,
