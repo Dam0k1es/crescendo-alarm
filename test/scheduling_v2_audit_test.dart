@@ -1080,6 +1080,91 @@ void main() {
     });
   });
 
+  group('FR-1/FR-5/FR-7: an evening appointment on the same date is no '
+      'target (T-208 shape)', () {
+    // Re-audit 2026-10-06 (maintainer: "Behebe FR-7"). Once the wake time
+    // lies more than 12 hours before an evening appointment, FR-1's wrap read
+    // that appointment as "earlier" and FR-5 aimed a run at it, while FR-2
+    // bounds a day only by ITS OWN hardFloor, and a morning value on the same
+    // date already lies before an evening one. Without the evening
+    // appointment each plan is smooth.
+    WeekPlanResult plan(DateTime anchor, List<DateTime> appointments,
+            {required int md, TimeOfDay? preferred}) =>
+        computeWeekPlan(
+          window: [
+            for (var d = 1; d <= 7; d++)
+              DateTime.utc(anchor.year, anchor.month, anchor.day + d)
+          ],
+          lastEffectiveWakeTime: anchor,
+          allEvents: [for (final a in appointments) _meetingAt(a)],
+          offsetAt: fixedOffset(Duration.zero),
+          durationToWakeUp: Duration.zero,
+          durationToGetReadyForDay: (_) => Duration.zero,
+          preferredWakeUpTime: preferred,
+          maxDailyDelta: Duration(minutes: md),
+          gapDayCounter: 0,
+          scheduleOnGapDays: true,
+        );
+
+    void expectSteps(WeekPlanResult result, DateTime anchor, int md) {
+      var previous = anchor;
+      for (final value in result.valuesByDay.values) {
+        final step = readingDelta(previous, value!).abs();
+        expect(step, lessThanOrEqualTo(Duration(minutes: md)),
+            reason: 'step into $value: $step (plan '
+                '${result.valuesByDay.values.toList()})');
+        previous = value;
+      }
+      expect(result.overrunNotificationNeeded, isFalse);
+    }
+
+    test('Sun 07:00, Wed 05:30, Fri 19:00, md 30: 06:30, 06:00, 05:30, hold',
+        () {
+      // 2026-01-04 is a Sunday.
+      final result = plan(_utc(7, 0, day: 4),
+          [_utc(5, 30, day: 7), _utc(19, 0, day: 9)],
+          md: 30);
+      expect(result.valuesByDay.values.toList(), [
+        _utc(6, 30, day: 5),
+        _utc(6, 0, day: 6),
+        _utc(5, 30, day: 7),
+        _utc(5, 30, day: 8),
+        _utc(5, 30, day: 9), // Friday: 05:30 is before its 19:00
+        _utc(5, 30, day: 10),
+        _utc(5, 30, day: 11),
+      ]);
+      expect(result.overrunNotificationNeeded, isFalse);
+    });
+
+    test('anchor 09:30, 04:20 (+6) and 20:30 (+7), md 73: smooth', () {
+      final anchor = _utc(9, 30, day: 4);
+      final result =
+          plan(anchor, [_utc(4, 20, day: 10), _utc(20, 30, day: 11)], md: 73);
+      expectSteps(result, anchor, 73);
+      expect(result.valuesByDay[_utc(0, 0, day: 10)], _utc(4, 20, day: 10));
+    });
+
+    test('P 07:00, 05:00 (+3) and 18:30 (+6), md 30: the even run, no jump',
+        () {
+      // 07:00 -> 05:00 in three days needs 40 minutes a day - an overrun
+      // FR-6 spreads evenly and reports. What must not happen is a second,
+      // avoidable jump toward 18:30 "earlier" (it planned 06:20, 03:58).
+      final anchor = _utc(7, 0, day: 4);
+      final result = plan(anchor, [_utc(5, 0, day: 7), _utc(18, 30, day: 10)],
+          md: 30, preferred: const TimeOfDay(hour: 7, minute: 0));
+      expect(result.valuesByDay.values.toList(), [
+        _utc(6, 20, day: 5),
+        _utc(5, 40, day: 6),
+        _utc(5, 0, day: 7),
+        _utc(5, 30, day: 8), // FR-4 drifts back toward 07:00
+        _utc(6, 0, day: 9),
+        _utc(6, 30, day: 10), // before Saturday's 18:30
+        _utc(7, 0, day: 11),
+      ]);
+      expect(result.overrunNotificationNeeded, isTrue);
+    });
+  });
+
   group('FR-6: capping at an appointment must be reported too (T-133)', () {
     // FR-6: "On EVERY excess over `maxDailyDelta` (`N=1` or distributed) the
     // user is notified once."

@@ -34,11 +34,13 @@
 // The T-139 allowlist (docs/TODO.md T-139, maintainer decision 2026-10-05).
 // T-139 changed FR-5 step 2 and FR-7 ON PURPOSE, after 8ac1d9e: a reached
 // point no longer ends the lookahead, FR-7's feasibility checks every point
-// FR-5 can target in groupTarget's frame, and times of day are compared with
-// their milliseconds. The oracle stays byte-verbatim, so for the cases that
+// FR-5 can target in groupTarget's frame, times of day are compared with
+// their milliseconds, and an evening hardFloor more than 12 hours after a
+// value on the same date is only its day's cap, not a target (2026-10-06,
+// the T-208 shape). The oracle stays byte-verbatim, so for the cases that
 // change it cannot decide anything any more. Those cases are frozen in
-// [_t139Divergent], computed once against this engine: 265 of the 2,000.
-// By where the anchor's reading lies: 129 on its own day (the day before the
+// [_t139Divergent], computed once against this engine: 267 of the 2,000.
+// By where the anchor's reading lies: 131 on its own day (the day before the
 // window), 90 on the date before that (a night shift's alarm the evening
 // before, T-118b), 24 on the window's first date (a generator artefact: an
 // anchor shifted forward by the offset - the opposite shape), and 22 cold
@@ -46,7 +48,7 @@
 // bit-identical again and not in the set.
 // For them the oracle is replaced by independent invariants
 // (test/support/plan_invariants.dart): FR-2 and FR-7's timing in both
-// directions for all 265, smoothness only where readings decide it (an
+// directions for all 267, smoothness only where readings decide it (an
 // anchor on its own day and no midnight in between - none of the 90 + 24).
 // Every other case must stay bit-identical. The test fails if the set of
 // divergent cases changes in either direction: a new divergence is
@@ -66,25 +68,25 @@ import 'support/t206_plan_cases.dart';
 /// legitimately differs from the 8ac1d9e oracle. Frozen - see the header.
 const Set<int> _t139Divergent = {
   7, 21, 22, 30, 33, 37, 41, 44, 45, 74, 94, 100, 101, 114, 120, 121, 124,
-  126, 135, 138, 145, 162, 166, 171, 182, 202, 255, 263, 266, 272, 273, 276,
-  279, 282, 284, 288, 296, 299, 317, 325, 328, 340, 347, 351, 352, 358, 366,
-  370, 373, 383, 393, 396, 407, 428, 436, 441, 446, 449, 456, 460, 475, 487,
-  494, 503, 505, 506, 511, 525, 529, 534, 538, 544, 548, 549, 554, 561, 565,
-  573, 591, 595, 614, 621, 635, 646, 650, 654, 656, 658, 670, 671, 673, 679,
-  692, 705, 710, 711, 714, 717, 727, 729, 736, 752, 763, 779, 785, 793, 813,
-  816, 824, 839, 846, 853, 855, 857, 879, 882, 887, 897, 910, 924, 937, 938,
-  943, 945, 959, 965, 975, 976, 979, 981, 987, 996, 1004, 1005, 1013, 1019,
-  1021, 1032, 1033, 1035, 1045, 1055, 1061, 1066, 1070, 1082, 1097, 1105,
-  1112, 1121, 1122, 1136, 1138, 1146, 1147, 1150, 1153, 1155, 1173, 1175,
-  1181, 1184, 1186, 1187, 1200, 1201, 1211, 1222, 1223, 1232, 1241, 1261,
-  1264, 1265, 1273, 1285, 1289, 1298, 1313, 1318, 1319, 1320, 1333, 1339,
-  1350, 1351, 1374, 1378, 1395, 1419, 1424, 1431, 1432, 1458, 1459, 1461,
-  1472, 1474, 1492, 1495, 1506, 1510, 1534, 1540, 1569, 1570, 1583, 1592,
-  1594, 1611, 1615, 1621, 1622, 1627, 1630, 1632, 1645, 1658, 1659, 1666,
-  1673, 1680, 1681, 1682, 1683, 1691, 1704, 1706, 1718, 1725, 1736, 1737,
-  1738, 1740, 1743, 1761, 1770, 1780, 1782, 1793, 1797, 1803, 1804, 1805,
-  1817, 1820, 1823, 1825, 1830, 1837, 1868, 1884, 1900, 1902, 1911, 1912,
-  1913, 1934, 1944, 1950, 1960, 1961, 1975, 1990, 1991,
+  126, 135, 138, 145, 162, 166, 171, 182, 194, 202, 255, 263, 266, 272, 273,
+  276, 279, 282, 284, 288, 296, 299, 317, 325, 328, 340, 347, 351, 352, 358,
+  366, 370, 373, 383, 393, 396, 407, 428, 436, 441, 446, 449, 456, 460, 475,
+  487, 494, 503, 505, 506, 511, 525, 529, 534, 538, 544, 548, 549, 554, 561,
+  565, 573, 591, 595, 614, 621, 635, 646, 650, 654, 656, 658, 670, 671, 673,
+  679, 692, 705, 710, 711, 714, 717, 727, 729, 736, 752, 763, 779, 785, 793,
+  813, 816, 824, 839, 846, 853, 855, 857, 879, 882, 887, 897, 910, 924, 937,
+  938, 943, 945, 959, 965, 975, 976, 979, 981, 987, 996, 1004, 1005, 1013,
+  1019, 1021, 1032, 1033, 1035, 1045, 1055, 1061, 1066, 1070, 1082, 1097,
+  1105, 1112, 1121, 1122, 1136, 1138, 1146, 1147, 1150, 1153, 1155, 1173,
+  1175, 1181, 1184, 1186, 1187, 1200, 1201, 1211, 1222, 1223, 1232, 1241,
+  1261, 1264, 1265, 1273, 1285, 1289, 1298, 1313, 1318, 1319, 1320, 1333,
+  1339, 1350, 1351, 1374, 1378, 1395, 1419, 1424, 1431, 1432, 1458, 1459,
+  1461, 1472, 1474, 1492, 1495, 1506, 1510, 1534, 1540, 1569, 1570, 1583,
+  1592, 1594, 1611, 1615, 1621, 1622, 1627, 1630, 1632, 1645, 1658, 1659,
+  1666, 1673, 1680, 1681, 1682, 1683, 1691, 1704, 1706, 1718, 1725, 1730,
+  1736, 1737, 1738, 1740, 1743, 1761, 1770, 1780, 1782, 1793, 1797, 1803,
+  1804, 1805, 1817, 1820, 1823, 1825, 1830, 1837, 1868, 1884, 1900, 1902,
+  1911, 1912, 1913, 1934, 1944, 1950, 1960, 1961, 1975, 1990, 1991,
 };
 
 const _offsets = [

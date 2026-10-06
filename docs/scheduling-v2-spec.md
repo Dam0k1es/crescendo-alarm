@@ -113,6 +113,15 @@ hours apart.
   milliseconds included (until the T-139 review they were dropped, misreading a bisected value by
   up to 999 ms). An instant enters this arithmetic as its reading L(t),
   or, for a day that has one, as its stored planned clock time (FR-3).
+  **Whether a `hardFloor` binds** is not a shift and is not decided by the wrap alone: where the
+  value carried onto the `hardFloor`'s own date and the `hardFloor` fall on the same date, the
+  `hardFloor` binds only if it is earlier there (FR-2 bounds a day by its own `hardFloor`). An
+  evening appointment more than 12 hours after a morning value reads as "earlier" under the wrap,
+  but on its own date the morning value already lies before it - it is that day's cap and nothing
+  more (FR-5's precondition; re-audit 2026-10-06, the `docs/TODO.md` T-208 shape). Where the two
+  fall on different dates - a value whose reading has crossed midnight, a night shift's alarm the
+  evening before - the wrapped reading still decides, unchanged; which date such a value belongs to
+  is `docs/TODO.md` T-225.
 
 Within one zone the two views agree except across a daylight-saving change. There a constant
 reading is **no** shift at all (maintainer decision A, `docs/timezone-requirements.md` TZ-2:
@@ -285,7 +294,15 @@ components of the local readings)
 qualifies as a target `t_m`. A point that is equal to or later than `A` demands nothing: someone
 who gets up at 06:45 has long since satisfied an appointment at 11:00. FR-4 applies to such a day
 (drift toward `preferredWakeUpTime`, bounded by `maxDailyDelta`), and the `hardFloor` then acts
-only as a **cap** (FR-2's upper bound), never as a pull.
+only as a **cap** (FR-2's upper bound), never as a pull. "Earlier" is decided on the point's own
+date where `A`'s time of day carried onto that date and the point fall on the same date (FR-1): an
+evening appointment more than 12 hours after a morning `A` is later there, even though the
+12-hour wrap reads it as earlier, and is no target either.
+
+- **Test (T-208 shape, 2026-10-06):** `A` = Sun 07:00, `hardFloor`s Wed 05:30 and Fri 19:00,
+  `maxDailyDelta=30min`, no `preferredWakeUpTime` → Mon 06:30, Tue 06:00, Wed 05:30, then 05:30
+  every day (Friday's 19:00 is only its cap), **no** notification. Before, Friday became the target
+  from Tuesday on: Tue 03:37, a 173-minute step, and a notification.
 
 This follows directly from FR-2 ("the planned value may be earlier - **always allowed**") and from
 step 1's own sentence ("`hardFloor` is exclusively an upper bound, never a directional
@@ -446,7 +463,8 @@ unaffected by this and applies as normal as soon as FR-6 itself is called with `
 - Check `|today's value − F| / N_remaining ≤ maxDailyDelta` for the intended value (holding, or a
   full `preferredWakeUpTime` step) - here too FR-6's clarification applies: the difference is
   time-of-day-based, not calendar-based - **and the same bound against every remaining point
-  `t_k` that FR-1 reads as earlier than yesterday's value** - exactly the points FR-5 can make a
+  `t_k` that FR-1 reads as earlier than yesterday's value** (on `t_k`'s own date where both fall on
+  the same date, see FR-1) - exactly the points FR-5 can make a
   target, `F` included: falling by `maxDailyDelta` every day from the intended value must reach
   `t_k`'s `hardFloor` by its day. A point more than 12 hours earlier by the clock reads as later
   under FR-1 and is not checked: no run aims at it, so none may start on its account - it only

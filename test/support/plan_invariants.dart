@@ -127,6 +127,26 @@ List<String> hardFloorViolations(
 /// 02:00 hardFloor and a 20:00 value on the same date are 18 hours apart,
 /// while FR-1 reads them as 6 hours "later" - that shape is outside what
 /// the planning's day convention decides today; see the T-139 review.)
+/// The hardFloors (window index -> instant) that bind a curve from the
+/// anchor at all. FR-2 bounds a day only by its own hardFloor, so a floor on
+/// its own date later than every value the plan can reach - later than the
+/// anchor's time of day and than the preferred time - is that day's cap and
+/// nothing more (an evening appointment after a morning wake time; the T-208
+/// shape, 2026-10-06).
+Map<int, DateTime> _bindingFloors(PlanInputs p, DateTime a) {
+  var ceiling = _timeOfDay(a);
+  if (p.preferred case final pref?) {
+    final pm = (pref.hour * 60 + pref.minute) * 60 * 1000000;
+    if (pm > ceiling) ceiling = pm;
+  }
+  return {
+    for (final e in floorsOf(p).entries)
+      if (!(_sameDate(readingAt(e.value, p.rules), p.window[e.key]) &&
+          _timeOfDay(readingAt(e.value, p.rules)) > ceiling))
+        e.key: e.value,
+  };
+}
+
 bool smoothnessApplies(PlanInputs p) {
   final anchor = p.anchor;
   if (anchor == null) return false;
@@ -134,10 +154,14 @@ bool smoothnessApplies(PlanInputs p) {
   final dayBefore = DateTime.utc(
       p.window.first.year, p.window.first.month, p.window.first.day - 1);
   if (!_sameDate(a, dayBefore)) return false;
-  final offsets = <int>[0];
   for (final entry in floorsOf(p).entries) {
+    if (!_sameDate(readingAt(entry.value, p.rules), p.window[entry.key])) {
+      return false;
+    }
+  }
+  final offsets = <int>[0];
+  for (final entry in _bindingFloors(p, a).entries) {
     final r = readingAt(entry.value, p.rules);
-    if (!_sameDate(r, p.window[entry.key])) return false;
     offsets.add(_timeOfDay(r) - _timeOfDay(a));
   }
   if (p.preferred case final pref?) {
@@ -161,7 +185,7 @@ List<String> smoothnessViolations(Map<DateTime, DateTime?> values,
     PlanInputs p) {
   final a = readingAt(p.anchor!, p.rules);
   final md = p.maxDailyDelta.inMicroseconds;
-  final exists = floorsOf(p).entries.every((e) =>
+  final exists = _bindingFloors(p, a).entries.every((e) =>
       -wrapDeltaMicros(a, readingAt(e.value, p.rules)) <= md * (e.key + 1));
   if (!exists) return const [];
   final out = <String>[];
@@ -229,11 +253,21 @@ List<String> smoothnessViolations(Map<DateTime, DateTime?> values,
           hold.add(Duration(microseconds: distance.isNegative ? -step : step));
     }
 
-    // FR-1/FR-5: the later hardFloors that read as earlier than yesterday.
+    // FR-1/FR-5: the later hardFloors that read as earlier than yesterday -
+    // and, where a floor lies on the date the value would carry onto its day,
+    // are earlier THERE (FR-2: an evening appointment after a morning value
+    // on the same date is only that day's cap; spec FR-5, 2026-10-06).
+    bool earlierOnItsDate(MapEntry<int, DateTime> e) {
+      final r = readingAt(e.value, p.rules);
+      final placed = _readingDaysLater(prevReading, e.key - i + 1);
+      return !_sameDate(placed, r) || r.isBefore(placed);
+    }
+
     final targets = [
       for (final e in floors.entries)
         if (e.key > i &&
-            wrapDeltaMicros(prevReading, readingAt(e.value, p.rules)) < 0)
+            wrapDeltaMicros(prevReading, readingAt(e.value, p.rules)) < 0 &&
+            earlierOnItsDate(e))
           e,
     ];
     bool keepsTargets(DateTime reading) => targets.every((e) {

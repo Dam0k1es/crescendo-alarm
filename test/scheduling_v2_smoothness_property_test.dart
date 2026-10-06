@@ -31,11 +31,15 @@
 // - FR-7 timing, both directions: no day earlier than necessary and none
 //   later than the hold or the FR-4 drift allow (see timingViolations).
 //
-// Six families, each with gapDayCounter 0..9 and scheduleOnGapDays on/off
+// Seven families, each with gapDayCounter 0..9 and scheduleOnGapDays on/off
 // (so FR-9's valve and T-52.1's mask take part):
 //
 // - DAY: times of day 03:00-11:00, fixed offsets incl. +5:45, -3:30, +12:45.
 // - EVENING: 14:00-23:30 - an evening or late shift, anchor on its own day.
+// - EVENING MIX: a morning anchor and morning appointments (03:00-09:00)
+//   with evening appointments (17:00-22:30) on later days - the T-208 shape
+//   the re-audit of 2026-10-06 found: an evening hardFloor more than 12 hours
+//   after a morning value read as "earlier" and pulled a run toward it.
 // - ROTA: anchor and appointments at any time of day, anchor on its own day -
 //   a rota that changes between night and day shifts (Marie, personas.md).
 //   This is where a point more than 12 hours earlier reads as later under
@@ -84,12 +88,12 @@ const _fixedOffsets = [
   Duration(hours: 12, minutes: 45),
 ];
 
-enum _Family { day, evening, rota, shift, dst, dstNight }
+enum _Family { day, evening, eveningMix, rota, shift, dst, dstNight }
 
 void main() {
   setUpAll(tzdata.initializeTimeZones);
 
-  test('FR-2, smoothness and FR-7 timing hold over 9,000 seeded random windows',
+  test('FR-2, smoothness and FR-7 timing hold over 10,500 seeded random windows',
       () {
     final random = Random(20261005);
     final berlin = zoneRules(tz.getLocation('Europe/Berlin'));
@@ -102,7 +106,7 @@ void main() {
     int minuteIn(int fromMinute, int span) =>
         (fromMinute + random.nextInt(span + 1)) % (24 * 60);
 
-    for (var c = 0; c < 9000; c++) {
+    for (var c = 0; c < 10500; c++) {
       final family = _Family.values[c % _Family.values.length];
       final md = _deltas[random.nextInt(_deltas.length)];
       final ZoneOffsetAt rules;
@@ -137,6 +141,7 @@ void main() {
         _Family.day || _Family.dst => (3 * 60, 8 * 60),
         _Family.evening => (14 * 60, 9 * 60 + 30),
         _Family.shift || _Family.rota => (0, 24 * 60 - 1),
+        _Family.eveningMix => (3 * 60, 6 * 60),
         _Family.dstNight => (60, 3 * 60),
       };
       final DateTime anchor = switch (family) {
@@ -154,6 +159,11 @@ void main() {
         if (random.nextDouble() < 0.45) {
           events.add(_meetingAt(
               at(dayAt(k), minuteIn(bandStart, bandSpan)).add(lead)));
+        }
+        // EVENING MIX: evening appointments too, on days of their own or
+        // beside a morning one (the earlier one is the day's hardFloor).
+        if (family == _Family.eveningMix && random.nextDouble() < 0.35) {
+          events.add(_meetingAt(at(dayAt(k), minuteIn(17 * 60, 5 * 60 + 30))));
         }
       }
       final preferred = random.nextBool()
@@ -222,7 +232,12 @@ void main() {
             '(per family: $failedPerFamily); first ones:\n'
             '${violations.take(5).join('\n')}');
     // The generator must actually exercise the smoothness property.
-    for (final f in [_Family.day, _Family.evening, _Family.dst]) {
+    for (final f in [
+      _Family.day,
+      _Family.evening,
+      _Family.eveningMix,
+      _Family.dst
+    ]) {
       expect(smoothChecked[f] ?? 0, greaterThan(500),
           reason: 'smoothness decided too rarely in ${f.name}');
     }

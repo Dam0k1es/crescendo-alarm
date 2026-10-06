@@ -315,6 +315,28 @@ DateTime? hardFloor({
       .subtract(durationToGetReady);
 }
 
+/// FR-1/FR-2/FR-5 (re-audit 2026-10-06, the T-208 shape): whether [point]
+/// reads as EARLIER than [anchorReading] under FR-1's 12-hour wrap only
+/// because it lies more than 12 hours LATER on its own date - an evening
+/// appointment after a morning value. FR-2 bounds a day by its own
+/// hardFloor, and a morning value on that date already lies before it, so
+/// such a point is only its own day's cap: never a run target (FR-5) and
+/// never a reason to start a run (FR-7). Decided on the point's own date:
+/// the anchor's time of day carried onto that date ([HardFloorPoint.dayOffset]
+/// days on) against the point's reading. Only where both fall on the same
+/// date - a value whose reading has crossed midnight onto another date
+/// (T-225, a night shift's date) keeps FR-1's wrapped reading, unchanged.
+bool _capOnlyOnItsDate(
+    DateTime anchorReading, HardFloorPoint point, ZoneOffsetAt offsetAt) {
+  final pointReading = _reading(point.value, offsetAt);
+  if (!_wallClockDelta(anchorReading, pointReading).isNegative) return false;
+  final onItsDate = _readingDaysLater(anchorReading, point.dayOffset);
+  final sameDate = onItsDate.year == pointReading.year &&
+      onItsDate.month == pointReading.month &&
+      onItsDate.day == pointReading.day;
+  return sameDate && !pointReading.isBefore(onItsDate);
+}
+
 /// [groupTarget] with the anchor given as a READING (docs/TODO.md T-206):
 /// the planning loop's anchor may be a stored planned clock time, which its
 /// instant cannot recover (a skipped reading).
@@ -345,6 +367,10 @@ HardFloorPoint _groupTargetFromReading({
   // grouped through.
   for (var m = points.length; m >= 1; m--) {
     final target = points[m - 1];
+    // FR-5's precondition, on the point's own date: an evening appointment
+    // after a morning value is no target, however FR-1's wrap reads it. It
+    // stays in the violation check below as an intermediate point.
+    if (_capOnlyOnItsDate(anchorReading, target, offsetAt)) continue;
     final curve = _distributeReadings(
       anchor: anchorReading,
       target: _reading(target.value, offsetAt),
@@ -367,8 +393,9 @@ HardFloorPoint _groupTargetFromReading({
     if (!violated) return target;
   }
 
-  // Unreachable: m=1 has no intermediate points to violate, so the loop
-  // above always returns by then.
+  // Reached only when every point is a same-date cap (m=1 has no
+  // intermediate points to violate): no target at all, and the caller's
+  // FR-5 precondition treats this one as such.
   return points.first;
 }
 
@@ -474,7 +501,10 @@ GapOrRunStartResult _planGapOrRunStartDayReading({
   // FR-5's warning against a "directional filter" is preserved: the points
   // are NOT removed from `remainingPoints`, so they still take part in
   // `groupTarget`'s violation check. They are only excluded as a *target*.
-  if (_wallClockDelta(vReading, f) >= Duration.zero) return gapDay();
+  if (_wallClockDelta(vReading, f) >= Duration.zero ||
+      _capOnlyOnItsDate(vReading, grouped, offsetAt)) {
+    return gapDay();
+  }
 
   // FR-7: N_Rest = N_F - i. `grouped.dayOffset` is v-relative (the genuine
   // calendar-day distance from `v` to F - groupTarget/distribute need it that
@@ -536,7 +566,9 @@ GapOrRunStartResult _planGapOrRunStartDayReading({
   // until then it is only its own day's cap (FR-2).
   final targetable = [
     for (final point in remainingPoints)
-      if (_wallClockDelta(vReading, _reading(point.value, offsetAt)).isNegative)
+      if (_wallClockDelta(vReading, _reading(point.value, offsetAt))
+              .isNegative &&
+          !_capOnlyOnItsDate(vReading, point, offsetAt))
         point,
   ];
   bool reachesEveryPoint(DateTime candidate) {

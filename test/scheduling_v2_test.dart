@@ -394,6 +394,31 @@ void main() {
     });
   });
 
+  group('FR-5 precondition, decided on the point\'s own date (T-208 shape)',
+      () {
+    // Bullet added 2026-10-06, verbatim: A = Sun 07:00, hardFloors Wed 05:30
+    // and Fri 19:00, maxDailyDelta=30min, no preferredWakeUpTime -> Mon
+    // 06:30, Tue 06:00, Wed 05:30, then 05:30 every day, no notification.
+    test('an evening appointment after a morning value is only its cap', () {
+      final result = _utcWeek(
+        anchor: _utc(7, 0, day: 4), // Sun 4 Jan 2026
+        events: [
+          _meetingAt(_utc(5, 30, day: 7)), // Wed
+          _meetingAt(_utc(19, 0, day: 9)), // Fri
+        ],
+        maxDailyDelta: const Duration(minutes: 30),
+      );
+      _expectUtcWeek(result, [
+        _utc(6, 30, day: 5),
+        _utc(6, 0, day: 6),
+        _utc(5, 30, day: 7),
+        _utc(5, 30, day: 8),
+        _utc(5, 30, day: 9),
+        _utc(5, 30, day: 10),
+      ], overrun: false);
+    });
+  });
+
   group('planGapOrRunStartDay (FR-7)', () {
     // HardFloorPoint.dayOffset is always relative to "today" (the `v` passed
     // in for THIS call) - each simulated day below is its own fresh call,
