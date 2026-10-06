@@ -31,7 +31,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Since T-137 the screen opens on "Scheduled"; the Add button belongs
+    // Since T-137 the screen opens on "Scheduled" (still the case after
+    // 2026-10-06 moved "Manual" to the left); the Add button belongs
     // to the Manual tab (on "Scheduled" that spot holds the sync button).
     // So switch there first - this test's assertion is unchanged, only
     // the path to the dialog is one step longer.

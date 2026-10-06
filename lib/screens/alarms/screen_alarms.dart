@@ -38,14 +38,17 @@ import 'package:crescendo_alarm/utils/utils.dart';
 class ScreenAlarms extends StatefulWidget {
   const ScreenAlarms({super.key});
 
-  // "Scheduled" comes first: the calendar-derived alarms are the actual
-  // product path, manual alarms the exception.
+  // "Manual" is the left tab, "Scheduled" the right one (maintainer,
+  // 2026-10-06: "Schiebe manual alarms nach links und scheduled alarms nach
+  // rechts."; reverses T-137's order). The screen still opens on
+  // "Scheduled" (see `initialIndex` below): the calendar-derived alarms are
+  // the actual product path, manual alarms the exception.
   //
   // Whoever swaps these here must also swap the `tabs:` and
   // `TabBarView.children` lists - otherwise the screen shows one list while
   // the button and swipe-to-delete-all act on the other.
-  static const int scheduledTabIndex = 0;
-  static const int manualTabIndex = 1;
+  static const int manualTabIndex = 0;
+  static const int scheduledTabIndex = 1;
 
   @override
   State<ScreenAlarms> createState() => _ScreenAlarmsState();
@@ -69,7 +72,8 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
   initState() {
     super.initState();
     _appState = Provider.of<AppState>(context, listen: false);
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+        length: 2, vsync: this, initialIndex: ScreenAlarms.scheduledTabIndex);
     _tabController.addListener(_handleTabChange);
   }
 
@@ -290,14 +294,14 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
           indicatorColor: context.watch<AppState>().accentColor,
           tabs: [
             Tab(
-              icon: Icon(Icons.calendar_month,
-                  color: context.watch<AppState>().accentColor),
-              text: "Scheduled",
-            ),
-            Tab(
               icon: Icon(Icons.access_alarm,
                   color: context.watch<AppState>().accentColor),
               text: "Manual",
+            ),
+            Tab(
+              icon: Icon(Icons.calendar_month,
+                  color: context.watch<AppState>().accentColor),
+              text: "Scheduled",
             ),
           ],
         ),
@@ -307,8 +311,8 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
           return TabBarView(
             controller: _tabController,
             children: [
-              buildListView(appState.scheduledAlarms),
               buildListView(appState.manualAlarms),
+              buildListView(appState.scheduledAlarms),
             ],
           );
         },

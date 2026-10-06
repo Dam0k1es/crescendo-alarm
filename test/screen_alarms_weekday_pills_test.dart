@@ -29,7 +29,8 @@ Future<AppState> _pumpAlarmsScreen(WidgetTester tester,
     ),
   );
   await tester.pumpAndSettle();
-  // The Manual tab is second (docs/TODO.md T-137).
+  // The screen opens on "Scheduled" (docs/TODO.md T-137), even though
+  // "Manual" is the left tab since 2026-10-06.
   await tester.tap(find.text('Manual'));
   await tester.pumpAndSettle();
   return appState;

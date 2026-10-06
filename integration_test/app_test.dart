@@ -134,10 +134,11 @@ Future<void> createManualAlarmOneMinuteFromNow(
     WidgetTester tester, AppState appState) async {
   expect(find.byType(ScreenAlarms), findsOneWidget);
 
-  // docs/TODO.md T-137: since the switch, the screen opens on "Scheduled";
-  // the Add button belongs to the Manual tab (on "Scheduled" the Sync
-  // button sits there instead). Without this tab switch, the tap below
-  // finds nothing - exactly what run 34721191411 failed on.
+  // docs/TODO.md T-137: the screen opens on "Scheduled" (still so since
+  // 2026-10-06, when "Manual" became the left tab); the Add button belongs
+  // to the Manual tab (on "Scheduled" the Sync button sits there instead).
+  // Without this tab switch, the tap below finds nothing - exactly what
+  // run 34721191411 failed on.
   await tester.tap(find.text('Manual'));
   await tester.pumpAndSettle();
 
