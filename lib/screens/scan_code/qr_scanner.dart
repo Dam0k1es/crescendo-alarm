@@ -105,6 +105,16 @@ class QrScanner extends StatefulWidget {
   @visibleForTesting
   static Stream<AlarmSet>? debugRingingStreamOverride;
 
+  /// Test-only seam (docs/TODO.md T-215): the camera (re)initialisation
+  /// results `ReaderWidget.onControllerCreated` reports - `null` for success,
+  /// the error otherwise - delivered to the same handler. `ReaderWidget` is
+  /// not built while [debugScanStreamOverride] is set, so without this a
+  /// test could not reproduce "the camera came back after a resume". Like
+  /// the seams above it exists in release builds too (docs/TODO.md T-16),
+  /// and is `null` there.
+  @visibleForTesting
+  static Stream<Object?>? debugCameraInitStreamOverride;
+
   /// Test-only seam: the real `Handler.onAlarmHandled` has no way of its own
   /// to observe how many times it was called - needed to pin down the
   /// double-dismiss bug `_handleAlarmOnce` guards against (see
@@ -121,16 +131,39 @@ class QrScanner extends StatefulWidget {
 
 class _QrScannerState extends State<QrScanner> {
   StreamSubscription<Object?>? _subscription;
+  StreamSubscription<Object?>? _cameraInitSubscription;
   late final AppState _appState;
 
   /// Set when the scanner may not be working: the camera reported an error,
   /// no frame reached the decoder within [_proofOfLifeTimeout], or no valid
-  /// code was found within [_maxTimeWithoutValidScan]. Cleared again whenever
-  /// the camera (re)initializes without an error (`onControllerCreated`).
-  /// It drives the emergency stop button below - without it a "guaranteed
-  /// wake-up" alarm whose scanner never comes up leaves the user on a
-  /// `PopScope(canPop: false)` screen with no scanner and no way out.
-  bool _cameraFailed = false;
+  /// code was found within [_maxTimeWithoutValidScan]. It drives the
+  /// emergency stop below - without it a "guaranteed wake-up" alarm whose
+  /// scanner never comes up leaves the user on a `PopScope(canPop: false)`
+  /// screen with no scanner and no way out.
+  ///
+  /// docs/TODO.md T-215: **never cleared** once set. It used to follow every
+  /// `onControllerCreated` (`error != null`), and ReaderWidget calls that
+  /// again after every resume and camera toggle - a successful
+  /// re-initialisation withdrew the offer, and the timers that had raised it
+  /// fire only once. A camera that initialises is not a camera that can see.
+  /// Maintainer (2026-10-06): "Der soll nicht verschwinden, aber wegwischbar
+  /// sein." - only the user hides it, see [_emergencyStopSwipedAway].
+  bool _emergencyStopOffered = false;
+
+  /// docs/TODO.md T-215: the user swiped the offer away ("let me try
+  /// scanning again"). Cleared - the offer shown again - by the next failure
+  /// condition: a camera error, or [_maxTimeWithoutValidScan] more without a
+  /// valid code ([_startMaxScanDurationTimer] re-arms on the swipe). So the
+  /// escape hatch is hidden only by the user's own action, and never for the
+  /// rest of the ring: a swipe by mistake costs at most one more timeout.
+  bool _emergencyStopSwipedAway = false;
+
+  /// Gives each appearance its own `Dismissible` key - a dismissed
+  /// `Dismissible` must not come back under the same key.
+  int _emergencyStopAppearance = 0;
+
+  bool get _showEmergencyStop =>
+      _emergencyStopOffered && !_emergencyStopSwipedAway;
 
   /// Evidence that the decode loop is alive: a scan arrived, successful or not.
   bool _scannerProvedAlive = false;
@@ -176,8 +209,7 @@ class _QrScannerState extends State<QrScanner> {
   /// screen, which it otherwise never learns about. Since
   /// `androidStopAlarmOnDismiss: false` (`ringing_alarm_settings.dart`) that
   /// is no longer a notification swipe, but e.g. `Alarm.stopAll()` from
-  /// another ring screen's emergency stop or from `Handler.handleAlarm`'s
-  /// fallback.
+  /// `Handler.handleAlarm`'s "no screen could be shown" fallback.
   RingingWatch? _ringingWatch;
 
   /// docs/TODO.md T-229: only for a ringing alarm, like [_ringingWatch].
@@ -227,25 +259,51 @@ class _QrScannerState extends State<QrScanner> {
     // The camera is driven by ReaderWidget in build(); only the injected test
     // stream needs a subscription here.
     _subscription = QrScanner.debugScanStreamOverride?.listen(_handleScan);
+    _cameraInitSubscription =
+        QrScanner.debugCameraInitStreamOverride?.listen(_onCameraInitialised);
 
     _proofOfLifeTimer = Timer(_proofOfLifeTimeout, () {
       if (!mounted || _scannerProvedAlive) return;
       debugPrint(
           '=====qrScanner: no scan within ${_proofOfLifeTimeout.inSeconds}s '
           '- offering the emergency stop');
-      setState(() => _cameraFailed = true);
+      _offerEmergencyStop();
     });
 
-    // Deliberately not cancelled by _noteScannerAlive() - see this timer's
-    // own doc comment for why "the scanner is running" is not the same
-    // question as "the camera can actually see anything".
+    _startMaxScanDurationTimer();
+  }
+
+  /// Deliberately not cancelled by _noteScannerAlive() - see
+  /// [_maxScanDurationTimer]'s own doc comment for why "the scanner is
+  /// running" is not the same question as "the camera can actually see
+  /// anything". Started with the screen, and again when the user swipes the
+  /// emergency stop away (docs/TODO.md T-215).
+  void _startMaxScanDurationTimer() {
+    _maxScanDurationTimer?.cancel();
     _maxScanDurationTimer = Timer(_maxTimeWithoutValidScan, () {
       if (!mounted) return;
       debugPrint(
           '=====qrScanner: no valid code within ${_maxTimeWithoutValidScan.inSeconds}s '
           '- offering the emergency stop regardless of scanner activity');
-      setState(() => _cameraFailed = true);
+      _offerEmergencyStop();
     });
+  }
+
+  /// A failure condition occurred: show the emergency stop, also if the user
+  /// had swiped an earlier offer away.
+  void _offerEmergencyStop() {
+    setState(() {
+      if (!_emergencyStopOffered || _emergencyStopSwipedAway) {
+        _emergencyStopAppearance++;
+      }
+      _emergencyStopOffered = true;
+      _emergencyStopSwipedAway = false;
+    });
+  }
+
+  void _onEmergencyStopSwipedAway() {
+    setState(() => _emergencyStopSwipedAway = true);
+    _startMaxScanDurationTimer();
   }
 
   @override
@@ -258,8 +316,18 @@ class _QrScannerState extends State<QrScanner> {
     // Stop listening to the injected events, if any. ReaderWidget disposes of
     // its own camera controller.
     unawaited(_subscription?.cancel());
+    unawaited(_cameraInitSubscription?.cancel());
 
     super.dispose();
+  }
+
+  /// ReaderWidget's `onControllerCreated`, after the first start and again
+  /// after every resume and camera toggle. Only an error counts: a success
+  /// does not withdraw an offer already made (docs/TODO.md T-215).
+  void _onCameraInitialised(Object? error) {
+    if (!mounted || error == null) return;
+    debugPrint('=====qrScanner: camera unavailable: ${error.runtimeType}');
+    _offerEmergencyStop();
   }
 
   /// Any frame that reached the decoder - hit or miss - proves the loop runs.
@@ -381,8 +449,8 @@ class _QrScannerState extends State<QrScanner> {
       icon: Icon(Icons.close, color: _appState.accentColor),
     );
 
-    // Shown instead of the (hidden-by-design) exit button once _cameraFailed
-    // is set - a camera error (permission revoked, hardware busy, unsupported
+    // Shown instead of the (hidden-by-design) exit button once
+    // _emergencyStopOffered is set (and not swiped away) - a camera error (permission revoked, hardware busy, unsupported
     // device, ...) or one of the two timeouts (which also catch a hardware
     // camera kill-switch): without this, a "guaranteed wake-up" alarm whose
     // QR scanner can never work would leave the user stuck on a
@@ -505,14 +573,8 @@ class _QrScannerState extends State<QrScanner> {
                       ),
                     ),
                   ),
-                  onControllerCreated: (controller, error) {
-                    if (!mounted) return;
-                    setState(() => _cameraFailed = error != null);
-                    if (error != null) {
-                      debugPrint(
-                          '=====qrScanner: camera unavailable: ${error.runtimeType}');
-                    }
-                  },
+                  onControllerCreated: (controller, error) =>
+                      _onCameraInitialised(error),
                 ),
               ),
             Align(
@@ -524,8 +586,26 @@ class _QrScannerState extends State<QrScanner> {
                   children: [
                     if (widget.displayExitButton)
                       exitButton
-                    else if (_cameraFailed)
-                      emergencyStopButton,
+                    else if (_showEmergencyStop)
+                      // docs/TODO.md T-215: stays until the user swipes it
+                      // away - see _emergencyStopSwipedAway.
+                      Dismissible(
+                        key: ValueKey<int>(_emergencyStopAppearance),
+                        onDismissed: (_) => _onEmergencyStopSwipedAway(),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            emergencyStopButton,
+                            const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: Text(
+                                'Swipe aside to hide',
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -566,15 +646,88 @@ class _QrScannerState extends State<QrScanner> {
 
   /// The emergency stop for when the camera cannot open the gate: a
   /// "guaranteed wake-up" alarm cannot be dismissed by scanning then, so
-  /// stop alarms directly (mirroring `Handler.handleAlarm`'s own "no overlay
-  /// could be shown" fallback) before letting the user leave this screen.
-  /// `Alarm.stopAll()` cancels every armed alarm, not only the ringing ones.
+  /// stop the ringing alarm directly before letting the user leave this
+  /// screen.
+  ///
+  /// docs/TODO.md T-216 (maintainer, 2026-10-06: "Wieso? der soll nur den
+  /// aktuellen canceln."): this called `Alarm.stopAll()` from the initial
+  /// commit on - from before T-74e gave the screen the ringing alarm's id,
+  /// when stopping everything was the only way to reach the ringing one.
+  /// That cancelled every armed alarm: scheduled ones came back at the next
+  /// checkpoint, manual ones (since T-217) only once a checkpoint's
+  /// `reconcileManualAlarmsWithPlatform` re-armed them - until then a manual
+  /// alarm due in between stayed silent. Now it stops [QrScanner.alarmId],
+  /// never a future alarm. The `alarmId == null` branch (stop exactly what
+  /// the platform reports ringing) is unreachable in production: the only
+  /// screen built without an id is `PageImportQr`, which shows Cancel
+  /// (`displayExitButton`) instead of the emergency stop.
+  ///
+  /// `Alarm.stop` reports a failure as `false`, not as an exception, so each
+  /// ring is checked again afterwards (as the valid-scan path does). If it
+  /// still rings, `Alarm.stopAll()` is the last resort - cheap since T-217,
+  /// for the reasons above. An alarm is handled ([_handleAlarmOnce], the
+  /// valid-scan path: T-14 re-arm, T-147 once-only) only once it really
+  /// stopped; if one still rings after that, the screen and the button stay
+  /// - closing would leave a ringing alarm with no screen to stop it from
+  /// (`androidStopAlarmOnDismiss: false`, and `Alarm.ringing` does not
+  /// change, so nothing would bring a screen back).
   Future<void> _emergencyStopAndClose() async {
+    List<int> ids;
     try {
-      await Alarm.stopAll();
+      ids = switch (widget.alarmId) {
+        final int id => <int>[id],
+        null => await _appState.ringingPlatformAlarmIds(),
+      };
     } catch (e) {
-      debugPrint('=====qrScanner: Failed to stop all alarms: ${e.runtimeType}');
+      debugPrint(
+          '=====qrScanner: emergency stop: ringing alarms unknown: ${e.runtimeType}');
+      ids = const <int>[];
+    }
+
+    for (final id in ids) {
+      try {
+        await _appState.stopPlatformAlarm(id);
+      } catch (e) {
+        debugPrint('=====qrScanner: emergency stop failed: ${e.runtimeType}');
+      }
+    }
+
+    var stillRinging = await _stillRinging(ids);
+    if (stillRinging.isNotEmpty) {
+      debugPrint('=====qrScanner: emergency stop did not end the ring - '
+          'stopping every alarm');
+      try {
+        await _appState.stopAllPlatformAlarms();
+      } catch (e) {
+        debugPrint(
+            '=====qrScanner: stopping all alarms failed: ${e.runtimeType}');
+      }
+      stillRinging = await _stillRinging(ids);
+    }
+
+    for (final id in ids) {
+      if (!stillRinging.contains(id)) _handleAlarmOnce(id);
+    }
+    if (stillRinging.isNotEmpty) {
+      debugPrint('=====qrScanner: still ringing - keeping the screen open');
+      return;
     }
     _closeView();
+  }
+
+  /// Which of [ids] the platform still reports ringing. A query that fails
+  /// counts as "stopped": the stop call itself reported nothing wrong, and
+  /// an unanswerable question must not trap the user behind
+  /// `PopScope(canPop: false)`.
+  Future<Set<int>> _stillRinging(List<int> ids) async {
+    final ringing = <int>{};
+    for (final id in ids) {
+      try {
+        if (await _appState.platformAlarmIsRinging(id)) ringing.add(id);
+      } catch (e) {
+        debugPrint('=====qrScanner: ringing state unknown: ${e.runtimeType}');
+      }
+    }
+    return ringing;
   }
 }

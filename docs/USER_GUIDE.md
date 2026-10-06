@@ -126,6 +126,10 @@ requires it - the idea being that if it's stuck somewhere across the room, you h
 broken sensor), a "Camera not working - Stop alarm" button appears automatically after about 30
 seconds of trying, so you're never physically trapped by a broken gate. If the camera never starts
 at all (no picture ever reaches the scanner), the same button appears after about 10 seconds.
+Once shown, the button stays - also when the camera restarts after you switch apps - until you
+swipe it aside yourself; if no valid code is scanned within about 30 seconds after that, it comes
+back. The button stops only the alarm that is ringing: later alarms stay armed, and a repeating
+manual alarm is set again for its next day, exactly as after a scan.
 
 **If the ringing screen cannot be shown at all** (for example the app is still starting up when the
 alarm fires), the app retries five times, three seconds apart, and then stops the alarm rather than

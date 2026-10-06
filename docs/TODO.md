@@ -1861,9 +1861,9 @@ rather than expanded into more scope here: see T-185.
   v1.4.0 release - and every earlier release - record no icon licence until the next release;
   verified with `git merge-base --is-ancestor` (the T-212/T-214 commit 5ad6287 commit is in neither).
 
-### T-215 · The QR scanner's emergency stop can be withdrawn again after it appeared (P1, bug, open)
+### T-215 · The QR scanner's emergency stop can be withdrawn again after it appeared (P1, bug) — RESOLVED on `dev` (2026-10-06), device check outstanding
 
-- [ ] Found by the code-comment review of 2026-10-01 (`lib/screens/scan_code/qr_scanner.dart`).
+- [x] Found by the code-comment review of 2026-10-01 (`lib/screens/scan_code/qr_scanner.dart`).
 - **Finding:** `onControllerCreated` sets `_cameraFailed = error != null`, and the scanner widget
   calls it again after every app resume and every camera toggle. A successful re-initialisation
   therefore hides the emergency-stop button again after the proof-of-life or the maximum-scan
@@ -1872,10 +1872,25 @@ rather than expanded into more scope here: see T-185.
 - *Done when:* a widget test shows the button staying visible after a timeout followed by a
   successful `onControllerCreated`, and the code only ever raises `_cameraFailed` once set (or
   re-arms the timers), without weakening the T-38 tests.
+- **Maintainer decision (2026-10-06):** "Der soll nicht verschwinden, aber wegwischbar sein."
+- **Fix:** `qr_scanner.dart` - `_cameraFailed` became `_emergencyStopOffered`, which is only ever
+  raised (camera error, proof-of-life timeout, max-scan timeout) and never cleared; a successful
+  `onControllerCreated` (`_onCameraInitialised(null)`) changes nothing. The button sits in a
+  `Dismissible` ("Swipe aside to hide"); a swipe sets `_emergencyStopSwipedAway` and re-arms the
+  30 s `_maxScanDurationTimer`, so the offer comes back on the next camera error or after another
+  30 s without a valid code - hidden only by the user's own action, never for the rest of the ring.
+  `displayExitButton` (import flow) unchanged. New test seam `debugCameraInitStreamOverride`
+  (same shape and same T-16 caveat as the other two statics).
+- **Tests:** `test/qr_scanner_emergency_stop_test.dart` group T-215 (stays after a successful
+  re-init following a timeout and following a camera error; a swipe hides it; a new error after a
+  swipe shows it again while a success does not; another 30 s without a valid code shows it again,
+  not after 20 s; counter-tests: a working camera never offers it, the import flow keeps Cancel).
+  Red before the fix (5 of 7 failing), `qr_scanner_gate_test.dart`'s T-38 cases unchanged and green.
+- **Outstanding:** `docs/device-trial-checklist.md` D6/D7 on the real phone.
 
-### T-216 · The emergency stop cancels every armed alarm, and manual alarms are not re-armed (P1, bug, open)
+### T-216 · The emergency stop cancels every armed alarm, and manual alarms are not re-armed (P1, bug) — RESOLVED on `dev` (2026-10-06), device check outstanding
 
-- [ ] Found by the code-comment review of 2026-10-01 (`qr_scanner.dart` `_emergencyStopAndClose`).
+- [x] Found by the code-comment review of 2026-10-01 (`qr_scanner.dart` `_emergencyStopAndClose`).
 - **Finding:** the emergency stop calls `Alarm.stopAll()`, which cancels every armed alarm on the
   platform, not only the ringing one. Scheduled alarms come back at the next checkpoint (FR-18),
   but nothing re-arms the user's manual alarms, which still show as enabled - the same
@@ -1883,6 +1898,32 @@ rather than expanded into more scope here: see T-185.
   alarm can stay silent.
 - *Done when:* a test shows that after an emergency stop every other enabled alarm is still armed
   (or re-armed), and the stop itself still silences the ringing alarm.
+- **Maintainer decision (2026-10-06):** "Wieso? der soll nur den aktuellen canceln."
+- **Why `stopAll`:** present since the initial commit, before T-74e gave `QrScanner` the ringing
+  alarm's id - stopping everything was then the only way to reach the ringing one.
+- **Fix:** `_emergencyStopAndClose` stops `widget.alarmId` via `AppState.stopPlatformAlarm` (which
+  also refreshes the direct-boot mirror and the sleep-time window); with no id, exactly the ids
+  the new `AppState.ringingPlatformAlarmIds()` reports ringing - never a future one, unlike the
+  scan path's `deactivationStopTargets` fallback (that branch is unreachable in production: only
+  `PageImportQr` builds the scanner without an id, and it shows Cancel instead). Review follow-up:
+  `Alarm.stop` reports failure as `false`, not as an exception, so each ring is re-checked
+  (`AppState.platformAlarmIsRinging`); if it still rings, `Alarm.stopAll()`
+  (`AppState.stopAllPlatformAlarms`) is the last resort - cheap since T-217's
+  `reconcileManualAlarmsWithPlatform` - and if it still rings after that, the screen and the button
+  stay open. An alarm is handled only once it really stopped. Each stopped id goes through `_handleAlarmOnce`
+  -> `Handler.onAlarmHandled`, the same path as a valid scan: T-14 re-arm of a repeating manual
+  alarm, T-147 once-only guard (RingingWatch's `onGone` for the same stop is absorbed). The T-229
+  quieter is untouched (disposed with the screen as before). `Handler.handleAlarm`'s own
+  "no screen could be shown" `stopAll` fallback is a different path and not changed here.
+- **Tests:** `test/qr_scanner_emergency_stop_test.dart` group T-216 with `FakeAlarmPlatform`: a
+  future manual alarm stays armed while the ringing one is stopped and handled exactly once; a
+  repeating manual alarm is re-armed once, for a later instant; with no id only the ringing alarm
+  is stopped; with nothing ringing nothing is stopped and the screen still closes. All four red
+  before the fix. Review follow-up, red first: a silently failing stop (and failing `stopAll`)
+  keeps screen and button and handles/re-arms nothing; a failing stop with a working `stopAll`
+  handles once and closes; counter-test: a working stop never calls `stopAll`.
+  `FakeAlarmPlatform` now ends the ring on a successful stop and models `stopAll`.
+- **Outstanding:** `docs/device-trial-checklist.md` D8 on the real phone.
 
 ### T-217 · Direct-boot siren for an overdue alarm of any age; a late first unlock can lose the real alarm (P1) — RESOLVED on `dev` (2026-10-06), device checks outstanding
 

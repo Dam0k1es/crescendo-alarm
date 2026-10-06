@@ -1181,11 +1181,40 @@ class AppState extends ChangeNotifier {
   Future<List<AlarmSettings>> Function()? debugPlatformGetAll;
   @visibleForTesting
   Future<bool> Function(int id)? debugPlatformIsRinging;
+  @visibleForTesting
+  Future<void> Function()? debugPlatformStopAll;
 
   /// What the platform really has armed (`Alarm.getAlarms()`) - read by
   /// FR-18's reconciliation (`applyPlannedAlarms`).
   Future<List<AlarmSettings>> platformAlarms() =>
       (debugPlatformGetAll ?? Alarm.getAlarms)();
+
+  /// The ids of the platform alarms ringing right now - what the QR gate's
+  /// emergency stop silences when it was not told which alarm rings
+  /// (docs/TODO.md T-216). Never a future armed one.
+  Future<List<int>> ringingPlatformAlarmIds() async {
+    final ids = <int>[];
+    for (final alarm in await platformAlarms()) {
+      if (await platformAlarmIsRinging(alarm.id)) ids.add(alarm.id);
+    }
+    return ids;
+  }
+
+  /// Whether the platform reports alarm [id] ringing right now. `Alarm.stop`
+  /// reports a failure as `false`, not as an exception, so a caller that
+  /// must know the ring really ended asks again (docs/TODO.md T-216).
+  Future<bool> platformAlarmIsRinging(int id) =>
+      (debugPlatformIsRinging ?? Alarm.isRinging)(id);
+
+  /// `Alarm.stopAll()`: the QR gate's emergency stop's last resort when a
+  /// single stop did not end the ring (docs/TODO.md T-216). Cancels every
+  /// armed alarm; scheduled ones return at the next checkpoint (FR-18),
+  /// enabled manual ones through [reconcileManualAlarmsWithPlatform].
+  Future<void> stopAllPlatformAlarms() async {
+    await (debugPlatformStopAll ?? Alarm.stopAll)();
+    refreshDirectBootFallback();
+    unawaited(refreshSleepTimeDnd());
+  }
 
   /// docs/TODO.md T-217 follow-up: re-arms every enabled [ManualAlarm] the
   /// platform has lost, at its next occurrence ([nextManualOccurrence], the

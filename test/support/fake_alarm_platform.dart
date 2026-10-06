@@ -38,6 +38,9 @@ class FakeAlarmPlatform {
   /// Ids the platform reports as ringing right now (`Alarm.isRinging`).
   final Set<int> ringing = {};
 
+  /// How often `Alarm.stopAll` was called (docs/TODO.md T-216).
+  int stopAllCalls = 0;
+
   void attach(AppState appState) {
     appState.debugPlatformSet = (settings) async {
       setIds.add(settings.id);
@@ -46,6 +49,13 @@ class FakeAlarmPlatform {
     appState.debugPlatformStop = (id) async {
       stopIds.add(id);
       armed.remove(id);
+      // A real successful stop also ends the ring (docs/TODO.md T-216).
+      ringing.remove(id);
+    };
+    appState.debugPlatformStopAll = () async {
+      stopAllCalls++;
+      armed.clear();
+      ringing.clear();
     };
     appState.debugPlatformGetAll = () async => armed.values.toList();
     appState.debugPlatformIsRinging = (id) async => ringing.contains(id);

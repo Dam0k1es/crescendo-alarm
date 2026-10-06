@@ -86,6 +86,9 @@ not yet through this table.
 | D3 | Scan the **wrong** code | alarm keeps running, scanner stays open | |
 | D4 | Scan the correct code with the **real camera** | alarm stops (closes T-16) | |
 | D5 | Check whether the scanned value appears anywhere on screen | **must not** — the scanner simply closes on the right code | |
+| D6 | Arm a second manual alarm for later; let the first ring with a code set, cover the lens until "Camera not working - Stop alarm" appears; switch to another app and back | the button **stays** after the camera restarts (T-215) | |
+| D7 | Swipe the button aside, keep the lens covered ~30 s | it hides on the swipe and comes back after ~30 s without a valid code (T-215) | |
+| D8 | Tap "Camera not working - Stop alarm" | only the ringing alarm stops; the later manual alarm is still armed (`adb shell dumpsys alarm`), a repeating one is re-armed for its next day (T-216) | |
 
 ## E — Diagnostics log (T-89)
 
