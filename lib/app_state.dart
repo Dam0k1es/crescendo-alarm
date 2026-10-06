@@ -1179,11 +1179,53 @@ class AppState extends ChangeNotifier {
   Future<void> Function(int id)? debugPlatformStop;
   @visibleForTesting
   Future<List<AlarmSettings>> Function()? debugPlatformGetAll;
+  @visibleForTesting
+  Future<bool> Function(int id)? debugPlatformIsRinging;
 
   /// What the platform really has armed (`Alarm.getAlarms()`) - read by
   /// FR-18's reconciliation (`applyPlannedAlarms`).
   Future<List<AlarmSettings>> platformAlarms() =>
       (debugPlatformGetAll ?? Alarm.getAlarms)();
+
+  /// docs/TODO.md T-217 follow-up: re-arms every enabled [ManualAlarm] the
+  /// platform has lost, at its next occurrence ([nextManualOccurrence], the
+  /// same resolution as creating or toggling it).
+  ///
+  /// On Android 15+ a force-stop cancels the app's AlarmManager entries; the
+  /// `alarm` plugin's storage survives and its `Alarm.init` re-arms future
+  /// entries on the next launch, but drops every one whose time passed in
+  /// the meantime (and its BootReceiver drops stale ones). A manual alarm
+  /// dropped that way stayed switched on in the list with nothing
+  /// registered. `ScheduledAlarm`s are not touched: FR-18
+  /// (`applyPlannedAlarms`) owns them.
+  ///
+  /// Called only from the checkpoint sequence (`runSchedulingCheckpoint`,
+  /// step 2) - not a second entry point. Never re-arms a disabled alarm, one
+  /// still registered (no duplicate, no re-set), or one ringing right now;
+  /// does nothing when the platform state cannot be read. Never throws.
+  Future<void> reconcileManualAlarmsWithPlatform(
+      {DateTime Function()? now}) async {
+    final Set<int> platformIds;
+    try {
+      platformIds = (await platformAlarms()).map((a) => a.id).toSet();
+    } catch (e) {
+      debugPrint(
+          "=====reconcileManualAlarms: platform state unknown: ${e.runtimeType}");
+      return;
+    }
+    for (final alarm in List<ManualAlarm>.from(_manualAlarms)) {
+      if (!alarm.enabled || platformIds.contains(alarm.id)) continue;
+      try {
+        if (await (debugPlatformIsRinging ?? Alarm.isRinging)(alarm.id)) {
+          continue;
+        }
+        await _setAlarm(alarm, _getAlarmTime(alarm, now: now));
+      } catch (e) {
+        debugPrint(
+            "=====reconcileManualAlarms: re-arm failed: ${e.runtimeType}");
+      }
+    }
+  }
 
   Future<void> _setAlarm(MyAlarm alarm, DateTime alarmDateTime) async {
     final alarmSettings = buildRingingAlarmSettings(

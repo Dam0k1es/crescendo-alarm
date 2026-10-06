@@ -35,6 +35,9 @@ class FakeAlarmPlatform {
   /// Every id passed to `Alarm.stop`, in order.
   final List<int> stopIds = [];
 
+  /// Ids the platform reports as ringing right now (`Alarm.isRinging`).
+  final Set<int> ringing = {};
+
   void attach(AppState appState) {
     appState.debugPlatformSet = (settings) async {
       setIds.add(settings.id);
@@ -45,6 +48,7 @@ class FakeAlarmPlatform {
       armed.remove(id);
     };
     appState.debugPlatformGetAll = () async => armed.values.toList();
+    appState.debugPlatformIsRinging = (id) async => ringing.contains(id);
   }
 
   /// Whether anything is armed at [instant]'s whole minute.
@@ -52,5 +56,17 @@ class FakeAlarmPlatform {
     final minute = instant.toUtc().millisecondsSinceEpoch ~/ 60000;
     return armed.values.any(
         (a) => a.dateTime.toUtc().millisecondsSinceEpoch ~/ 60000 == minute);
+  }
+
+  /// docs/TODO.md T-217 (review N1): what a real Android 15+ force-stop plus
+  /// relaunch at [now] does to what `Alarm.getAlarms()` reports. The
+  /// force-stop cancels the AlarmManager entries but leaves the plugin's own
+  /// storage - which is what `getAlarms` reads - intact; the relaunch's
+  /// `Alarm.init` (`_checkAlarm`) then re-arms every future entry and stops
+  /// every past one that is not ringing. So: past entries disappear, future
+  /// ones stay. Not recorded in [setIds]/[stopIds] - the app did nothing.
+  void forceStopAndRelaunch(DateTime now) {
+    armed.removeWhere(
+        (id, a) => !ringing.contains(id) && !a.dateTime.isAfter(now));
   }
 }

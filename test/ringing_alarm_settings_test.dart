@@ -19,6 +19,27 @@ import 'package:crescendo_alarm/models/alarms/ringing_alarm_settings.dart';
 // `AlarmSettings` is plain data, but `Alarm.set()` itself is not.
 
 void main() {
+  test('T-217: an alarm found overdue at boot still rings up to 60 minutes '
+      'late, the same window as the direct-boot fallback siren', () {
+    // The plugin's default (15 min) dropped a real alarm 15-60 minutes
+    // overdue while the native fallback still rang a siren for it - the
+    // user got the generic siren instead of their own alarm and QR gate.
+    final settings = buildRingingAlarmSettings(
+      id: 1,
+      dateTime: DateTime(2026, 3, 10, 7, 30),
+      tone: null,
+      gentlewake: false,
+      volume: 0.8,
+      gentleWakeDuration: const Duration(minutes: 1),
+      title: 'Alarm',
+      body: 'Your alarm is ringing',
+      vibrate: true,
+    );
+
+    expect(settings.androidStaleAfter, const Duration(minutes: 60));
+    expect(settings.androidStaleAfter, overdueRingWindow);
+  });
+
   test('a ringing alarm never lets a notification swipe stop it', () {
     final settings = buildRingingAlarmSettings(
       id: 1,

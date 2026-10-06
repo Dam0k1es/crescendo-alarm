@@ -40,6 +40,9 @@ class MainActivity: FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         stopService(Intent(this, DirectBootFallbackService::class.java))
+        // docs/TODO.md T-217: remove the old, sound-playing siren channel on
+        // every app start, not only when a siren fires.
+        DirectBootFallback.deleteLegacySirenChannel(applicationContext)
     }
 
     // `launchMode="singleTop"` means an already-running instance is handed
@@ -63,7 +66,9 @@ class MainActivity: FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 if (call.method == "setNextAlarm") {
                     val dueAtMillis = call.argument<Long>("dueAtMillis")
-                    DirectBootFallback.setDueAt(applicationContext, dueAtMillis)
+                    // docs/TODO.md T-217: a write from here means unlocked
+                    // - any siren armed at the locked boot is retired.
+                    DirectBootFallback.setDueAt(applicationContext, dueAtMillis, fromApp = true)
                     result.success(null)
                 } else {
                     result.notImplemented()

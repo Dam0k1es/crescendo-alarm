@@ -40,8 +40,17 @@ class DirectBootFallbackAlarmReceiver : BroadcastReceiver() {
         // Consumed once here, not in the service: this is what tells a
         // stray retry - or the next real boot, before the app has had a
         // chance to mirror a fresh value - not to refire a fallback for an
-        // alarm already handled one way or another by then.
-        DirectBootFallback.setDueAt(context, null)
+        // alarm already handled one way or another by then. Only if the
+        // mirror still holds the due time this siren was armed for
+        // (docs/TODO.md T-217): the app may already have mirrored the next
+        // alarm, which an unconditional clear would erase. The extra comes
+        // from this app's own PendingIntent - the receiver is not exported.
+        val firedFor = if (intent.hasExtra(DirectBootFallback.EXTRA_DUE_AT_MILLIS)) {
+            intent.getLongExtra(DirectBootFallback.EXTRA_DUE_AT_MILLIS, 0L)
+        } else {
+            null
+        }
+        DirectBootFallback.consume(context, firedFor)
 
         val serviceIntent = Intent(context, DirectBootFallbackService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

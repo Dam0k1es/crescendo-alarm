@@ -42,6 +42,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
+import 'package:crescendo_alarm/models/scheduling/apply_alarms.dart';
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
 import 'package:crescendo_alarm/models/scheduling/replan_notifications.dart';
@@ -113,14 +115,22 @@ Future<T> _serialized<T>(Future<T> Function() body) {
 /// The complete response to a trigger, in fixed order:
 ///
 /// 1. serialize (T-77),
-/// 2. check FR-17's daily lock (only for [CheckpointTrigger.appForeground]),
-/// 3. record the current time zone offset (FR-16),
-/// 4. [replan] - including FR-18's alarm reconciliation, which `replan()`
+/// 2. re-arm what the platform has lost ([_reconcileWithPlatform], T-217
+///    follow-up): enabled manual alarms the `alarm` plugin dropped as past
+///    due (re-armed at their next occurrence), and - only if a future
+///    enabled `ScheduledAlarm` is missing - FR-18's applier on the EXISTING
+///    plan, a safety net that needs no calendar read (not a replan),
+///    before the daily lock,
+/// 3. check FR-17's daily lock (only for [CheckpointTrigger.appForeground]),
+/// 4. record the current time zone offset (FR-16),
+/// 5. [replan] - including FR-18's alarm reconciliation, which `replan()`
 ///    itself triggers,
-/// 5. report FR-6/FR-9/FR-12 ([reportReplanNotifications]),
-/// 6. replan the bedtime notification ([scheduleSleepReminder], T-80),
-/// 7. re-arm the sleep-time Do Not Disturb window
-///    ([AppState.refreshSleepTimeDnd], T-198) - derived from step 6's inputs.
+/// 6. report FR-6/FR-9/FR-12 ([reportReplanNotifications]),
+/// 7. replan the bedtime notification ([scheduleSleepReminder], T-80),
+/// 8. re-arm the sleep-time Do Not Disturb window
+///    ([AppState.refreshSleepTimeDnd], T-198) - derived from step 7's inputs,
+///    and re-mirror the direct-boot due time
+///    ([AppState.refreshDirectBootFallback], T-217).
 ///
 /// | Trigger | today concluded (FR-11) | daily lock (FR-17) |
 /// |---|---|---|
@@ -161,6 +171,10 @@ Future<ReplanResult?> runSchedulingCheckpoint(
       queueDepth: queuedBehind,
       waited: bucketMillis(clock.elapsedMilliseconds),
     );
+
+    // Step 2 (T-217 follow-up). Swallows its own failures, so it cannot
+    // break the sequence.
+    await _reconcileWithPlatform(appState, nowFn);
 
     if (trigger == CheckpointTrigger.appForeground) {
       // FR-17: a second app open on the same day is a no-op. Read inside the
@@ -251,6 +265,13 @@ Future<ReplanResult?> runSchedulingCheckpoint(
       // native side switches Do Not Disturb when its own alarms fire.
       await appState.refreshSleepTimeDnd(now: nowFn);
 
+      // docs/TODO.md T-217 (review N4): the direct-boot mirror is otherwise
+      // only refreshed on an arm/cancel. A ring stopped directly
+      // (`Alarm.stop`) with no FR-18 diff left the rung time mirrored, and a
+      // reboot more than 60 minutes later posted "Alarm missed" for an
+      // alarm that did ring. Same freshly planned values as step 7.
+      appState.refreshDirectBootFallback(now: nowFn);
+
       Diag.checkpointFinished(
         trigger: diagTriggerOf(trigger),
         outcome: outcome,
@@ -261,6 +282,50 @@ Future<ReplanResult?> runSchedulingCheckpoint(
       await Diag.flush();
     }
   });
+}
+
+/// Step 2 of [runSchedulingCheckpoint] (docs/TODO.md T-217 follow-up).
+///
+/// An Android 15+ force-stop cancels the app's AlarmManager entries but
+/// leaves the `alarm` plugin's storage intact; the relaunch's `Alarm.init`
+/// re-arms every future entry and stops every past one. What stays lost is
+/// a manual alarm whose time passed while the app was stopped (or one the
+/// plugin's BootReceiver dropped as stale): the list kept showing it on with
+/// nothing registered. Manual alarms have no FR-18, so:
+///
+/// - manual alarms: [AppState.reconcileManualAlarmsWithPlatform] re-arms
+///   every enabled one missing on the platform at its next occurrence;
+/// - scheduled alarms, a cheap safety net: every app open already runs a
+///   `manualSync` checkpoint whose replan applies FR-18 - unless the
+///   calendar read fails. Only if a FUTURE enabled one is missing on the
+///   platform (a past one stays listed after ringing and must not trigger
+///   this on every checkpoint), [applyPlannedAlarms] runs on the current
+///   `pendingDayValues`/`disabledDays`: the existing plan, so switched-off
+///   days stay unarmed (T-221) and a past-dated, possibly ringing alarm is
+///   never touched (planAlarmSync's own rule).
+///
+/// Platform unreadable -> nothing at all. Never throws.
+Future<void> _reconcileWithPlatform(
+    AppState appState, DateTime Function() nowFn) async {
+  try {
+    await appState.reconcileManualAlarmsWithPlatform(now: nowFn);
+
+    final Set<int> platformIds;
+    try {
+      platformIds =
+          (await appState.platformAlarms()).map((a) => a.id).toSet();
+    } catch (e) {
+      return;
+    }
+    final now = nowFn();
+    final missing = appState.scheduledAlarms.any((ScheduledAlarm a) =>
+        a.enabled &&
+        (a.time as DateTime).isAfter(now) &&
+        !platformIds.contains(a.id));
+    if (missing) await applyPlannedAlarms(appState, now: nowFn);
+  } catch (e) {
+    debugPrint("=====_reconcileWithPlatform: ${e.runtimeType}");
+  }
 }
 
 /// [runSchedulingCheckpoint] for callers that must not fail: every UI and

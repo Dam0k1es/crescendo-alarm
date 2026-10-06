@@ -72,6 +72,29 @@ void main() {
     expect(mirrored, DateTime(2026, 3, 10, 7, 0));
   });
 
+  test('T-217: an app opened a day and a half after a missed alarm mirrors '
+      'the next future occurrence, never the missed one', () async {
+    // Characterization, green before the fix: the stale, 36-hour-old due
+    // time DirectBootReceiver found on the Sunday of the real-device report
+    // did not come from this mirror - it was left over from before the
+    // force-stop, because nothing runs this while the app is stopped.
+    final appState = await _freshAppState();
+    final sundayEvening = DateTime(2026, 10, 4, 19, 0);
+
+    appState.manualAlarms.add(ManualAlarm(
+      time: const TimeOfDay(hour: 7, minute: 0),
+      enabled: true,
+      gentlewake: false,
+      tone: 'assets/sounds/lollipop.mp3',
+      id: 1,
+    ));
+
+    appState.refreshDirectBootFallback(now: () => sundayEvening);
+
+    expect(mirrored, isNotNull);
+    expect(mirrored!.isAfter(sundayEvening), isTrue);
+  });
+
   test('a disabled manual alarm is not mirrored', () async {
     final appState = await _freshAppState();
     final now = DateTime(2026, 3, 10, 6, 0);

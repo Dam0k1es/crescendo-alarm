@@ -19,6 +19,24 @@ import 'dart:math';
 
 import 'package:alarm/alarm.dart';
 
+/// docs/TODO.md T-217 (maintainer decision 2026-10-06, "Nur bis 60 Min
+/// überfällig"): how late an alarm that became due while the phone was off,
+/// locked after a restart, or the app force-stopped may still ring. Beyond
+/// it nothing rings - neither the real alarm nor the native direct-boot
+/// fallback siren (`DirectBootFallbackPolicy.MAX_OVERDUE_MINUTES`, kept equal
+/// by test/direct_boot_fallback_contract_test.dart); the native side posts a
+/// silent "Alarm missed" notification instead.
+///
+/// Passed to the plugin as `androidStaleAfter`. Its default (15 minutes)
+/// made the plugin's BootReceiver drop a real alarm 15-60 minutes overdue
+/// while the native siren still rang for it - the user got the generic
+/// system tone instead of their own alarm and QR gate. Both now use the same
+/// window with the same inclusive boundary (`now - due > window` discards) -
+/// evaluated at different instants, though: the siren's at
+/// LOCKED_BOOT_COMPLETED, the plugin's at BOOT_COMPLETED after the first
+/// unlock, so a late unlock can still leave the siren as the only ring.
+const Duration overdueRingWindow = Duration(minutes: 60);
+
 /// The [AlarmSettings] a ringing alarm is armed with - shared by
 /// `AppState._setAlarm` (a `ScheduledAlarm`/`ManualAlarm` actually going off)
 /// and `AppState.setSnoozeAlarm` (FR-20's postponed re-ring), so the two
@@ -114,6 +132,7 @@ AlarmSettings buildRingingAlarmSettings({
     vibrate: vibrate,
     warningNotificationOnKill: true,
     androidFullScreenIntent: true,
+    androidStaleAfter: overdueRingWindow,
   );
 }
 

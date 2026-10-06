@@ -63,10 +63,35 @@ class DirectBootReceiver : BroadcastReceiver() {
         // it. Reads nothing from the Intent; swallows its own failures.
         SleepTimeDnd.onBoot(context)
 
-        val dueAtMillis = DirectBootFallback.getDueAt(context)
-        if (dueAtMillis == null) {
-            Log.d(TAG, "No mirrored alarm to arm a fallback for.")
-            return
+        // docs/TODO.md T-217: not only a real boot. On Android 15+ a
+        // force-stopped app gets LOCKED_BOOT_COMPLETED again when the user
+        // next launches it (AOSP ActivityManagerService
+        // maybeSendBootCompletedLocked, flag stayStopped), and the mirrored
+        // due time can then be days old - the real-device report was a
+        // siren a day and a half late. The policy rings only up to 60
+        // minutes overdue (the `alarm` plugin's androidStaleAfter, set from
+        // lib/), reports anything older as missed, and arms no siren at all
+        // when the user is already unlocked - then the plugin's own
+        // BootReceiver re-arms the real alarm right after this.
+        val now = System.currentTimeMillis()
+        DirectBootFallback.deleteLegacySirenChannel(context)
+        val decision = DirectBootFallbackPolicy.decide(
+            DirectBootFallback.getDueAt(context), now, DirectBootFallback.isUserUnlocked(context)
+        )
+        val armed = when (decision) {
+            is DirectBootFallbackPolicy.Decision.Nothing -> {
+                Log.d(TAG, "No fallback needed (nothing mirrored, or already unlocked).")
+                return
+            }
+            is DirectBootFallbackPolicy.Decision.NotifyMissed -> {
+                Log.i(TAG, "Mirrored alarm is too far overdue to ring; reporting it as missed.")
+                DirectBootMissedNotification.post(context, decision.dueAtMillis)
+                // Consumed, so the next boot does not report it again -
+                // unless the app has meanwhile mirrored a newer alarm.
+                DirectBootFallback.consume(context, decision.dueAtMillis)
+                return
+            }
+            is DirectBootFallbackPolicy.Decision.ArmSiren -> decision
         }
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -82,26 +107,14 @@ class DirectBootReceiver : BroadcastReceiver() {
             return
         }
 
-        val now = System.currentTimeMillis()
-        // An alarm still ahead is scheduled for its real time; one already
-        // overdue by the time this finally runs fires as soon as possible
-        // instead of being silently dropped, since a locked reboot could
-        // take a while to even get this receiver called. Unlike the `alarm`
-        // plugin's own BootReceiver, there is no stale cutoff: since 5.11.0
-        // the plugin discards an alarm overdue by more than
-        // `AlarmSettings.androidStaleAfter` (15 minutes by default, which
-        // lib/ does not override), while this fires however old the
-        // mirrored due time is.
-        val fireAt = if (dueAtMillis > now) dueAtMillis else now
+        // T-217: the shared helper, so DirectBootFallback's cancel path
+        // always matches what is armed here; the due time travels as an
+        // extra and tells the alarm receiver which value it consumes.
+        val pendingIntent = DirectBootFallback.sirenIntent(
+            context, PendingIntent.FLAG_UPDATE_CURRENT, armed.dueAtMillis
+        ) ?: return
 
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            0,
-            Intent(context, DirectBootFallbackAlarmReceiver::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pendingIntent)
-        Log.i(TAG, "Direct-boot fallback armed for $fireAt (due was $dueAtMillis).")
+        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, armed.atMillis, pendingIntent)
+        Log.i(TAG, "Direct-boot fallback armed for ${armed.atMillis}.")
     }
 }

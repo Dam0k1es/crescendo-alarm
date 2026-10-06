@@ -70,7 +70,13 @@ import android.util.Log
 class DirectBootFallbackService : Service() {
     companion object {
         private const val TAG = "DirectBootFallback"
-        private const val CHANNEL_ID = "direct_boot_fallback"
+        // docs/TODO.md T-217: a new id, because the first channel
+        // ("direct_boot_fallback", LEGACY_CHANNEL_ID) was created without
+        // setSound(null, null) and so played the default notification sound
+        // on top of the siren - and an existing channel's sound can no
+        // longer be changed by the app. The legacy channel is deleted
+        // (DirectBootFallback.deleteLegacySirenChannel).
+        private const val CHANNEL_ID = "direct_boot_fallback_silent"
         private const val NOTIFICATION_ID = 0x158
         const val ACTION_STOP = "com.crescendoalarm.crescendoalarm.direct_boot_fallback.STOP"
 
@@ -333,20 +339,21 @@ class DirectBootFallbackService : Service() {
         val text = "Device was still locked after a restart - unlock to continue."
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Meant to stay silent, so the system does not play its own
-            // one-shot sound on top of the alarm sound MediaPlayer loops -
-            // but no setSound(null, null) is called, so the channel keeps
-            // NotificationChannel's default sound
-            // (Settings.System.DEFAULT_NOTIFICATION_URI). Silencing it needs
-            // that call under a new channel id: an existing channel's sound
-            // can no longer be changed by the app.
+            // Silent channel: the siren is MediaPlayer/ToneGenerator's job,
+            // the notification must not add its own one-shot sound on top
+            // (docs/TODO.md T-217). Vibration likewise comes from
+            // startVibration(), not the channel.
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Fallback alarm (device locked after restart)",
                 NotificationManager.IMPORTANCE_HIGH
-            )
-            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                .createNotificationChannel(channel)
+            ).apply {
+                setSound(null, null)
+                enableVibration(false)
+            }
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            DirectBootFallback.deleteLegacySirenChannel(this)
+            manager.createNotificationChannel(channel)
 
             Notification.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
