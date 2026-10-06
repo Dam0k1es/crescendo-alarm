@@ -174,7 +174,13 @@ valve never needs to fire at all).
   reboots, force-stops, and checks 24 h later whether it actually rang with the phone untouched.
   **Result of its first attempt (2026-10-02 to 2026-10-04): invalid** - the app was opened before
   the check, which triggers FR-17's recovery and so answers a different question. The force-stop
-  question therefore remains **unresolved** (`docs/TODO.md` T-04/T-164). A missed alarm is a total failure of the app's core purpose, so
+  question therefore remains **unresolved** (`docs/TODO.md` T-04/T-164) as far as device evidence goes.
+  **Platform analysis (2026-10-06, `docs/TODO.md` T-217):** on Android 15+ a force-stop cancels all
+  of the app's PendingIntents until the next app launch (which re-sends `LOCKED_BOOT_COMPLETED`,
+  AOSP `ActivityManagerService.maybeSendBootCompletedLocked`, `stayStopped`), so nothing rings in
+  between; at that launch an alarm missed by more than 60 minutes is reported by a silent "Alarm
+  missed" notification, and dropped manual alarms are re-armed. A clean T-164 re-run without
+  opening the app is the device confirmation still owed. A missed alarm is a total failure of the app's core purpose, so
   closing this gap remains the single highest-priority open item in this document.
   **Fixed (2026-09-18):** a `SharedPreferences` load failure could block app startup entirely
   instead of degrading to defaults - see `docs/TODO.md` T-45. (The per-alarm enable/disable switch
@@ -267,6 +273,11 @@ valve never needs to fire at all).
   lifecycle that changed nothing) before the maintainer confirmed it fully working: continuous
   vibration and an audible, looping siren while locked, silenced immediately on unlock via
   `ACTION_USER_PRESENT`.
+- **Bounded to 60 minutes overdue (2026-10-06, `docs/TODO.md` T-217, on `dev`, not yet
+  device-verified):** maintainer decision "Nur bis 60 Min überfällig". The siren rings only while
+  the device is still locked and the alarm is due or at most 60 minutes overdue; already unlocked →
+  no siren (the real alarm takes over); beyond 60 minutes → a silent "Alarm missed" notification.
+  The real alarm's own late-ring window (`androidStaleAfter`) is 60 minutes too.
 
 ## R4 - All alarm-ringing prerequisites are met before an alarm fires
 

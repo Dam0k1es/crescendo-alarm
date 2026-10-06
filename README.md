@@ -18,6 +18,10 @@ Welcome to Crescendo Alarm, an innovative alarm clock app designed for individua
   a wake-up budget, a bedtime reminder, an optional sleep-time Do Not Disturb, imported custom
   alarm tones, choosing which calendars count and ignoring single events, sharing/printing the
   deactivation code, and an opt-in, PII-free diagnostics log - see the [User Guide](docs/USER_GUIDE.md).
+- **After a restart:** if the phone stays locked, a fallback siren rings for an alarm that is due or
+  at most 60 minutes overdue; an alarm missed by more is reported by a silent "Alarm missed"
+  notification. **Limitation:** on Android 15 and newer, a **Force stop** removes the app's alarms
+  until the app is opened again - see the User Guide's "If the phone restarts, or the app is stopped".
 
 ## Technologies Used
 

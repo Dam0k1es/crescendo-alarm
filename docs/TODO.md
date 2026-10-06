@@ -49,7 +49,7 @@ not further analysis — each item names the question, the possible readings, an
 | **T-121** | Does an appointment inside the window also disable FR-9's valve for the days **after** it? |
 | **T-122** | Is anchoring decided by a value's origin, or by its meaning? |
 | **T-207** | Should a masked gap day still anchor the next day, or the cold start after it skip FR-6's jump warning? |
-| **T-208** | May an evening appointment more than 12 h after the wake time pull the wake time "earlier"? |
+| **T-208** | May an evening appointment more than 12 h after the wake time pull the wake time "earlier"? *(Same-date shape decided and fixed 2026-10-06 - no; the cross-midnight part is T-225.)* |
 
 The **decided** part of the six remaining 2026-09-11 cases (T-112 … T-122) is pinned down by tests
 (T-118, T-123 … T-128) - that is the basis a decision can be formulated against. T-207/T-208 (from
@@ -57,13 +57,17 @@ the T-206 simulation) are reproduced in their entries, not yet by tests.
 
 **Decided since:** T-119 (2026-09-28, yes - each appointment is assigned by the zone's rules at its
 own instant; implemented with T-206, 718e4a5). T-139 (2026-10-05, the jump should not occur at all:
-a `ΔT=0` point no longer ends FR-7's lookahead; fixed on `dev` after three independent reviews - see its entry).
+a `ΔT=0` point no longer ends FR-7's lookahead; fixed on `dev` after three independent reviews - see its entry;
+second round 2026-10-06). T-217 (2026-10-06, "Nur bis 60 Min überfällig" - an overdue alarm rings
+only up to 60 minutes late; resolved on `dev`). T-208's same-date evening shape (2026-10-06, fixed
+with T-139's second round; the cross-midnight part stays open as T-225).
 
 **Also waiting on a decision (2026-10-05), outside the table's "code follows the spec" shape:**
 T-223 (should FR-10's cold start follow the same smoothing and notification rules as normal
-planning?), T-217 (what should happen to an alarm that became due while the phone was off or
-locked - ring once on unlock, only within some window?) and T-220 (is a source link enough for
-`desugar_jdk_libs`' GPL-2.0, or must the exact source archive ship?), and T-225 (which date does a night-shift wake time belong to?).
+planning?), T-220 (is a source link enough for `desugar_jdk_libs`' GPL-2.0, or must the exact
+source archive ship?), T-225 (which date does a night-shift wake time belong to?), and T-222's
+remaining question (should FR-12 also skip a concluded day that had no planned value at all? Not
+yet put to the maintainer).
 
 ---
 
@@ -199,6 +203,17 @@ locked - ring once on unlock, only within some window?) and T-220 (is a source l
   `scripts/verify-long-idle-alarm-survival.sh` - arms, reboots and force-stops, then waits a full 24h
   with the phone genuinely untouched before checking whether the alarm actually rang, rather than
   only whether it is still registered. Built, self-tested offline, not yet run against a real device.
+- **First long-idle run (2026-10-02 to 2026-10-04, T-164): invalid as a test** - the app was opened
+  before `check`, which runs FR-17's recovery. **But the T-217 analysis (2026-10-06) answers the
+  force-stop half from the platform side:** on Android 15+ a force-stop cancels all of the app's
+  PendingIntents, and nothing re-arms them until the user next launches the app (that launch is
+  what re-sends `LOCKED_BOOT_COMPLETED`/`BOOT_COMPLETED`, AOSP `ActivityManagerService`
+  `maybeSendBootCompletedLocked`, `stayStopped`). So in that run, Saturday's alarm almost certainly
+  did not ring - the maintainer did not notice whether it rang. Since T-217, an alarm missed that way
+  by more than 60 minutes is reported by a silent "Alarm missed" notification at that next launch,
+  and enabled manual alarms the plugin dropped are re-armed at their next occurrence.
+  **Next step:** re-run T-164 without opening the app at all between `arm` and `check`, to confirm
+  the force-stop result by an actual (non-)ring rather than by reading the platform source.
 - **Requirement:** R3
 
 ### T-158 · A reboot while the device stays locked can silence the alarm entirely — RESOLVED (2026-09-20), confirmed on a real device
@@ -670,6 +685,14 @@ locked - ring once on unlock, only within some window?) and T-220 (is a source l
   triggers FR-17's recovery, which re-arms every alarm on its own. The result says nothing either
   way; the long-idle question (T-04/T-93, R3) remains unanswered. A valid run needs the phone left
   completely untouched between `arm` and `check`.
+- **Analysis since (2026-10-06, T-217):** the run's outcome is predictable from the platform even
+  though the run itself is invalid. On Android 15+ a force-stop cancels every PendingIntent the app
+  owns, and the app stays stopped until the user launches it; that launch re-sends
+  `LOCKED_BOOT_COMPLETED` (AOSP `ActivityManagerService` `maybeSendBootCompletedLocked`, flag
+  `stayStopped`). Saturday's alarm therefore almost certainly did not ring; the maintainer did not
+  notice whether it rang. The same launch is what made the direct-boot siren ring for the
+  36-hour-old mirrored alarm (T-217's root cause). **Next step:** run it again with the app not
+  opened at all between `arm` and `check`.
 - **Requirement:** R3
 
 ### T-165 · The `alarm` plugin's exported `AlarmReceiver` could silence a ringing alarm without the QR code — FIXED (2026-09-24), build-verified
@@ -1622,7 +1645,7 @@ rather than expanded into more scope here: see T-185.
 - *Done when:* the maintainer decides, the spec says so, and a regression test with a masked gap
   day followed by an early appointment pins it down.
 
-### T-208 · An evening appointment more than 12 h after the wake time is read as "earlier" (P2, open spec decision, related to T-112/T-115)
+### T-208 · An evening appointment more than 12 h after the wake time is read as "earlier" (P2) — same-date shape RESOLVED (2026-10-06, on `dev`); cross-midnight part open (T-225)
 
 - [ ] Found by the T-206 persona-Tom simulation (2026-09-29, run "Berlin", autumn window).
 - **Situation:** FR-1's wraparound resolves a time-of-day difference into (−12 h, +12 h]. A
@@ -1650,6 +1673,13 @@ rather than expanded into more scope here: see T-185.
   planned value on the same date), or is a real evening event a legitimate "earlier" target?
 - *Done when:* decided together with T-112/T-115, specified, and pinned down by a regression test
   with an evening appointment in the window.
+- **Same-date shape resolved (2026-10-06, with T-139's second round):** where the value carried onto
+  the `hardFloor`'s date and the `hardFloor` fall on the same date, the `hardFloor` binds only if it
+  is earlier there - an evening appointment is that day's cap and nothing more
+  (`_capOnlyOnItsDate`; spec FR-1/FR-5/FR-7, test bullet "T-208 shape": anchor Sun 07:00, floors Wed
+  05:30 and Fri 19:00, md 30 → Mon 06:30, Tue 06:00, then 05:30, no notification).
+- **Still open:** values whose reading crosses midnight (night shifts, an alarm on the evening
+  before its day) still go through the wrapped reading; which date they belong to is T-225.
 
 ### T-209 · `_timeOfDayMicros` drops the milliseconds (P3, bug) — FIXED (2026-10-05, on `dev`)
 
@@ -1854,7 +1884,7 @@ rather than expanded into more scope here: see T-185.
 - *Done when:* a test shows that after an emergency stop every other enabled alarm is still armed
   (or re-armed), and the stop itself still silences the ringing alarm.
 
-### T-217 · Direct-boot siren for an overdue alarm of any age; a late first unlock can lose the real alarm (P1, open, unverified on a device)
+### T-217 · Direct-boot siren for an overdue alarm of any age; a late first unlock can lose the real alarm (P1) — RESOLVED on `dev` (2026-10-06), device checks outstanding
 
 - [ ] Found by the code-comment review of 2026-10-01 (`DirectBootReceiver.kt`, the `alarm` plugin's
   boot handling). Not yet reproduced on a device.
@@ -1870,6 +1900,54 @@ rather than expanded into more scope here: see T-185.
   locked is decided (ring once on unlock? only within some window?), both the native receiver and
   the plugin's `androidStaleAfter` follow it, and a device run per `docs/device-trial-checklist.md`
   confirms it.
+- **Reproduced on the maintainer's phone (2026-10-06):** after the T-164 run (a force-stop, then
+  days later the app opened again) the fallback siren rang for an alarm about 36 hours old.
+- **Root cause:** not a reboot at all. On Android 15+ a force-stop cancels all of the app's
+  PendingIntents, and the **first process start after a force-stop re-sends
+  `LOCKED_BOOT_COMPLETED`** (and `BOOT_COMPLETED`) - AOSP `ActivityManagerService`
+  `maybeSendBootCompletedLocked`, `stayStopped` flag. `DirectBootReceiver` took that for a boot and
+  armed the siren for the mirrored due time, which nothing had refreshed since the force-stop.
+- **Maintainer decision (2026-10-06, verbatim):** *"Nur bis 60 Min überfällig"* (only up to 60
+  minutes overdue).
+- **Fix (on `dev`, uncommitted at the time of writing; tests red first):**
+  - `DirectBootFallbackPolicy.decide` (pure, JVM-tested in `DirectBootFallbackPolicyTest`, 19
+    cases): device still **locked** and the alarm due in the future or at most 60 minutes overdue
+    → siren; user already **unlocked** → no siren (the plugin's own `BootReceiver` re-arms the real
+    alarm right after); more than 60 minutes overdue → no siren, a silent **"Alarm missed"**
+    notification (`DirectBootMissedNotification`, IMPORTANCE_LOW, no sound, no vibration, tap opens
+    the app), locked or not.
+  - **Cancel-on-change:** a mirror write that changes the due time cancels a siren already armed
+    for the old one (`cancelsArmedSiren`), so deleting, disabling or moving the alarm after unlock
+    cannot leave a siren ringing at the old time. **Any write from the app** (the Dart channel,
+    `fromApp`) cancels an armed siren even when the due time is unchanged - this closes a
+    pre-existing double ring (siren armed at a locked reboot for a future alarm, user unlocks in
+    between, then siren **and** real alarm ring in the morning). The receiver arms through the
+    shared `DirectBootFallback.sirenIntent` helper, so arming and cancelling match the same
+    PendingIntent; a fired siren clears the mirror only if it still
+    holds the due time it was armed for (`mirrorAfterConsuming`).
+  - **Silent channels:** the siren's notification moved to a new channel id
+    `direct_boot_fallback_silent` (`setSound(null, null)`, no channel vibration); the legacy
+    `direct_boot_fallback` channel, which played the default notification sound on top of the
+    siren, is deleted from `DirectBootReceiver`, the service and `MainActivity.onCreate`.
+  - **The real alarm's window matches:** `androidStaleAfter` is set to 60 minutes
+    (`overdueRingWindow`, `lib/models/alarms/ringing_alarm_settings.dart`; the plugin default was
+    15), kept equal to the native constant by `test/direct_boot_fallback_contract_test.dart`.
+  - **Re-arming after a force-stop:** a new first checkpoint step (`_reconcileWithPlatform`,
+    `lib/models/scheduling/checkpoint.dart`) re-arms every enabled manual alarm the `alarm` plugin
+    dropped as past due at its next occurrence (`AppState.reconcileManualAlarmsWithPlatform`), and,
+    only if a future enabled scheduled alarm is missing on the platform, runs FR-18's applier on
+    the existing plan - a safety net for a failed calendar read, not a replan
+    (`test/platform_alarm_reconcile_test.dart`).
+  - `refreshDirectBootFallback` now also runs in the checkpoint's `finally`, so a ring stopped
+    directly no longer leaves the rung time mirrored (which a reboot more than 60 minutes later
+    would have reported as missed).
+- **Review (Günther, 2026-10-06):** one blocking finding, **B1** - on the force-stop relaunch path
+  the receiver still armed the siren while the user was already unlocked, so it could ring on top
+  of the real alarm or for a mirrored time nothing tracked any more. Fixed (the `userUnlocked`
+  branch above), with its own policy tests.
+- **Still outstanding:** device checks per `docs/device-trial-checklist.md` section H (locked vs
+  unlocked after a force-stop, the 60-minute window both sides of the boundary, the silent siren
+  channel, a manual alarm re-armed after force-stop and relaunch).
 
 ### T-218 · Schedule screen: calendar ranges are fetched or shown one day short or not at all (P2, bug, open)
 
@@ -2037,6 +2115,9 @@ rather than expanded into more scope here: see T-185.
   rung is checked" - the reported Thursday/Friday case with no notification, and a counter-check
   where a late appointment earlier than a day that did ring still notifies.
 - **Not covered:** a real-device re-run of the reported sequence.
+- **Still open (2026-10-06):** the question for days **without** a planned value (see "Current
+  behaviour kept on purpose" above) has still not been put to the maintainer; listed under
+  "Waiting on a decision" at the top.
 - **Requirement:** R2; FR-12, FR-21.
 
 ### T-223 · FR-10's cold start can jump hours without smoothing or an FR-6 notice (P2, open question to the maintainer)
@@ -2089,6 +2170,45 @@ rather than expanded into more scope here: see T-185.
 - **Question:** does a wake time belong to the date it rings on, or to the shift/day it prepares
   for - and how should FR-1's wrap and FR-5's grouping treat values that cross midnight?
 - *Done when:* decided, specified in FR-1/FR-5, and the property test's midnight exclusion removed.
+
+### T-226 · DST repeated hour: drift onto a first-pass hardFloor can jump or rise (P3, open)
+
+- [ ] Found by T-139's second-round oracle (2026-10-06).
+- **Situation (Europe/Berlin, autumn):** anchor Sat 24 Oct 01:40 CEST, `preferredWakeUpTime`
+  02:05, `maxDailyDelta` 60 min, a `hardFloor` on Sun 25 Oct at 02:50 CEST (the **first** pass of
+  the repeated hour). The drift toward 02:05 resolves to the **later** pass (TZ-1), is clamped to the
+  floor and reads 02:50 - a +70-minute step with an FR-6 notice, where simply holding would have
+  been smooth. Without `preferredWakeUpTime`: anchor 02:08, floor 02:11 on the first pass → the
+  reading rises by 3 minutes, which T-132 excludes (an appointment must never pull a wake time later).
+- **Cause:** on the repeated hour the cap is applied on instants, but the step is measured on
+  readings - the two disagree for exactly that hour.
+- **Oracle counts:** Europe/Berlin 5 jumps, 9 rises, 2 early descents; America/Nuuk 2 jumps, 4
+  rises; injected test zones 2 early descents.
+- *Done when:* the cap and the step use one frame on the repeated hour (or the spec says which
+  wins), with regression tests for both shapes above, green in every CI zone.
+- **Requirement:** R2; FR-2, FR-6, TZ-1.
+
+### T-227 · FR-8's 7-day horizon can force a jump a longer look would have avoided (P3, note for the maintainer)
+
+- [ ] Found by T-139's second-round oracle (2026-10-06).
+- **Observation:** a `hardFloor` that enters the 7-day window late (it was beyond the horizon on
+  the previous days) can force a step above `maxDailyDelta` even though a smooth curve over 21 days
+  existed - 118 of 2000 rolling 21-day runs.
+- **Status:** accepted by the spec - FR-8 plans 7 days ahead on purpose - so this is not a bug.
+  Recorded so the maintainer can decide whether a longer horizon is worth it; nothing to implement
+  until then.
+- **Requirement:** R2; FR-8.
+
+### T-228 · Alarms screen: "Manual" tab on the left, "Scheduled" on the right — DONE (2026-10-06, on `dev`)
+
+- [x] Maintainer request (2026-10-06, verbatim): *"Schiebe manual alarms nach links und scheduled
+  alarms nach rechts."* (Move manual alarms to the left and scheduled alarms to the right.)
+- **Reverses T-137's order.** The screen still **opens on Scheduled** (`initialIndex:
+  ScreenAlarms.scheduledTabIndex`, `lib/screens/alarms/screen_alarms.dart`) - T-137's reason, the
+  calendar-derived alarms being the product path, still holds for which list a user sees first.
+- **Tests:** `test/screen_alarms_tab_order_test.dart` (the tab/list/button coupling T-137 guards,
+  now with Manual at index 0, plus the initial tab).
+- **Not covered:** a look on a real phone (`docs/device-trial-checklist.md` H8).
 
 ### T-204 · Release v1.4.0 published — DONE (2026-09-28)
 
@@ -6405,6 +6525,22 @@ defects found and fixed in the follow-up commit:**
     alarms now describes the repeat-day resolution T-14 already implemented; stale spec references
     (T-62, the pre-T-87 checkpoint function names, the background-isolate wording T-199 overtook)
     were corrected.
+- **Second round (2026-10-06).** Maintainer (verbatim): *"Behebe FR-7 und achte auf Einhaltung der
+  anderen Anforderungen nach Implementierung"* (fix FR-7 and make sure the other requirements are
+  still met after the implementation).
+  - An independent exact-interval oracle (computes, per window, whether a plan without any step
+    above `maxDailyDelta` exists at all) found avoidable jumps **only** in the evening-appointment
+    shape: a same-date evening `hardFloor` was read as "earlier" through FR-1's 12-hour wrap and
+    became a run target (the T-208 shape).
+  - **Fix:** `_capOnlyOnItsDate` (`lib/models/scheduling/scheduling_v2.dart`) - a `hardFloor` that is
+    later than the value on its own date is only that day's cap, never a target. Spec FR-1/FR-5/FR-7
+    amended (with a verbatim "T-208 shape" test bullet).
+  - **Verified by the same oracle:** avoidable jumps 0 in every family - eveningMix 21 → 0,
+    eveningMix~midnight 190 → 0, rota 2 → 0, rota~midnight 30 → 0, tight~midnight 6 → 0; no family
+    got worse. The T-206 differential test's frozen allowlist (cases that deliberately differ from
+    8ac1d9e) is now 267.
+  - Two residual shapes found along the way are recorded separately: the DST repeated-hour edge
+    (T-226) and FR-8's 7-day horizon (T-227).
 - **Requirement:** R2
 
 ### T-138 · Snooze (FR-20) — IMPLEMENTED (2026-09-12)
@@ -6443,7 +6579,7 @@ defects found and fixed in the follow-up commit:**
   on switching on, persistence, the process itself with injected platform calls).
 - **Requirement:** R2, R3, R4
 
-### T-137 · "Scheduled" is the first tab, "Manual" the second — IMPLEMENTED (2026-09-12)
+### T-137 · "Scheduled" is the first tab, "Manual" the second — IMPLEMENTED (2026-09-12), order reversed by T-228 (2026-10-06)
 
 - [x] Tabs, contents and index constants swapped.
 - **Why:** at the maintainer's request, and it fits the product: the calendar-derived alarms
@@ -7780,6 +7916,11 @@ red and that stays invisible in the rest of the suite today.
   `am force-stop`, Android clears all of the package's alarms at the platform level, and a
   force-stopped process no longer receives `BOOT_COMPLETED` afterwards - so force-stop will come
   back red, **by design**. That belongs in R3 as a boundary, not as a defect.
+- **2026-10-06 (T-217, from AOSP source):** on Android 15+ the force-stop half is now explained -
+  a force-stop cancels all of the app's PendingIntents until the next app launch, which re-sends
+  `LOCKED_BOOT_COMPLETED`/`BOOT_COMPLETED` (`ActivityManagerService.maybeSendBootCompletedLocked`,
+  `stayStopped`). The 2026-09-19 "still registered after force-stop" reading stays unexplained
+  (possibly the 5-second wait). A clean T-164 run without opening the app is the device check.
 
 ### T-75 · `lastReplanDate` conflates two purposes -> FR-9/FR-12 skip whole days — RESOLVED (2026-09-10)
 

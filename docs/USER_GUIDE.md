@@ -19,7 +19,8 @@ the point you actually need it:
 
 ## Alarms
 
-Two tabs: **Scheduled** (calendar-derived) and **Manual** (alarms you set yourself).
+Two tabs: **Manual** on the left (alarms you set yourself) and **Scheduled** on the right
+(calendar-derived). The screen opens on **Scheduled**.
 
 ### Scheduled
 
@@ -297,3 +298,22 @@ If a deactivation code is set and the alarm requires it (every scheduled alarm; 
 with **Deactivation Code Required** on), the QR scanner appears instead of this display - with
 **Snooze** there too - and only scanning your code stops the alarm (see "Scan Code" above for the
 broken-camera fail-safe). The alarm's title is shown in its ringing notification.
+
+## If the phone restarts, or the app is stopped
+
+- **Restart, phone left locked.** Until you unlock the phone for the first time after a restart,
+  Android does not let the app's real alarm run. A simple fallback siren (with vibration) rings in
+  its place - your own tone, gentle wake and deactivation code are not available yet - and stops as
+  soon as you unlock. Once the phone is unlocked, no siren rings: the real alarm takes over.
+- **The 60-minute rule.** An alarm that became due while the phone was off, still locked after a
+  restart, or the app stopped, can still ring up to **60 minutes late** - the siren while locked,
+  the real alarm once unlocked. Beyond 60 minutes nothing rings any more: a late siren would only
+  startle you long after it could help.
+- **"Alarm missed".** Instead, a silent notification tells you which alarm could not ring. Tapping
+  it opens the app, where you can check your alarms.
+- **Force stop.** On Android 15 and newer, **Force stop** (Android's app settings) removes every
+  alarm the app has set, and the app cannot run again until you open it. Nothing rings in between -
+  so do not force-stop the app if you rely on its next alarm. When you open it again, it re-arms
+  your scheduled alarms and any manual alarm Android dropped; a manual alarm whose time passed in
+  the meantime is armed for its next occurrence. (Whether older Android versions behave the same
+  way is not established.)

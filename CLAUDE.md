@@ -17,7 +17,7 @@ Layering, outermost first:
 
 | File | Role |
 |---|---|
-| `checkpoint.dart` | **The** entry point: `runSchedulingCheckpoint({trigger})` / `runCheckpointSafely(...)`. Serialized against itself, and runs the full sequence (offset → replan → FR-6/9/12 notifications → bedtime reminder → sleep-time Do Not Disturb window push, the last two in the `finally`). Every platform trigger goes through here with a `CheckpointTrigger`; nothing else composes that sequence by hand. |
+| `checkpoint.dart` | **The** entry point: `runSchedulingCheckpoint({trigger})` / `runCheckpointSafely(...)`. Serialized against itself, and runs the full sequence (re-arm manual alarms the `alarm` plugin dropped as past due at their next occurrence, plus FR-18 on the existing plan as a no-calendar safety net if a future scheduled alarm is missing, T-217 → daily lock → offset → replan → FR-6/9/12 notifications → bedtime reminder → sleep-time Do Not Disturb window push → direct-boot mirror refresh, the last three in the `finally`). Every platform trigger goes through here with a `CheckpointTrigger`; nothing else composes that sequence by hand. |
 | `replan.dart` | `replan()` (reads the calendar uncached, walks the day-advance for FR-9/FR-12, calls the domain layer, applies FR-18) and `runTimezoneCheckpoint2()` (FR-16's second checkpoint, built for a background isolate and therefore talking to `SharedPreferences` directly - in practice it runs in the main isolate, whenever a notification is *scheduled*, not at bedtime: `docs/TODO.md` T-199, open). |
 | `scheduling_v2.dart` | Pure domain logic - plain values only, no `AppState`, no plugins, no `BuildContext`. Directly unit-testable without mocks. |
 | `apply_alarms.dart` | FR-18: turns the computed week into real `ScheduledAlarm`s (`planAlarmSync` pure, `applyPlannedAlarms` the applier). |
@@ -175,7 +175,7 @@ T-198 records why, from primary sources. Rules that are load-bearing:
   modes, and handing a non-ALL value back *activates* the app's mode.
 - The window is pushed at the bedtime reminder's own call sites (checkpoint `finally`,
   `Handler.onAlarmHandled` - R2 adopts its scheduling) and additionally after every
-  `_setAlarm`/`_stopAlarm`, at cold start and on the switch. It is step 7 of the one checkpoint
+  `_setAlarm`/`_stopAlarm`, at cold start and on the switch. It is step 8 of the one checkpoint
   sequence - not a second entry point, no own `CheckpointTrigger`. Reboot re-arming goes through
   the existing `DirectBootReceiver` (no new exported component).
 - Persisted keys are new (`sleepTimeDndEnabled`; native device-protected prefs `sleep_time_dnd`);
@@ -187,6 +187,35 @@ T-198 records why, from primary sources. Rules that are load-bearing:
 - **The two Android models have to be verified separately.** The maintainer's real test phone and
   the CI emulator both run **Android 16** (implicit app-owned mode) now; nothing covers Android 14
   and older (global DND). Never report a result from one model as covering the other.
+
+## Direct-Boot fallback siren (`DirectBootReceiver.kt`, `DirectBootFallback*.kt`)
+
+Neither the app nor the `alarm` plugin is `directBootAware`, so after a reboot the real alarm cannot
+run until the first unlock (`docs/TODO.md` T-158). Dart mirrors the next due time into
+device-protected prefs (`AppState.refreshDirectBootFallback`, after every arm/cancel and in step 8 of the checkpoint), and the
+native `DirectBootReceiver` arms a self-contained siren from it. Rules that are load-bearing
+(T-217, maintainer decision 2026-10-06, "Nur bis 60 Min überfällig"):
+
+- **`DirectBootReceiver` does not only run at a real boot.** On Android 15+ the first launch after
+  a force-stop re-sends `LOCKED_BOOT_COMPLETED`/`BOOT_COMPLETED` (AOSP `ActivityManagerService`
+  `maybeSendBootCompletedLocked`, `stayStopped` flag), while the force-stop cancelled every
+  PendingIntent - so the mirrored due time can be days old. Before T-217 that rang the siren for a
+  36-hour-old alarm.
+- **Every decision is the pure, JVM-tested `DirectBootFallbackPolicy.decide`:** user already
+  unlocked → no siren (the plugin's own `BootReceiver` re-arms the real alarm right after); locked
+  and due in the future or at most 60 minutes overdue → siren; more than 60 minutes overdue → a
+  silent "Alarm missed" notification (`DirectBootMissedNotification`), locked or not.
+- **The 60 minutes are one window on both sides:** `MAX_OVERDUE_MINUTES` natively and
+  `overdueRingWindow` (passed as the plugin's `androidStaleAfter`) in
+  `lib/models/alarms/ringing_alarm_settings.dart`, kept equal by
+  `test/direct_boot_fallback_contract_test.dart`. Change both or neither.
+- A mirror write that changes the due time cancels an armed siren (`cancelsArmedSiren`), and so
+  does **every** write from the app (Dart channel, `fromApp`), even with the due time unchanged -
+  otherwise a siren armed at a locked reboot rings on top of the real alarm once the user has
+  unlocked in between. Arm and cancel both go through `DirectBootFallback.sirenIntent`. A fired
+  siren consumes the mirror only if it still holds the due time it was armed for
+  (`mirrorAfterConsuming`). The siren's channel is `direct_boot_fallback_silent` (no sound of its
+  own); the legacy, sound-playing `direct_boot_fallback` channel is deleted at every start.
 
 License: GNU GPLv3 (see `LICENSE`). Copyright holders named in tracked files: Dam0k1es, centron5961
 - two of the three original developers of the project this repository grew from. All three have
@@ -577,9 +606,10 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status
 
-`flutter test` currently runs **877 tests across 122 files** (2026-10-05, T-139), and CI runs them ten times over -
+`flutter test` currently runs **903 tests across 124 files** (2026-10-06, v1.5.0), and CI runs them ten times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
-tests for native code (27 as of T-203, `SleepTimeDndPolicyTest`), run with
+tests for native code (46 as of T-217: 27 in `SleepTimeDndPolicyTest`, 19 in
+`DirectBootFallbackPolicyTest`), run with
 `cd android && ./gradlew :app:testDebugUnitTest` (locally from the native-filesystem worktree, and in
 `ci.yml`'s `build-dev-apk` job).
 

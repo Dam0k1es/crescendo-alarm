@@ -132,6 +132,24 @@ covers the other (`CLAUDE.md`, "Sleep-time Do Not Disturb"). Fill the header's A
 | G8 | **Android 15 and newer:** check Settings → Modes and the quick-settings DND tile during sleep time | the app's own mode is on; the global DND tile is not; your own DND and other modes untouched | |
 | G9 | **Android 14 and older:** switch DND on by hand before bedtime | the app leaves it alone and does not switch it off in the morning | |
 
+## H — v1.5.0: restart/force-stop fallback, tones, permissions, tabs (T-217, T-212, T-228)
+
+Android 15+ re-sends the boot broadcasts on the first launch after a force-stop (`docs/TODO.md`
+T-217), so H1–H5 cover a launch after a force-stop as well as a real reboot. Fill in the header's
+Android version - Android 14 and older are not covered by a result on 15+.
+
+| # | Check | Expectation | Result |
+|---|---|---|---|
+| H1 | Manual alarm +5 min with a secure lock screen; reboot and leave the phone **locked** past the due time | the fallback siren rings (vibration + siren) at the due time; **no** extra notification sound from the siren's notification (new silent channel); unlocking stops it | |
+| H2 | Same as H1, but unlock right after the reboot, **before** the due time | **no** siren at the due time; the real alarm rings with its own tone (and QR gate if set) | |
+| H3 | Manual alarm, `am force-stop`, wait until **less than 60 min** past the due time, then open the app while unlocked | no siren; the real alarm rings late, within the 60-minute window | |
+| H4 | Manual alarm, `am force-stop`, wait **more than 60 min** past the due time, then open the app | nothing rings; a silent **"Alarm missed"** notification names the alarm's time; tapping it opens the app | |
+| H5 | After H4: Settings → Apps → Crescendo Alarm → Notifications | only the silent siren channel ("Fallback alarm …") and "Missed alarms …" are listed; the old sound-playing fallback channel is gone | |
+| H6 | Repeating manual alarm whose time passes during a force-stop; relaunch the app; `dumpsys alarm` (C1's command) | the manual alarm is armed again at its **next** occurrence and still shows switched on | |
+| H7 | Settings → Alarm Tones: preview every bundled tone by ear, and let one ring for a minute | each tone plays, sounds like its name, no clipping, no audible click at the loop point (the clock ring especially) | |
+| H8 | Alarms screen | **Manual** is the left tab, **Scheduled** the right one; the screen opens on Scheduled; the bottom-right button is **+** on Manual and **Sync** on Scheduled | |
+| H9 | After installing over v1.4.0 (14 permissions instead of 31): let an alarm ring, wait for the bedtime reminder, trigger an FR-6 notice | every notification still appears | |
+
 ## Findings
 
 Enter anything notable here with a date and give it its own number in `docs/TODO.md` — this file
