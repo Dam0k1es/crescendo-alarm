@@ -28,7 +28,7 @@ plugins {
     // the Dart side. Purely a reporting step (`:app:cyclonedxBom`, applied
     // in app/build.gradle.kts): it does not lock or pin anything, so it
     // carries none of Gradle dependency locking's maintenance burden.
-    id("org.cyclonedx.bom") version "3.4.1" apply false
+    id("org.cyclonedx.bom") version "3.5.0" apply false
 }
 
 include(":app")
