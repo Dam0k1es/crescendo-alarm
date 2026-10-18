@@ -2328,7 +2328,7 @@ rather than expanded into more scope here: see T-185.
   reason, T-231** (the scanner's camera crashes the process once the engine is detached).
 - **Device check:** `docs/device-trial-checklist.md` H15.
 
-### T-231 · Swiping the app away while the QR scanner is open crashes the process, which ends the ring (P1, bug, open)
+### T-231 · Swiping the app away while the QR scanner is open crashes the process, which ends the ring — FIXED on `dev` (2026-10-19) (P1)
 
 - [ ] Found while verifying T-230 on a real phone (Fairphone 3, Android 13, 2026-10-19): with the
   T-230 fix in place the plugin kept the alarm running after the swipe ("Keeping alarm running as
@@ -2345,6 +2345,15 @@ rather than expanded into more scope here: see T-185.
   scanner is shown; the alarm is not re-armed until the app is next opened.
 - *Done when:* the camera preview is closed whenever the app leaves the foreground, so a task swipe
   during a QR ring leaves the alarm ringing - verified on a real phone (H15 with a code).
+- **Fix:** `QrScanner` observes the app lifecycle and builds `ReaderWidget` only through the pure
+  `shouldBuildLivePreview` (foreground only, never with an injected test stream), so leaving the
+  foreground - Recents included - disposes the preview before a swipe can detach the engine. The
+  observer never touches the injected test stream (the T-16 trap). Test first:
+  `test/qr_scanner_lifecycle_test.dart` (red: `shouldBuildLivePreview` did not exist).
+- **Verified on the phone (2026-10-19, local debug build):** a QR-gated manual alarm, scanner open,
+  app swiped out of Recents - the alarm kept ringing (`AlarmService` and the `USAGE_ALARM` player
+  still running 20 s later, no crash in the crash buffer); tapping its notification within the same
+  minute brought the QR scanner back, which restarted the camera; the emergency stop then ended it.
 
 ### T-228 · Alarms screen: "Manual" tab on the left, "Scheduled" on the right — DONE (2026-10-06, on `dev`)
 

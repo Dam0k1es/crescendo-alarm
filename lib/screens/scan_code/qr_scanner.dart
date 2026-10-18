@@ -129,7 +129,23 @@ class QrScanner extends StatefulWidget {
   State<QrScanner> createState() => _QrScannerState();
 }
 
-class _QrScannerState extends State<QrScanner> {
+/// docs/TODO.md T-231: whether the live camera preview (`ReaderWidget`) may be
+/// built. Only while the app is in the foreground: flutter_zxing stops its
+/// image stream when the app leaves it, but the preview keeps feeding
+/// Flutter's texture until the widget is disposed, and a frame arriving after
+/// a Recents swipe has detached the engine crashes the whole process - taking
+/// the alarm plugin's `AlarmService`, and with it the ring, down too. Never
+/// built when a test stream is injected (no camera in a widget test).
+bool shouldBuildLivePreview({
+  required bool testStreamInjected,
+  required AppLifecycleState? lifecycle,
+}) =>
+    !testStreamInjected &&
+    (lifecycle == null || lifecycle == AppLifecycleState.resumed);
+
+class _QrScannerState extends State<QrScanner> with WidgetsBindingObserver {
+  /// The app lifecycle state the preview decision follows (T-231).
+  AppLifecycleState? _lifecycle = WidgetsBinding.instance.lifecycleState;
   StreamSubscription<Object?>? _subscription;
   StreamSubscription<Object?>? _cameraInitSubscription;
   late final AppState _appState;
@@ -250,12 +266,13 @@ class _QrScannerState extends State<QrScanner> {
       _notificationQuieter = RingNotificationQuieter(ringingId);
     }
 
-    // No lifecycle observer any more: ReaderWidget starts and stops its own
-    // camera with the app lifecycle. The previous scanner needed one, and its
-    // handler was the mechanism behind half of docs/TODO.md T-16 - an
-    // `inactive` -> `resumed` pair cancelled the injected test stream and
-    // re-listened to the camera instead.
-    //
+    // The lifecycle observer only decides whether the preview is built
+    // (T-231, [shouldBuildLivePreview]). It must never touch the injected
+    // test stream: the previous scanner's lifecycle handler cancelled it on
+    // an `inactive` -> `resumed` pair and re-listened to the camera instead,
+    // which was half of docs/TODO.md T-16.
+    WidgetsBinding.instance.addObserver(this);
+
     // The camera is driven by ReaderWidget in build(); only the injected test
     // stream needs a subscription here.
     _subscription = QrScanner.debugScanStreamOverride?.listen(_handleScan);
@@ -307,7 +324,14 @@ class _QrScannerState extends State<QrScanner> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    setState(() => _lifecycle = state);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _proofOfLifeTimer?.cancel();
     _maxScanDurationTimer?.cancel();
     _ringingWatch?.cancel();
@@ -503,8 +527,11 @@ class _QrScannerState extends State<QrScanner> {
             // The live preview. Not built at all when a test stream is
             // injected: no scanner plugin's camera can run in a widget test,
             // and building it would be the only thing standing between the
-            // gate and a unit test of it.
-            if (QrScanner.debugScanStreamOverride == null)
+            // gate and a unit test of it. Nor while the app is not in the
+            // foreground (T-231, see [shouldBuildLivePreview]).
+            if (shouldBuildLivePreview(
+                testStreamInjected: QrScanner.debugScanStreamOverride != null,
+                lifecycle: _lifecycle))
               Center(
                 child: ReaderWidget(
                   // docs/REQUIREMENTS.md R13: "any pre-existing code already

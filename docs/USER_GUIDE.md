@@ -305,7 +305,8 @@ broken-camera fail-safe). The alarm's title is shown in its ringing notification
 
 Once the ringing display is open, the alarm's notification no longer appears as a banner over it;
 it stays silently in the notification shade while the alarm keeps ringing. If you leave the app
-while the alarm rings, that notification (or the app in recent apps) leads back to the display.
+while the alarm rings, that notification (or the app in recent apps) leads back to the display. Swiping
+the app away in the recent apps list does not stop the alarm either.
 
 ## If the phone restarts, or the app is stopped
 
