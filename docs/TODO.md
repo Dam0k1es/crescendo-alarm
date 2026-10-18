@@ -2318,9 +2318,8 @@ rather than expanded into more scope here: see T-185.
 - **Transition:** the flag is stored with each armed alarm, and `planAlarmSync` does not compare it,
   so an alarm armed before this build keeps the old behaviour until it is re-armed (after its next
   ring, or a plan change). New alarms and every re-arm get the fix.
-- **Known limit, not fixed here (audit finding G3-03):** after the swipe the alarm keeps ringing,
-  but if the app is reopened a minute or more after the due time, `Handler.handleAlarm`'s
-  one-minute stale check stops the ring without the ring screen or the QR gate.
+- **Known limit at the time, since fixed (T-232):** after the swipe the alarm kept ringing, but
+  reopening the app a minute or more after the due time stopped it silently.
 - **Verified on the phone (2026-10-19, local debug build of this fix, dev key):** a plain manual
   alarm (no deactivation code) swiped away from Recents kept ringing - `AlarmService` still running
   and the `USAGE_ALARM` player still started 40 s later; the plugin logged "Keeping alarm running as
@@ -2354,6 +2353,33 @@ rather than expanded into more scope here: see T-185.
   app swiped out of Recents - the alarm kept ringing (`AlarmService` and the `USAGE_ALARM` player
   still running 20 s later, no crash in the crash buffer); tapping its notification within the same
   minute brought the QR scanner back, which restarted the camera; the emergency stop then ended it.
+
+### T-232 · A ring Dart learns about a minute or more late is stopped silently, without ring screen or QR gate — FIXED on `dev` (2026-10-19) (P1)
+
+- [ ] Found by the 2026-10-08 audit (finding G3-03, independently M3-01), confirmed on a real phone
+  (Fairphone 3, Android 13, 2026-10-19): a manual alarm ringing as a heads-up while another app was
+  in front, its notification tapped 87 s later - the app opened on the alarm list, no ring screen,
+  and the ring ended at once.
+- **Cause:** `Handler.handleAlarm` stopped every ring whose due minute lay before the current minute
+  (`isAlarmStale`, a rule from the original project). A ring reaches Dart with its original due
+  time - from the plugin's ring event, or from `Alarm.init`'s `_checkAlarm` when no engine was
+  attached - so anything noticed a minute late counted as stale: an overdue ring after a reboot
+  (T-217 lets those ring up to 60 minutes late, with "their own alarm and QR gate"), a ring opened
+  from its notification, a return after a Recents swipe (T-230).
+- **Requirement:** T-217's maintainer decision, "Nur bis 60 Min überfällig".
+- **Fix:** `isAlarmStale` is "more than `overdueRingWindow` overdue", counted on instants - the same
+  60 minutes and the same strict `>` as the plugin's `androidStaleAfter` and the native fallback
+  siren. Tests first: `test/handler_stale_alarm_test.dart` (87 s and 59/60 min not stale, 61 min
+  stale; red against the old rule), and the T-202 instant cases in
+  `test/dst_platform_handoff_test.dart` moved to the new boundary (61 real minutes across a
+  repeated hour are stale although the local readings are a minute apart).
+- **Verified on the phone (2026-10-19, local debug build):** (1) plain alarm, heads-up, notification
+  tapped after 89 s - the ring screen with Stop appeared and the alarm kept ringing; (2) QR-gated
+  alarm, scanner open, app swiped out of Recents, notification tapped after 81 s - the QR scanner
+  came back, the alarm kept ringing, no crash; the emergency stop ended it.
+- **Remaining by design:** a ring noticed more than 60 minutes after its due time is still stopped
+  without a screen (the overdue window's own limit).
+- **Device check:** `docs/device-trial-checklist.md` H16.
 
 ### T-228 · Alarms screen: "Manual" tab on the left, "Scheduled" on the right — DONE (2026-10-06, on `dev`)
 

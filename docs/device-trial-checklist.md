@@ -158,6 +158,7 @@ Android version - Android 14 and older are not covered by a result on 15+.
 | H13 | While ringing with the ring screen open: pull down the shade, swipe the alarm notification away (T-229, T-147) | the alarm keeps ringing; the notification comes back (the banner may reappear until the app is next brought to the front - known limit) | |
 | H14 | Settings → Apps → Crescendo Alarm → Notifications after H10 (T-229) | a new channel "Ringing alarm (alarm screen open)" exists, set to silent; "Alarm Notification" unchanged | |
 | H15 | While a manual alarm rings (no QR code, then again with one): open Recents and swipe the app away (T-230, T-231) | the alarm keeps ringing; tapping its notification within the same minute opens the ring screen (QR scanner with a code); Stop ends it | |
+| H16 | A manual alarm rings while another app is in front (heads-up only); tap its notification 70-90 s later (no QR code, then again with one) (T-232) | the ring screen (QR scanner with a code) appears and the alarm keeps ringing; it does not stop on its own when the app opens | |
 
 ## Findings
 

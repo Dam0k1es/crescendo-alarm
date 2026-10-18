@@ -208,7 +208,9 @@ native `DirectBootReceiver` arms a self-contained siren from it. Rules that are 
 - **The 60 minutes are one window on both sides:** `MAX_OVERDUE_MINUTES` natively and
   `overdueRingWindow` (passed as the plugin's `androidStaleAfter`) in
   `lib/models/alarms/ringing_alarm_settings.dart`, kept equal by
-  `test/direct_boot_fallback_contract_test.dart`. Change both or neither.
+  `test/direct_boot_fallback_contract_test.dart`. Change both or neither. `Handler.isAlarmStale` uses
+  the same window (`docs/TODO.md` T-232): a ring Dart notices late gets its screen and QR gate up to
+  60 minutes after its due time, not one minute.
 - A mirror write that changes the due time cancels an armed siren (`cancelsArmedSiren`), and so
   does **every** write from the app (Dart channel, `fromApp`), even with the due time unchanged -
   otherwise a siren armed at a locked reboot rings on top of the real alarm once the user has
@@ -606,7 +608,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status
 
-`flutter test` currently runs **936 tests across 128 files** (2026-10-19), and CI runs them ten times over -
+`flutter test` currently runs **938 tests across 128 files** (2026-10-19), and CI runs them ten times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
 tests for native code (56 as of T-229: 27 in `SleepTimeDndPolicyTest`, 19 in
 `DirectBootFallbackPolicyTest`, 10 in `RingNotificationPolicyTest`), run with

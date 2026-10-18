@@ -253,23 +253,38 @@ void main() {
           ringAt.millisecondsSinceEpoch + 30 * 1000);
       expect(isAlarmStale(ringAt, now), isFalse,
           reason: 'the same instant in two frames is the same alarm');
+      // docs/TODO.md T-232: the boundary is T-217's overdue window, counted
+      // on instants - a local-tagged `now` against the UTC-tagged report.
       expect(
           isAlarmStale(
               ringAt,
               DateTime.fromMillisecondsSinceEpoch(
-                  ringAt.millisecondsSinceEpoch + _minute)),
+                  ringAt.millisecondsSinceEpoch + 60 * _minute)),
+          isFalse);
+      expect(
+          isAlarmStale(
+              ringAt,
+              DateTime.fromMillisecondsSinceEpoch(
+                  ringAt.millisecondsSinceEpoch + 61 * _minute)),
           isTrue);
     });
 
-    test('across the repeated hour: the first pass\'s last minute is stale '
-        'at the second pass\'s first minute', () {
+    test('across the repeated hour: real elapsed time counts, not the '
+        'local reading', () {
       for (final t in overlaps) {
+        // A first-pass alarm and a "now" 61 real minutes later: in the repeated
+        // hour the local readings can be far closer than that (one minute
+        // apart for a 60-minute repeat), so a reading-based comparison would
+        // call it barely late. It is stale; 59 real minutes are not.
         final event =
-            DateTime.fromMillisecondsSinceEpoch(t.firstPassMs(t.wallEndMs - _minute));
-        final now = DateTime.fromMillisecondsSinceEpoch(t.secondPassMs(t.wallStartMs));
-        expect(now.difference(event), const Duration(minutes: 1), reason: '$t');
-        expect(isAlarmStale(event, now), isTrue, reason: '$t');
-        expect(isAlarmStale(now, event), isFalse, reason: '$t');
+            DateTime.fromMillisecondsSinceEpoch(t.firstPassMs(t.wallStartMs));
+        final late61 = DateTime.fromMillisecondsSinceEpoch(
+            event.millisecondsSinceEpoch + 61 * _minute);
+        final late59 = DateTime.fromMillisecondsSinceEpoch(
+            event.millisecondsSinceEpoch + 59 * _minute);
+        expect(isAlarmStale(event, late61), isTrue, reason: '$t');
+        expect(isAlarmStale(event, late59), isFalse, reason: '$t');
+        expect(isAlarmStale(late61, event), isFalse, reason: '$t');
       }
     }, skip: overlaps.isEmpty ? noTransitionReason : false);
   });

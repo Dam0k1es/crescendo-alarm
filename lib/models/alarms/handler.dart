@@ -23,6 +23,7 @@ import 'package:provider/provider.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 import 'package:crescendo_alarm/models/alarms/myalarm.dart';
+import 'package:crescendo_alarm/models/alarms/ringing_alarm_settings.dart';
 import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
@@ -33,20 +34,25 @@ import 'package:crescendo_alarm/utils/notifications.dart';
 import 'package:crescendo_alarm/utils/sleep_reminder.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
-/// Whether an alarm's scheduled [eventDateTime] is already in the past
-/// relative to [now]. Compares full DateTimes (not just day/hour/minute) so
-/// a stale alarm from a previous day/month/year is correctly detected too;
-/// both are truncated to minute precision, as the alarm plugin may trigger
-/// an alarm a few milliseconds before or after the scheduled time.
+/// Whether a ringing alarm's scheduled [eventDateTime] lies more than
+/// [overdueRingWindow] before [now] - too old to show a ring screen for, so
+/// `handleAlarm` stops it. Compares full DateTimes (not just day/hour/minute)
+/// so a stale alarm from a previous day/month/year is correctly detected too.
 ///
-/// docs/TODO.md T-202: truncated on the instant ([alarmPlatformTime]), not
-/// by rebuilding local fields. The plugin reports [eventDateTime] UTC-tagged
-/// (see `buildRingingAlarmSettings`), whose fields rebuilt as local time
-/// would be off by the device offset; and inside a repeated fall-back hour
-/// two different instants share one local reading, so a first-pass alarm
-/// ringing late in the second pass looked "not stale".
+/// docs/TODO.md T-232: the window is T-217's (the maintainer's "Nur bis 60
+/// Min überfällig"), the same one the plugin's `androidStaleAfter` and the
+/// native fallback siren use. It used to be one minute, which silently
+/// stopped every ring Dart learned about a minute or more late - an overdue
+/// ring after a reboot, or one opened from its notification - with no ring
+/// screen and no QR gate.
+///
+/// docs/TODO.md T-202: compared as instants ([DateTime.difference] works on
+/// epoch time, whatever the frame), never by rebuilding local fields. The
+/// plugin reports [eventDateTime] UTC-tagged (see
+/// `buildRingingAlarmSettings`), and inside a repeated fall-back hour two
+/// different instants share one local reading.
 bool isAlarmStale(DateTime eventDateTime, DateTime now) =>
-    alarmPlatformTime(eventDateTime).isBefore(alarmPlatformTime(now));
+    now.difference(eventDateTime) > overdueRingWindow;
 
 /// docs/TODO.md T-176 (maintainer request): whether the QR/deactivation-code
 /// gate should be shown for this specific ringing alarm. A global code must
