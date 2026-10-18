@@ -214,7 +214,9 @@ native `DirectBootReceiver` arms a self-contained siren from it. Rules that are 
 - A mirror write that changes the due time cancels an armed siren (`cancelsArmedSiren`), and so
   does **every** write from the app (Dart channel, `fromApp`), even with the due time unchanged -
   otherwise a siren armed at a locked reboot rings on top of the real alarm once the user has
-  unlocked in between. Arm and cancel both go through `DirectBootFallback.sirenIntent`. A fired
+  unlocked in between. The siren also checks the lock state when it fires (`soundsAtFire`, `docs/TODO.md`
+  T-233): unlocked by then - the plugin re-armed the real alarm - it stays silent, also when the app
+  was never opened. Arm and cancel both go through `DirectBootFallback.sirenIntent`. A fired
   siren consumes the mirror only if it still holds the due time it was armed for
   (`mirrorAfterConsuming`). The siren's channel is `direct_boot_fallback_silent` (no sound of its
   own); the legacy, sound-playing `direct_boot_fallback` channel is deleted at every start.
@@ -610,7 +612,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 `flutter test` currently runs **938 tests across 128 files** (2026-10-19), and CI runs them ten times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
-tests for native code (56 as of T-229: 27 in `SleepTimeDndPolicyTest`, 19 in
+tests for native code (58 as of T-233: 27 in `SleepTimeDndPolicyTest`, 21 in
 `DirectBootFallbackPolicyTest`, 10 in `RingNotificationPolicyTest`), run with
 `cd android && ./gradlew :app:testDebugUnitTest` (locally from the native-filesystem worktree, and in
 `ci.yml`'s `build-dev-apk` job).

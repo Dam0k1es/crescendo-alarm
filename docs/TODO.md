@@ -2381,6 +2381,26 @@ rather than expanded into more scope here: see T-185.
   without a screen (the overdue window's own limit).
 - **Device check:** `docs/device-trial-checklist.md` H16.
 
+### T-233 · A siren armed at a locked boot rings together with the real alarm once the user has unlocked — FIXED on `dev` (2026-10-20) (P2)
+
+- [ ] Found by the 2026-10-08 audit (M3-02, G6-02) and reproduced on a real phone (Fairphone 3,
+  Android 13, 2026-10-20, device-trial C1-C3): a manual alarm due at 02:17, reboot at 02:11,
+  unlocked at 02:12 without opening the app - `dumpsys alarm` then held two entries for 02:17
+  (`AlarmReceiver` re-armed by the plugin's BootReceiver on the unlock, and
+  `DirectBootFallbackAlarmReceiver` from the locked boot), and at 02:17 both rang: two `USAGE_ALARM`
+  players, `DirectBootFallbackService` and `AlarmService` running together.
+- **Cause:** the only thing that cancels an armed siren is a mirror write from the Dart side
+  (T-217's `fromApp`), and nothing runs Dart after an unlock unless the app is opened. The siren
+  receiver never looked at the lock state when it fired. T-217's resolution text claimed this double
+  ring was closed; it was closed only for users who open the app in between.
+- **Fix:** `DirectBootFallbackPolicy.soundsAtFire(userUnlocked)` - the siren sounds only while the
+  device is still locked; `DirectBootFallbackAlarmReceiver` checks `UserManager.isUserUnlocked` when
+  it fires (the mirror is consumed either way). Tests first: two cases in
+  `DirectBootFallbackPolicyTest` (red: `Unresolved reference 'soundsAtFire'`).
+- **Verified on the phone (2026-10-20, local debug build):** same sequence with an alarm at 02:27 -
+  both entries armed after the unlock as before, but at 02:27 only `AlarmService` rang (one player);
+  the receiver logged "Device unlocked since the siren was armed; the real alarm rings instead."
+
 ### T-228 · Alarms screen: "Manual" tab on the left, "Scheduled" on the right — DONE (2026-10-06, on `dev`)
 
 - [x] Maintainer request (2026-10-06, verbatim): *"Schiebe manual alarms nach links und scheduled

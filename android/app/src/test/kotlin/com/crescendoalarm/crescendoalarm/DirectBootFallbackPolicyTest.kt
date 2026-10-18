@@ -210,4 +210,18 @@ class DirectBootFallbackPolicyTest {
         assertEquals(true, DirectBootFallbackPolicy.cancelsArmedSiren(due, due, fromApp = true))
         assertEquals(true, DirectBootFallbackPolicy.cancelsArmedSiren(null, null, fromApp = true))
     }
+
+    // docs/TODO.md T-233 (real phone, 2026-10-20): a siren armed at a locked
+    // boot for a future due time rang together with the real alarm after the
+    // user had unlocked without opening the app - the plugin's BootReceiver had
+    // re-armed the real alarm on that unlock. Unlocked at fire time: stay silent.
+    @Test
+    fun `T-233 - the siren stays silent when the user has unlocked since it was armed`() {
+        assertEquals(false, DirectBootFallbackPolicy.soundsAtFire(userUnlocked = true))
+    }
+
+    @Test
+    fun `T-233 - the siren sounds while the device is still locked`() {
+        assertEquals(true, DirectBootFallbackPolicy.soundsAtFire(userUnlocked = false))
+    }
 }

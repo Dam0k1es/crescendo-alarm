@@ -20,6 +20,7 @@ package com.crescendoalarm.crescendoalarm
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import android.os.Build
 
 /**
@@ -36,6 +37,10 @@ import android.os.Build
  * loops the sound and vibration for real.
  */
 class DirectBootFallbackAlarmReceiver : BroadcastReceiver() {
+    private companion object {
+        const val TAG = "DirectBootFallback"
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         // Consumed once here, not in the service: this is what tells a
         // stray retry - or the next real boot, before the app has had a
@@ -51,6 +56,13 @@ class DirectBootFallbackAlarmReceiver : BroadcastReceiver() {
             null
         }
         DirectBootFallback.consume(context, firedFor)
+
+        // docs/TODO.md T-233: unlocked since the siren was armed - the real
+        // alarm was re-armed by the plugin on that unlock and rings itself.
+        if (!DirectBootFallbackPolicy.soundsAtFire(DirectBootFallback.isUserUnlocked(context))) {
+            Log.i(TAG, "Device unlocked since the siren was armed; the real alarm rings instead.")
+            return
+        }
 
         val serviceIntent = Intent(context, DirectBootFallbackService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

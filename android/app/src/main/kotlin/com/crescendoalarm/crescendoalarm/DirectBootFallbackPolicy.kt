@@ -108,4 +108,14 @@ object DirectBootFallbackPolicy {
      */
     fun cancelsArmedSiren(previous: Long?, next: Long?, fromApp: Boolean): Boolean =
         fromApp || previous != next
+
+    /**
+     * Whether an armed siren may sound when its alarm fires (docs/TODO.md
+     * T-233). Only while the device is still locked: once the user has
+     * unlocked, the `alarm` plugin's BootReceiver has re-armed the real alarm,
+     * and a siren armed at the locked boot would ring on top of it. Nothing on
+     * that path runs Dart, so no app write could have cancelled the siren -
+     * reproduced on a real phone (2026-10-20): both rang together.
+     */
+    fun soundsAtFire(userUnlocked: Boolean): Boolean = !userUnlocked
 }
