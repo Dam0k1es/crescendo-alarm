@@ -56,6 +56,28 @@ void main() {
     expect(settings.notificationSettings.androidStopAlarmOnDismiss, isFalse);
   });
 
+  test('T-230: removing the app from the recent apps list never stops a '
+      'ringing alarm', () {
+    // The plugin's default `androidStopAlarmOnTermination: true` makes its
+    // AlarmService stop and unsave the ringing alarm in onTaskRemoved -
+    // reproduced on a real phone (2026-10-19): the ring ended at once, with
+    // no Stop button and no QR scan, and the alarm was not re-armed. T-147's
+    // rule applies: only the in-app Stop button or the QR scan may stop it.
+    final settings = buildRingingAlarmSettings(
+      id: 1,
+      dateTime: DateTime(2026, 3, 10, 7, 30),
+      tone: null,
+      gentlewake: false,
+      volume: 0.8,
+      gentleWakeDuration: const Duration(minutes: 1),
+      title: 'Alarm',
+      body: 'Your alarm is ringing',
+      vibrate: true,
+    );
+
+    expect(settings.androidStopAlarmOnTermination, isFalse);
+  });
+
   test('gentle wake produces a staircase fade, otherwise a fixed volume',
       () {
     final fading = buildRingingAlarmSettings(

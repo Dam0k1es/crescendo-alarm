@@ -130,6 +130,11 @@ AlarmSettings buildRingingAlarmSettings({
     ),
     loopAudio: true,
     vibrate: vibrate,
+    // docs/TODO.md T-230: the plugin default `true` stops and unsaves a
+    // ringing alarm in AlarmService.onTaskRemoved, i.e. when the app is
+    // swiped out of the recent apps list - the same bypass T-147 closed for
+    // a notification swipe. The ring keeps going until Stop or the QR scan.
+    androidStopAlarmOnTermination: false,
     warningNotificationOnKill: true,
     androidFullScreenIntent: true,
     androidStaleAfter: overdueRingWindow,

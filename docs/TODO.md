@@ -2297,6 +2297,55 @@ rather than expanded into more scope here: see T-185.
   screen, tone continues, heads-up still shown when another app is in front, locked-screen launch
   unchanged, notification in the shade).
 
+### T-230 · Swiping the app out of the recent apps list stops a ringing alarm, QR gate or not — FIXED on `dev` (2026-10-19) (P1)
+
+- [ ] Found by the 2026-10-08 whole-project audit (finding G3-02, independently M3-06), confirmed on a
+  real phone (Fairphone 3, LineageOS 20 / Android 13, 2026-10-19): a manual alarm ringing, Recents
+  opened, the app's card swiped away - the ring ended at once (`AlarmService` gone from `dumpsys
+  activity services`, no `USAGE_ALARM` player left in `dumpsys audio`), without the Stop button or
+  a QR scan, and the alarm was not re-armed until the app was next opened (T-217's reconcile).
+- **Cause (from source):** `buildRingingAlarmSettings` never set the `alarm` plugin's
+  `androidStopAlarmOnTermination`, whose default is `true`. The plugin copies it into
+  `AlarmService` at ring start (alarm 5.12.0, `AlarmService.kt:266`), and `onTaskRemoved`
+  (`:335-346`) then unsaves the alarm and stops the service. The merged manifest gives
+  `AlarmService` no `stopWithTask`, so Android does call `onTaskRemoved` on a task swipe.
+- **Requirement:** T-147's maintainer rule - only the in-app Stop button or the QR scan may stop a
+  ringing alarm. T-147 closed the notification-swipe path (`androidStopAlarmOnDismiss: false`);
+  this was the sibling setting, for every alarm, not only QR-gated ones.
+- **Fix:** `androidStopAlarmOnTermination: false` in `buildRingingAlarmSettings` (shared by
+  `_setAlarm` and `setSnoozeAlarm`). Test first: `test/ringing_alarm_settings_test.dart` "T-230"
+  (red against the old code: `Expected: false, Actual: <true>`).
+- **Transition:** the flag is stored with each armed alarm, and `planAlarmSync` does not compare it,
+  so an alarm armed before this build keeps the old behaviour until it is re-armed (after its next
+  ring, or a plan change). New alarms and every re-arm get the fix.
+- **Known limit, not fixed here (audit finding G3-03):** after the swipe the alarm keeps ringing,
+  but if the app is reopened a minute or more after the due time, `Handler.handleAlarm`'s
+  one-minute stale check stops the ring without the ring screen or the QR gate.
+- **Verified on the phone (2026-10-19, local debug build of this fix, dev key):** a plain manual
+  alarm (no deactivation code) swiped away from Recents kept ringing - `AlarmService` still running
+  and the `USAGE_ALARM` player still started 40 s later; the plugin logged "Keeping alarm running as
+  androidStopAlarmOnTermination is false". **A QR-gated alarm still stopped - for a different
+  reason, T-231** (the scanner's camera crashes the process once the engine is detached).
+- **Device check:** `docs/device-trial-checklist.md` H15.
+
+### T-231 · Swiping the app away while the QR scanner is open crashes the process, which ends the ring (P1, bug, open)
+
+- [ ] Found while verifying T-230 on a real phone (Fairphone 3, Android 13, 2026-10-19): with the
+  T-230 fix in place the plugin kept the alarm running after the swipe ("Keeping alarm running as
+  androidStopAlarmOnTermination is false", 16:40:09.343), but 340 ms later the process died with
+  `java.lang.RuntimeException: Cannot execute operation because FlutterJNI is not attached to
+  native` at `FlutterJNI.scheduleFrame` <- `FlutterRenderer.scheduleEngineFrame` <-
+  `FlutterRenderer$ImageReaderSurfaceProducer.onImage` - a camera preview frame arriving after the
+  activity's engine was detached. `AlarmService` runs in the same process and died with it; its
+  restart had no alarm settings, so nothing rang any more.
+- **Cause (from source):** `flutter_zxing` 3.0.1's `ReaderWidget` stops only the image *stream* on
+  `inactive`/`hidden`/`paused` (`_stopCamera`, `reader_widget.dart:429-439`); the camera preview
+  keeps feeding Flutter's texture until the widget is disposed, which a task swipe never does.
+- **Impact:** every QR-gated alarm can still be ended by swiping the app out of Recents while the
+  scanner is shown; the alarm is not re-armed until the app is next opened.
+- *Done when:* the camera preview is closed whenever the app leaves the foreground, so a task swipe
+  during a QR ring leaves the alarm ringing - verified on a real phone (H15 with a code).
+
 ### T-228 · Alarms screen: "Manual" tab on the left, "Scheduled" on the right — DONE (2026-10-06, on `dev`)
 
 - [x] Maintainer request (2026-10-06, verbatim): *"Schiebe manual alarms nach links und scheduled
