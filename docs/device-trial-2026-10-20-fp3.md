@@ -107,7 +107,7 @@ not yet through this table.
 | E4 | Check after A3 | `alarmSync` **without** a large `toRemove` at `toAdd=0` (that would be T-64) | |
 | E5 | Check after the morning alarm | `dayAdvance` with `daysProcessed >= 1` (0 would be T-75) | |
 | E6 | Check at bedtime | *Superseded by T-199, see below* | |
-| E7 | Press "Copy" and paste the text somewhere | complete, exclusively enum names and numbers | 2026-10-20 partly: Copy tapped; clipboard not readable via adb on Android 13 |
+| E7 | Press "Copy" and paste the text somewhere | complete, exclusively enum names and numbers | 2026-10-20 ✓ copied text pasted and checked by the maintainer on their own device (not readable via adb on Android 13) |
 | E8 | Switch off, restart the app, check | no new events | 2026-10-20 ✓ switched off, app restarted: no new entries |
 
 E6 was meant to confirm FR-16's checkpoint 2 on the device via a `timezoneCheck (bg)` entry at
