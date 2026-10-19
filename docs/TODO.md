@@ -2420,6 +2420,19 @@ rather than expanded into more scope here: see T-185.
   "Alarm missed" notice, and rings if it is at most 60 minutes overdue (T-217's window), on every
   Android version.
 
+### T-235 · Switching "Also record wake and appointment times" off leaves recorded clock times in the export (P2, decided 2026-10-20, open)
+
+- [ ] Found by the 2026-10-08 audit (G4-01, confirmed by V4): `Diag.setIncludeClockTimes(false)`
+  only flips the switch (`lib/utils/diag/diag_log.dart:585-586`); records already holding clock
+  values stay in the ring buffer, while `render` writes its header from the *current* switch -
+  "No timestamps, no calendar data, no wake times by design" (`:692-696`). A user who pastes the log
+  into a bug report afterwards ships a sleep pattern under a header saying there is none.
+- **Maintainer decision (2026-10-20):** delete the clock-time records when the switch is turned off
+  (*"das sehe ich auch als die fairere Version"*), rather than only adjusting the header.
+- *Done when:* turning the switch off removes every record carrying clock values (`dayPlanned`,
+  `dayEventTime`, and `planInputs`' preferred wake time), the export then holds none, and a test
+  pins it.
+
 ### T-228 · Alarms screen: "Manual" tab on the left, "Scheduled" on the right — DONE (2026-10-06, on `dev`)
 
 - [x] Maintainer request (2026-10-06, verbatim): *"Schiebe manual alarms nach links und scheduled
