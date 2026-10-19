@@ -2401,6 +2401,21 @@ rather than expanded into more scope here: see T-185.
   both entries armed after the unlock as before, but at 02:27 only `AlarmService` rang (one player);
   the receiver logged "Device unlocked since the siren was armed; the real alarm rings instead."
 
+### T-234 · Android 14 and older: an alarm lost to a force-stop is never reported as missed (P2, open product decision)
+
+- [ ] Found on a real phone (Fairphone 3, Android 13, 2026-10-20, device-trial H3/H4,
+  `docs/device-trial-2026-10-20-fp3.md`): a manual alarm, `am force-stop` before its due time, the
+  app opened 31 and 62 minutes after it - nothing rang at the due time, nothing rang on opening, and
+  no "Alarm missed" notice appeared; the alarm was quietly re-armed for its next occurrence.
+- **Why:** T-217's late ring and missed notice both ride on Android 15+ re-sending
+  `LOCKED_BOOT_COMPLETED`/`BOOT_COMPLETED` on the first launch after a force-stop. Android 14 and
+  older do not, and the force-stop removes every alarm of the app (C4 on the same run), so on those
+  versions the loss is silent. The T-217 reconcile on opening only re-arms the *next* occurrence.
+- **Decision needed:** should the app, when it finds a dropped alarm on opening (the T-217
+  reconcile), post the same silent "Alarm missed" notice for an occurrence that passed while it was
+  force-stopped - and ring it if it is at most 60 minutes overdue (T-217's window), like Android 15+?
+  Until then README's "Android 15 and newer" limitation text is incomplete (audit L2-03).
+
 ### T-228 · Alarms screen: "Manual" tab on the left, "Scheduled" on the right — DONE (2026-10-06, on `dev`)
 
 - [x] Maintainer request (2026-10-06, verbatim): *"Schiebe manual alarms nach links und scheduled
