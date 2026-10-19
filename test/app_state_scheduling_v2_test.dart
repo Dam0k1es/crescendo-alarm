@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
+import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm.dart' show DayOfWeek;
 
 // Phase 0, step 2 (docs/scheduling-v2-spec.md, "Implementation order"):
@@ -341,6 +342,57 @@ void main() {
       appState.diagnosticsEnabled = true;
       expect(appState.diagnosticsIncludeClockTimes, isTrue,
           reason: 'two separate switches - one does not flip the other');
+    });
+
+    // docs/TODO.md T-235 (audit G4-01): switching the clock-time switch off
+    // deletes what it recorded, so a log copied afterwards holds none.
+    test('switching diagnosticsIncludeClockTimes off purges recorded clock '
+        'times', () async {
+      SharedPreferences.setMockInitialValues({});
+      Diag.resetForTest();
+      await Diag.init(isolate: LogIsolate.main, enabled: true);
+      final appState = AppState();
+      await appState.initialized;
+
+      appState.diagnosticsIncludeClockTimes = true;
+      Diag.dayPlanned(
+          dayOffset: 1, plannedMinuteOfDay: 400, earliestEventMinuteOfDay: 480);
+      Diag.dayEventTime(
+          dayOffset: 1, startMinuteOfDay: 480, endMinuteOfDay: 540);
+      Diag.qrGate(outcome: QrOutcome.accepted, codeWasSet: true);
+      expect(
+          Diag.records.where((r) =>
+              r.event == DiagEvent.dayPlanned ||
+              r.event == DiagEvent.dayEventTime),
+          hasLength(2));
+
+      appState.diagnosticsIncludeClockTimes = false;
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+          Diag.records.where((r) =>
+              r.event == DiagEvent.dayPlanned ||
+              r.event == DiagEvent.dayEventTime),
+          isEmpty);
+      expect(Diag.records.map((r) => r.event), contains(DiagEvent.qrGate),
+          reason: 'only the clock-time records go');
+    });
+
+    test('switching it on (or leaving it off) purges nothing', () async {
+      SharedPreferences.setMockInitialValues({});
+      Diag.resetForTest();
+      await Diag.init(isolate: LogIsolate.main, enabled: true);
+      final appState = AppState();
+      await appState.initialized;
+
+      appState.diagnosticsIncludeClockTimes = true;
+      Diag.dayPlanned(
+          dayOffset: 1, plannedMinuteOfDay: 400, earliestEventMinuteOfDay: 480);
+      appState.diagnosticsIncludeClockTimes = true;
+      await Future<void>.delayed(Duration.zero);
+
+      expect(Diag.records.where((r) => r.event == DiagEvent.dayPlanned),
+          hasLength(1));
     });
   });
 

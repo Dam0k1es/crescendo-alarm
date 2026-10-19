@@ -261,7 +261,8 @@ day, no date), for three things:
 All three are real clock times, and together with the rest of the log they amount to a sleep pattern and
 a daily routine - that is exactly why the switch is off by default and separate from ordinary
 diagnostics. Turn it on only while actively investigating a scheduling problem, and remember it is
-then included in anything you copy and share from this screen.
+then included in anything you copy and share from this screen. Switching it off again deletes the
+clock times recorded so far (the rest of the log stays).
 
 ## Time zones and daylight saving
 

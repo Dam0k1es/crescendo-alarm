@@ -2420,7 +2420,7 @@ rather than expanded into more scope here: see T-185.
   "Alarm missed" notice, and rings if it is at most 60 minutes overdue (T-217's window), on every
   Android version.
 
-### T-235 · Switching "Also record wake and appointment times" off leaves recorded clock times in the export (P2, decided 2026-10-20, open)
+### T-235 · Switching "Also record wake and appointment times" off leaves recorded clock times in the export — FIXED on `dev` (2026-10-20) (P2)
 
 - [ ] Found by the 2026-10-08 audit (G4-01, confirmed by V4): `Diag.setIncludeClockTimes(false)`
   only flips the switch (`lib/utils/diag/diag_log.dart:585-586`); records already holding clock
@@ -2432,6 +2432,13 @@ rather than expanded into more scope here: see T-185.
 - *Done when:* turning the switch off removes every record carrying clock values (`dayPlanned`,
   `dayEventTime`, and `planInputs`' preferred wake time), the export then holds none, and a test
   pins it.
+- **Fix:** `Diag.purgeClockTimes()` drops every `dayPlanned`/`dayEventTime` record and resets
+  `planInputs`' preferred wake time to `-1` - in the ring buffer (synchronously, before any await)
+  and in both persisted sinks; `AppState.diagnosticsIncludeClockTimes`' setter calls it on the
+  on-to-off transition. The switch's help text and the user guide say so. Tests first:
+  `test/diag_log_clock_purge_test.dart` (red: `Member not found: 'Diag.purgeClockTimes'`) and two
+  cases in `test/app_state_scheduling_v2_test.dart` (red: the clock records were still there after
+  the switch went off).
 
 ### T-228 · Alarms screen: "Manual" tab on the left, "Scheduled" on the right — DONE (2026-10-06, on `dev`)
 

@@ -686,6 +686,59 @@ abstract final class Diag {
     await p.remove(prefsKeyIsolate);
   }
 
+  /// docs/TODO.md T-235 (maintainer decision 2026-10-20): switching clock-time
+  /// logging off deletes what it recorded - every `dayPlanned` and
+  /// `dayEventTime` record, and `planInputs`' preferred wake-up time (reset to
+  /// `-1`, the value it carries with the switch off) - from the ring buffer
+  /// and from both persisted sinks. Without this the export kept a sleep
+  /// pattern under a header saying it holds none. An entry a sink cannot
+  /// decode is dropped rather than kept unchecked.
+  static Future<void> purgeClockTimes({SharedPreferences? prefs}) async {
+    // The ring buffer first, before any await: from the moment the switch is
+    // off, nothing readable in memory carries a clock value any more.
+    final kept = _ring.map(_withoutClockTimes).whereType<DiagRecord>().toList();
+    _ring
+      ..clear()
+      ..addAll(kept);
+    final p = prefs ?? _prefs ?? await SharedPreferences.getInstance();
+    for (final key in <String>[prefsKeyMain, prefsKeyIsolate]) {
+      final raw = p.getString(key);
+      if (raw == null) continue;
+      try {
+        final cleaned = <List<int>>[
+          for (final entry in jsonDecode(raw) as List<dynamic>)
+            if (DiagRecord.decode(entry as List<dynamic>) case final record?)
+              if (_withoutClockTimes(record) case final clean?) clean.encode(),
+        ];
+        await p.setString(key, jsonEncode(cleaned));
+      } catch (_) {
+        // Unreadable as a whole: nothing in it can be vouched for. No output
+        // (T-89: an exception can echo its source string).
+        await p.remove(key);
+      }
+    }
+  }
+
+  static DiagRecord? _withoutClockTimes(DiagRecord r) {
+    if (r.event == DiagEvent.dayPlanned || r.event == DiagEvent.dayEventTime) {
+      return null;
+    }
+    if (r.event == DiagEvent.planInputs &&
+        (r.fields[DiagField.preferredWakeUpMinuteOfDay] ?? -1) != -1) {
+      return DiagRecord(
+        boot: r.boot,
+        seq: r.seq,
+        event: r.event,
+        uptime: r.uptime,
+        fields: <DiagField, int>{
+          ...r.fields,
+          DiagField.preferredWakeUpMinuteOfDay: -1,
+        },
+      );
+    }
+    return r;
+  }
+
   /// A human-readable rendering for export. The names come from this file's
   /// own enums, i.e. from the program itself - never from user data.
   static String render(List<DiagRecord> records) {

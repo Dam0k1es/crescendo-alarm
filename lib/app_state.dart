@@ -619,9 +619,14 @@ class AppState extends ChangeNotifier {
   }
 
   set diagnosticsIncludeClockTimes(bool value) {
+    final switchedOff = _diagnosticsIncludeClockTimes && !value;
     _diagnosticsIncludeClockTimes = value;
     _prefs.setBool('diagnosticsIncludeClockTimes', value);
     Diag.setIncludeClockTimes(value);
+    // docs/TODO.md T-235: off means gone - the clock times recorded so far are
+    // deleted, not merely no longer added to, so an export made afterwards
+    // cannot carry a sleep pattern under a header saying it holds none.
+    if (switchedOff) unawaited(Diag.purgeClockTimes());
     notifyListeners();
   }
 

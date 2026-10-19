@@ -124,7 +124,8 @@ class _PageDiagnosticsState extends State<PageDiagnostics> {
                       'These are clock times: together they are a sleep '
                       'pattern and a daily routine. Turn it on while '
                       'investigating a scheduling problem - and remember it '
-                      'is then in anything you share.',
+                      'is then in anything you share. Switching it off '
+                      'deletes the clock times recorded so far.',
                       style: TextStyle(fontSize: 12),
                     ),
                     isThreeLine: true,
