@@ -29,6 +29,7 @@ import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 import 'package:crescendo_alarm/models/alarms/manual_alarm_enable.dart';
 import 'package:crescendo_alarm/models/alarms/myalarm.dart';
 import 'package:crescendo_alarm/models/alarms/ringing_alarm_settings.dart';
+import 'package:crescendo_alarm/utils/notifications.dart';
 import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
 import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
 import 'package:crescendo_alarm/models/scheduling/next_wake_up.dart';
@@ -96,6 +97,14 @@ class AppState extends ChangeNotifier {
   bool _snoozeEnabled = true;
   Duration _snoozeTime = const Duration(minutes: 5);
   Map<int, DateTime> _snoozeOriginOf = <int, DateTime>{};
+
+  /// docs/TODO.md T-234: the instant each manual alarm was last armed for on
+  /// the platform (epoch milliseconds, by alarm id). The `alarm` plugin
+  /// forgets an occurrence that passed while the app was force-stopped (its
+  /// `Alarm.init` stops every past entry that is not ringing), so this is the
+  /// only record of WHEN the lost occurrence was due. Removed when the alarm
+  /// rings (Dart saw it) or is deleted.
+  Map<int, int> _manualArmedFor = <int, int>{};
   TimeOfDay _durationToGetReady = const TimeOfDay(hour: 0, minute: 45);
   // docs/TODO.md T-52.3: absent from this map means "use the global
   // _durationToGetReady value for that day" - so an empty map (the default,
@@ -351,6 +360,42 @@ class AppState extends ChangeNotifier {
     _snoozeOriginOf = {..._snoozeOriginOf, alarmId: originalRing};
     _saveSnoozeOrigins();
     notifyListeners();
+  }
+
+  /// The instant manual alarm [alarmId] was last armed for (T-234), if known.
+  Map<int, int> get manualArmedFor => Map.unmodifiable(_manualArmedFor);
+
+  void _noteManualArmed(int alarmId, DateTime dueAt) {
+    _manualArmedFor = {
+      ..._manualArmedFor,
+      alarmId: dueAt.millisecondsSinceEpoch
+    };
+    _saveManualArmedFor();
+  }
+
+  /// Dart saw manual alarm [alarmId] ring (`Handler.handleAlarm`): that
+  /// occurrence happened, so a later absence from the platform is not a
+  /// missed alarm (T-234).
+  void markManualAlarmRang(int alarmId) {
+    if (!_manualArmedFor.containsKey(alarmId)) return;
+    _manualArmedFor = {..._manualArmedFor}..remove(alarmId);
+    _saveManualArmedFor();
+  }
+
+  void _saveManualArmedFor() => _prefs.setString(
+      'manualAlarmArmedFor',
+      jsonEncode(_manualArmedFor.map((id, ms) => MapEntry('$id', ms))));
+
+  Map<int, int> _loadManualArmedFor() {
+    try {
+      final raw = _prefs.getString('manualAlarmArmedFor');
+      if (raw == null) return <int, int>{};
+      return (jsonDecode(raw) as Map<String, dynamic>)
+          .map((id, ms) => MapEntry(int.parse(id), ms as int));
+    } catch (e) {
+      debugPrint("=====_loadManualArmedFor: ${e.runtimeType}");
+      return <int, int>{};
+    }
   }
 
   void forgetSnoozeOrigin(int alarmId) {
@@ -1059,6 +1104,7 @@ class AppState extends ChangeNotifier {
     if (alarm is ManualAlarm) {
       _manualAlarms.remove(alarm);
       _saveManualAlarms();
+      markManualAlarmRang(alarm.id); // forgets the armed time (T-234)
     } else {
       _scheduledAlarms.remove(alarm);
       _saveScheduledAlarms();
@@ -1238,7 +1284,7 @@ class AppState extends ChangeNotifier {
   /// still registered (no duplicate, no re-set), or one ringing right now;
   /// does nothing when the platform state cannot be read. Never throws.
   Future<void> reconcileManualAlarmsWithPlatform(
-      {DateTime Function()? now}) async {
+      {DateTime Function()? now, Notifications? notifications}) async {
     final Set<int> platformIds;
     try {
       platformIds = (await platformAlarms()).map((a) => a.id).toSet();
@@ -1247,11 +1293,31 @@ class AppState extends ChangeNotifier {
           "=====reconcileManualAlarms: platform state unknown: ${e.runtimeType}");
       return;
     }
+    final nowTime = (now ?? DateTime.now)();
     for (final alarm in List<ManualAlarm>.from(_manualAlarms)) {
       if (!alarm.enabled || platformIds.contains(alarm.id)) continue;
       try {
         if (await (debugPlatformIsRinging ?? Alarm.isRinging)(alarm.id)) {
           continue;
+        }
+        // docs/TODO.md T-234 (maintainer decision 2026-10-20): the occurrence
+        // that passed while the app was stopped is not lost silently. Up to
+        // [overdueRingWindow] late it rings now (armed for a time that is not
+        // in the future: the plugin rings it at once); later - up to two days -
+        // the same "Alarm missed" notice the native direct-boot path posts,
+        // under the same notification id. Either way the next occurrence is
+        // armed afterwards, by the alarm's own re-arm after the ring or below.
+        final armedFor = _manualArmedFor[alarm.id];
+        if (armedFor != null) {
+          final dueAt = DateTime.fromMillisecondsSinceEpoch(armedFor);
+          final overdue = nowTime.difference(dueAt);
+          if (!overdue.isNegative && overdue <= overdueRingWindow) {
+            await _setAlarm(alarm, nowTime);
+            continue;
+          }
+          if (!overdue.isNegative && overdue <= _missedNoticeWindow) {
+            await _postMissedNotice(alarm, dueAt, notifications);
+          }
         }
         await _setAlarm(alarm, _getAlarmTime(alarm, now: now));
       } catch (e) {
@@ -1259,6 +1325,30 @@ class AppState extends ChangeNotifier {
             "=====reconcileManualAlarms: re-arm failed: ${e.runtimeType}");
       }
     }
+  }
+
+  /// How far back a lost occurrence is still worth a notice (T-234): beyond
+  /// this the alarm is re-armed silently - a notice about last week is noise.
+  static const Duration _missedNoticeWindow = Duration(hours: 48);
+
+  /// The native `DirectBootMissedNotification`'s id (0x217): the same notice
+  /// from either side replaces the other instead of stacking (Android 15+
+  /// posts it natively too).
+  static const int _missedNoticeId = 0x217;
+
+  Future<void> _postMissedNotice(
+      ManualAlarm alarm, DateTime dueAt, Notifications? notifications) async {
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    String two(int n) => n.toString().padLeft(2, '0');
+    final dueText =
+        '${weekdays[dueAt.weekday - 1]} ${two(dueAt.hour)}:${two(dueAt.minute)}';
+    await (notifications ?? Notifications()).scheduleNotification(
+      id: _missedNoticeId,
+      title: 'Alarm missed',
+      body: 'Your alarm for $dueText could not ring - the phone was '
+          'restarted or the app was stopped. Open the app to check your '
+          'alarms.',
+    );
   }
 
   Future<void> _setAlarm(MyAlarm alarm, DateTime alarmDateTime) async {
@@ -1283,6 +1373,7 @@ class AppState extends ChangeNotifier {
     } else {
       await Alarm.set(alarmSettings: alarmSettings);
     }
+    if (alarm is ManualAlarm) _noteManualArmed(alarm.id, alarmSettings.dateTime);
     refreshDirectBootFallback();
     // docs/TODO.md T-198: the same "every real arm/cancel" hook - see
     // refreshSleepTimeDnd.
@@ -1825,6 +1916,7 @@ class AppState extends ChangeNotifier {
       final snoozeMinutes = _prefs.getInt('snoozeTimeMinutes');
       if (snoozeMinutes != null) _snoozeTime = Duration(minutes: snoozeMinutes);
       _snoozeOriginOf = _loadSnoozeOrigins();
+      _manualArmedFor = _loadManualArmedFor();
       _diagnosticsIncludeClockTimes =
           _prefs.getBool('diagnosticsIncludeClockTimes') ??
               _diagnosticsIncludeClockTimes;

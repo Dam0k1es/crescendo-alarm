@@ -199,6 +199,9 @@ class Handler {
   /// [overlayRetryDelay], rather than left ringing with nothing on screen to
   /// stop it.
   Future<void> handleAlarm(AlarmSettings event) async {
+    // docs/TODO.md T-234: this occurrence happened - a later absence of the
+    // alarm from the platform is not a missed alarm.
+    _appState.markManualAlarmRang(event.id);
     _fireReplanCheckpoint(event);
 
     // docs/TODO.md T-89: a kDebugMode diagnostic block used to sit here,

@@ -321,9 +321,11 @@ the app away in the recent apps list does not stop the alarm either.
   startle you long after it could help.
 - **"Alarm missed".** Instead, a silent notification tells you which alarm could not ring. Tapping
   it opens the app, where you can check your alarms.
-- **Force stop.** On Android 15 and newer, **Force stop** (Android's app settings) removes every
+- **Force stop.** On every Android version, **Force stop** (Android's app settings) removes every
   alarm the app has set, and the app cannot run again until you open it. Nothing rings in between -
   so do not force-stop the app if you rely on its next alarm. When you open it again, it re-arms
-  your scheduled alarms and any manual alarm Android dropped; a manual alarm whose time passed in
-  the meantime is armed for its next occurrence. (Whether older Android versions behave the same
-  way is not established.)
+  your scheduled alarms and any manual alarm Android dropped. A manual alarm whose time passed in
+  the meantime rings at once if it is at most 60 minutes overdue; if it is more than that (up to two
+  days), you get the silent "Alarm missed" notification instead, and the alarm is armed for its next
+  occurrence. (On Android 15 and newer the restart fallback above does the same on its own, before
+  you open the app.)

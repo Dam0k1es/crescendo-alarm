@@ -174,7 +174,7 @@ Future<ReplanResult?> runSchedulingCheckpoint(
 
     // Step 2 (T-217 follow-up). Swallows its own failures, so it cannot
     // break the sequence.
-    await _reconcileWithPlatform(appState, nowFn);
+    await _reconcileWithPlatform(appState, nowFn, notifications);
 
     if (trigger == CheckpointTrigger.appForeground) {
       // FR-17: a second app open on the same day is a no-op. Read inside the
@@ -305,10 +305,11 @@ Future<ReplanResult?> runSchedulingCheckpoint(
 ///   never touched (planAlarmSync's own rule).
 ///
 /// Platform unreadable -> nothing at all. Never throws.
-Future<void> _reconcileWithPlatform(
-    AppState appState, DateTime Function() nowFn) async {
+Future<void> _reconcileWithPlatform(AppState appState,
+    DateTime Function() nowFn, Notifications? notifications) async {
   try {
-    await appState.reconcileManualAlarmsWithPlatform(now: nowFn);
+    await appState.reconcileManualAlarmsWithPlatform(
+        now: nowFn, notifications: notifications);
 
     final Set<int> platformIds;
     try {

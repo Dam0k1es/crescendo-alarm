@@ -2401,7 +2401,7 @@ rather than expanded into more scope here: see T-185.
   both entries armed after the unlock as before, but at 02:27 only `AlarmService` rang (one player);
   the receiver logged "Device unlocked since the siren was armed; the real alarm rings instead."
 
-### T-234 · Android 14 and older: an alarm lost to a force-stop is never reported as missed (P2, decided 2026-10-20, open)
+### T-234 · An alarm lost to a force-stop is never reported as missed or rung late — FIXED on `dev` (2026-10-20) (P2)
 
 - [ ] Found on a real phone (Fairphone 3, Android 13, 2026-10-20, device-trial H3/H4,
   `docs/device-trial-2026-10-20-fp3.md`): a manual alarm, `am force-stop` before its due time, the
@@ -2419,6 +2419,22 @@ rather than expanded into more scope here: see T-185.
   opening, an occurrence that passed while the app was force-stopped is reported with the silent
   "Alarm missed" notice, and rings if it is at most 60 minutes overdue (T-217's window), on every
   Android version.
+- **Cause of the loss:** the `alarm` plugin's `Alarm.init` stops (and unsaves) every stored alarm
+  whose time passed and that is not ringing, so by the time the checkpoint's reconcile runs the app
+  no longer knew *when* the lost occurrence was due.
+- **Fix:** `AppState.manualArmedFor` (persisted as `manualAlarmArmedFor`) records the instant each
+  manual alarm was last armed for; it is dropped when Dart sees the alarm ring (`Handler.handleAlarm`
+  -> `markManualAlarmRang`) and when the alarm is deleted. `reconcileManualAlarmsWithPlatform` now
+  rings a missing, enabled alarm at once if its recorded instant is at most `overdueRingWindow`
+  (60 min) ago, and otherwise - up to 48 hours - posts "Alarm missed" with the native notice's id
+  (`0x217`, so Android 15+ shows one notice, not two); the next occurrence is armed in every case.
+  Scheduled alarms are out of scope (FR-18 owns them). Tests first:
+  `test/manual_alarm_missed_test.dart` (9; red: `markManualAlarmRang` / `manualArmedFor` did not
+  exist).
+- **Verified on the phone (Fairphone 3, Android 13, 2026-10-20, local debug build):** an alarm due
+  13:54, force-stopped before, the app opened at 13:56: it rang 8 s after opening (device-trial H3
+  re-run). **Still to confirm on the device:** the more-than-60-minutes case (H4 re-run: the
+  notice, id `0x217`); covered by the unit tests only so far.
 
 ### T-235 · Switching "Also record wake and appointment times" off leaves recorded clock times in the export — FIXED on `dev` (2026-10-20) (P2)
 

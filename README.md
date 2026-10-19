@@ -20,8 +20,10 @@ Welcome to Crescendo Alarm, an innovative alarm clock app designed for individua
   deactivation code, and an opt-in, PII-free diagnostics log - see the [User Guide](docs/USER_GUIDE.md).
 - **After a restart:** if the phone stays locked, a fallback siren rings for an alarm that is due or
   at most 60 minutes overdue; an alarm missed by more is reported by a silent "Alarm missed"
-  notification. **Limitation:** on Android 15 and newer, a **Force stop** removes the app's alarms
-  until the app is opened again - see the User Guide's "If the phone restarts, or the app is stopped".
+  notification. **Limitation:** on every Android version, a **Force stop** removes the app's alarms
+  until the app is opened again; on opening, a manual alarm that passed meanwhile rings late (up to
+  60 minutes overdue) or is reported as missed - see the User Guide's "If the phone restarts, or the
+  app is stopped".
 
 ## Technologies Used
 

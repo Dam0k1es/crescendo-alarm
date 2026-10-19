@@ -17,7 +17,7 @@ Layering, outermost first:
 
 | File | Role |
 |---|---|
-| `checkpoint.dart` | **The** entry point: `runSchedulingCheckpoint({trigger})` / `runCheckpointSafely(...)`. Serialized against itself, and runs the full sequence (re-arm manual alarms the `alarm` plugin dropped as past due at their next occurrence, plus FR-18 on the existing plan as a no-calendar safety net if a future scheduled alarm is missing, T-217 → daily lock → offset → replan → FR-6/9/12 notifications → bedtime reminder → sleep-time Do Not Disturb window push → direct-boot mirror refresh, the last three in the `finally`). Every platform trigger goes through here with a `CheckpointTrigger`; nothing else composes that sequence by hand. |
+| `checkpoint.dart` | **The** entry point: `runSchedulingCheckpoint({trigger})` / `runCheckpointSafely(...)`. Serialized against itself, and runs the full sequence (re-arm manual alarms the `alarm` plugin dropped as past due - an occurrence at most 60 minutes overdue rings at once, an older one up to 48 h is reported with the "Alarm missed" notice (T-234, the alarm's last armed instant is `AppState.manualArmedFor`) - at their next occurrence, plus FR-18 on the existing plan as a no-calendar safety net if a future scheduled alarm is missing, T-217 → daily lock → offset → replan → FR-6/9/12 notifications → bedtime reminder → sleep-time Do Not Disturb window push → direct-boot mirror refresh, the last three in the `finally`). Every platform trigger goes through here with a `CheckpointTrigger`; nothing else composes that sequence by hand. |
 | `replan.dart` | `replan()` (reads the calendar uncached, walks the day-advance for FR-9/FR-12, calls the domain layer, applies FR-18) and `runTimezoneCheckpoint2()` (FR-16's second checkpoint, built for a background isolate and therefore talking to `SharedPreferences` directly - in practice it runs in the main isolate, whenever a notification is *scheduled*, not at bedtime: `docs/TODO.md` T-199, open). |
 | `scheduling_v2.dart` | Pure domain logic - plain values only, no `AppState`, no plugins, no `BuildContext`. Directly unit-testable without mocks. |
 | `apply_alarms.dart` | FR-18: turns the computed week into real `ScheduledAlarm`s (`planAlarmSync` pure, `applyPlannedAlarms` the applier). |
@@ -610,7 +610,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status
 
-`flutter test` currently runs **943 tests across 129 files** (2026-10-20), and CI runs them ten times over -
+`flutter test` currently runs **952 tests across 130 files** (2026-10-20), and CI runs them ten times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
 tests for native code (58 as of T-233: 27 in `SleepTimeDndPolicyTest`, 21 in
 `DirectBootFallbackPolicyTest`, 10 in `RingNotificationPolicyTest`), run with
