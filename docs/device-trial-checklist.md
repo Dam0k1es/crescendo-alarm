@@ -200,3 +200,26 @@ is the evidence, not the task list.
 | A manual alarm rings, the app is swiped from Recents, nothing is touched: the ring ends 60 minutes after its due time and "Alarm stopped" appears | 2026-10-22, Fairphone 3 / Android 13: rang 12:49:01, ended 13:49:22, notice id 536 posted, app never reopened - confirmed |
 | A ring that is snoozed from the notification (native snooze) still ends 60 minutes after the snoozed time | |
 | Reboot while ringing: the timeout is re-armed (remainder up to due + 60 min) | |
+
+## Calendar run, 2026-10-23, Fairphone 3 (LineageOS, Android 13), dev build f97525e
+
+A throw-away LOCAL calendar account and its events were created over `content insert` and deleted again
+afterwards. Defaults: wake 15 min, get ready 45 min, preferred wake-up 08:00, max daily shift 1 h.
+
+| # | Result |
+|---|---|
+| B1/B2 | Appointment Sat 24.10. 09:00 created; lead times at their defaults (0:15 + 0:45), not changed. |
+| B3 | Sync listed six days (Sat-Thu; today's wake was already past at 23:00). Every alarm armed with its ring timeout one hour later. |
+| B4 | Saturday 08:00 = 09:00 - 60 min, to the minute - confirmed. |
+| B5 | Moved to 11:00, sync: Saturday 10:00 - confirmed. |
+| B6 | Deleted, sync: all scheduled alarms dropped out (no appointment in the window) - the "or drops out" clause. |
+| B7 | Appointment in Asia/Tokyo (18:00 JST = 11:00 Berlin): alarm 10:00 Berlin time - follows the device zone, confirmed. |
+| B8 | All-day appointment on Mon 26.10.: list and platform entries unchanged - ignored, confirmed. |
+| B9 | Saturday switched off + sync: stays listed at 10:00, switch off, platform entry and its timeout gone; the same after force-stop and reopening - confirmed. |
+| B10 | Switched on: listed on, armed again (alarm + timeout), confirmed. Ringing at the planned time was not waited for. |
+| E1 | Record diagnostics on. |
+| E2 | Log of 17 events is numbers only (largest value 123), no title, no calendar name, no time of day. |
+| E3 | `weekPlanComputed`: windowDayCount = distinctDayKeys = 7, plannedDays = 6 (not 7: it was 23:00, today's alarm was past). |
+| E4 | `alarmSync`: toRemove 0 / toAdd 0 on the no-op sync; 1 / 1 for B9's off-on - no T-64 shape. |
+| E5 | Not run: needs a morning alarm to ring. |
+| E6 | Superseded by T-199. |
