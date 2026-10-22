@@ -378,6 +378,10 @@ class Handler {
     Future<bool> Function(ManualAlarm alarm, bool enabled)?
         setManualAlarmEnabled,
   }) {
+    // docs/TODO.md T-237: Stop, Snooze and the QR gate call `Alarm.stop`
+    // themselves, not through AppState, so this is where the handled ring's
+    // timeout ends. A manual alarm's re-arm below arms its next one after.
+    appState.cancelRingTimeoutFor(alarmID);
     scheduleSleepReminder(appState, notifications: notifications);
     // docs/TODO.md T-198 (R2): the sleep-time window follows the reminder's
     // scheduling here too - the only rescheduling a ManualAlarm dismiss gets

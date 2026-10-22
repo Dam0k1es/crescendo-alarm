@@ -1,3 +1,4 @@
+import 'package:crescendo_alarm/utils/ring_timeout.dart' as ring_timeout;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
@@ -59,6 +60,24 @@ ScheduledAlarm _alarm(DateTime time, int id) => ScheduledAlarm(
     );
 
 void main() {
+  test(
+      'T-237: a handled ring ends its own timeout - Stop and the QR gate call '
+      'Alarm.stop directly, so nothing else would cancel it', () async {
+    final appState = await _freshAppState();
+    final cancelled = <int>[];
+    ring_timeout.cancelRingTimeout = (id) async => cancelled.add(id);
+    addTearDown(() => ring_timeout.cancelRingTimeout = (id) async {});
+
+    // A snoozed ring: its id is in neither alarm list.
+    Handler.onAlarmHandled(appState, 777,
+        notifications: _SilentNotifications());
+    for (var i = 0; i < 5; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    expect(cancelled, [777]);
+  });
+
   test('T-64: a dismiss does NOT delete the planned alarms', () async {
     final appState = await _freshAppState();
     final tomorrow = DateTime.now().add(const Duration(days: 1));
@@ -80,7 +99,8 @@ void main() {
             'got ${appState.scheduledAlarms.map((a) => a.id).toList()}');
   });
 
-  test('T-64: this also holds with an empty calendar (the real case)', () async {
+  test('T-64: this also holds with an empty calendar (the real case)',
+      () async {
     final appState = await _freshAppState();
     expect(appState.meetings, isEmpty);
     final tomorrow = DateTime.now().add(const Duration(days: 1));

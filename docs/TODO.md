@@ -8493,3 +8493,20 @@ red and that stays invisible in the rest of the suite today.
   clock jump forward of more than 60 minutes during a ring ends it.
 - **Tests:** `RingTimeoutPolicyTest`, `app_state_ring_timeout_test.dart`, `ring_timeout_contract_test.dart`.
   Device (Fairphone 3, Android 13): see `docs/device-trial-checklist.md`.
+
+### T-238 · An exported awesome_notifications service lets any app crash the process, and a ring with it — FIXED on `dev` (2026-10-23) (audit P1-01, P1)
+- **Device evidence (Fairphone 3, Android 13):** `adb shell am start-service -n <pkg>/me.carda.awesome_notifications.core.managers.StatusBarManager`
+  → `FATAL EXCEPTION … Unable to create service … StatusBarManager: NullPointerException`, the process restarted
+  (PID changed). During a ring the same call ended it: `AlarmService` destroyed, audio-focus holder dead 6 s
+  after the ring began, only the notification left.
+- **Fix:** the merged manifest drops the service (`tools:node="remove"`; nothing in the app starts it).
+  After the fix the same call answers "Error: Not found; no service started" and the PID is unchanged.
+  `test/manifest_statusbar_manager_removed_test.dart`.
+
+### T-237 follow-up · Stop and the QR gate leave the ring's timeout armed (found on the device, fixed)
+- The ring screens stop through `Alarm.stop` directly, so `_platformStop`'s cancel never ran and the timeout
+  stayed until it fired (harmless: the policy finds nothing ringing). `Handler.onAlarmHandled` now cancels
+  it; a repeating manual alarm's re-arm follows. Device: after Stop only the next occurrence's timeout remains.
+- Device results 2026-10-23: reboot with the app never opened (C1–C3) rings; reboot **during** a ring re-rings
+  after boot with the timeout re-armed at due + 60 min; Dart snooze arms the timeout for the new time; the
+  notification offers no snooze action, so the plugin's native snooze path is unreachable in this app.

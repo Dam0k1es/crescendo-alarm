@@ -252,6 +252,13 @@
              own explicit PendingIntent reaches it. Direct-boot-aware only so
              an entry falling due before the first unlock is delivered (it
              then does nothing: the plugin cannot ring before it either). -->
+        <!-- docs/TODO.md T-224 (audit P1-01): awesome_notifications' own
+             manifest exports this service, and instantiating it throws a
+             NullPointerException that kills the whole process - a ringing
+             alarm with it. Nothing in the app starts it. -->
+        <service
+            android:name="me.carda.awesome_notifications.core.managers.StatusBarManager"
+            tools:node="remove" />
         <receiver
             android:name=".RingTimeoutReceiver"
             android:enabled="true"

@@ -1484,6 +1484,11 @@ class AppState extends ChangeNotifier {
     unawaited(refreshSleepTimeDnd());
   }
 
+  /// docs/TODO.md T-237: ends the timeout of a ring that was handled (the ring
+  /// screens stop it without going through [_platformStop]).
+  void cancelRingTimeoutFor(int id) =>
+      _pushRingTimeout(() => ring_timeout.cancelRingTimeout(id));
+
   /// docs/TODO.md T-237: fire-and-forget, and whatever the native side or a
   /// replaced hook does, it never fails an arm or a stop.
   void _pushRingTimeout(Future<void> Function() push) {
