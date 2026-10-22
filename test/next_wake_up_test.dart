@@ -151,4 +151,65 @@ void main() {
           reason: '2026-03-13 is the next Friday, not "tomorrow"');
     });
   });
+  // docs/TODO.md T-239 (audit G6-01): the alarm plugin rings at the floored
+  // whole minute (`alarmPlatformTime`), but a planned value can carry seconds
+  // (a daily shift of 33 min 20 s). Compared raw, an alarm that has rung at
+  // 06:33:00 stayed "next" until 06:33:20, so every mirror/reminder write in
+  // those seconds - and the cold-start refresh and the ring checkpoint both
+  // run in them - pointed at the alarm that had just rung.
+  group('nextWakeUpTime reads a planned value at its ring minute (T-239)', () {
+    final planned = DateTime(2026, 3, 11, 6, 33, 20);
+    final key = _iso(planned);
+    final values = {key: planned.millisecondsSinceEpoch};
+
+    test('inside the seconds after the ring minute the alarm is no longer next',
+        () {
+      final result = nextWakeUpTime(
+        pendingDayValues: values,
+        disabledDays: const {},
+        manualAlarms: const [],
+        now: DateTime(2026, 3, 11, 6, 33, 5),
+      );
+
+      expect(result, isNull, reason: 'it rang at 06:33:00');
+    });
+
+    test('before the ring minute the value is returned as that minute', () {
+      final result = nextWakeUpTime(
+        pendingDayValues: values,
+        disabledDays: const {},
+        manualAlarms: const [],
+        now: DateTime(2026, 3, 11, 6, 32, 0),
+      );
+
+      expect(result, DateTime(2026, 3, 11, 6, 33, 0));
+    });
+
+    test('counter-test: one second before the ring minute it is still next',
+        () {
+      final result = nextWakeUpTime(
+        pendingDayValues: values,
+        disabledDays: const {},
+        manualAlarms: const [],
+        now: DateTime(2026, 3, 11, 6, 32, 59),
+      );
+
+      expect(result, DateTime(2026, 3, 11, 6, 33, 0));
+    });
+
+    test('the next day\'s alarm wins once the first one has rung', () {
+      final nextDay = DateTime(2026, 3, 12, 6, 0);
+      final result = nextWakeUpTime(
+        pendingDayValues: {
+          ...values,
+          _iso(nextDay): nextDay.millisecondsSinceEpoch,
+        },
+        disabledDays: const {},
+        manualAlarms: const [],
+        now: DateTime(2026, 3, 11, 6, 33, 5),
+      );
+
+      expect(result, nextDay);
+    });
+  });
 }

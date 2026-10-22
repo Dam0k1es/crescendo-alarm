@@ -89,7 +89,14 @@ DateTime? nextWakeUpTime({
     // comparison itself (`isBefore`/`isAfter`) is on instants either way.
     final planned = localFromStored(millis);
     if (planned == null) continue;
-    consider(planned);
+    // docs/TODO.md T-239 (audit G6-01): the plugin rings at the floored whole
+    // minute (`alarmPlatformTime`), not at a planned value's seconds. Read at
+    // the ring minute, an alarm that has just rung is no longer "next" - the
+    // direct-boot mirror and the bedtime reminder otherwise pointed at it for
+    // up to a minute. (`sleepTimeWindow` hands in ring minutes already.)
+    consider(DateTime.fromMillisecondsSinceEpoch(
+        planned.millisecondsSinceEpoch -
+            planned.millisecondsSinceEpoch % Duration.millisecondsPerMinute));
   }
 
   for (final alarm in manualAlarms) {

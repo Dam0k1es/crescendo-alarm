@@ -382,6 +382,11 @@ class Handler {
     // themselves, not through AppState, so this is where the handled ring's
     // timeout ends. A manual alarm's re-arm below arms its next one after.
     appState.cancelRingTimeoutFor(alarmID);
+    // docs/TODO.md T-239 (audit G6-01): the same reason - Stop and the QR gate
+    // end the ring without AppState, so the direct-boot mirror (which holds
+    // the next due time) is corrected here, next to the reminder and the DND
+    // window below.
+    appState.refreshDirectBootFallback();
     scheduleSleepReminder(appState, notifications: notifications);
     // docs/TODO.md T-198 (R2): the sleep-time window follows the reminder's
     // scheduling here too - the only rescheduling a ManualAlarm dismiss gets

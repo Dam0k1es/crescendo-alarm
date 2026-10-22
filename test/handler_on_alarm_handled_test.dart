@@ -1,3 +1,5 @@
+import 'package:crescendo_alarm/utils/direct_boot_mirror.dart'
+    as direct_boot_mirror;
 import 'package:crescendo_alarm/utils/ring_timeout.dart' as ring_timeout;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -60,6 +62,21 @@ ScheduledAlarm _alarm(DateTime time, int id) => ScheduledAlarm(
     );
 
 void main() {
+  test('T-239 (G6-01): a handled ring refreshes the direct-boot mirror - Stop '
+      'and the QR gate call Alarm.stop directly, so nothing else would', () async {
+    final appState = await _freshAppState();
+    var mirrored = 0;
+    direct_boot_mirror.mirrorDirectBootFallback = (dueAt) async => mirrored++;
+    addTearDown(() => direct_boot_mirror.mirrorDirectBootFallback = (d) async {});
+
+    Handler.onAlarmHandled(appState, 778, notifications: _SilentNotifications());
+    for (var i = 0; i < 5; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    expect(mirrored, greaterThanOrEqualTo(1));
+  });
+
   test(
       'T-237: a handled ring ends its own timeout - Stop and the QR gate call '
       'Alarm.stop directly, so nothing else would cancel it', () async {

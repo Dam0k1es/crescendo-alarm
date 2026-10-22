@@ -8510,3 +8510,19 @@ red and that stays invisible in the rest of the suite today.
 - Device results 2026-10-23: reboot with the app never opened (C1–C3) rings; reboot **during** a ring re-rings
   after boot with the timeout re-armed at due + 60 min; Dart snooze arms the timeout for the new time; the
   notification offers no snooze action, so the plugin's native snooze path is unreachable in this app.
+
+### T-239 · The direct-boot mirror and the bedtime reminder point at the alarm that just rang — FIXED on `dev` (2026-10-24) (audit G6-01 / G4-03, P2)
+- **Root cause:** `nextWakeUpTime` compared a planned value's raw instant (e.g. 06:33:20) with `now`, but the
+  `alarm` plugin rings at the floored whole minute (`alarmPlatformTime`, 06:33:00). Until :20 the alarm that had
+  just rung stayed "next", and the cold-start refresh and the ring checkpoint both run in those seconds. Stop and
+  the QR gate also end the ring without AppState, so nothing refreshed the mirror afterwards.
+- **Fix:** `nextWakeUpTime` reads a planned value at its ring minute (`sleepTimeWindow` already did);
+  `Handler.onAlarmHandled` refreshes the mirror next to the reminder and the DND window.
+  `test/next_wake_up_test.dart` (T-239 group), `test/handler_on_alarm_handled_test.dart`.
+- **Device (Fairphone 3, 2026-10-24 with the phone clock moved by `cmd alarm set-time`, restored afterwards):**
+  after ringing and stopping the 08:00 alarm the mirror pointed at the next day's 08:00. The seconds-carrying
+  shape itself was not reproduced on the phone: a planned value with seconds needs a ring history as the anchor
+  (a fresh install plans FR-10's cold start, no smoothing), so that part rests on the unit tests.
+- **Observation, not changed:** on a cold start the planner stepped 08:00 → 06:20 in one day (100 min, more than
+  `maxDailyDelta`) when the first appointment was two days out. FR-10 (cold start, no anchor) is the likely reason;
+  not checked against the spec.
