@@ -223,3 +223,13 @@ afterwards. Defaults: wake 15 min, get ready 45 min, preferred wake-up 08:00, ma
 | E4 | `alarmSync`: toRemove 0 / toAdd 0 on the no-op sync; 1 / 1 for B9's off-on - no T-64 shape. |
 | E5 | Not run: needs a morning alarm to ring. |
 | E6 | Superseded by T-199. |
+
+## Daylight-saving change, 2026-10-25 02:59:50 CEST → 02:00:10 CET (Fairphone 3, Android 13, dev build 76fcded; phone clock moved with `cmd alarm set-time`)
+
+| Check | Result |
+|---|---|
+| Manual alarm 08:01 and calendar-planned alarm 08:30 on the DST day, created/synced at 00:2x CEST | Armed at 08:01 / 08:30 **CET** (07:01Z / 07:30Z): each day is resolved with its own day's rules. |
+| Clock runs through the change (02:59:50 CEST → 02:00:10 CET) | The armed alarm entries did not change. |
+| App opened after the change (resume re-alignment, T-205) | No churn: entries unchanged. |
+| Both alarms ring | Rang at local 08:01:00 and 08:30:00 CET - confirmed. |
+| Not covered | A real change over a real night; other zones; an alarm armed before the clocks change for a day after it (resolved at arming here, the case above). |
