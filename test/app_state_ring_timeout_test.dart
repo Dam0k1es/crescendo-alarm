@@ -102,7 +102,7 @@ void main() {
 
     expect(armed.map((e) => e.id), [41, 41]);
     expect(armed.last.dueAtMillis,
-        saturday7.add(const Duration(days: 1)).toUtc().millisecondsSinceEpoch);
+        DateTime(2026, 10, 4, 7).toUtc().millisecondsSinceEpoch);
   });
 
   test('switching an alarm off cancels its timeout', () async {
@@ -199,7 +199,7 @@ void main() {
 
     expect(platform.armed[41]?.dateTime, isNot(saturday7),
         reason: 'not rung a second time at exactly 60:00');
-    expect(platform.armedAt(saturday7.add(const Duration(days: 1))), isTrue,
+    expect(platform.armedAt(DateTime(2026, 10, 4, 7)), isTrue,
         reason: 'the next occurrence is armed');
   });
 
