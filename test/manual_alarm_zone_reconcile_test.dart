@@ -69,10 +69,13 @@ ManualAlarm _manual(int id, int hour,
       repeatOnDays: repeat,
     );
 
+// `now` is the device's local clock in production (`DateTime.now()`); an
+// instant taken from the platform (UTC-tagged) is converted, or its digits
+// would be read as local ones in a zone that is not UTC.
 Future<void> _open(AppState appState, DateTime now) => runCheckpointSafely(
       appState,
       trigger: CheckpointTrigger.appForeground,
-      now: () => now,
+      now: () => now.toLocal(),
       fetchEvents: (from, to) async => [],
       notifications: _SilentNotifications(),
     );

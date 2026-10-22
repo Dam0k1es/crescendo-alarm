@@ -8479,3 +8479,17 @@ red and that stays invisible in the rest of the suite today.
 - **Documented limit (maintainer choice):** no native TIMEZONE_CHANGED receiver. Without opening
   the app after a zone change the alarm rings at the old absolute time.
   `test/manual_alarm_zone_reconcile_test.dart`.
+
+### T-237 · A ring nobody stops ends itself after 60 minutes (G3-03 "Wecker ohne Ende", P1, fixed on `dev`)
+- **Decision (maintainer, 2026-10-23):** after 60 minutes from the due time the ring ends and a silent
+  "Alarm stopped" notice (id `0x218`) is posted. Accepted: it can end a QR-gated alarm, and the ring
+  may end while the ring screen is open.
+- **Design:** `RingTimeoutPolicy` (pure, JVM tests), `RingTimeout` (exact alarm per id, device-protected
+  mirror, boot re-arm, sync from the plugin's stored alarms), `RingTimeoutReceiver` (not exported, ends
+  only that ring via `AlarmService.handleStopAlarmCommand`), channel `.../ring_timeout`,
+  `lib/utils/ring_timeout.dart`; reviewed independently twice (tests, proposal).
+- **Residual risks:** a ring whose audio failed is not in the plugin's `ringingAlarmIds` and is never
+  timed out; a daily alarm lost by a native-only timeout is re-armed when the app is next opened; a
+  clock jump forward of more than 60 minutes during a ring ends it.
+- **Tests:** `RingTimeoutPolicyTest`, `app_state_ring_timeout_test.dart`, `ring_timeout_contract_test.dart`.
+  Device (Fairphone 3, Android 13): see `docs/device-trial-checklist.md`.

@@ -44,8 +44,47 @@ object DirectBootMissedNotification {
     private const val TAG = "DirectBootMissed"
     private const val CHANNEL_ID = "direct_boot_missed_alarm"
     private const val NOTIFICATION_ID = 0x217
+    private const val UNSTOPPED_CHANNEL_ID = "ring_timeout_unstopped"
+    private const val UNSTOPPED_NOTIFICATION_ID = 0x218
 
-    fun post(context: Context, dueAtMillis: Long) {
+    /**
+     * docs/TODO.md T-237: a ring nobody stopped was ended after 60 minutes
+     * ([RingTimeoutPolicy.TIMEOUT_MINUTES]). Own id and channel: it must not
+     * replace an unread "could not ring" notice for another alarm.
+     */
+    fun postUnstopped(context: Context, dueAtMillis: Long) = post(
+        context, dueAtMillis,
+        notificationId = UNSTOPPED_NOTIFICATION_ID,
+        channelId = UNSTOPPED_CHANNEL_ID,
+        channelName = "Alarms that rang unstopped",
+        title = "Alarm stopped",
+        textFor = { dueText ->
+            "Your alarm for $dueText rang for 60 minutes and was ended. " +
+                "Open the app to check your alarms."
+        },
+    )
+
+    fun post(context: Context, dueAtMillis: Long) = post(
+        context, dueAtMillis,
+        notificationId = NOTIFICATION_ID,
+        channelId = CHANNEL_ID,
+        channelName = "Missed alarms (phone restarted or app stopped)",
+        title = "Alarm missed",
+        textFor = { dueText ->
+            "Your alarm for $dueText could not ring - the phone was " +
+                "restarted or the app was stopped. Open the app to check your alarms."
+        },
+    )
+
+    private fun post(
+        context: Context,
+        dueAtMillis: Long,
+        notificationId: Int,
+        channelId: String,
+        channelName: String,
+        title: String,
+        textFor: (String) -> String,
+    ) {
         try {
             val manager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -55,29 +94,27 @@ object DirectBootMissedNotification {
                 DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_SHOW_DATE or
                     DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_ALL
             )
-            val title = "Alarm missed"
-            val text = "Your alarm for $dueText could not ring - the phone was " +
-                "restarted or the app was stopped. Open the app to check your alarms."
+            val text = textFor(dueText)
 
             val openApp = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
             val contentIntent = PendingIntent.getActivity(
-                context, 0x217, openApp,
+                context, notificationId, openApp,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
             val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel(
-                    CHANNEL_ID,
-                    "Missed alarms (phone restarted or app stopped)",
+                    channelId,
+                    channelName,
                     NotificationManager.IMPORTANCE_LOW
                 ).apply {
                     setSound(null, null)
                     enableVibration(false)
                 }
                 manager.createNotificationChannel(channel)
-                Notification.Builder(context, CHANNEL_ID)
+                Notification.Builder(context, channelId)
                     .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                     .setContentTitle(title)
                     .setContentText(text)
@@ -97,7 +134,7 @@ object DirectBootMissedNotification {
                     .setAutoCancel(true)
                     .build()
             }
-            manager.notify(NOTIFICATION_ID, notification)
+            manager.notify(notificationId, notification)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to post the missed-alarm notification.", e)
         }

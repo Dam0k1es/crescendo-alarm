@@ -119,6 +119,36 @@ class MainActivity: FlutterActivity() {
                 }
             }
 
+        // docs/TODO.md T-237: which alarm id is armed for which instant, so
+        // the native timeout can end a ring nobody stops after 60 minutes.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, RingTimeout.CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "arm" -> {
+                        val id = call.argument<Number>("id")?.toInt()
+                        val due = call.argument<Number>("dueAtMillis")?.toLong()
+                        if (id != null && due != null) RingTimeout.arm(applicationContext, id, due)
+                        result.success(null)
+                    }
+                    "cancel" -> {
+                        call.argument<Number>("id")?.toInt()?.let {
+                            RingTimeout.cancel(applicationContext, it)
+                        }
+                        result.success(null)
+                    }
+                    "cancelAll" -> {
+                        RingTimeout.cancelAll(applicationContext)
+                        result.success(null)
+                    }
+                    "sync" -> {
+                        RingTimeout.syncFromPlugin(applicationContext)
+                        result.success(null)
+                    }
+                    "takeTimedOut" -> result.success(RingTimeout.takeTimedOut(applicationContext))
+                    else -> result.notImplemented()
+                }
+            }
+
         // docs/TODO.md T-229: the ring screens (ScreenAlarmActive, QrScanner)
         // call this when they appear and on every resume, to take the
         // plugin's ringing notification out of the heads-up over them.

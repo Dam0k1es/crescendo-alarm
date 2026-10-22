@@ -247,6 +247,16 @@
             android:enabled="true"
             android:exported="false"
             android:directBootAware="true" />
+        <!-- docs/TODO.md T-237: ends a ring nobody stopped 60 minutes after
+             its due time. Not exported, no intent filter: only RingTimeout's
+             own explicit PendingIntent reaches it. Direct-boot-aware only so
+             an entry falling due before the first unlock is delivered (it
+             then does nothing: the plugin cannot ring before it either). -->
+        <receiver
+            android:name=".RingTimeoutReceiver"
+            android:enabled="true"
+            android:exported="false"
+            android:directBootAware="true" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility?hl=en and

@@ -109,6 +109,8 @@ void main() {
           .allMatches(mainActivity)
           .map((m) => m.group(1)!)
           .where((m) => m != 'setNextAlarm')
+          // The ring-timeout channel (T-237) shares MainActivity.
+          .where((m) => !{'arm', 'cancel', 'cancelAll', 'sync', 'takeTimedOut'}.contains(m))
           .toSet();
       expect(methods, {
         'setWindow',

@@ -221,6 +221,33 @@ native `DirectBootReceiver` arms a self-contained siren from it. Rules that are 
   (`mirrorAfterConsuming`). The siren's channel is `direct_boot_fallback_silent` (no sound of its
   own); the legacy, sound-playing `direct_boot_fallback` channel is deleted at every start.
 
+## Ring timeout (`RingTimeout*.kt`, `lib/utils/ring_timeout.dart`)
+
+A ring nobody stops ends itself **60 minutes after its due time** and a silent "Alarm stopped"
+notice (id `0x218`, own channel) says so (`docs/TODO.md` T-237, maintainer decision 2026-10-23: it
+may end a QR-gated alarm, and even while the ring screen is open). The `alarm` plugin's own loop
+never ends. Rules that are load-bearing:
+
+- **Native, engine-free.** Dart pushes `armRingTimeout(id, dueAt)` / `cancelRingTimeout` /
+  `cancelAllRingTimeouts` (every one swallows errors; `AppState._pushRingTimeout` guards them too)
+  at every real arm and stop (`_setAlarm`, `setSnoozeAlarm`, `_platformStop`, `stopAllPlatformAlarms`).
+  `RingTimeout.kt` arms one exact alarm per id at due + 60 min (`setAndAllowWhileIdle` fallback when
+  the exact-alarm permission is revoked, API 31-32), mirrored in device-protected prefs and re-armed
+  by `DirectBootReceiver` after a reboot. `RingTimeoutReceiver` is not exported and ends only THAT
+  ring through the plugin's `AlarmService.handleStopAlarmCommand` - never a `stopAll`.
+- **Every decision is the pure, JVM-tested `RingTimeoutPolicy.decide`.** The timer is keyed to the due
+  time it was armed for: a saved due time that moved later (the plugin's native snooze keeps the id)
+  gets `Rearm` for the new due time, an early fire re-arms, a not-ringing or stale one does nothing.
+- **The plugin re-arms its own alarms** (force-stop, update, boot, a daily repeat) without telling
+  Dart: `RingTimeout.syncFromPlugin` reads its stored alarms (credential-encrypted - only after
+  `isUserUnlocked`, wrapped in try/catch) at cold start, in checkpoint step 8 and after every fire.
+- **`reconcileManualAlarmsWithPlatform` first takes the timed-out ids** (`takeTimedOutRingIds`) and
+  marks them rung, so the T-234 late-ring path cannot ring a timed-out alarm again at exactly 60:00.
+  The 60 minutes equal `overdueRingWindow` (`test/ring_timeout_contract_test.dart`).
+- Known residual: a daily alarm whose plugin entry is gone after a native-only timeout stays gone
+  until the app is next opened (the plugin re-arms repeats it knows about; Dart's reconcile covers
+  the rest). A reboot while ringing leaves only the remainder up to due + 60 min.
+
 License: GNU GPLv3 (see `LICENSE`). Copyright holders named in tracked files: Dam0k1es, centron5961
 - two of the three original developers of the project this repository grew from. All three have
 now given explicit consent to GPLv3 (2026-09-20); the third's consent is to the licence only, not

@@ -304,6 +304,11 @@ with **Deactivation Code Required** on), the QR scanner appears instead of this 
 **Snooze** there too - and only scanning your code stops the alarm (see "Scan Code" above for the
 broken-camera fail-safe). The alarm's title is shown in its ringing notification.
 
+An alarm that nobody stops does not ring forever: 60 minutes after its due time it ends by itself
+and a silent notice, "Alarm stopped", tells you it rang for 60 minutes. This also ends an alarm
+that needs the deactivation code - waiting out the hour is a very uncomfortable way to do it, but
+it is there so a ring can never outlast a dead battery's worth of hours.
+
 Once the ringing display is open, the alarm's notification no longer appears as a banner over it;
 it stays silently in the notification shade while the alarm keeps ringing. If you leave the app
 while the alarm rings, that notification (or the app in recent apps) leads back to the display. Swiping

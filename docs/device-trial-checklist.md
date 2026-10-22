@@ -192,3 +192,11 @@ is the evidence, not the task list.
   now has real-device confirmation - only the scripted `dumpsys alarm` procedure
   (`.github/scripts/check_alarm_survival.sh`) and this table's own device/APK/commit logging
   remain to turn these one-off observations into a repeatable, dated record.
+
+## Ring timeout (T-237)
+
+| Check | Result |
+|---|---|
+| A manual alarm rings, the app is swiped from Recents, nothing is touched: the ring ends 60 minutes after its due time and "Alarm stopped" appears | 2026-10-22, Fairphone 3 / Android 13: rang 12:49:01, ended 13:49:22, notice id 536 posted, app never reopened - confirmed |
+| A ring that is snoozed from the notification (native snooze) still ends 60 minutes after the snoozed time | |
+| Reboot while ringing: the timeout is re-armed (remainder up to due + 60 min) | |

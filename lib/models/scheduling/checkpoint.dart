@@ -49,6 +49,7 @@ import 'package:crescendo_alarm/models/scheduling/replan.dart';
 import 'package:crescendo_alarm/models/scheduling/replan_notifications.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/utils/notifications.dart';
+import 'package:crescendo_alarm/utils/ring_timeout.dart' as ring_timeout;
 import 'package:crescendo_alarm/utils/sleep_reminder.dart';
 import 'package:crescendo_alarm/utils/wall_clock.dart'
     show ZoneOffsetAt, deviceOffsetAt;
@@ -271,6 +272,8 @@ Future<ReplanResult?> runSchedulingCheckpoint(
       // reboot more than 60 minutes later posted "Alarm missed" for an
       // alarm that did ring. Same freshly planned values as step 7.
       appState.refreshDirectBootFallback(now: nowFn);
+      // docs/TODO.md T-237: alarms the plugin armed itself have no timeout yet.
+      unawaited(ring_timeout.syncRingTimeouts().catchError((Object _) {}));
 
       Diag.checkpointFinished(
         trigger: diagTriggerOf(trigger),

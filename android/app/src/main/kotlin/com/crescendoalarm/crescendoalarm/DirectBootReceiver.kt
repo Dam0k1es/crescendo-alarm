@@ -63,6 +63,9 @@ class DirectBootReceiver : BroadcastReceiver() {
         // it. Reads nothing from the Intent; swallows its own failures.
         SleepTimeDnd.onBoot(context)
 
+        // docs/TODO.md T-237: the ring timeouts' AlarmManager entries are gone too.
+        RingTimeout.rearmAfterBoot(context)
+
         // docs/TODO.md T-217: not only a real boot. On Android 15+ a
         // force-stopped app gets LOCKED_BOOT_COMPLETED again when the user
         // next launches it (AOSP ActivityManagerService

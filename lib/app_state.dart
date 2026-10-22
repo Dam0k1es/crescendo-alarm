@@ -38,6 +38,7 @@ import 'package:crescendo_alarm/models/scheduling/stored_values.dart'
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/utils/direct_boot_mirror.dart' as direct_boot_mirror;
+import 'package:crescendo_alarm/utils/ring_timeout.dart' as ring_timeout;
 import 'package:crescendo_alarm/utils/sleep_time_dnd.dart' as sleep_time_dnd;
 import 'package:crescendo_alarm/utils/utils.dart';
 
@@ -1263,6 +1264,7 @@ class AppState extends ChangeNotifier {
   /// enabled manual ones through [reconcileManualAlarmsWithPlatform].
   Future<void> stopAllPlatformAlarms() async {
     await (debugPlatformStopAll ?? Alarm.stopAll)();
+    _pushRingTimeout(ring_timeout.cancelAllRingTimeouts);
     refreshDirectBootFallback();
     unawaited(refreshSleepTimeDnd());
   }
@@ -1293,6 +1295,14 @@ class AppState extends ChangeNotifier {
           "=====reconcileManualAlarms: platform state unknown: ${e.runtimeType}");
       return;
     }
+    // docs/TODO.md T-237: a ring that ended by its 60-minute timeout is
+    // rung, not lost - mark it before anything below could treat it as a
+    // missed one (within the window it would ring again).
+    try {
+      for (final id in await ring_timeout.takeTimedOutRingIds()) {
+        markManualAlarmRang(id);
+      }
+    } catch (_) {}
     // One reading of the clock for the whole pass: a second one inside
     // `_getAlarmTime` could land in the next minute and push an alarm that is
     // a fraction of a second from ringing to tomorrow.
@@ -1416,6 +1426,8 @@ class AppState extends ChangeNotifier {
     } else {
       await Alarm.set(alarmSettings: alarmSettings);
     }
+    // docs/TODO.md T-237: only after a successful set.
+    _pushRingTimeout(() => ring_timeout.armRingTimeout(alarm.id, alarmSettings.dateTime));
     if (alarm is ManualAlarm) _noteManualArmed(alarm.id, alarmSettings.dateTime);
     refreshDirectBootFallback();
     // docs/TODO.md T-198: the same "every real arm/cancel" hook - see
@@ -1439,19 +1451,26 @@ class AppState extends ChangeNotifier {
   /// it, since there is no more postponing left to soften the wake-up with.
   Future<void> setSnoozeAlarm(
       int id, DateTime at, bool gentleWakeAllowed) async {
-    await Alarm.set(
-      alarmSettings: buildRingingAlarmSettings(
-        id: id,
-        dateTime: alarmPlatformTime(at),
-        tone: _selectedTone,
-        gentlewake: _gentleWakeUpEnabled && gentleWakeAllowed,
-        volume: _selectedVolume,
-        gentleWakeDuration: _gentleWakeUpDuration,
-        title: 'Snoozed alarm',
-        body: "Your alarm is ringing",
-        vibrate: _vibrationEnabled,
-      ),
+    final settings = buildRingingAlarmSettings(
+      id: id,
+      dateTime: alarmPlatformTime(at),
+      tone: _selectedTone,
+      gentlewake: _gentleWakeUpEnabled && gentleWakeAllowed,
+      volume: _selectedVolume,
+      gentleWakeDuration: _gentleWakeUpDuration,
+      title: 'Snoozed alarm',
+      body: "Your alarm is ringing",
+      vibrate: _vibrationEnabled,
     );
+    // Through the same seam as [_setAlarm] (docs/TODO.md T-237's tests).
+    final platformSet = debugPlatformSet;
+    if (platformSet != null) {
+      await platformSet(settings);
+    } else {
+      await Alarm.set(alarmSettings: settings);
+    }
+    // The postponed ring is its own ring: it gets its own 60 minutes.
+    _pushRingTimeout(() => ring_timeout.armRingTimeout(id, settings.dateTime));
   }
 
   /// Stops the platform alarm [id] without removing anything from
@@ -1465,6 +1484,16 @@ class AppState extends ChangeNotifier {
     unawaited(refreshSleepTimeDnd());
   }
 
+  /// docs/TODO.md T-237: fire-and-forget, and whatever the native side or a
+  /// replaced hook does, it never fails an arm or a stop.
+  void _pushRingTimeout(Future<void> Function() push) {
+    unawaited(() async {
+      try {
+        await push();
+      } catch (_) {}
+    }());
+  }
+
   Future<void> _platformStop(int id) async {
     final platformStop = debugPlatformStop;
     if (platformStop != null) {
@@ -1472,6 +1501,9 @@ class AppState extends ChangeNotifier {
     } else {
       await Alarm.stop(id);
     }
+    // docs/TODO.md T-237: every stop - the user's, a removal, a snooze's
+    // first half - ends that ring's timeout. A snooze arms its own after.
+    _pushRingTimeout(() => ring_timeout.cancelRingTimeout(id));
   }
 
 
@@ -1985,5 +2017,8 @@ class AppState extends ChangeNotifier {
     // docs/TODO.md T-198: likewise for the sleep-time window - see
     // refreshSleepTimeDnd's list of call sites.
     unawaited(refreshSleepTimeDnd());
+    // docs/TODO.md T-237: the plugin re-arms its alarms itself after a
+    // force-stop or an update; give those a timeout too.
+    _pushRingTimeout(ring_timeout.syncRingTimeouts);
   }
 }
