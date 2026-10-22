@@ -83,6 +83,15 @@ class Handler {
   /// between retries without a real test waiting on real wall-clock time.
   final Future<void> Function(Duration duration) _sleep;
 
+  /// docs/TODO.md T-236: whether the platform reports alarm [id] as ringing
+  /// right now. Injectable for tests; the default asks the alarm plugin.
+  final Future<bool> Function(int id) _isRinging;
+
+  /// docs/TODO.md T-236: stops alarm [id] on the platform and reports whether
+  /// it did (`Alarm.stop` returns `false` for a failed stop rather than
+  /// throwing). Injectable for tests.
+  final Future<bool> Function(int id) _stopAlarm;
+
   /// docs/TODO.md T-38 (maintainer request): showing the ringing overlay is
   /// retried this many times, [overlayRetryDelay] apart, before the 3-second
   /// fallback below gives up and silently stops the alarm. A single failed
@@ -103,9 +112,13 @@ class Handler {
   /// regression test, which needs full control over when/whether it completes.
   Handler(this._context,
       {Future<ReplanResult?> Function(AppState)? runCheckpoint,
-      Future<void> Function(Duration)? sleep})
+      Future<void> Function(Duration)? sleep,
+      Future<bool> Function(int id)? isRinging,
+      Future<bool> Function(int id)? stopAlarm})
       : _runCheckpoint = runCheckpoint ?? _ringCheckpoint,
-        _sleep = sleep ?? Future.delayed {
+        _sleep = sleep ?? Future.delayed,
+        _isRinging = isRinging ?? ((id) => Alarm.isRinging(id)),
+        _stopAlarm = stopAlarm ?? Alarm.stop {
     _appState = Provider.of<AppState>(_context, listen: false);
   }
 
@@ -131,6 +144,9 @@ class Handler {
     Diag.alarmRang(
       alarmType: ringing.runtimeType,
       knownToAppState: ringing != null,
+      // T-236: true also for a ring that is still going after the overdue
+      // window (the original due time is old) - the flag describes the
+      // event's age, not whether it was stopped.
       stale: isAlarmStale(event.dateTime, DateTime.now()),
       deactivationCodeSet: _appState.deactivationCode != null,
       checkpointFired: ringing is ScheduledAlarm,
@@ -155,6 +171,18 @@ class Handler {
       await _runCheckpoint(_appState);
     } catch (e) {
       debugPrint("=====handleAlarm: ring checkpoint failed: ${e.runtimeType}");
+    }
+  }
+
+  /// Whether alarm [id] is ringing; an unreadable state counts as ringing
+  /// (T-236: never silence an alarm on doubt).
+  Future<bool> _alarmIsRinging(int id) async {
+    try {
+      return await _isRinging(id);
+    } catch (e) {
+      debugPrint(
+          "=====handleAlarm: Failed to read the ringing state: ${e.runtimeType}");
+      return true;
     }
   }
 
@@ -219,34 +247,39 @@ class Handler {
     bool stoppingAlarmPossible = true;
 
     try {
-      bool alarmSetBeforeNow = false;
+      // docs/TODO.md T-236 (audit G3-03): "stale" only ever applies to
+      // something that is NOT ringing. Every event that reaches this method
+      // through `Alarm.ringing` is ringing by construction (the plugin stops
+      // past-due, silent alarms itself in `Alarm.init`), so this branch is a
+      // narrow guard for the one race left: the ring ended between the stream
+      // event and here (e.g. via the notification), and a ring screen shown
+      // now would stay stuck open (T-147). A ring that is still going - for
+      // an hour or for six, the plugin's loop never ends - must always get
+      // its screen and, if configured, the QR gate; stopping it silently
+      // because its ORIGINAL due time is old let "swipe the app away (T-230),
+      // wait an hour, open it" end a gated alarm for free. If the platform
+      // cannot say, the alarm counts as ringing: never silence on doubt.
+      bool silentAndStale = false;
       try {
-        alarmSetBeforeNow = isAlarmStale(event.dateTime, DateTime.now());
+        silentAndStale = isAlarmStale(event.dateTime, DateTime.now()) &&
+            !await _alarmIsRinging(event.id);
       } catch (e) {
         debugPrint(
-            "=====handleAlarm: Failed to check if alarm is set in the past: ${e.runtimeType}");
+            "=====handleAlarm: Failed to check if the alarm is stale: ${e.runtimeType}");
       }
 
-      if (alarmSetBeforeNow) {
-        debugPrint("=====handleAlarm: Stopping alarm that is set in the past");
+      if (silentAndStale) {
+        debugPrint("=====handleAlarm: Stopping a stale alarm that is not ringing");
+        // Only a stop that took effect leaves nothing to show. A stop that
+        // fails or throws falls through: an alarm that could not be stopped
+        // must still get a screen to stop it from.
+        var stopped = false;
         try {
-          Alarm.stop(event.id);
+          stopped = await _stopAlarm(event.id);
         } catch (e) {
           debugPrint("=====handleAlarm: Failed to stop alarm: ${e.runtimeType}");
-          stoppingAlarmPossible = false;
         }
-
-        // Only a stop that took effect leaves nothing to show. If the alarm
-        // is still armed, fall through: a ring that could not be stopped
-        // must still get a screen to stop it from.
-        try {
-          List<AlarmSettings> alarmSettings = await Alarm.getAlarms();
-          if (!alarmSettings.contains(event)) {
-            return;
-          }
-        } catch (e) {
-          debugPrint("=====handleAlarm: Failed to get alarms list: ${e.runtimeType}");
-        }
+        if (stopped) return;
       }
 
       // The QR gate needs a configured code - and, since T-176, an alarm

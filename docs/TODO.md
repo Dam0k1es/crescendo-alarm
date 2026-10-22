@@ -8461,3 +8461,21 @@ red and that stays invisible in the rest of the suite today.
   What follows - FR-16's Checkpoint 2 never runs at bedtime, and the leg should assert the callback
   does NOT fire before the due time - is T-199.
 
+
+### T-236 · A ringing alarm is never stopped by the stale rule (audit G3-03 residual, P1, fixed)
+- **Problem:** `Handler.handleAlarm` stopped an event silently when more than `overdueRingWindow`
+  had passed since its original due time - also while it was still audibly ringing. Since T-230
+  (a Recents swipe leaves the ring going) "swipe, wait an hour, open the app" ended a QR-gated
+  alarm without the gate.
+- **Fix:** the stale rule applies only to a silent alarm (`isRinging` seam; an unreadable state
+  counts as ringing), and the stop goes through the `stopAlarm` seam: if it did not stop, the ring
+  screen / QR gate is shown. `test/handler_stale_ringing_test.dart`.
+
+### T-205 / M2-01 · Manual alarms follow the device zone on app open (decision 2026-10-23)
+- `AppState.reconcileManualAlarmsWithPlatform` (step 2 of every checkpoint) re-arms an enabled
+  manual alarm whose armed instant differs by a minute or more from its next occurrence under
+  the current zone rules. One clock reading per pass; entries ringing, past or due within two
+  minutes, and alarms changed during the pass are left alone.
+- **Documented limit (maintainer choice):** no native TIMEZONE_CHANGED receiver. Without opening
+  the app after a zone change the alarm rings at the old absolute time.
+  `test/manual_alarm_zone_reconcile_test.dart`.

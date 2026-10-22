@@ -285,11 +285,11 @@ clock times recorded so far (the rest of the log stays).
     at 00:00 on the night they go back.
   - This is tested for every time zone with a change in 2026/2027, but has not yet been watched on
     a real phone across a real change - glance at your alarm list around the next one.
-- **Travelling across time zones is not yet reliably supported.** In particular, the first manual
-  alarm after a flight can still ring at the time it was set for in the old zone, and travel
-  combined with daylight saving changes in several regions is not supported yet. Until that is
-  solved, check your alarms after arriving in another time zone. Details:
-  `docs/timezone-requirements.md`.
+- **Travelling across time zones is only partly supported.** Manual alarms follow the new zone
+  when you open the app or return to it after the change; if you do not open the app, they still
+  ring at the old absolute time. Travel combined with daylight saving changes in several regions
+  is not supported yet. After arriving in another time zone, open the app once and check your
+  alarms. Details: `docs/timezone-requirements.md`.
 
 ## When an alarm rings
 

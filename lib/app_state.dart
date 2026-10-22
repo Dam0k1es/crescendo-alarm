@@ -1285,18 +1285,27 @@ class AppState extends ChangeNotifier {
   /// does nothing when the platform state cannot be read. Never throws.
   Future<void> reconcileManualAlarmsWithPlatform(
       {DateTime Function()? now, Notifications? notifications}) async {
-    final Set<int> platformIds;
+    final Map<int, AlarmSettings> entries;
     try {
-      platformIds = (await platformAlarms()).map((a) => a.id).toSet();
+      entries = {for (final a in await platformAlarms()) a.id: a};
     } catch (e) {
       debugPrint(
           "=====reconcileManualAlarms: platform state unknown: ${e.runtimeType}");
       return;
     }
+    // One reading of the clock for the whole pass: a second one inside
+    // `_getAlarmTime` could land in the next minute and push an alarm that is
+    // a fraction of a second from ringing to tomorrow.
     final nowTime = (now ?? DateTime.now)();
+    DateTime nowOnce() => nowTime;
     for (final alarm in List<ManualAlarm>.from(_manualAlarms)) {
-      if (!alarm.enabled || platformIds.contains(alarm.id)) continue;
+      if (!alarm.enabled) continue;
       try {
+        final entry = entries[alarm.id];
+        if (entry != null) {
+          await _realignToCurrentZone(alarm, entry, nowTime, nowOnce);
+          continue;
+        }
         if (await (debugPlatformIsRinging ?? Alarm.isRinging)(alarm.id)) {
           continue;
         }
@@ -1319,12 +1328,46 @@ class AppState extends ChangeNotifier {
             await _postMissedNotice(alarm, dueAt, notifications);
           }
         }
-        await _setAlarm(alarm, _getAlarmTime(alarm, now: now));
+        await _setAlarm(alarm, _getAlarmTime(alarm, now: nowOnce));
       } catch (e) {
         debugPrint(
             "=====reconcileManualAlarms: re-arm failed: ${e.runtimeType}");
       }
     }
+  }
+
+  /// docs/TODO.md T-205 / audit M2-01 (maintainer decision 2026-10-23): a
+  /// manual alarm is a wall-clock time, but it was armed as ONE absolute
+  /// instant and never looked at again - a changed device time zone (or
+  /// changed zone rules) left it ringing hours off. On every app open and
+  /// resume the armed instant is compared with the alarm's next occurrence
+  /// under the CURRENT rules ([_getAlarmTime], the resolution used for
+  /// arming) and re-armed when they differ by a minute or more.
+  ///
+  /// Left alone: an entry that is ringing, at or before [nowTime], or due
+  /// within two minutes (about to ring - re-arming stops the plugin alarm
+  /// first, `Alarm.set` calls `stop`); an alarm that was switched off, edited
+  /// or deleted while the platform was being asked. Unknown ids (a snoozed
+  /// ring has a new random id, `snooze.dart`) never get here - only enabled
+  /// [ManualAlarm]s do. Without opening the app after a zone change nothing
+  /// is corrected (no native TIMEZONE_CHANGED receiver, a maintainer choice).
+  Future<void> _realignToCurrentZone(ManualAlarm alarm, AlarmSettings entry,
+      DateTime nowTime, DateTime Function() nowOnce) async {
+    if (!entry.dateTime.isAfter(nowTime) ||
+        entry.dateTime.difference(nowTime) <= const Duration(minutes: 2)) {
+      return;
+    }
+    if (await (debugPlatformIsRinging ?? Alarm.isRinging)(alarm.id)) return;
+    final expected = _getAlarmTime(alarm, now: nowOnce);
+    if (entry.dateTime.difference(expected).abs() < const Duration(minutes: 1)) {
+      return;
+    }
+    // The platform was asked (awaits above): the alarm may have changed.
+    final current = _manualAlarms.where((a) => a.id == alarm.id).firstOrNull;
+    if (current == null || !identical(current, alarm) || !current.enabled) {
+      return;
+    }
+    await _setAlarm(alarm, expected);
   }
 
   /// How far back a lost occurrence is still worth a notice (T-234): beyond
