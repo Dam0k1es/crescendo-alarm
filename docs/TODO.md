@@ -2433,8 +2433,9 @@ rather than expanded into more scope here: see T-185.
   exist).
 - **Verified on the phone (Fairphone 3, Android 13, 2026-10-20, local debug build):** an alarm due
   13:54, force-stopped before, the app opened at 13:56: it rang 8 s after opening (device-trial H3
-  re-run). **Still to confirm on the device:** the more-than-60-minutes case (H4 re-run: the
-  notice, id `0x217`); covered by the unit tests only so far.
+  re-run). The more-than-60-minutes case (H4 re-run, 2026-10-23): an alarm due 01:34 opened 63 min
+  late - nothing rang, notice id `0x217` "Alarm missed ... Fri 01:34", re-armed for the next Friday;
+  ~60 h overdue - re-armed silently (beyond the 48 h window).
 
 ### T-235 · Switching "Also record wake and appointment times" off leaves recorded clock times in the export — FIXED on `dev` (2026-10-20) (P2)
 
