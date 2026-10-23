@@ -20,6 +20,10 @@ version: 1.6.0+7
 
 environment:
   sdk: '>=3.3.3 <4.0.0'
+  # The Flutter release this app is built and tested with (.fvmrc, the CI
+  # workflows' FLUTTER_VERSION and F-Droid's recipe name the same one;
+  # test/build_pins_test.dart keeps them equal).
+  flutter: '>=3.47.2 <3.48.0'
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
