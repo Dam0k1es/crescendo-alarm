@@ -153,7 +153,7 @@ Android version - Android 14 and older are not covered by a result on 15+.
 | H8 | Alarms screen | **Manual** is the left tab, **Scheduled** the right one; the screen opens on Scheduled; the bottom-right button is **+** on Manual and **Sync** on Scheduled | |
 | H9 | After installing over v1.4.0 (14 permissions instead of 31): let an alarm ring, wait for the bedtime reminder, trigger an FR-6 notice | every notification still appears | |
 | H10 | Unlocked phone, **app open**: let a manual alarm +1 min ring (no QR code, then again with one) (T-229) | the ring screen shows **without** a notification banner over its top; the tone (and vibration, if on) keeps playing; the notification is in the shade (silent section) | |
-| H11 | Unlocked phone, **another app** in front when the alarm rings (T-229) | a heads-up appears as before (the way to the ring screen); tapping it opens the ring screen, and the banner is then gone; tone continues | |
+| H11 | Unlocked phone, **another app** in front when the alarm rings, with "Display over other apps" **not** allowed (T-229) | a heads-up appears (the way to the ring screen); tapping it opens the ring screen, and the banner is then gone; tone continues | Fairphone 3 / Android 13, 2026-10-24 phone time: heads-up only, no screen (`SKIP_NO_PERMISSION`) - as described |
 | H12 | **Locked** phone, screen off, alarm rings (T-229) | the ring screen launches full-screen over the lock screen exactly as before (R4); tone continues | |
 | H13 | While ringing with the ring screen open: pull down the shade, swipe the alarm notification away (T-229, T-147) | the alarm keeps ringing; the notification comes back (the banner may reappear until the app is next brought to the front - known limit) | |
 | H14 | Settings → Apps → Crescendo Alarm → Notifications after H10 (T-229) | a new channel "Ringing alarm (alarm screen open)" exists, set to silent; "Alarm Notification" unchanged | |
@@ -245,3 +245,18 @@ the ring not stopped.
 | T-237 on an unattended ring | The ring was over at 09:17; the "Alarm stopped" notice (id 536) was posted at 09:00:00 - 60 minutes after the 08:00 due time. |
 | Next days | The following day's alarm (and its timeout) was still armed. |
 | Not covered | The ring screen opening by itself on the locked phone was not observed; Android 13 only. |
+
+## Alarm screen opening by itself (T-240)
+
+The phone clock of this device ran about a day and an hour ahead of real time during these runs; dates here are
+the phone's.
+
+| # | Check | Expectation | Result |
+|---|---|---|---|
+| J1 | Unlocked, launcher in front, "Display over other apps" allowed | the ring screen (Snooze/Stop) comes to the front by itself | Fairphone 3 / Android 13: confirmed (`LAUNCH`) |
+| J2 | Unlocked, another app in front, allowed | the same | confirmed |
+| J3 | Unlocked, app process killed (`am kill`), allowed | the same, from a fresh process | confirmed (new PID) |
+| J4 | **Locked**, screen off, allowed or not | the full-screen intent as before; the launcher does nothing | confirmed (`SKIP_LOCKED`, ring screen over the lock screen) |
+| J5 | Not allowed, unlocked | heads-up only, as before | confirmed (`SKIP_NO_PERMISSION`) |
+| J6 | Settings > Alarm Screen, denied state: **Allow** | opens the system "Display over other apps" screen for the app | confirmed |
+| J7 | **Android 14, 15, 16:** the same J1-J4 and the full-screen-intent card (access on and off) | to be run | **not run** |

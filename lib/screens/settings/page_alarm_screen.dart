@@ -95,12 +95,14 @@ class _PageAlarmScreenState extends State<PageAlarmScreen>
           title: 'On an unlocked phone',
           allowed: status.overlay,
           text: status.overlay
-              ? 'Allowed - the alarm screen opens by itself while you use the '
-                  'phone.'
+              ? 'Allowed - the app can open the alarm screen by itself while '
+                  'you use the phone.'
               : 'Not allowed - while you use the phone an alarm shows only as '
                   'a notification at the top of the screen; tap it to open '
-                  'the alarm screen. Allow "Display over other apps" to have '
-                  'it open by itself. The app draws nothing with it.',
+                  'the alarm screen. To let the app open it by itself, allow '
+                  '"Display over other apps" (Android\'s name for letting an '
+                  'app bring its own screen to the front). The app draws '
+                  'nothing over other apps.',
           actionLabel: 'Allow',
           onAction: access.openOverlaySettings,
         ),

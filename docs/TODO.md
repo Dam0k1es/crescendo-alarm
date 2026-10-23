@@ -8511,7 +8511,7 @@ red and that stays invisible in the rest of the suite today.
   after boot with the timeout re-armed at due + 60 min; Dart snooze arms the timeout for the new time; the
   notification offers no snooze action, so the plugin's native snooze path is unreachable in this app.
 
-### T-239 · The direct-boot mirror and the bedtime reminder point at the alarm that just rang — FIXED on `dev` (2026-10-24) (audit G6-01 / G4-03, P2)
+### T-239 · The direct-boot mirror and the bedtime reminder point at the alarm that just rang — FIXED on `dev` (2026-10-23) (audit G6-01 / G4-03, P2)
 - **Root cause:** `nextWakeUpTime` compared a planned value's raw instant (e.g. 06:33:20) with `now`, but the
   `alarm` plugin rings at the floored whole minute (`alarmPlatformTime`, 06:33:00). Until :20 the alarm that had
   just rung stayed "next", and the cold-start refresh and the ring checkpoint both run in those seconds. Stop and
@@ -8527,7 +8527,7 @@ red and that stays invisible in the rest of the suite today.
   `maxDailyDelta`) when the first appointment was two days out. FR-10 (cold start, no anchor) is the likely reason;
   not checked against the spec.
 
-### T-240 · An alarm rings but no screen opens, only a notification — FIXED on `dev` (2026-10-24) (P1, maintainer report)
+### T-240 · An alarm rings but no screen opens, only a notification — FIXED on `dev` and device-verified on Android 13; Android 14+ not yet verified (2026-10-23) (P1, maintainer report)
 - **Report (maintainer, 2026-10-23):** several times an alarm rang, no screen opened, only a notification; on
   Android 14 or newer, locked and unlocked.
 - **Reproduced (Fairphone 3, Android 13, 2026-10-24):** locked + screen off → the ring screen opens over the
@@ -8535,7 +8535,7 @@ red and that stays invisible in the rest of the suite today.
   and `mCurrentFocus` stays on the other app: only a heads-up. Cause: Android launches a full-screen intent only
   when the screen is off or the device locked, otherwise it shows a heads-up (AOSP `NotificationInterruptState
   ProviderImpl`, `NO_FSI_EXPECTED_TO_HUN`); the `alarm` plugin never starts an activity itself
-  (`audit-recovery/research-ring-screen.md`).
+  ((maintainer-side research notes)).
 - **Maintainer decisions (2026-10-24):** both situations are in scope; the ring screen shall open by itself on an
   unlocked phone, accepting the new permission `SYSTEM_ALERT_WINDOW` ("Display over other apps").
 - **Fix:** `RingScreenLauncher` (observes the plugin's `AlarmRingingLiveData` from `CrescendoApplication`) starts
@@ -8553,3 +8553,15 @@ red and that stays invisible in the rest of the suite today.
 - **Not verified:** Android 14+ (full-screen-intent access denied/allowed, Android 16 behaviour of the background
   start with the overlay permission); the diagnostics log does not yet record whether the phone was locked or the
   app in front at the ring.
+- **Reviews (2026-10-23, Günther / Philipp / Lea):** no blocking defect;
+  Philipp: ACCEPT (no third-party path to the trigger, QR gate not bypassed, no overlay-drawing code in the app or
+  its sources). Applied: honest wording (Android 13 only), USER_GUIDE ring section and checklist H11/J rows,
+  Privacy.md's pre-unlock list now includes the ring-timeout due times, lay wording of the overlay card, wider
+  overlay-API guard in the contract test. **Follow-ups, not done:** (1) verify on Android 14-16 (the CI emulator is
+  API 36) - Günther's recollection that `SYSTEM_ALERT_WINDOW` may no longer exempt a background activity start on 15/16
+  is unchecked, the research found `BAL_ALLOW_SAW_PERMISSION` still in android16-release; (2) a diagnostics record of
+  the launch decision (the `Log.i` is invisible in release) and of lock/foreground state at the ring; (3) a message
+  when opening a system screen fails; (4) a one-time prompt or Alarms-screen warning when the full-screen-intent access
+  is off (nobody is told otherwise); (5) the MobSF gate on `master` has not seen the new permission - run it or add a
+  dated exception; (6) every ring on an unlocked phone takes the foreground, snoozes and backup alarms included (the
+  per-alarm exclusions do not apply to the launch).

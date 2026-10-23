@@ -83,10 +83,15 @@ void main() {
           reason: f.path);
     }
     for (final k in Directory(_kotlinDir).listSync().whereType<File>()) {
-      expect(k.readAsStringSync(), isNot(contains('TYPE_APPLICATION_OVERLAY')),
-          reason: k.path);
-      expect(k.readAsStringSync(), isNot(contains('WindowManager')),
-          reason: k.path);
+      for (final api in [
+        'TYPE_APPLICATION_OVERLAY',
+        'TYPE_SYSTEM_ALERT',
+        'WindowManager',
+        '.addView(',
+      ]) {
+        expect(k.readAsStringSync(), isNot(contains(api)),
+            reason: '\${k.path} must not draw: \$api');
+      }
     }
   });
 }

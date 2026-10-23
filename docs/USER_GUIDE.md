@@ -236,10 +236,12 @@ Whether the alarm screen opens by itself when an alarm rings (`docs/TODO.md` T-2
   The card says so and **Open settings** takes you to the system screen. Below Android 14 there is
   nothing to switch.
 - **On an unlocked phone:** while you use the phone Android shows an alarm only as a notification
-  at the top of the screen and never opens the screen itself. With **Allow** ("Display over other
-  apps") the app opens the alarm screen by itself in that case too. The app draws nothing over
-  other apps with it; the permission is used only to bring its own screen to the front. Without
-  it, tap the notification to reach the alarm screen.
+  at the top of the screen and never opens the screen itself. Android calls the permission that
+  lets an app bring its own screen forward "Display over other apps". With **Allow** the app
+  tries to open the alarm screen by itself in that case too. The app draws nothing over other apps
+  with it; it is used only to bring its own screen to the front. It is checked on Android 13 only
+  so far; if it does not work on your phone, the notification still leads to the alarm screen.
+  The display may then appear over a call or another app you are using.
 
 ### Appearance
 
@@ -323,6 +325,13 @@ An alarm that nobody stops does not ring forever: 60 minutes after its due time 
 and a silent notice, "Alarm stopped", tells you it rang for 60 minutes. This also ends an alarm
 that needs the deactivation code - waiting out the hour is a very uncomfortable way to do it, but
 it is there so a ring can never outlast a dead battery's worth of hours.
+
+When the alarm rings, the display opens by itself if the phone is locked or its screen is off. On a
+phone you are using (unlocked, screen on) Android only shows a notification at the top of the screen
+and does not open the display; tap the notification to open it, or allow "Display over other apps"
+under Settings > Alarm Screen so the app opens the display by itself there too (the display can then
+appear over a call or another app you are using). On Android 14 and newer, also check Settings >
+Alarm Screen > Over the lock screen.
 
 Once the ringing display is open, the alarm's notification no longer appears as a banner over it;
 it stays silently in the notification shade while the alarm keeps ringing. If you leave the app
