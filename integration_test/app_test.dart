@@ -219,6 +219,9 @@ class _SilentNotifications implements Notifications {
 /// the empty device calendar), so a second appForeground would be a pure
 /// no-op. `manualSync` is not subject to the lock and does not treat today as
 /// concluded, so the window begins **today**.
+DateTime? _sharedEventStart;
+Duration? _sharedLeadTime;
+
 Future<DateTime> planOneCalendarEvent(
   AppState appState, {
   Duration leadTime = const Duration(hours: 2),
@@ -230,7 +233,20 @@ Future<DateTime> planOneCalendarEvent(
   // A real future instant is mandatory: AppState.addAlarm rejects a
   // ScheduledAlarm whose time is not after the REAL DateTime.now() - not
   // after an injected "now".
-  final eventStart = DateTime.now().toUtc().add(leadTime);
+  //
+  // The same appointment for every scenario of the file (not "now + 2 h" per
+  // call), and the override is never withdrawn between scenarios: the app of
+  // the PREVIOUS scenario is still alive when the next one starts, and its
+  // open-sync checkpoint lands late - after a tearDown that nulled the override
+  // it read the emulator's real, empty calendar and replanned the new
+  // scenario's week away ("removed 7, added 0"; master run 39975512401, and
+  // again locally on the Fairphone 3). Always seeing the same appointment, a
+  // late checkpoint now plans the same week instead of an empty one.
+  final eventStart = _sharedEventStart != null && _sharedLeadTime == leadTime
+      ? _sharedEventStart!
+      : DateTime.now().toUtc().add(leadTime);
+  _sharedEventStart = eventStart;
+  _sharedLeadTime = leadTime;
 
   // docs/TODO.md T-194: installed process-wide, not just passed to this one
   // call - the app under test runs checkpoints of its own (main.dart's
@@ -281,7 +297,8 @@ void main() {
 
   tearDown(() async {
     QrScanner.debugScanStreamOverride = null;
-    debugFetchEventsOverride = null;
+    // debugFetchEventsOverride stays installed on purpose (see
+    // planOneCalendarEvent): the previous scenario's app keeps running.
     await Alarm.stopAll();
   });
 

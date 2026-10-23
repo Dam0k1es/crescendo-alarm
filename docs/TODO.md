@@ -8684,3 +8684,9 @@ red and that stays invisible in the rest of the suite today.
 - **Still open for F-Droid:** the actual fdroiddata merge request and its CI (the recipe is a draft, not built by F-Droid's
   tooling); chain-of-title record for the university-project code (L1-07, needs the other authors); reproducible builds
   are not demonstrated; `device_calendar` is unmaintained.
+- **E2E race, second round (2026-10-23):** after minSdk 26 the `app_test.dart` file failed T-61 and T-84 on the Fairphone 3
+  although T-84/T-64 had passed twice with the offer dialog pre-answered - the same race (an earlier scenario's app, still
+  alive, runs its open-sync checkpoint late and, with the override nulled by `tearDown`, reads the emulator's empty
+  calendar and replans the new scenario's week away). `planOneCalendarEvent` now uses one appointment for the whole file and
+  `tearDown` no longer withdraws `debugFetchEventsOverride`, so a late checkpoint plans the same week instead of an empty
+  one; the file then passed 7/7 twice. The race itself (a checkpoint queued behind calendar I/O) is not removed from the app.
