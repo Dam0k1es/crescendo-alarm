@@ -82,6 +82,8 @@ enum DiagEvent {
   alarmSync(20),
   alarmRang(30),
   alarmDismissed(31),
+  // docs/TODO.md T-240: the phone's state when an alarm rang - see Diag.ringScreenState.
+  ringScreenState(32),
   qrGate(40),
   notificationEmitted(50),
   failure(90);
@@ -148,6 +150,13 @@ enum DiagField {
   dismissRoute(85),
   stopFailed(86),
   qrOutcome(87),
+  // T-240: the phone's state at a ring (Diag.ringScreenState)
+  ringLaunchDecision(140),
+  ringKeyguardLocked(141),
+  ringScreenOn(142),
+  ringAppInFront(143),
+  ringOverlayGranted(144),
+  ringFullScreenIntent(145),
   // Notifications
   notificationKind(90),
   suppressedByEpisodeFlag(91),
@@ -281,6 +290,37 @@ enum OffsetChangeShape {
   otherChange(3);
 
   const OffsetChangeShape(this.code);
+  final int code;
+}
+
+/// What the native ring-screen launcher decided at a ring (docs/TODO.md T-240).
+/// The codes are the Kotlin `RingScreenLaunchPolicy.Decision.code` values;
+/// `test/alarm_screen_contract_test.dart` keeps both sides equal.
+enum RingLaunchDecision {
+  unknown(0),
+  launched(1),
+  skippedLocked(2),
+  skippedScreenOff(3),
+  skippedAlreadyInFront(4),
+  skippedNoPermission(5),
+  launchFailed(6);
+
+  const RingLaunchDecision(this.code);
+  final int code;
+
+  static RingLaunchDecision fromCode(int code) => values.firstWhere(
+        (d) => d.code == code,
+        orElse: () => RingLaunchDecision.unknown,
+      );
+}
+
+/// A special access as the log sees it: nothing to grant, granted, denied.
+enum AccessState {
+  notApplicable(0),
+  granted(1),
+  denied(2);
+
+  const AccessState(this.code);
   final int code;
 }
 
@@ -941,6 +981,27 @@ abstract final class Diag {
         DiagField.stale: stale ? 1 : 0,
         DiagField.deactivationCodeSet: deactivationCodeSet ? 1 : 0,
         DiagField.checkpointFired: checkpointFired ? 1 : 0,
+      });
+
+  /// docs/TODO.md T-240: the phone's state at a ring, as the native launcher
+  /// saw it. Numbers only - no time, no title - so "the alarm rang but no
+  /// screen opened" can be told apart: a locked phone, a dark screen, the
+  /// app in front, a missing access, a refused start.
+  static void ringScreenState({
+    required RingLaunchDecision decision,
+    required bool keyguardLocked,
+    required bool screenOn,
+    required bool appInFront,
+    required bool overlayGranted,
+    required AccessState fullScreenIntent,
+  }) =>
+      _record(DiagEvent.ringScreenState, <DiagField, int>{
+        DiagField.ringLaunchDecision: decision.code,
+        DiagField.ringKeyguardLocked: keyguardLocked ? 1 : 0,
+        DiagField.ringScreenOn: screenOn ? 1 : 0,
+        DiagField.ringAppInFront: appInFront ? 1 : 0,
+        DiagField.ringOverlayGranted: overlayGranted ? 1 : 0,
+        DiagField.ringFullScreenIntent: fullScreenIntent.code,
       });
 
   static void alarmDismissed({

@@ -43,7 +43,8 @@ void main() {
     for (final method in [
       'status',
       'openFullScreenIntentSettings',
-      'openOverlaySettings'
+      'openOverlaySettings',
+      'ringState',
     ]) {
       expect(dart, contains("'$method'"), reason: 'Dart calls $method');
       expect(mainActivity, contains('"$method"'),
@@ -93,5 +94,21 @@ void main() {
             reason: '\${k.path} must not draw: \$api');
       }
     }
+  });
+
+  test('Dart\'s RingLaunchDecision codes equal the Kotlin policy codes', () {
+    final policy = _read('$_kotlinDir/RingScreenLaunchPolicy.kt');
+    const expected = {
+      'LAUNCH': 1,
+      'SKIP_LOCKED': 2,
+      'SKIP_SCREEN_OFF': 3,
+      'SKIP_ALREADY_IN_FRONT': 4,
+      'SKIP_NO_PERMISSION': 5,
+    };
+    expected.forEach((name, code) {
+      expect(policy, contains('$name($code)'));
+    });
+    expect(policy, contains('CODE_LAUNCH_FAILED = 6'));
+    expect(policy, contains('CODE_UNKNOWN = 0'));
   });
 }

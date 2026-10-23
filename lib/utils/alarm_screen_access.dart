@@ -80,3 +80,62 @@ Future<bool> _open(String method) async {
     return false;
   }
 }
+
+/// The phone's state at the last ring, as `RingScreenLauncher` saw it
+/// (docs/TODO.md T-240) - recorded by `Handler.handleAlarm` in the diagnostics
+/// log. [decisionCode] is `RingScreenLaunchPolicy.Decision.code` (or 6 for a
+/// refused start).
+class RingScreenState {
+  const RingScreenState({
+    required this.decisionCode,
+    required this.keyguardLocked,
+    required this.screenOn,
+    required this.appInFront,
+    required this.overlayGranted,
+    required this.fullScreenIntent,
+  });
+
+  final int decisionCode;
+  final bool keyguardLocked;
+  final bool screenOn;
+  final bool appInFront;
+  final bool overlayGranted;
+
+  /// `null`: nothing to grant (Android below 14).
+  final bool? fullScreenIntent;
+}
+
+/// The native launcher's last ring state, or null when it has seen no ring
+/// (or there is no native side).
+Future<RingScreenState?> Function() readLastRingScreenState = _readRingState;
+
+Future<RingScreenState?> _readRingState() async {
+  try {
+    final reply = await _channel.invokeMapMethod<String, Object?>('ringState');
+    if (reply == null) return null;
+    final decision = reply['decision'];
+    final locked = reply['keyguardLocked'];
+    final screenOn = reply['screenOn'];
+    final front = reply['appInFront'];
+    final overlay = reply['overlay'];
+    final fsi = reply['fullScreenIntent'];
+    if (decision is! int ||
+        locked is! bool ||
+        screenOn is! bool ||
+        front is! bool ||
+        overlay is! bool ||
+        (fsi != null && fsi is! bool)) {
+      return null;
+    }
+    return RingScreenState(
+      decisionCode: decision,
+      keyguardLocked: locked,
+      screenOn: screenOn,
+      appInFront: front,
+      overlayGranted: overlay,
+      fullScreenIntent: fsi as bool?,
+    );
+  } catch (_) {
+    return null;
+  }
+}

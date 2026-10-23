@@ -243,6 +243,11 @@ Whether the alarm screen opens by itself when an alarm rings (`docs/TODO.md` T-2
   so far; if it does not work on your phone, the notification still leads to the alarm screen.
   The display may then appear over a call or another app you are using.
 
+The Alarms screen helps with both: on Android 14 and newer a warning at its top says so as long as full-screen
+notifications are off for the app (**Open settings** takes you to the system screen), and the first time the Alarms
+screen opens the app offers "Display over other apps" once - **Allow** or **Not now**; Settings > Alarm Screen
+stays the place to change it.
+
 ### Appearance
 
 Dark mode (or follow the system setting) and an accent colour.

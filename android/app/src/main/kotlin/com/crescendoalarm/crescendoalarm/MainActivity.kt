@@ -159,6 +159,7 @@ class MainActivity: FlutterActivity() {
                         result.success(AlarmScreenAccess.openFullScreenIntentSettings(applicationContext))
                     "openOverlaySettings" ->
                         result.success(AlarmScreenAccess.openOverlaySettings(applicationContext))
+                    "ringState" -> result.success(RingScreenLauncher.lastRingState())
                     else -> result.notImplemented()
                 }
             }

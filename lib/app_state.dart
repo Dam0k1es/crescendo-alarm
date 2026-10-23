@@ -676,6 +676,18 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// docs/TODO.md T-240: whether the one-time offer to let the alarm screen
+  /// open by itself ("Display over other apps") has been shown. Shown counts
+  /// as shown, whatever the answer; Settings > Alarm Screen stays reachable.
+  bool _alarmScreenPromptShown = false;
+  bool get alarmScreenPromptShown => _alarmScreenPromptShown;
+
+  void markAlarmScreenPromptShown() {
+    _alarmScreenPromptShown = true;
+    _prefs.setBool('alarmScreenPromptShown', true);
+    notifyListeners();
+  }
+
   set diagnosticsEnabled(bool value) {
     _diagnosticsEnabled = value;
     _prefs.setBool('diagnosticsEnabled', _diagnosticsEnabled);
@@ -1985,6 +1997,8 @@ class AppState extends ChangeNotifier {
               _safetyValveNotificationSent;
       _diagnosticsEnabled =
           _prefs.getBool('diagnosticsEnabled') ?? _diagnosticsEnabled;
+      _alarmScreenPromptShown =
+          _prefs.getBool('alarmScreenPromptShown') ?? _alarmScreenPromptShown;
       _disabledDays =
           (_prefs.getStringList('disabledDays') ?? const <String>[]).toSet();
       _ignoredEventIds =

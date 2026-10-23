@@ -68,4 +68,17 @@ class RingScreenLaunchPolicyTest {
         assertEquals(Decision.SKIP_LOCKED, decide(overlayGranted = false, keyguardLocked = true))
         assertEquals(Decision.SKIP_SCREEN_OFF, decide(overlayGranted = false, interactive = false))
     }
+
+    @Test
+    fun `the decision codes are the ones the diagnostics log decodes`() {
+        // Dart's RingLaunchDecision (lib/utils/diag/diag_log.dart) carries the same numbers;
+        // 6 is the launcher's own "start failed", 0 "no ring seen yet".
+        assertEquals(1, Decision.LAUNCH.code)
+        assertEquals(2, Decision.SKIP_LOCKED.code)
+        assertEquals(3, Decision.SKIP_SCREEN_OFF.code)
+        assertEquals(4, Decision.SKIP_ALREADY_IN_FRONT.code)
+        assertEquals(5, Decision.SKIP_NO_PERMISSION.code)
+        assertEquals(6, RingScreenLaunchPolicy.CODE_LAUNCH_FAILED)
+        assertEquals(0, RingScreenLaunchPolicy.CODE_UNKNOWN)
+    }
 }

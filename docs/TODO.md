@@ -8565,3 +8565,12 @@ red and that stays invisible in the rest of the suite today.
   is off (nobody is told otherwise); (5) the MobSF gate on `master` has not seen the new permission - run it or add a
   dated exception; (6) every ring on an unlocked phone takes the foreground, snoozes and backup alarms included (the
   per-alarm exclusions do not apply to the launch).
+- **Follow-ups done (2026-10-23):** (4) `AlarmScreenAccessHint` on the Alarms screen: a persistent warning while the
+  full-screen-intent access (Android 14+) is off, and a one-time offer of "Display over other apps"
+  (`AppState.alarmScreenPromptShown`); (2) a new diagnostics event `ringScreenState` (code 32, fields 140-145, numbers
+  only: launch decision, keyguard locked, screen on, app in front, overlay access, full-screen-intent access) recorded
+  by `Handler.handleAlarm` from the native launcher's last state (`RingScreenLauncher.lastRingState`, channel method
+  `ringState`; a refused start is decision 6). Device (Fairphone 3): fresh install → the offer appeared once and did not
+  return after "Not now"; an unlocked ring without the access logged decision 5, with it decision 1.
+  Still open: (1) Android 14-16, (3) a message when opening a system screen fails, (5) MobSF on `master`, (6) the
+  per-alarm exclusions do not apply to the launch.

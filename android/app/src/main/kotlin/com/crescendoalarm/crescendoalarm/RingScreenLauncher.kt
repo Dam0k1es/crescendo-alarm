@@ -51,6 +51,13 @@ object RingScreenLauncher {
     private var resumedActivities = 0
     private var installed = false
 
+    /** What the launcher saw at the last ring (docs/TODO.md T-240), for the diagnostics log. */
+    @Volatile
+    private var lastState: Map<String, Any?>? = null
+
+    /** Null until a ring has been seen in this process. */
+    fun lastRingState(): Map<String, Any?>? = lastState
+
     fun install(app: Application) {
         if (installed) return
         installed = true
@@ -79,14 +86,29 @@ object RingScreenLauncher {
                 activityResumed = resumedActivities > 0,
             )
             Log.i(TAG, "ring: decision=$decision")
-            if (decision != RingScreenLaunchPolicy.Decision.LAUNCH) return
-            context.startActivity(
-                Intent(context, MainActivity::class.java).addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                )
+            val state = hashMapOf<String, Any?>(
+                "decision" to decision.code,
+                "keyguardLocked" to keyguard.isKeyguardLocked,
+                "screenOn" to power.isInteractive,
+                "appInFront" to (resumedActivities > 0),
+                "overlay" to AlarmScreenAccess.overlayGranted(context),
+                "fullScreenIntent" to AlarmScreenAccess.fullScreenIntentGranted(context),
             )
+            lastState = state
+            if (decision != RingScreenLaunchPolicy.Decision.LAUNCH) return
+            try {
+                context.startActivity(
+                    Intent(context, MainActivity::class.java).addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                            Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    )
+                )
+            } catch (e: Exception) {
+                state["decision"] = RingScreenLaunchPolicy.CODE_LAUNCH_FAILED
+                lastState = state
+                throw e
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Starting the ring screen failed: ${e.javaClass.simpleName}")
         }

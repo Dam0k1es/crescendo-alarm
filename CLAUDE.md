@@ -268,6 +268,12 @@ starts an activity (`docs/TODO.md` T-240, device-reproduced on the Fairphone 3).
   precondition of the ring.
 - **Settings > Alarm Screen reads and opens the two accesses** (full-screen intents on Android 14+, "Display
   over other apps") through channel `.../alarm_screen_access`; it re-reads on resume.
+- **Nobody is left uninformed:** `AlarmScreenAccessHint` (top of the Alarms screen) warns while the
+  full-screen-intent access is off and offers the overlay access once (`AppState.alarmScreenPromptShown`).
+  Every ring logs `Diag.ringScreenState` (decision, keyguard, screen on, app in front, both accesses; numbers only) from
+  the launcher's in-process last state (`ringState` channel method) - so "it rang but no screen opened" can be read
+  from an exported log. `RingLaunchDecision` (Dart) and `RingScreenLaunchPolicy.Decision.code` (Kotlin) are kept
+  equal by `test/alarm_screen_contract_test.dart`.
 - Device-verified on Android 13 only (unlocked + launcher, unlocked + another app, process killed, locked
   = untouched). Android 14+'s full-screen-intent access is read through `canUseFullScreenIntent()` and
   has not been seen on a device.

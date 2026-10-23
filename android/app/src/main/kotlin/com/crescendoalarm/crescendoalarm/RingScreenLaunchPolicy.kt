@@ -33,13 +33,20 @@ package com.crescendoalarm.crescendoalarm
  * the full-screen-intent path (guaranteed wake-up), untouched.
  */
 object RingScreenLaunchPolicy {
-    enum class Decision {
-        LAUNCH,
-        SKIP_LOCKED,
-        SKIP_SCREEN_OFF,
-        SKIP_ALREADY_IN_FRONT,
-        SKIP_NO_PERMISSION,
+    /** [code] is what the diagnostics log records (Dart's `RingLaunchDecision`). */
+    enum class Decision(val code: Int) {
+        LAUNCH(1),
+        SKIP_LOCKED(2),
+        SKIP_SCREEN_OFF(3),
+        SKIP_ALREADY_IN_FRONT(4),
+        SKIP_NO_PERMISSION(5),
     }
+
+    /** The launcher decided to start the screen and Android refused or threw. */
+    const val CODE_LAUNCH_FAILED = 6
+
+    /** No ring has been seen by the launcher yet. */
+    const val CODE_UNKNOWN = 0
 
     fun decide(
         overlayGranted: Boolean,

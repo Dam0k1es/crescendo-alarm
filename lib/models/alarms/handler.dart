@@ -27,6 +27,7 @@ import 'package:crescendo_alarm/models/alarms/ringing_alarm_settings.dart';
 import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
 import 'package:crescendo_alarm/models/scheduling/replan.dart';
+import 'package:crescendo_alarm/utils/alarm_screen_access.dart' as alarm_screen_access;
 import 'package:crescendo_alarm/utils/diag/diag_log.dart';
 import 'package:crescendo_alarm/screens/alarms/screen_active_alarm.dart';
 import 'package:crescendo_alarm/screens/scan_code/qr_scanner.dart';
@@ -218,6 +219,28 @@ class Handler {
     return false;
   }
 
+  /// docs/TODO.md T-240: the phone's state at this ring, from the native
+  /// launcher - fire-and-forget, never allowed to delay the ring screen.
+  Future<void> _recordRingScreenState() async {
+    try {
+      final state = await alarm_screen_access.readLastRingScreenState();
+      Diag.ringScreenState(
+        decision: state == null
+            ? RingLaunchDecision.unknown
+            : RingLaunchDecision.fromCode(state.decisionCode),
+        keyguardLocked: state?.keyguardLocked ?? false,
+        screenOn: state?.screenOn ?? false,
+        appInFront: state?.appInFront ?? false,
+        overlayGranted: state?.overlayGranted ?? false,
+        fullScreenIntent: switch (state?.fullScreenIntent) {
+          true => AccessState.granted,
+          false => AccessState.denied,
+          null => AccessState.notApplicable,
+        },
+      );
+    } catch (_) {}
+  }
+
   /// Everything a newly ringing alarm triggers, in order: the FR-8 ring
   /// checkpoint (fire-and-forget, see [_fireReplanCheckpoint]), the stop of a
   /// stale ring, recording the FR-20 snooze origin, and the ring screen -
@@ -231,6 +254,7 @@ class Handler {
     // alarm from the platform is not a missed alarm.
     _appState.markManualAlarmRang(event.id);
     _fireReplanCheckpoint(event);
+    unawaited(_recordRingScreenState());
 
     // docs/TODO.md T-89: a kDebugMode diagnostic block used to sit here,
     // creating two real notifications with alarm type, wake time, and alarm

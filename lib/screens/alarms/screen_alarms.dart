@@ -27,6 +27,7 @@ import 'package:crescendo_alarm/models/alarms/myalarm.dart';
 import 'package:crescendo_alarm/models/alarms/scheduled_alarm.dart';
 import 'package:crescendo_alarm/models/scheduling/checkpoint.dart';
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
+import 'package:crescendo_alarm/screens/alarms/alarm_screen_access_hint.dart';
 import 'package:crescendo_alarm/utils/permissions.dart';
 import 'package:crescendo_alarm/utils/utils.dart';
 
@@ -308,13 +309,19 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
       ),
       body: Consumer<AppState>(
         builder: (context, appState, child) {
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              buildListView(appState.manualAlarms),
-              buildListView(appState.scheduledAlarms),
-            ],
-          );
+          return Column(children: [
+            // docs/TODO.md T-240: warning / one-time offer, see the widget.
+            const AlarmScreenAccessHint(),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  buildListView(appState.manualAlarms),
+                  buildListView(appState.scheduledAlarms),
+                ],
+              ),
+            ),
+          ]);
         },
       ),
       floatingActionButton: _tabController.index == ScreenAlarms.manualTabIndex

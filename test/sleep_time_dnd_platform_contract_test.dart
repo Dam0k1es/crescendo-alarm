@@ -105,14 +105,15 @@ void main() {
 
     test('the native side exposes exactly the methods Dart calls - none of '
         'which switches Do Not Disturb on', () {
+      // Only the sleep-time DND channel's own handler: MainActivity hosts
+      // other channels too (ring timeout, alarm screen access, ...), each
+      // with methods of its own.
+      final start = mainActivity.indexOf('SleepTimeDnd.CHANNEL');
+      final end = mainActivity.indexOf('MethodChannel(', start);
+      final dndBlock = mainActivity.substring(start, end < 0 ? null : end);
       final methods = RegExp(r'"(\w+)" ->')
-          .allMatches(mainActivity)
+          .allMatches(dndBlock)
           .map((m) => m.group(1)!)
-          .where((m) => m != 'setNextAlarm')
-          // The ring-timeout channel (T-237) shares MainActivity.
-          .where((m) => !{'arm', 'cancel', 'cancelAll', 'sync', 'takeTimedOut'}.contains(m))
-          // The alarm-screen-access channel (T-240) shares MainActivity too.
-          .where((m) => !{'status', 'openFullScreenIntentSettings', 'openOverlaySettings'}.contains(m))
           .toSet();
       expect(methods, {
         'setWindow',

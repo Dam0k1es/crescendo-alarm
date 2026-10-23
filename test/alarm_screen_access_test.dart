@@ -93,4 +93,31 @@ void main() {
     expect(await access.openFullScreenIntentSettings(), isFalse);
     expect(await access.openOverlaySettings(), isFalse);
   });
+
+  test('the last ring state is read as sent', () async {
+    _mock((call) async => {
+          'decision': 5,
+          'keyguardLocked': false,
+          'screenOn': true,
+          'appInFront': false,
+          'overlay': false,
+          'fullScreenIntent': null,
+        });
+
+    final s = await access.readLastRingScreenState();
+
+    expect(s, isNotNull);
+    expect(s!.decisionCode, 5);
+    expect(s.screenOn, isTrue);
+    expect(s.keyguardLocked, isFalse);
+    expect(s.fullScreenIntent, isNull);
+  });
+
+  test('no ring seen yet (null) and no native side both read as null',
+      () async {
+    _mock((call) async => null);
+    expect(await access.readLastRingScreenState(), isNull);
+    _mock(null);
+    expect(await access.readLastRingScreenState(), isNull);
+  });
 }
