@@ -70,6 +70,9 @@ class _AlarmScreenAccessHintState extends State<AlarmScreenAccessHint>
 
   void _maybeOffer(access.AlarmScreenAccess status) {
     final appState = context.read<AppState>();
+    // Not over another screen - above all a ringing alarm's: the offer is
+    // simply left for the next resume, and is not used up.
+    if (ModalRoute.of(context)?.isCurrent == false) return;
     if (_dialogOpen ||
         !status.available ||
         status.overlay ||

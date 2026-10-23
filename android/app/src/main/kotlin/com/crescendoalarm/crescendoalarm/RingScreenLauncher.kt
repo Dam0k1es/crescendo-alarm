@@ -24,6 +24,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
@@ -55,8 +57,37 @@ object RingScreenLauncher {
     @Volatile
     private var lastState: Map<String, Any?>? = null
 
-    /** Null until a ring has been seen in this process. */
-    fun lastRingState(): Map<String, Any?>? = lastState
+    private var ringCounter = 0
+    private val main = Handler(Looper.getMainLooper())
+
+    /** A start was issued and is still being confirmed (until [CONFIRM_AFTER_MILLIS] later). */
+    private var settling = false
+
+    private const val CONFIRM_AFTER_MILLIS = 2_000L
+    private const val WAIT_STEP_MILLIS = 100L
+    private const val WAIT_FOR_RING_MILLIS = 1_500L
+
+    /**
+     * Calls [done] with the state of a ring newer than [after] once it is known:
+     * waits a moment for the ring itself to arrive and, when a start was issued,
+     * until the app has shown or been given up on. Null when no such ring came.
+     * Main thread only.
+     */
+    fun whenRingStateKnown(after: Int, done: (Map<String, Any?>?) -> Unit) {
+        val startedAt = System.currentTimeMillis()
+        fun check() {
+            val state = lastState
+            val newer = state != null && (state["ring"] as Int) > after
+            val waited = System.currentTimeMillis() - startedAt
+            when {
+                newer && !settling -> done(state)
+                !newer && waited >= WAIT_FOR_RING_MILLIS -> done(null)
+                waited >= WAIT_FOR_RING_MILLIS + CONFIRM_AFTER_MILLIS -> done(if (newer) state else null)
+                else -> main.postDelayed({ check() }, WAIT_STEP_MILLIS)
+            }
+        }
+        check()
+    }
 
     fun install(app: Application) {
         if (installed) return
@@ -87,6 +118,7 @@ object RingScreenLauncher {
             )
             Log.i(TAG, "ring: decision=$decision")
             val state = hashMapOf<String, Any?>(
+                "ring" to ++ringCounter,
                 "decision" to decision.code,
                 "keyguardLocked" to keyguard.isKeyguardLocked,
                 "screenOn" to power.isInteractive,
@@ -96,6 +128,7 @@ object RingScreenLauncher {
             )
             lastState = state
             if (decision != RingScreenLaunchPolicy.Decision.LAUNCH) return
+            settling = true
             try {
                 context.startActivity(
                     Intent(context, MainActivity::class.java).addFlags(
@@ -107,8 +140,18 @@ object RingScreenLauncher {
             } catch (e: Exception) {
                 state["decision"] = RingScreenLaunchPolicy.CODE_LAUNCH_FAILED
                 lastState = state
+                settling = false
                 throw e
             }
+            // Android 14+ blocks a background start without throwing: look again.
+            main.postDelayed({
+                val shown = resumedActivities > 0
+                lastState = HashMap(state).apply {
+                    this["appInFront"] = shown
+                    if (!shown) this["decision"] = RingScreenLaunchPolicy.CODE_LAUNCH_NOT_SHOWN
+                }
+                settling = false
+            }, CONFIRM_AFTER_MILLIS)
         } catch (e: Exception) {
             Log.w(TAG, "Starting the ring screen failed: ${e.javaClass.simpleName}")
         }

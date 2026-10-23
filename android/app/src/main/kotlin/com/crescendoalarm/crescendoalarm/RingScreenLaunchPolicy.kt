@@ -45,6 +45,9 @@ object RingScreenLaunchPolicy {
     /** The launcher decided to start the screen and Android refused or threw. */
     const val CODE_LAUNCH_FAILED = 6
 
+    /** The start was issued and the app was still not in front 2 s later (blocked silently). */
+    const val CODE_LAUNCH_NOT_SHOWN = 7
+
     /** No ring has been seen by the launcher yet. */
     const val CODE_UNKNOWN = 0
 

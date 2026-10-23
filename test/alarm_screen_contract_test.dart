@@ -109,6 +109,7 @@ void main() {
       expect(policy, contains('$name($code)'));
     });
     expect(policy, contains('CODE_LAUNCH_FAILED = 6'));
+    expect(policy, contains('CODE_LAUNCH_NOT_SHOWN = 7'));
     expect(policy, contains('CODE_UNKNOWN = 0'));
   });
 }

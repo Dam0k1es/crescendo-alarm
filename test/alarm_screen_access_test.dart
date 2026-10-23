@@ -94,8 +94,31 @@ void main() {
     expect(await access.openOverlaySettings(), isFalse);
   });
 
+  test('the ring state asks for a ring newer than the last one recorded',
+      () async {
+    Object? args;
+    _mock((call) async {
+      args = call.arguments;
+      return {
+        'ring': 4,
+        'decision': 1,
+        'keyguardLocked': false,
+        'screenOn': true,
+        'appInFront': true,
+        'overlay': true,
+        'fullScreenIntent': null,
+      };
+    });
+
+    final s = await access.readLastRingScreenState(3);
+
+    expect(args, {'after': 3});
+    expect(s!.ringId, 4);
+  });
+
   test('the last ring state is read as sent', () async {
     _mock((call) async => {
+          'ring': 1,
           'decision': 5,
           'keyguardLocked': false,
           'screenOn': true,
@@ -104,7 +127,7 @@ void main() {
           'fullScreenIntent': null,
         });
 
-    final s = await access.readLastRingScreenState();
+    final s = await access.readLastRingScreenState(0);
 
     expect(s, isNotNull);
     expect(s!.decisionCode, 5);
@@ -116,8 +139,8 @@ void main() {
   test('no ring seen yet (null) and no native side both read as null',
       () async {
     _mock((call) async => null);
-    expect(await access.readLastRingScreenState(), isNull);
+    expect(await access.readLastRingScreenState(0), isNull);
     _mock(null);
-    expect(await access.readLastRingScreenState(), isNull);
+    expect(await access.readLastRingScreenState(0), isNull);
   });
 }

@@ -117,6 +117,11 @@ Consequences to respect when adding an event:
     `Diag.dayEventTime`, gated behind the switch like `dayPlanned`'s own two. Do not widen the list
     further without the same kind of reason, and note that `...MinuteOfDay` had to be added to the
     pattern, because a `...OfDay` suffix slipped past the original rule unnoticed.
+- **`Diag.ringScreenState` (T-240) records the phone's state at every ring** - launch decision, keyguard locked,
+  screen on, app in front, overlay access, full-screen-intent access - as six small numbers from the native launcher
+  (`RingScreenLauncher`, confirmed 2 s after a start it issued: decision 7 = Android blocked it silently; a state
+  not newer than the last recorded ring is logged as unknown). No clock, so it is always on with the log; it says
+  whether the phone was in use at the wake moment, nothing time-anchored (Philipp's review, accepted).
 - **Exceptions go in as `runtimeType`** through an identity table to an int; `toString()` is never
   called on a `Type` (R8 obfuscation is then irrelevant).
 - **The background isolate has its own ring buffer.** FR-16's Checkpoint 2 was built to run in a

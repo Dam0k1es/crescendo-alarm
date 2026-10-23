@@ -219,11 +219,25 @@ class Handler {
     return false;
   }
 
+  /// The newest native ring state this process has recorded; a state that is
+  /// not newer belongs to an earlier ring.
+  static int _lastRecordedRing = 0;
+
+  @visibleForTesting
+  static void debugResetRecordedRing() => _lastRecordedRing = 0;
+
   /// docs/TODO.md T-240: the phone's state at this ring, from the native
-  /// launcher - fire-and-forget, never allowed to delay the ring screen.
+  /// launcher - fire-and-forget, never allowed to delay the ring screen. The
+  /// native side answers once it knows the ring (and whether a start it issued
+  /// actually showed the app), so this can take a couple of seconds; a state
+  /// that is not newer than the last recorded one is recorded as unknown
+  /// rather than as this ring's.
   Future<void> _recordRingScreenState() async {
     try {
-      final state = await alarm_screen_access.readLastRingScreenState();
+      var state =
+          await alarm_screen_access.readLastRingScreenState(_lastRecordedRing);
+      if (state != null && state.ringId <= _lastRecordedRing) state = null;
+      if (state != null) _lastRecordedRing = state.ringId;
       Diag.ringScreenState(
         decision: state == null
             ? RingLaunchDecision.unknown

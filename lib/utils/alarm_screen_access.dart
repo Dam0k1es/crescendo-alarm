@@ -87,6 +87,7 @@ Future<bool> _open(String method) async {
 /// refused start).
 class RingScreenState {
   const RingScreenState({
+    required this.ringId,
     required this.decisionCode,
     required this.keyguardLocked,
     required this.screenOn,
@@ -95,6 +96,10 @@ class RingScreenState {
     required this.fullScreenIntent,
   });
 
+  /// Counts the rings the native launcher has seen in this process; a state
+  /// whose [ringId] is not newer than the last recorded one belongs to an
+  /// earlier ring.
+  final int ringId;
   final int decisionCode;
   final bool keyguardLocked;
   final bool screenOn;
@@ -105,21 +110,26 @@ class RingScreenState {
   final bool? fullScreenIntent;
 }
 
-/// The native launcher's last ring state, or null when it has seen no ring
-/// (or there is no native side).
-Future<RingScreenState?> Function() readLastRingScreenState = _readRingState;
+/// The native launcher's state of a ring newer than [after] - it waits a
+/// moment for the ring and for a start it issued to show (or fail to) - or
+/// null when it has seen none (or there is no native side).
+Future<RingScreenState?> Function(int after) readLastRingScreenState =
+    _readRingState;
 
-Future<RingScreenState?> _readRingState() async {
+Future<RingScreenState?> _readRingState(int after) async {
   try {
-    final reply = await _channel.invokeMapMethod<String, Object?>('ringState');
+    final reply = await _channel
+        .invokeMapMethod<String, Object?>('ringState', {'after': after});
     if (reply == null) return null;
+    final ring = reply['ring'];
     final decision = reply['decision'];
     final locked = reply['keyguardLocked'];
     final screenOn = reply['screenOn'];
     final front = reply['appInFront'];
     final overlay = reply['overlay'];
     final fsi = reply['fullScreenIntent'];
-    if (decision is! int ||
+    if (ring is! int ||
+        decision is! int ||
         locked is! bool ||
         screenOn is! bool ||
         front is! bool ||
@@ -128,6 +138,7 @@ Future<RingScreenState?> _readRingState() async {
       return null;
     }
     return RingScreenState(
+      ringId: ring,
       decisionCode: decision,
       keyguardLocked: locked,
       screenOn: screenOn,

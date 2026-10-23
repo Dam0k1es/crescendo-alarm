@@ -303,7 +303,10 @@ enum RingLaunchDecision {
   skippedScreenOff(3),
   skippedAlreadyInFront(4),
   skippedNoPermission(5),
-  launchFailed(6);
+  launchFailed(6),
+  // The start was issued and the app was still not in front 2 s later
+  // (Android blocked it silently).
+  launchNotShown(7);
 
   const RingLaunchDecision(this.code);
   final int code;

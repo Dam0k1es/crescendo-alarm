@@ -266,6 +266,9 @@ clipboard (**Copy**) if you need to report a problem. Recording is **off by defa
 **Record diagnostics** to start it; **Clear** deletes everything recorded so far. It never records anything that could identify you (no
 calendar titles, no account names, no exception text) - see the export's own header for exactly
 what mode produced it. Most of the log only ever records bucketed differences, never a clock time.
+Each time an alarm rings, the log also notes as a few numbers whether the phone was locked, its screen on
+and the app in front, and what the app decided about opening the alarm screen - so "it rang but no screen
+opened" can be told apart (no time, no title).
 
 A separate, off-by-default switch lets you additionally include **exact clock times** (minute-of-
 day, no date), for three things:

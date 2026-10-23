@@ -79,6 +79,7 @@ class RingScreenLaunchPolicyTest {
         assertEquals(4, Decision.SKIP_ALREADY_IN_FRONT.code)
         assertEquals(5, Decision.SKIP_NO_PERMISSION.code)
         assertEquals(6, RingScreenLaunchPolicy.CODE_LAUNCH_FAILED)
+        assertEquals(7, RingScreenLaunchPolicy.CODE_LAUNCH_NOT_SHOWN)
         assertEquals(0, RingScreenLaunchPolicy.CODE_UNKNOWN)
     }
 }

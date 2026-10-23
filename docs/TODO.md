@@ -8574,3 +8574,10 @@ red and that stays invisible in the rest of the suite today.
   return after "Not now"; an unlocked ring without the access logged decision 5, with it decision 1.
   Still open: (1) Android 14-16, (3) a message when opening a system screen fails, (5) MobSF on `master`, (6) the
   per-alarm exclusions do not apply to the launch.
+- **Second review round (2026-10-23, Günther / Philipp; no blocking defect) - applied:** the recorded decision is now
+  confirmed (the launcher looks again 2 s after a start it issued; app still not in front = decision 7 `launchNotShown`,
+  i.e. Android blocked it silently, instead of an optimistic 1); every native state carries a ring counter and Dart logs a
+  state not newer than the last recorded ring as unknown (it can no longer log the previous ring's); the one-time offer
+  does not open over another screen such as a ringing alarm's (and is then not used up); `screen_alarms_access_hint_test`
+  pins that the Alarms screen embeds the hint and is silent without a native side; USER_GUIDE and CLAUDE.md name the new
+  event. Philipp: the event is accepted without a switch (no clock; "phone in use at the wake moment" only).

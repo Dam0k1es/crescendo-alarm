@@ -44,7 +44,7 @@ void main() {
   });
 
   tearDown(() {
-    access.readLastRingScreenState = () async => null;
+    access.readLastRingScreenState = (after) async => null;
   });
 
   test('Diag.ringScreenState records the state as numbers', () async {
@@ -82,13 +82,15 @@ void main() {
       'skippedAlreadyInFront': 4,
       'skippedNoPermission': 5,
       'launchFailed': 6,
+      'launchNotShown': 7,
     });
   });
 
   testWidgets('every ring records the native launcher\'s state', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await Diag.init(isolate: LogIsolate.main, enabled: true);
-    access.readLastRingScreenState = () async => const access.RingScreenState(
+    access.readLastRingScreenState = (after) async => const access.RingScreenState(
+          ringId: 1,
           decisionCode: 5,
           keyguardLocked: false,
           screenOn: true,
@@ -132,7 +134,7 @@ void main() {
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     await Diag.init(isolate: LogIsolate.main, enabled: true);
-    access.readLastRingScreenState = () async => null;
+    access.readLastRingScreenState = (after) async => null;
     final appState = AppState();
     await appState.initialized;
     late BuildContext context;
@@ -162,5 +164,61 @@ void main() {
     expect(r, hasLength(1));
     expect(r.single.fields[DiagField.ringLaunchDecision],
         RingLaunchDecision.unknown.code);
+  });
+
+  testWidgets('a state that is not newer than the last recorded ring is never '
+      'recorded as that ring\'s', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await Diag.init(isolate: LogIsolate.main, enabled: true);
+    final asked = <int>[];
+    access.readLastRingScreenState = (after) async {
+      asked.add(after);
+      // The native side has nothing newer: it answers with the old ring.
+      return const access.RingScreenState(
+        ringId: 1,
+        decisionCode: 1,
+        keyguardLocked: false,
+        screenOn: true,
+        appInFront: true,
+        overlayGranted: true,
+        fullScreenIntent: null,
+      );
+    };
+    final appState = AppState();
+    await appState.initialized;
+    late BuildContext context;
+    await tester.pumpWidget(ChangeNotifierProvider.value(
+      value: appState,
+      child: MaterialApp(
+        home: Builder(builder: (c) {
+          context = c;
+          return const SizedBox();
+        }),
+      ),
+    ));
+    Handler.debugResetRecordedRing();
+    final handler = Handler(
+      context,
+      runCheckpoint: (_) async => null,
+      sleep: (d) async {},
+      isRinging: (id) async => true,
+      stopAlarm: (id) async => true,
+    );
+
+    await handler.handleAlarm(_alarm());
+    for (var i = 0; i < 5; i++) {
+      await tester.pump();
+    }
+    await handler.handleAlarm(_alarm());
+    for (var i = 0; i < 5; i++) {
+      await tester.pump();
+    }
+
+    final r = Diag.records
+        .where((e) => e.event == DiagEvent.ringScreenState)
+        .map((e) => e.fields[DiagField.ringLaunchDecision])
+        .toList();
+    expect(asked, [0, 1], reason: 'the second ring asks for something newer');
+    expect(r, [1, RingLaunchDecision.unknown.code]);
   });
 }
