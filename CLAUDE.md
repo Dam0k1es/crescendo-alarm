@@ -248,6 +248,30 @@ never ends. Rules that are load-bearing:
   until the app is next opened (the plugin re-arms repeats it knows about; Dart's reconcile covers
   the rest). A reboot while ringing leaves only the remainder up to due + 60 min.
 
+## Alarm screen opening by itself (`RingScreenLauncher.kt`, `AlarmScreenAccess.kt`, `lib/screens/settings/page_alarm_screen.dart`)
+
+Android launches the `alarm` plugin's full-screen-intent notification only on a locked phone or with the
+screen off; on a phone in use it shows a heads-up (AOSP `NO_FSI_EXPECTED_TO_HUN`), and the plugin never
+starts an activity (`docs/TODO.md` T-240, device-reproduced on the Fairphone 3). Rules that are load-bearing:
+
+- **Only the unlocked, screen-on, app-not-in-front state is touched.** `RingScreenLaunchPolicy.decide`
+  (pure, JVM-tested) returns `LAUNCH` only then; a locked phone or a dark screen stays the
+  full-screen-intent path (guaranteed wake-up), exactly as before.
+- **`SYSTEM_ALERT_WINDOW` is the one added permission, used to start `MainActivity` from the
+  background and for nothing else** (`test/alarm_screen_contract_test.dart` forbids
+  `TYPE_APPLICATION_OVERLAY`/`WindowManager`). It is user-granted in Settings > Alarm Screen; without it
+  nothing changes. It is on the reviewed allow-list in `scripts/check_manifest_permissions.py`.
+- **The trigger is the plugin's in-process `AlarmRingingLiveData`,** observed from
+  `CrescendoApplication.onCreate` (so also in a process the ring itself started, with no engine); Dart
+  needs nothing - with an engine alive `Handler.handleAlarm` has queued the screen, on a cold start
+  `Alarm.init` finds the ringing alarm. Failures are swallowed: an addition to the notification, never a
+  precondition of the ring.
+- **Settings > Alarm Screen reads and opens the two accesses** (full-screen intents on Android 14+, "Display
+  over other apps") through channel `.../alarm_screen_access`; it re-reads on resume.
+- Device-verified on Android 13 only (unlocked + launcher, unlocked + another app, process killed, locked
+  = untouched). Android 14+'s full-screen-intent access is read through `canUseFullScreenIntent()` and
+  has not been seen on a device.
+
 License: GNU GPLv3 (see `LICENSE`). Copyright holders named in tracked files: Dam0k1es, centron5961
 - two of the three original developers of the project this repository grew from. All three have
 now given explicit consent to GPLv3 (2026-09-20); the third's consent is to the licence only, not

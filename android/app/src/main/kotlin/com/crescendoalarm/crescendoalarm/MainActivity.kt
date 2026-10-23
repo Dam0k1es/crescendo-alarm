@@ -149,6 +149,20 @@ class MainActivity: FlutterActivity() {
                 }
             }
 
+        // docs/TODO.md T-240: the two accesses behind "the alarm screen opens by
+        // itself", read and opened from Settings > Alarm Screen.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AlarmScreenAccess.CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "status" -> result.success(AlarmScreenAccess.status(applicationContext))
+                    "openFullScreenIntentSettings" ->
+                        result.success(AlarmScreenAccess.openFullScreenIntentSettings(applicationContext))
+                    "openOverlaySettings" ->
+                        result.success(AlarmScreenAccess.openOverlaySettings(applicationContext))
+                    else -> result.notImplemented()
+                }
+            }
+
         // docs/TODO.md T-229: the ring screens (ScreenAlarmActive, QrScanner)
         // call this when they appear and on every resume, to take the
         // plugin's ringing notification out of the heads-up over them.

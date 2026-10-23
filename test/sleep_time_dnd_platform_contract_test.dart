@@ -111,6 +111,8 @@ void main() {
           .where((m) => m != 'setNextAlarm')
           // The ring-timeout channel (T-237) shares MainActivity.
           .where((m) => !{'arm', 'cancel', 'cancelAll', 'sync', 'takeTimedOut'}.contains(m))
+          // The alarm-screen-access channel (T-240) shares MainActivity too.
+          .where((m) => !{'status', 'openFullScreenIntentSettings', 'openOverlaySettings'}.contains(m))
           .toSet();
       expect(methods, {
         'setWindow',

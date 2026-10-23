@@ -10,6 +10,10 @@ The App collects the following data, all of it stored locally on your device:
 - Calendar Data: With your permission, the App reads your calendar to derive intelligent wake-up
   times based on your commitments. The App does not write to or modify your calendar.
 
+- "Display over other apps": If you allow it (Settings > Alarm Screen), the App uses it only to bring
+  its own alarm screen to the front when an alarm rings on an unlocked phone. It draws nothing over
+  other apps and reads nothing from them.
+
 - Camera Data: With your permission, the App uses your camera to scan a QR code or barcode - to
   import it as your deactivation code, or to check it when a "guaranteed wake-up" alarm rings. The
   camera feed is used only at the moment of scanning to detect the code - no photo or video is

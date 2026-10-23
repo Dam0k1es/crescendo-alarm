@@ -53,6 +53,11 @@ ALLOWED = {
     "android.permission.WAKE_LOCK": "ringing the alarm with the screen off",
     "android.permission.VIBRATE": "alarm vibration",
     "android.permission.USE_FULL_SCREEN_INTENT": "ring screen over the lock screen",
+    "android.permission.SYSTEM_ALERT_WINDOW":
+        "T-240: lets the app start the ring screen itself on an unlocked phone "
+        "in use (Android shows a full-screen-intent notification only as a "
+        "heads-up there and blocks background activity starts without it); "
+        "granted by the user in Settings > Alarm Screen, never used to draw",
     "android.permission.FOREGROUND_SERVICE": "alarm and Direct-Boot fallback services",
     "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK":
         "the mediaPlayback foreground service type of those services",

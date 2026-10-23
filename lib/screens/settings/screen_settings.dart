@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/screens/settings/page_aboutpage.dart';
+import 'package:crescendo_alarm/screens/settings/page_alarm_screen.dart';
 import 'package:crescendo_alarm/screens/settings/page_alarmtones.dart';
 import 'package:crescendo_alarm/screens/settings/page_appearance.dart';
 import 'package:crescendo_alarm/screens/settings/page_diagnostics.dart';
@@ -37,7 +38,7 @@ class _ScreenSettingsState extends State<ScreenSettings>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -61,6 +62,9 @@ class _ScreenSettingsState extends State<ScreenSettings>
         ),
         bottom: TabBar(
           controller: _tabController,
+          // Five tabs no longer fit side by side without cutting their names.
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           labelColor: Theme.of(context).colorScheme.onSurface,
           unselectedLabelColor: Theme.of(context).colorScheme.onSurface,
           indicatorColor: context.watch<AppState>().accentColor,
@@ -69,6 +73,12 @@ class _ScreenSettingsState extends State<ScreenSettings>
               icon: Icon(Icons.notifications_active,
                   color: context.watch<AppState>().accentColor),
               text: 'Alarm Tones',
+            ),
+            // docs/TODO.md T-240: can the alarm screen open by itself.
+            Tab(
+              icon: Icon(Icons.screen_lock_portrait,
+                  color: context.watch<AppState>().accentColor),
+              text: 'Alarm Screen',
             ),
             Tab(
               icon: Icon(Icons.palette,
@@ -95,6 +105,7 @@ class _ScreenSettingsState extends State<ScreenSettings>
         controller: _tabController,
         children: const [
           PageAlarmTones(),
+          PageAlarmScreen(),
           PageAppearance(),
           PageAboutpage(),
           PageDiagnostics(),

@@ -105,7 +105,7 @@
     <uses-permission android:name="android.permission.BROADCAST_CLOSE_SYSTEM_DIALOGS" tools:node="remove" />
 
     <application
-        android:name="${applicationName}"
+        android:name=".CrescendoApplication"
         android:icon="@mipmap/ic_launcher"
         android:label="Crescendo Alarm"
         android:allowBackup="false">
@@ -292,6 +292,13 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- docs/TODO.md T-240: "Display over other apps". Android shows a
+         full-screen-intent notification as a mere heads-up on a phone in use
+         and lets a background process start an activity only with this
+         permission, so RingScreenLauncher uses it to open the ring screen on
+         an unlocked phone. Off until the user grants it (Settings > Alarm
+         Screen); never used for drawing anything. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />

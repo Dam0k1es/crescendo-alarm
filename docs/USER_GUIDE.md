@@ -210,7 +210,7 @@ below, never the alarm itself:
 
 ## Settings
 
-Four tabs.
+Five tabs.
 
 ### Alarm Tones
 
@@ -225,6 +225,21 @@ Four tabs.
 - **Volume** and **Vibration** are the defaults: scheduled alarms always use them, and a new manual
   alarm starts with them. An existing manual alarm keeps the values it was created with (its own
   Volume can be changed in its dialog).
+
+### Alarm Screen
+
+Whether the alarm screen opens by itself when an alarm rings (`docs/TODO.md` T-240):
+
+- **Over the lock screen:** on a locked phone, or one with the screen off, Android opens the alarm
+  screen from the alarm's full-screen notification. From Android 14 you can withdraw that access
+  for an app; if it is off, the alarm shows only as a notification, also on the lock screen.
+  The card says so and **Open settings** takes you to the system screen. Below Android 14 there is
+  nothing to switch.
+- **On an unlocked phone:** while you use the phone Android shows an alarm only as a notification
+  at the top of the screen and never opens the screen itself. With **Allow** ("Display over other
+  apps") the app opens the alarm screen by itself in that case too. The app draws nothing over
+  other apps with it; the permission is used only to bring its own screen to the front. Without
+  it, tap the notification to reach the alarm screen.
 
 ### Appearance
 

@@ -422,6 +422,7 @@ and the calendar entries the user explicitly grants access to.
   | `WAKE_LOCK` | ringing with the screen off |
   | `VIBRATE` | alarm vibration |
   | `USE_FULL_SCREEN_INTENT` | ring screen over the lock screen |
+  | `SYSTEM_ALERT_WINDOW` | T-240: starts the ring screen on an unlocked phone in use (Android only shows a heads-up there); the user grants it in Settings > Alarm Screen, nothing is ever drawn with it |
   | `FOREGROUND_SERVICE` | alarm and Direct-Boot fallback services |
   | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | those services' foreground-service type |
   | `POST_NOTIFICATIONS` | alarm and reminder notifications |

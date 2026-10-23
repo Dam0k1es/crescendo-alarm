@@ -8526,3 +8526,30 @@ red and that stays invisible in the rest of the suite today.
 - **Observation, not changed:** on a cold start the planner stepped 08:00 → 06:20 in one day (100 min, more than
   `maxDailyDelta`) when the first appointment was two days out. FR-10 (cold start, no anchor) is the likely reason;
   not checked against the spec.
+
+### T-240 · An alarm rings but no screen opens, only a notification — FIXED on `dev` (2026-10-24) (P1, maintainer report)
+- **Report (maintainer, 2026-10-23):** several times an alarm rang, no screen opened, only a notification; on
+  Android 14 or newer, locked and unlocked.
+- **Reproduced (Fairphone 3, Android 13, 2026-10-24):** locked + screen off → the ring screen opens over the
+  lock screen (process alive or killed). **Unlocked** with the launcher or another app in front → the alarm rings
+  and `mCurrentFocus` stays on the other app: only a heads-up. Cause: Android launches a full-screen intent only
+  when the screen is off or the device locked, otherwise it shows a heads-up (AOSP `NotificationInterruptState
+  ProviderImpl`, `NO_FSI_EXPECTED_TO_HUN`); the `alarm` plugin never starts an activity itself
+  (`audit-recovery/research-ring-screen.md`).
+- **Maintainer decisions (2026-10-24):** both situations are in scope; the ring screen shall open by itself on an
+  unlocked phone, accepting the new permission `SYSTEM_ALERT_WINDOW` ("Display over other apps").
+- **Fix:** `RingScreenLauncher` (observes the plugin's `AlarmRingingLiveData` from `CrescendoApplication`) starts
+  `MainActivity` when `RingScreenLaunchPolicy` says LAUNCH - unlocked, screen on, app not in front, permission
+  granted; locked/dark stays the full-screen-intent path. New Settings tab **Alarm Screen**
+  (`page_alarm_screen.dart`, `AlarmScreenAccess.kt`): shows whether full-screen intents (Android 14+,
+  `canUseFullScreenIntent`) and the overlay access are granted and opens the matching system screen.
+  `SYSTEM_ALERT_WINDOW` added to the manifest, the permission allow-list, REQUIREMENTS.md and Privacy.md.
+- **Tests:** `RingScreenLaunchPolicyTest` (JVM), `alarm_screen_access_test.dart`, `page_alarm_screen_test.dart`,
+  `alarm_screen_contract_test.dart`.
+- **Device (Fairphone 3, Android 13):** without the permission `SKIP_NO_PERMISSION` and behaviour as before; with it
+  (`appops set ... SYSTEM_ALERT_WINDOW allow`): unlocked + launcher, unlocked + Settings in front, and unlocked
+  with the process killed all brought the ring screen (Snooze/Stop) to the front; locked → `SKIP_LOCKED`, the
+  full-screen intent as before; the new tab reads the state and **Allow** opens the system overlay screen.
+- **Not verified:** Android 14+ (full-screen-intent access denied/allowed, Android 16 behaviour of the background
+  start with the overlay permission); the diagnostics log does not yet record whether the phone was locked or the
+  app in front at the ring.
