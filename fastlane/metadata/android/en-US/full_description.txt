@@ -17,4 +17,4 @@ Please read before you rely on it
 
 Permissions: calendar (the app only reads; the calendar plugin requires the write permission to be granted, the app never writes), camera (to scan the code), notifications, exact alarms, full-screen notifications, "Display over other apps" (optional, only to bring the alarm screen to the front) and Do Not Disturb access (optional).
 
-Free software under the GNU GPL v3. Source and issue tracker: https://github.com/Dam0k1es/crescendo-alarm
+Free software under the GNU GPL v3 or later. Source and issue tracker: https://github.com/Dam0k1es/crescendo-alarm

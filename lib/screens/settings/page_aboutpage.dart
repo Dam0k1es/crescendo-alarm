@@ -92,7 +92,8 @@ class PageAboutpage extends StatelessWidget {
                       applicationName: 'Crescendo Alarm',
                       applicationLegalese:
                           'Copyright (C) 2026 Dam0k1es, centron5961. Licensed '
-                          'under the GNU General Public License v3.0.',
+                          'under the GNU General Public License, version 3 '
+                          'or any later version.',
                     );
                   },
                   child: const Text('Third-Party Licenses'),

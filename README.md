@@ -1,7 +1,7 @@
 # Crescendo Alarm
 
 [![CI](https://github.com/Dam0k1es/crescendo-alarm/actions/workflows/ci.yml/badge.svg)](https://github.com/Dam0k1es/crescendo-alarm/actions/workflows/ci.yml)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 
 Welcome to Crescendo Alarm, an innovative alarm clock app designed for individuals with irregular sleep patterns. Whether you work shifts or simply have trouble waking up, Crescendo Alarm has features tailored to your needs. (Travelling across time zones is not yet reliably supported - see [docs/timezone-requirements.md](docs/timezone-requirements.md).)
 
@@ -142,8 +142,8 @@ Contributions are welcome! Please fork this repository and submit pull requests.
 
 ### License
 
-Copyright (C) 2026 Dam0k1es, centron5961. Licensed under the GNU General Public License v3.0 - see
-the [LICENSE](LICENSE) file for the full text.
+Copyright (C) 2026 Dam0k1es, centron5961. Licensed under the GNU General Public License, version 3 or (at your option) any later version
+(SPDX: GPL-3.0-or-later) - see the [LICENSE](LICENSE) file for the full text of version 3.
 
 ---
 

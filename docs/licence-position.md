@@ -1,6 +1,8 @@
 # Licence position
 
-Crescendo Alarm is distributed under the **GNU GPLv3** (`LICENSE`). The project grew out of a university
+Crescendo Alarm is distributed under the **GNU GPLv3** (`LICENSE`), in the form **GPL-3.0-or-later**
+(maintainer decision 2026-10-23: every source header already granted "any later version"; README, the About
+page, the store listing and F-Droid's `License:` field now say the same - `test/licence_form_test.dart`). The project grew out of a university
 project with three original developers. All three have now given explicit consent (2026-09-20) to
 this GPLv3 licensing; two, Dam0k1es and centron5961, also consented to being named as copyright
 holders. The third consented to the licence only, not to being named - a deliberate choice by that

@@ -289,7 +289,7 @@ starts an activity (`docs/TODO.md` T-240, device-reproduced on the Fairphone 3).
   = untouched). Android 14+'s full-screen-intent access is read through `canUseFullScreenIntent()` and
   has not been seen on a device.
 
-License: GNU GPLv3 (see `LICENSE`). Copyright holders named in tracked files: Dam0k1es, centron5961
+License: GNU GPLv3 or later, SPDX `GPL-3.0-or-later` (see `LICENSE`; decision 2026-10-23, kept consistent across source headers, README, the About page, the store listing and the F-Droid recipe by `test/licence_form_test.dart`). Copyright holders named in tracked files: Dam0k1es, centron5961
 - two of the three original developers of the project this repository grew from. All three have
 now given explicit consent to GPLv3 (2026-09-20); the third's consent is to the licence only, not
 to being named, so no third name is added anywhere - this is a deliberate choice by that developer,
