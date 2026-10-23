@@ -8635,3 +8635,17 @@ red and that stays invisible in the rest of the suite today.
 - `.github/security-exceptions.json`'s DirectBootReceiver entry says "10-minute fallback siren": checked, still true
   (`DirectBootFallbackService.MAX_RING_MILLIS`); the 60 minutes are the overdue window for arming it, not its length.
 - **Not done:** a CI check on the merged manifest (the source test cannot see what a plugin bump adds).
+
+### T-242 · Missing third-party notices: libyuv (BSD-3) and the dmfs NOTICEs (Apache-2.0) — FIXED on `dev` (2026-10-23) (audit L1-01, L1-02, P3)
+- **L1-01:** CameraX's native library (`androidx.camera:camera-core`, shipped through the QR scanner's camera plugin)
+  statically links libyuv; BSD-3-Clause clause 2 requires its copyright notice in binary distributions, and
+  `AndroidLibraries.txt` pointed at Protocol Buffers' copyright line only. **L1-02:** `org.dmfs:rfc5545-datetime` (and
+  `lib-recur`, same author) arrive via `device_calendar`; Apache-2.0 §4(d) asks for their NOTICE text, which the APK drops.
+- **Fix:** `assets/text/licences/libyuv_LICENSE.txt` (verbatim from the libyuv repository) and `dmfs_NOTICE.txt` (both
+  NOTICE files, verbatim) are registered under "Third-Party Licenses" (`lib/utils/licence_notices.dart`);
+  `scripts/gen_android_library_notices.py`'s licence-text pointers name them, `AndroidLibraries.txt` was regenerated from the
+  CycloneDX SBOM and `--check` matches. `test/licence_notices_test.dart` expects both entries and their key lines.
+- Also corrected: `docs/licence-position.md` said the T-213 notices were "not in any published release" (L1-05) - they
+  have shipped since v1.5.0.
+- **Not done:** the SBOM-driven check does not detect a NEW statically linked native component; a licence dump of all
+  154 Dart packages (L1-08) is still open.

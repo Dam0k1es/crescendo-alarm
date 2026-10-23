@@ -77,14 +77,14 @@ bundled "librscpp" Reed-Solomon implementation) under Apache-2.0, **libzueci** (
 readers are enabled) and zint under BSD-3. All GPLv3-compatible, so the claim above holds for them
 too. *(Corrected 2026-10-01: an earlier version of this paragraph said, after a re-check for
 T-142, that no separate zueci source is vendored - that was wrong; `flutter_zxing` 3.0.1 vendors and
-compiles it.)* Since 2026-10-01 (`docs/TODO.md` T-213; on `dev`, not in `v1.4.0`) `assets/text/NativeCodeNotices.txt` also
+compiles it.)* Since 2026-10-01 (`docs/TODO.md` T-213; shipped since `v1.5.0`, not in `v1.4.0`) `assets/text/NativeCodeNotices.txt` also
 carries libzueci, Bjoern Hoehrmann's UTF-8 decoder (MIT, in zxing-cpp's `Utf.cpp`, `zueci.c` and
 zint's `common.c`), Project Nayuki's QR code (MIT, zint `qr.c`), Kentaro Fukuchi's `qr.h`, a BSI
 permission note (zint `rss.c`), and the embedded Arimo (Apache-2.0) and OCR-B font data, verbatim
 from the vendored `flutter_zxing` 3.0.1; `test/native_code_notices_test.dart` checks the file
 against what `flutter_zxing`'s CMake build actually compiles, so a gap like libzueci's cannot recur.
 
-**Other shipped notices (T-213; on `dev` since 2026-10-01, not yet in any published release - `v1.4.0` predates them).** `lib/utils/licence_notices.dart` registers, under "Third-Party
+**Other shipped notices (T-213; shipped since `v1.5.0` - `v1.4.0` and earlier predate them; T-242 added libyuv and the dmfs NOTICEs after `v1.6.0`).** `lib/utils/licence_notices.dart` registers, under "Third-Party
 Licenses": the Material Icons font (CC BY 4.0, shipped tree-shaken), the native notices above, the
 shipped Java/Kotlin libraries (`assets/text/licences/AndroidLibraries.txt`, generated from the
 CycloneDX SBOM by `scripts/gen_android_library_notices.py` and checked against it in CI's release
@@ -127,8 +127,8 @@ Notices" button, the same pattern T-36 established for this app's own GPLv3 text
 
 ## Bundled assets
 
-Separate from code licensing (requirement R10, met on `dev` since 2026-10-01 - published releases
-up to `v1.4.0` still ship the earlier Mixkit tones and lack the T-213 notices): the six bundled alarm tones
+Separate from code licensing (requirement R10, met since `v1.5.0` - the published releases
+`v1.0.0` to `v1.4.0` still ship the earlier Mixkit tones and lack the T-213 notices and stay downloadable, audit L1-04): the six bundled alarm tones
 (`assets/sounds/*.mp3`) are freely licensed - five edited Wikimedia Commons recordings under
 CC BY 4.0, CC BY-SA 4.0 or US-government public domain, and the default tone synthesised by
 `scripts/gen_tones.py` under GPL-3.0-or-later; `assets/sounds/CREDITS.md` records each file's

@@ -39,13 +39,17 @@ import sys
 LICENCE_TEXTS = {
     "Apache-2.0": (
         "the full text is reproduced in \"Native Code Notices\" (zxing-cpp "
-        "section) and under many Dart packages in \"Third-Party Licenses\"."
+        "section) and under many Dart packages in \"Third-Party Licenses\"; "
+        "the NOTICE files of org.dmfs:lib-recur and org.dmfs:rfc5545-datetime "
+        "are listed under \"lib-recur and rfc5545-datetime (org.dmfs)\"."
     ),
     "BSD-3-Clause": (
         "the 3-clause BSD text, with the copyright line of Protocol Buffers "
         "(repackaged as androidx.datastore:datastore-preferences-external-"
         "protobuf), is listed under \"Protocol Buffers\" in \"Third-Party "
-        "Licenses\"."
+        "Licenses\"; the copyright notice of libyuv (statically linked into "
+        "androidx.camera:camera-core) is listed under \"libyuv (in "
+        "androidx.camera:camera-core)\"."
     ),
     "GPL-2.0-with-classpath-exception": (
         "the full text (GPL-2.0 with the Classpath Exception) is listed under "

@@ -62,6 +62,17 @@ const _protobufPreface =
     'androidx.datastore:datastore-preferences-external-protobuf. Licensed '
     'under the 3-clause BSD licence:';
 
+const _libyuvPreface =
+    'libyuv, which the CameraX native library (androidx.camera:camera-core, '
+    'brought in by the QR scanner\'s camera plugin) is statically linked '
+    'with. Licensed under the 3-clause BSD licence:';
+
+const _dmfsPreface =
+    'The NOTICE files of two Apache-2.0 libraries by Marten Gajda that '
+    'device_calendar brings in (their licence asks for them to be '
+    'reproduced; the Apache License 2.0 text itself is listed under many '
+    'packages above):';
+
 const _otherPreface = 'Additional notices for code this package derived '
     'from other projects (kept outside its LICENSE file):';
 
@@ -89,6 +100,16 @@ const _textNotices = <(List<String>, String, String?)>[
     ['Protocol Buffers'],
     'assets/text/licences/protobuf_LICENSE.txt',
     _protobufPreface
+  ),
+  (
+    ['libyuv (in androidx.camera:camera-core)'],
+    'assets/text/licences/libyuv_LICENSE.txt',
+    _libyuvPreface
+  ),
+  (
+    ['lib-recur and rfc5545-datetime (org.dmfs)'],
+    'assets/text/licences/dmfs_NOTICE.txt',
+    _dmfsPreface
   ),
   (['archive'], 'assets/text/licences/archive_LICENSE-other.md', _otherPreface),
   (['image'], 'assets/text/licences/image_LICENSE-other.md', _otherPreface),
