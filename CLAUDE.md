@@ -599,10 +599,10 @@ Run the E2E suite locally with a connected device or running emulator:
 
 | Component | Version | Notes |
 |---|---|---|
-| Flutter | 3.47.2 (stable) | `fvm` used to pin this on the dev VM |
+| Flutter | 3.47.2 (stable) | pinned in `.fvmrc`, `pubspec.yaml` (`environment: flutter:`) and the workflows' `FLUTTER_VERSION`; `test/build_pins_test.dart` keeps the three equal, F-Droid's recipe reads `.fvmrc` (`docs/fdroid-recipe-draft.yml`) |
 | Dart | 3.13.2 | bundled with the above Flutter |
 | JDK | 17 (OpenJDK) | required by AGP 9.x / Gradle 9.x |
-| Gradle | 9.8.0 | `android/gradle/wrapper/gradle-wrapper.properties` |
+| Gradle | 9.8.0 | `android/gradle/wrapper/gradle-wrapper.properties`, pinned by `distributionSha256Sum`; the tracked `gradle-wrapper.jar` is the official one (both checked by `test/build_pins_test.dart`) |
 | Android Gradle Plugin (AGP) | 9.4.1 | `android/settings.gradle.kts` |
 | Kotlin Gradle Plugin | 2.4.20 | `android/settings.gradle.kts` |
 | compileSdk | 36 (Flutter default) | no override any more - see "compileSdk override ... (removed)" below |

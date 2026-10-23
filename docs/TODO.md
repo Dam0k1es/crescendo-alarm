@@ -8602,3 +8602,17 @@ red and that stays invisible in the rest of the suite today.
   order). Still open for F-Droid: pin the Flutter version in the fdroiddata recipe (and, for consistency, in the repo),
   `distributionSha256Sum` for the Gradle wrapper, the licence notices (libyuv, rfc5545-datetime), T-220, the exported
   `awesome_notifications` receivers (Philipp), and the remaining items of the readiness list.
+
+### F-Droid readiness (2026-10-23) - build pins and a recipe draft
+- **Gradle wrapper** (audit P2-07): `distributionSha256Sum` added to `gradle-wrapper.properties` (official value for
+  `gradle-9.8.0-all.zip` from services.gradle.org); the tracked `gradle-wrapper.jar` was compared with the official
+  `gradle-9.8.0-wrapper.jar.sha256` and matches. `test/build_pins_test.dart` pins both, so a dependency-bot bump of the
+  jar fails the suite until a human has checked it against gradle.org/release-checksums.
+- **Flutter pin:** `.fvmrc` (`3.47.2`), `pubspec.yaml` `environment: flutter: '>=3.47.2 <3.48.0'` and the three
+  workflows' `FLUTTER_VERSION` are equal, enforced by the same test. Whether 3.47.2 is a published stable release at
+  F-Droid build time is **not verified** here (it is what CI and the dev machine run).
+- **`docs/fdroid-recipe-draft.yml`:** a draft recipe modelled on a current Flutter recipe in fdroiddata (srclib
+  `flutter@stable`, the version read from `.fvmrc`, `pub get --enforce-lockfile`, `scandelete: .pub-cache`,
+  `ndk: r28c`, `UpdateCheckMode: Tags ^v[0-9]` with the pubspec regex, which reads `1.6.0` / `7` from this repository's
+  pubspec). **Not build-tested.** Open questions listed in the file: the release signingConfig without `key.properties`,
+  the NDK/CMake for `flutter_zxing`, the licence form (GPL-3.0-or-later vs -only).
