@@ -85,6 +85,12 @@ Future<void> pumpUntilGone(
 Future<AppState> pumpFreshApp(WidgetTester tester) async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.clear();
+  // docs/TODO.md T-240: the one-time offer of "Display over other apps" opens
+  // a dialog on the Alarms screen of a fresh install. These scenarios are not
+  // about it (it has its own widget tests and a device check), and a dialog
+  // over their flows would only add timing noise - they run as a user who has
+  // already answered it.
+  await prefs.setBool('alarmScreenPromptShown', true);
 
   final appState = AppState();
   await appState.initialized;

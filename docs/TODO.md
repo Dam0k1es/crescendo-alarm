@@ -8581,3 +8581,11 @@ red and that stays invisible in the rest of the suite today.
   does not open over another screen such as a ringing alarm's (and is then not used up); `screen_alarms_access_hint_test`
   pins that the Alarms screen embeds the hint and is silent without a native side; USER_GUIDE and CLAUDE.md name the new
   event. Philipp: the event is accepted without a switch (no clock; "phone in use at the wake moment" only).
+- **E2E gate (master run 39975512401, v1.6.0 candidate 8865df8):** `T-84` and `T-64` failed on the CI emulator -
+  "Expected: non-empty" right after planning - while passing alone: the one-time offer dialog (T-240) opened on the
+  Alarms screen of every fresh-install scenario and shifted the timing against the app's own late checkpoint, which
+  replans the week away on the emulator's empty calendar (the race T-194 describes). Reproduced on the Fairphone 3
+  (`flutter test integration_test/app_test.dart`, after `adb install -r -g` as in `run_e2e_tests.sh`: 5 passed, 2
+  failed; with the offer already answered: 7/7 twice). Fix: `pumpFreshApp` pre-sets `alarmScreenPromptShown` (the
+  scenarios are not about the offer, which has widget tests and a device check). The underlying race between a late
+  open-sync checkpoint and a test's plan is not removed.
