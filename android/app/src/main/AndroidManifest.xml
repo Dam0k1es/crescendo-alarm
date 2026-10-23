@@ -252,6 +252,27 @@
              own explicit PendingIntent reaches it. Direct-boot-aware only so
              an entry falling due before the first unlock is delivered (it
              then does nothing: the plugin cannot ring before it either). -->
+        <!-- docs/TODO.md T-241 (Philipp's review): awesome_notifications exports
+             these three receivers with no intent filter and no permission, so
+             any installed app could make this app post an arbitrary
+             notification (wake-screen and full-screen fields included). The
+             plugin reaches them only through explicit PendingIntents of this
+             app. DartRefreshSchedulesReceiver stays exported: it carries the
+             boot/package-replaced filter (T-158: a boot receiver must be
+             exported) and its exposure is the accepted F3 of
+             docs/security-assessment-2026-09.md. -->
+        <receiver
+            android:name="me.carda.awesome_notifications.DartNotificationActionReceiver"
+            android:exported="false"
+            tools:replace="android:exported" />
+        <receiver
+            android:name="me.carda.awesome_notifications.DartDismissedNotificationReceiver"
+            android:exported="false"
+            tools:replace="android:exported" />
+        <receiver
+            android:name="me.carda.awesome_notifications.DartScheduledNotificationReceiver"
+            android:exported="false"
+            tools:replace="android:exported" />
         <!-- docs/TODO.md T-224 (audit P1-01): awesome_notifications' own
              manifest exports this service, and instantiating it throws a
              NullPointerException that kills the whole process - a ringing

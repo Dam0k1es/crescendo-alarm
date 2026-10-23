@@ -8616,3 +8616,22 @@ red and that stays invisible in the rest of the suite today.
   `ndk: r28c`, `UpdateCheckMode: Tags ^v[0-9]` with the pubspec regex, which reads `1.6.0` / `7` from this repository's
   pubspec). **Not build-tested.** Open questions listed in the file: the release signingConfig without `key.properties`,
   the NDK/CMake for `flutter_zxing`, the licence form (GPL-3.0-or-later vs -only).
+
+### T-241 · Three exported awesome_notifications receivers let any app inject notifications — FIXED on `dev` (2026-10-23) (Philipp's review, low-medium)
+- **Finding (final review, 2026-10-23):** `DartNotificationActionReceiver`, `DartDismissedNotificationReceiver` and
+  `DartScheduledNotificationReceiver` are exported by the plugin's manifest with no intent filter and no permission; the
+  scheduled one takes a `notificationJson` extra and posts or schedules it without a caller check. Any installed app with no
+  permission could make Crescendo Alarm post an arbitrary notification (wake-screen and full-screen fields included): a
+  phishing and nuisance surface. It cannot reach the ring, the QR code or scheduling (`onActionReceivedMethod` is empty).
+- **Fix:** the app manifest overrides the three to `exported="false"` (`tools:replace="android:exported"`); the plugin
+  reaches them only through explicit PendingIntents of its own app. `test/manifest_notification_receivers_test.dart`.
+  `DartRefreshSchedulesReceiver` **stays exported** (boot/package-replaced filter; T-158: a boot receiver must be
+  exported), its QUICKBOOT exposure remains the accepted F3 of `docs/security-assessment-2026-09.md`.
+- **Device (Fairphone 3, Android 13):** `am broadcast` to the three receivers from the shell → `Permission Denial` in
+  logcat; to the refresh receiver → delivered. A bedtime reminder scheduled through `DartScheduledNotificationReceiver`
+  still fired when the phone clock was moved to its time ("Sleep time", channel `alerts`), no denial, no crash. The merged
+  debug manifest now exports only MainActivity, DirectBootReceiver, the alarm plugin's BootReceiver, the refresh receiver
+  and (debug/profile) ProfileInstallReceiver.
+- `.github/security-exceptions.json`'s DirectBootReceiver entry says "10-minute fallback siren": checked, still true
+  (`DirectBootFallbackService.MAX_RING_MILLIS`); the 60 minutes are the overdue window for arming it, not its length.
+- **Not done:** a CI check on the merged manifest (the source test cannot see what a plugin bump adds).
