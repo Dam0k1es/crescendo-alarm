@@ -67,6 +67,22 @@ def validated_appsec(report, apk_sha256: str | None) -> dict:
     return appsec
 
 
+def rationale_for(title: str, exceptions: dict) -> str | None:
+    """The dated rationale accepting `title`, or None.
+
+    An exception key is an exact title - except one ending in " *", which accepts
+    any title that STARTS with the key before the "*" (MobSF names the same rule
+    with a version number in it: "... Android version 7.0, [minSdk=24]", and the
+    number follows the project's own minSdk). Nothing else is matched loosely.
+    """
+    if title in exceptions:
+        return exceptions[title]
+    for key, why in exceptions.items():
+        if key.endswith(" *") and title.startswith(key[:-1]):
+            return why
+    return None
+
+
 def evaluate(report, exceptions: dict, apk_sha256: str | None = None) -> int:
     appsec = validated_appsec(report, apk_sha256)
     high, warning = appsec["high"], appsec["warning"]
@@ -75,8 +91,9 @@ def evaluate(report, exceptions: dict, apk_sha256: str | None = None) -> int:
     unaccepted = []
     for finding in high:
         title = finding["title"]
-        if title in exceptions:
-            print(f" - ACCEPTED: {title} - {exceptions[title]}")
+        why = rationale_for(title, exceptions)
+        if why is not None:
+            print(f" - ACCEPTED: {title} - {why}")
         else:
             print(f" - UNACCEPTED: {title}")
             unaccepted.append(title)
@@ -134,6 +151,10 @@ def self_test() -> int:
     accepted = "App can be installed on a vulnerable unpatched Android version 7.0, [minSdk=24]"
     exc = {"_comment": "x", "mobsf": {accepted: "2026-09-09: reason"}, "mobsfscan": {}}
 
+    prefix_key = "App can be installed on a vulnerable unpatched Android version *"
+    prefixed_title = "App can be installed on a vulnerable unpatched Android version 8.0, [minSdk=26]"
+    prefix_exc = {"_comment": "x", "mobsf": {prefix_key: "2026-10-23: reason"}, "mobsfscan": {}}
+
     def report(high=(), warning=()):
         return {"sha256": "ab" * 32, "appsec": {
             "high": [{"title": t, "section": "manifest"} for t in high],
@@ -143,6 +164,12 @@ def self_test() -> int:
         ("clean report passes", json.dumps(report()), True, None),
         ("accepted HIGH passes", json.dumps(report(high=[accepted], warning=["w"])), True, None),
         ("un-accepted HIGH fails", json.dumps(report(high=["Debug enabled"])), False, None),
+        ("a prefix exception ('... *') accepts any version of that rule",
+         json.dumps(report(high=[prefixed_title])), True, None, prefix_exc),
+        ("a prefix exception does not accept another rule",
+         json.dumps(report(high=["Debug enabled"])), False, None, prefix_exc),
+        ("a prefix exception does not accept a title that merely contains the text",
+         json.dumps(report(high=["x " + prefixed_title])), False, None, prefix_exc),
         ("MobSF error reply fails", json.dumps({"error": "Invalid API Key"}), False, None),
         ("report without appsec fails", json.dumps({"sha256": "x"}), False, None),
         ("appsec without 'high' fails", json.dumps({"appsec": {"warning": []}}), False, None),
@@ -162,12 +189,15 @@ def self_test() -> int:
         with open(exc_path, "w") as f:
             json.dump(exc, f)
         rep_path = os.path.join(d, "report.json")
-        for name, text, want_ok, sha in cases:
+        alt_path = os.path.join(d, "exceptions_alt.json")
+        with open(alt_path, "w") as f:
+            json.dump(prefix_exc, f)
+        for name, text, want_ok, sha, *alt in cases:
             with open(rep_path, "w") as f:
                 f.write(text)
             print(f"--- {name}")
             if sha is None:
-                rc = main([rep_path, exc_path])
+                rc = main([rep_path, alt_path if alt else exc_path])
             else:
                 try:
                     rc = evaluate(json.loads(text), exc["mobsf"], sha)

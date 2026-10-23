@@ -4,14 +4,15 @@
 # request: run it through `fdroid build` (or the fdroiddata CI) and fix what breaks.
 #
 # Open questions the first build must answer:
-#  - Signing: android/app/build.gradle.kts declares signingConfigs.release from key.properties,
-#    which F-Droid's builder does not have. fdroidserver is meant to strip signing configs; if the
-#    build still fails, make the release signingConfig conditional on key.properties existing.
+#  - Signing: a trial release build without key.properties failed in validateSigningRelease
+#    ("Keystore file not set for signing config release", 2026-10-23); build.gradle.kts now falls
+#    back to the debug key ONLY when CRESCENDO_ALLOW_DEBUG_SIGNED_RELEASE=1 (set below). F-Droid
+#    re-signs with its own key regardless.
 #  - Native code: flutter_zxing compiles C++ (CMake/NDK); the build here uses NDK 28.2.13676358
 #    (= r28c). The recipe's `ndk:` and any CMake package must match.
 #  - JDK 17, Gradle 9.8.0 (the wrapper downloads it; distributionSha256Sum is pinned) and
-#    AGP 9.4.1; compileSdk 36 comes from Flutter's own default.
-#  - License: GPL-3.0-or-later vs GPL-3.0-only is undecided (docs/TODO.md, L1-06).
+#    AGP 9.4.1; compileSdk 36 comes from Flutter's own default; minSdk 26, no desugaring.
+#  - License: GPL-3.0-or-later (decision 2026-10-23; test/licence_form_test.dart).
 #  - Fastlane metadata is in fastlane/metadata/android/en-US/ (title, descriptions, changelogs,
 #    icon, screenshots) - no summary/description fields are needed here.
 
@@ -27,9 +28,9 @@ RepoType: git
 Repo: https://github.com/Dam0k1es/crescendo-alarm.git
 
 Builds:
-  - versionName: 1.6.0
-    versionCode: 7
-    commit: v1.6.0
+  - versionName: 1.7.0
+    versionCode: 8
+    commit: v1.7.0
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
       - flutter@stable
@@ -49,11 +50,15 @@ Builds:
       - .pub-cache
     build:
       - export PUB_CACHE=$(pwd)/.pub-cache
+      # F-Droid's builder has no signing key and re-signs with its own; this lets the
+      # release build fall back to the debug key instead of failing in
+      # validateSigningRelease (build.gradle.kts; opt-in, no workflow sets it).
+      - export CRESCENDO_ALLOW_DEBUG_SIGNED_RELEASE=1
       - $$flutter$$/bin/flutter build apk --release
     ndk: r28c
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9]
 UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
-CurrentVersion: 1.6.0
-CurrentVersionCode: 7
+CurrentVersion: 1.7.0
+CurrentVersionCode: 8

@@ -1,0 +1,6 @@
+New in 1.7.0:
+- Android 8.0 or newer is now required (it was 7.0); the app no longer ships a GPL-2.0 desugaring library.
+- Licence: GPL-3.0-or-later; missing third-party notices (libyuv, dmfs) added.
+- Settings > Alarm Screen, a one-time offer and a warning explain how the alarm screen opens by itself.
+- Other apps can no longer make this one post notifications.
+- Ring ends after 60 minutes; manual alarms follow the time zone when you open the app.

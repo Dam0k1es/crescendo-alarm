@@ -8649,3 +8649,38 @@ red and that stays invisible in the rest of the suite today.
   have shipped since v1.5.0.
 - **Not done:** the SBOM-driven check does not detect a NEW statically linked native component; a licence dump of all
   154 Dart packages (L1-08) is still open.
+
+### T-243 · F-Droid readiness, round 3 (2026-10-23) - decisions and what was done
+- **Maintainer decisions:** the licence is **GPL-3.0-or-later**; **minSdk 26** instead of keeping core-library
+  desugaring; release the result as **v1.7.0** (not 1.6.1: dropping Android 7.0/7.1 is user-visible).
+- **Licence form:** README badge and text, the About page, the store listing and the recipe draft say
+  GPL-3.0-or-later; `test/licence_form_test.dart` keeps them and every source header consistent.
+- **T-220 closed - `desugar_jdk_libs` is gone.** minSdk 24 → 26 (`android/app/build.gradle.kts`), core-library
+  desugaring and its dependency removed (the `alarm` plugin's one `java.time` call on a back-compat path only mattered
+  below API 26, T-90), its notice and the GPL-2.0 text removed, `AndroidLibraries.txt` regenerated from the SBOM, the
+  generator now treats any GPL licence as a stop-the-build decision. The built APK has no `Lj$/` classes. No GPL-2.0
+  component ships any more, so there is no source obligation left to settle.
+- **MobSF gate:** it accepted its minSdk finding by exact title ("...Android version 7.0, [minSdk=24]"); the title names
+  the version, so raising minSdk would have turned the next master run red. `scripts/mobsf_summary.py` now accepts an
+  exception key ending in " *" as a prefix, and the exception reads "... unpatched Android version *"; self-test cases
+  cover that it accepts any version of that rule and nothing else. **Not verified against a real MobSF report:** the
+  exact title for minSdk 26 (the first master run will show it).
+- **SBOM check (G7-08):** `scripts/check_proprietary_native_deps.py` now fails closed on an empty, malformed or
+  unreadable SBOM (it used to say "clean" for zero components).
+- **Dart package licences (L1-08):** `test/dart_package_licences_test.dart` classifies the LICENSE text of all 154
+  resolved packages (93 BSD-3, 39 MIT, 13 Apache-2.0 incl. combinations, 1 MPL-2.0 = `dbus`, Linux-only, plus Flutter SDK
+  packages listed by hand); `docs/dart-package-licences.md` is the dated record.
+- **Exported components (Philipp):** `scripts/check_exported_components.py` reads the merged manifest of the built APK with
+  aapt2 and compares the exported components with a reviewed list, both ways; wired into ci.yml (debug and release builds)
+  and release.yml, self-test in the UTC leg.
+- **Probebau without a signing key:** an unsigned trial release build (a clean copy without `key.properties`, as on
+  F-Droid's builder) failed in `validateSigningRelease` ("Keystore file not set for signing config release"). The release
+  build now falls back to the debug key only when `CRESCENDO_ALLOW_DEBUG_SIGNED_RELEASE=1` (the recipe sets it); no workflow
+  does, and a test enforces that. (An earlier attempt failed for lack of disk space and corrupted Gradle's
+  `fileHashes` cache - moved aside, not deleted.)
+- **Other:** Flutter 3.47.2 is a published stable (releases_linux.json, 2026-08-27); `crescendoalarm.com` is not registered
+  (whois, 2026-10-23; the other TLDs were not checked); USER_GUIDE's garbled ring-timeout sentence and the T-237
+  limits, REQUIREMENTS R4's statement of the limits on "guaranteed", and the Mixkit-in-history note are written down.
+- **Still open for F-Droid:** the actual fdroiddata merge request and its CI (the recipe is a draft, not built by F-Droid's
+  tooling); chain-of-title record for the university-project code (L1-07, needs the other authors); reproducible builds
+  are not demonstrated; `device_calendar` is unmaintained.

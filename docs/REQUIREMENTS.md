@@ -54,16 +54,16 @@ Medium/informational findings don't block a release but must be recorded and rev
   bar to begin with; only HIGH/ERROR findings block. Three findings are *accepted* rather than
   fixed, and therefore carry a dated rationale in `.github/security-exceptions.json`: `mobsfscan`'s
   one ERROR (`android_task_hijacking2`, a StrandHogg-style task-hijacking pattern), MobSF's one HIGH
-  ("app installable on unpatched Android 7.0", i.e. `minSdk=24`), and - recorded for documentation
+  ("app installable on unpatched Android", named with the version of `minSdk`: 7.0 / `minSdk=24` until v1.6.0, 8.0 / `minSdk=26` since), and - recorded for documentation
   completeness, not because it was ever blocking anything - MobSF's WARNING for
   `DirectBootReceiver`'s exported-and-unprotected status (`docs/TODO.md` T-158's own consequence,
   reviewed and closed 2026-09-24 under `docs/TODO.md` T-160: `LOCKED_BOOT_COMPLETED` is itself a
   protected broadcast action the OS enforces at the sender, not something an app-level permission
   could add anything to). The `mobsfscan` finding is a known tool limitation - it flags a
   task-affinity/launch-mode pattern generically, without the runtime context to distinguish it from
-  this app's actual configuration. The MobSF HIGH restates the project's own deliberate `minSdk=24`
-  choice (see `CLAUDE.md`'s toolchain table) and is accepted, not fixed, because lowering `minSdk`
-  further is not currently planned. Update this paragraph if any acceptance is revisited.
+  this app's actual configuration. The MobSF HIGH restates the project's own deliberate `minSdk` choice
+  (see `CLAUDE.md`'s toolchain table; accepted through a prefix key because MobSF puts the version in
+  the title) and is accepted, not fixed, because raising `minSdk` further is not currently planned. Update this paragraph if any acceptance is revisited.
 
 ## R2 - Reliable calendar-derived alarm scheduling
 
@@ -285,6 +285,12 @@ Before an alarm rings, the app must have: working volume control, the ability to
 selected tone, and every permission the ringing path needs (exact-alarm scheduling, notifications,
 camera for QR deactivation).
 
+- **Limits on the "guaranteed" ring (2026-10-23, `docs/TODO.md` T-237, T-240):** a ring nobody stops
+  ends itself 60 minutes after its due time - also one that needs the deactivation code (maintainer
+  decision; native `RingTimeout*`, `RingTimeoutPolicy` is JVM-tested). On a phone in use, Android
+  shows a full-screen alarm only as a notification unless "Display over other apps" is allowed
+  (Settings > Alarm Screen); on Android 14+ the full-screen-notification access must be on for the
+  locked-phone path. Device-verified on Android 13 only.
 - **Checked by:** manual security/code review of `lib/models/alarms/handler.dart`,
   `lib/utils/permissions.dart`, and the `alarm`/`awesome_notifications` plugin integration, plus an
   automated E2E test on a real Android emulator covering both dismissal overlays
@@ -531,14 +537,13 @@ licensing obligations must be met.
   source under `lib/` now carries a GPLv3 copyright/licence header, guarded against regressing by
   `test/licence_header_test.dart` (`docs/TODO.md` T-48). An automated `license_checker`-style scan
   remains worth adding as a second line of defence for the dependency tree specifically.
-- **Two qualifications to "met" (2026-10-05, audit):**
-  1. **The T-213 notice work exists on `dev` only.** Every published release up to and including
-     `v1.4.0` predates it and ships without those notices (libzueci and the other embedded native
-     pieces, the Android library list, `desugar_jdk_libs`, the media credits); they reach users
-     with the next release.
-  2. **One open question:** `desugar_jdk_libs` (GPL-2.0 with the Classpath Exception) is compiled
-     into the APK and its notice carries a source link; whether that link satisfies GPL-2.0
-     section 3, or a written offer / bundled source is needed, is undecided (`docs/TODO.md` T-220).
+- **Qualifications to "met" (2026-10-05, audit) - both resolved:**
+  1. The T-213 notice work (libzueci and the other embedded native pieces, the Android library list, the
+     media credits) has shipped since `v1.5.0`; `v1.0.0`-`v1.4.0` predate it and stay downloadable.
+  2. `desugar_jdk_libs` (GPL-2.0 with the Classpath Exception) no longer ships: minSdk was raised from 24
+     to 26 on 2026-10-23 and core-library desugaring removed (`docs/TODO.md` T-220), so there is no
+     GPL-2.0 source obligation left to decide. Libyuv's BSD-3 notice and the dmfs NOTICE files were
+     added (T-242).
 
 ## R10 - All bundled assets are properly licensed for use
 
@@ -692,6 +697,6 @@ the repository has to be public before the APK reaches anyone else - is met as o
 (`docs/TODO.md` T-34): the repository is public and `v1.0.0` has been released (`v1.4.0` is the
 latest). R10 is met again since 2026-10-01 on `dev`: the non-free Mixkit tones were replaced with freely
 licensed ones (`docs/TODO.md` T-212) - published releases up to `v1.4.0` still ship the Mixkit tones.
-R9 additionally has one open question, `desugar_jdk_libs`'s GPL-2.0 source obligation (T-220). See
+(R9's one open question, `desugar_jdk_libs`, was closed on 2026-10-23: it was removed, T-220.) See
 `docs/TODO.md` for the full, prioritised, evidence-backed list every one of these gaps is now
 tracked under.

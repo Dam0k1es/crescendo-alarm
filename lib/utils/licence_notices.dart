@@ -26,8 +26,8 @@ import 'package:crescendo_alarm/utils/media_credits.dart';
 /// Flutter's collector reads only each Dart package's root LICENSE file. It
 /// misses: the C/C++ that flutter_zxing compiles into the app (T-142); the
 /// Material Icons font, which Flutter bundles under CC-BY-4.0; the
-/// Java/Kotlin libraries Gradle adds (AndroidX, Kotlin, desugar_jdk_libs,
-/// ...); the extra notices `archive`, `image` and `mime` keep outside their
+/// Java/Kotlin libraries Gradle adds (AndroidX, Kotlin, ...);
+/// the extra notices `archive`, `image` and `mime` keep outside their
 /// LICENSE file although that code ships (their codecs and mime table
 /// survive tree-shaking in the release `libapp.so`); and the credits of the
 /// app's own media (assets/icons/, assets/sounds/).
@@ -47,15 +47,6 @@ const _materialIconsPreface =
     'https://creativecommons.org/licenses/by/4.0/. Changes: at build time '
     'the font is reduced to the icons this app uses. The licence text '
     'follows.';
-
-const _desugarPreface =
-    'desugar_jdk_libs (com.android.tools:desugar_jdk_libs) - a subset of '
-    'the OpenJDK class library, compiled into this app to provide java.time '
-    'and related classes on older Android versions. Licensed under the GNU '
-    'General Public License, version 2, with the Classpath Exception. The '
-    'source code is published at https://github.com/google/desugar_jdk_libs '
-    '(the version is listed under "Android libraries (Java/Kotlin)"). The '
-    'licence text follows, as shipped with OpenJDK.';
 
 const _protobufPreface =
     'Protocol Buffers runtime, repackaged by AndroidX as '
@@ -90,11 +81,6 @@ const _textNotices = <(List<String>, String, String?)>[
     ['Android libraries (Java/Kotlin)'],
     'assets/text/licences/AndroidLibraries.txt',
     null
-  ),
-  (
-    ['desugar_jdk_libs'],
-    'assets/text/licences/GPL-2.0-with-classpath-exception.txt',
-    _desugarPreface
   ),
   (
     ['Protocol Buffers'],

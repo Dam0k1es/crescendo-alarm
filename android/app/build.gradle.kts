@@ -40,38 +40,25 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // docs/TODO.md T-90: `java.time.*` only exists on Android from API 26
-        // onward, but this project promises minSdk 24. Confirmed in the built
-        // release dex: `strings classes.dex | grep '^Ljava/time/'` finds
-        // `Ljava/time/Duration;`, and there are NO `Lj$/` replacement classes -
-        // so the call went into the APK un-desugared. The source is the
-        // `alarm` plugin (AlarmSettings.kt:138, `Duration.ofMillis`), which
-        // doesn't enable its own desugaring and itself declares minSdk 19.
-        //
-        // On closer reading, the call sits on a backward-compatibility path
-        // for old v4 alarm JSON that the current app version normally never
-        // enters - so it's a LATENT API-26 mine under a minSdk-24 contract,
-        // not a confirmed crash. Desugaring defuses it regardless and only
-        // costs build time; that's considerably cheaper than leaving the
-        // question open, since this project has no evidence whatsoever that
-        // the app runs on API 24 (the E2E emulator runs API 36, and ran
-        // API 34 before that).
-        isCoreLibraryDesugaringEnabled = true
+        // docs/TODO.md T-90 / T-220: no core-library desugaring. It was enabled
+        // only because the `alarm` plugin calls `java.time.Duration` on a
+        // backward-compatibility path while the app promised minSdk 24
+        // (`java.time` exists from API 26), and it shipped
+        // `desugar_jdk_libs` - GPL-2.0 with the Classpath Exception, with no
+        // matching source tag or sources jar to point at. The maintainer
+        // raised minSdk to 26 instead (2026-10-23): both the latent bug and the
+        // GPL component are gone.
     }
 
     defaultConfig {
         applicationId = "com.crescendoalarm.crescendoalarm"
-        // Pinned, not `flutter.minSdkVersion` (24 as well on the current
-        // Flutter, but free to move with an SDK upgrade): several plugins
-        // (image_picker_android, shared_preferences_android,
-        // flutter_plugin_android_lifecycle in their currently-resolved
-        // versions) declare minSdk=24 in their own Gradle modules, and
-        // Android's manifest merger always takes the highest minSdk across
-        // the app and all dependencies, so 24 is the real enforced floor
-        // regardless of what's set here (found via MobSF static analysis
-        // flagging a mismatch). Going lower needs those plugins downgraded
-        // first, not just this line changed.
-        minSdk = 24
+        // Pinned, not `flutter.minSdkVersion`: Flutter's own default is lower
+        // (24) and may move with an SDK upgrade, while this app needs API 26 -
+        // `java.time` without desugaring (see compileOptions above). The
+        // plugins' own floors (several declare 24) sit below it, so 26 is the
+        // enforced minimum. Raised from 24 on 2026-10-23 (docs/TODO.md T-220):
+        // Android 7.0 and 7.1 are no longer supported.
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -110,7 +97,21 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            // docs/TODO.md (F-Droid readiness): without key.properties the
+            // release config has no keystore and `validateSigningRelease` fails
+            // ("Keystore file not set for signing config release"). F-Droid's
+            // builder has no key - it builds and re-signs with its own - so the
+            // F-Droid recipe sets CRESCENDO_ALLOW_DEBUG_SIGNED_RELEASE=1 to let
+            // the build fall back to the debug key. Never the default: a CI
+            // release build that lost its key must stay red, not publish a
+            // debug-signed APK (test/build_pins_test.dart; no workflow sets it).
+            signingConfig =
+                if (keystoreProperties["storeFile"] == null &&
+                    System.getenv("CRESCENDO_ALLOW_DEBUG_SIGNED_RELEASE") == "1") {
+                    signingConfigs.getByName("debug")
+                } else {
+                    signingConfigs.getByName("release")
+                }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {
@@ -142,13 +143,10 @@ flutter {
 // exception, keeps the gate meaningful as those dependencies' versions
 // change.
 //
-// docs/TODO.md T-213: `coreLibraryDesugaring` too, because desugar_jdk_libs
-// ships (as the APK's classes2.dex, GPL-2.0 with the Classpath Exception)
-// but lives in its own configuration, outside releaseRuntimeClasspath.
 // scripts/gen_android_library_notices.py turns this SBOM into the in-app
 // list of Android libraries (assets/text/licences/AndroidLibraries.txt).
 tasks.named<org.cyclonedx.gradle.CyclonedxDirectTask>("cyclonedxDirectBom") {
-    includeConfigs.set(listOf("releaseRuntimeClasspath", "coreLibraryDesugaring"))
+    includeConfigs.set(listOf("releaseRuntimeClasspath"))
 }
 
 // docs/TODO.md T-148: the one real finding the scoped SBOM above turned up -
@@ -167,9 +165,6 @@ configurations.all {
 }
 
 dependencies {
-    // Belongs to isCoreLibraryDesugaringEnabled above (docs/TODO.md T-90):
-    // supplies the `java.time` replacement classes (`Lj$/...`) for API < 26.
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     // docs/TODO.md T-198: JVM unit tests for SleepTimeDndPolicy
     // (src/test/kotlin), run by ci.yml's build-dev-apk job. Test classpath
     // only - never part of releaseRuntimeClasspath, the SBOM, or the APK.

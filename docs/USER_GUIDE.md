@@ -332,7 +332,11 @@ broken-camera fail-safe). The alarm's title is shown in its ringing notification
 An alarm that nobody stops does not ring forever: 60 minutes after its due time it ends by itself
 and a silent notice, "Alarm stopped", tells you it rang for 60 minutes. This also ends an alarm
 that needs the deactivation code - waiting out the hour is a very uncomfortable way to do it, but
-it is there so a ring can never outlast a dead battery's worth of hours.
+a ring must not go on for hours after the phone's owner is gone, and the limit has to apply to
+every alarm alike. Two cases the limit does not cover: a ring whose sound failed to start is not
+timed out, and if the phone's clock jumps forward by more than an hour while an alarm rings, the
+ring ends at once. If the ring started late (for example after a restart), the 60 minutes are
+counted from its due time, so a ring that began 55 minutes late is cut after 5 minutes.
 
 When the alarm rings, the display opens by itself if the phone is locked or its screen is off. On a
 phone you are using (unlocked, screen on) Android only shows a notification at the top of the screen

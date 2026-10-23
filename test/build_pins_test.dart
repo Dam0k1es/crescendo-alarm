@@ -88,4 +88,36 @@ void main() {
       expect(bounds.group(2), '${lower[0]}.${lower[1] + 1}');
     });
   });
+
+  group('release signing', () {
+    final gradle = File('android/app/build.gradle.kts').readAsStringSync();
+
+    // A release build without key.properties failed in `validateSigningRelease`
+    // ("Keystore file not set for signing config release") - found by an
+    // unsigned trial build for F-Droid (2026-10-23), whose builder has no key.
+    // F-Droid re-signs with its own key, so the build must be allowed to fall
+    // back to the debug key - but ONLY on an explicit request, never silently:
+    // a CI release build that lost its key must stay red, not publish a
+    // debug-signed APK.
+    test('the debug-key fallback is opt-in through one environment variable',
+        () {
+      expect(gradle, contains('CRESCENDO_ALLOW_DEBUG_SIGNED_RELEASE'));
+      expect(gradle, contains('signingConfigs.getByName("debug")'));
+      // The environment variable guards the fallback; the default branch is
+      // still the release config, which fails loudly without a key.
+      expect(
+          RegExp(r'System\.getenv\("CRESCENDO_ALLOW_DEBUG_SIGNED_RELEASE"\) == "1"')
+              .hasMatch(gradle),
+          isTrue);
+    });
+
+    test('no workflow sets the fallback - only the F-Droid recipe does', () {
+      for (final f in Directory('.github/workflows').listSync().whereType<File>()) {
+        expect(f.readAsStringSync(), isNot(contains('CRESCENDO_ALLOW_DEBUG_SIGNED_RELEASE')),
+            reason: '\${f.path} would let a release build fall back to the debug key');
+      }
+      expect(File('docs/fdroid-recipe-draft.yml').readAsStringSync(),
+          contains('CRESCENDO_ALLOW_DEBUG_SIGNED_RELEASE=1'));
+    });
+  });
 }

@@ -59,12 +59,7 @@ void main() {
       ],
       'Android libraries (Java/Kotlin)': [
         'androidx.core:core',
-        'com.android.tools:desugar_jdk_libs',
-      ],
-      'desugar_jdk_libs': [
-        'GNU General Public License',
-        '"CLASSPATH" EXCEPTION TO THE GPL',
-        'https://github.com/google/desugar_jdk_libs',
+        'androidx.camera:camera-core',
       ],
       'Protocol Buffers': ['Copyright 2008 Google Inc.'],
       // docs/TODO.md L1-01 / L1-02: BSD-3-Clause clause 2 and Apache-2.0 4(d).

@@ -90,11 +90,11 @@ against what `flutter_zxing`'s CMake build actually compiles, so a gap like libz
 Licenses": the Material Icons font (CC BY 4.0, shipped tree-shaken), the native notices above, the
 shipped Java/Kotlin libraries (`assets/text/licences/AndroidLibraries.txt`, generated from the
 CycloneDX SBOM by `scripts/gen_android_library_notices.py` and checked against it in CI's release
-builds), `desugar_jdk_libs` (GPL-2.0 with the Classpath Exception, with a source link), Protocol
+builds), Protocol
 Buffers (BSD-3), the extra notices of `archive`, `image` and `mime` (whose code does ship) and both
-media `CREDITS.md` files (tones, icon). Open point: whether `desugar_jdk_libs`'s source link
-satisfies GPL-2.0 section 3 for the binary in the APK, or a written offer / bundled source is
-needed (`docs/TODO.md` T-220).
+media `CREDITS.md` files (tones, icon). `desugar_jdk_libs` (GPL-2.0 with the Classpath Exception) was
+removed on 2026-10-23 - minSdk was raised to 26 instead (`docs/TODO.md` T-220) - so no GPL-2.0
+component ships any more and the open question about its source obligation is gone.
 
 What this document does **not** claim: that every transitive dependency has been individually
 audited. R8 scopes that out deliberately. The claim is narrower and checkable - no dependency in

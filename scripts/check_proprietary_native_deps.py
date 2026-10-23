@@ -118,10 +118,22 @@ def _offense(group: str, name: str) -> str | None:
 
 
 def main(bom_path: str) -> int:
-    with open(bom_path) as f:
-        bom = json.load(f)
+    # Fail closed: a missing, unreadable or empty SBOM must not read as "clean"
+    # (docs/TODO.md G7-08) - a real release build resolves well over a hundred
+    # components.
+    try:
+        with open(bom_path) as f:
+            bom = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"FAIL (fail-closed): cannot read the SBOM {bom_path}: "
+              f"{type(e).__name__}")
+        return 1
+    components = bom.get("components") if isinstance(bom, dict) else None
+    if not isinstance(components, list) or not components:
+        print("FAIL (fail-closed): the SBOM has no components - the gate "
+              "would check nothing.")
+        return 1
 
-    components = bom.get("components", [])
     offenders = []
     for component in components:
         group = component.get("group") or ""
@@ -193,7 +205,8 @@ def self_test() -> int:
 
     # Precision cases: a group-prefix match on dot boundaries, never a bare
     # string prefix - these free libraries must NOT fire, or the check would
-    # be too broad to ship. All four ship in this app today.
+    # be too broad to ship. The first three ship in this app today
+    # (desugar_jdk_libs shipped until 2026-10-23 and stays a near-miss case).
     check("Material Components", "com.google.android.material", "material",
           False)
     check("Gson", "com.google.code.gson", "gson", False)
@@ -219,6 +232,28 @@ def self_test() -> int:
             {"group": "com.syncfusion", "name": "flutter_syncfusion"},
         ]}, f)
         offending_path = f.name
+
+    # docs/TODO.md G7-08: an empty or unreadable SBOM used to pass ("No
+    # forbidden native dependency found among 0 components"), so a broken
+    # SBOM step would have switched this gate off silently. It fails closed.
+    def bad_bom(text):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as g:
+            g.write(text)
+            return g.name
+
+    for label, text in (
+            ("empty components", '{"components": []}'),
+            ("no components key", '{"bomFormat": "CycloneDX"}'),
+            ("components not a list", '{"components": {}}'),
+            ("JSON array", "[]"),
+            ("empty file", ""),
+            ("truncated JSON", '{"components": [')):
+        if main(bad_bom(text)) != 1:
+            print(f"SELF-TEST FAIL: main() accepted an unusable SBOM ({label})")
+            failed = True
+    if main("/nonexistent/bom.json") != 1:
+        print("SELF-TEST FAIL: main() accepted a missing SBOM file")
+        failed = True
 
     if main(clean_path) != 0:
         print("SELF-TEST FAIL: main() flagged a clean synthetic BOM")

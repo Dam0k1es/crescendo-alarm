@@ -454,7 +454,7 @@ Four workflows under `.github/workflows/` (plus shared scripts under `.github/sc
   `test/no_proprietary_dependencies_test.dart` cannot see, and exactly how `mobile_scanner` brought
   in ML Kit before T-33 removed it. Since T-213 it denies whole groups (all of
   `com.google.android.gms`, Firebase, Play, datatransport, UMP, Crashlytics/Fabric, Huawei HMS/
-  AGConnect), and the SBOM's scope also covers `coreLibraryDesugaring`. The same jobs also run
+  AGConnect), and the SBOM is checked fail-closed (an empty or unreadable SBOM is a failure, G7-08). The same jobs also run
   `scripts/gen_android_library_notices.py --check` (the in-app Java/Kotlin library notice list must
   match the SBOM - regenerate with `./gradlew cyclonedxBom` and the script after a dependency
   change) and `scripts/check_apk_dependency_block.py` (the APK must not carry AGP's encrypted
@@ -606,7 +606,7 @@ Run the E2E suite locally with a connected device or running emulator:
 | Android Gradle Plugin (AGP) | 9.4.1 | `android/settings.gradle.kts` |
 | Kotlin Gradle Plugin | 2.4.20 | `android/settings.gradle.kts` |
 | compileSdk | 36 (Flutter default) | no override any more - see "compileSdk override ... (removed)" below |
-| minSdk | 24 (pinned explicitly) | `android/app/build.gradle.kts` - was intended to stay below Flutter's own default (also 24, coincidentally, on current Flutter) for older-device support, but MobSF found the *compiled* APK's merged manifest already enforced minSdk=24 regardless, because several plugins (`image_picker_android`, `shared_preferences_android`, `flutter_plugin_android_lifecycle`) declare `minSdk=24` in their own Gradle modules, and manifest merging always takes the highest value across the app + all dependencies. Pinned explicitly to 24 to match the real enforced floor instead of leaving a misleadingly lower number. Also: this value has silently regressed to `flutter.minSdkVersion` (dropping any pin at all) more than once in this project's history - if you ever intend to actually push it lower than 24 again, you'd first need to downgrade those three plugins, not just change this line. |
+| minSdk | 26 (pinned explicitly) | `android/app/build.gradle.kts`. Raised from 24 on 2026-10-23 (`docs/TODO.md` T-220, maintainer decision): `java.time` needs API 26, and keeping minSdk 24 meant shipping core-library desugaring (`desugar_jdk_libs`, GPL-2.0 with the Classpath Exception, no source tag or sources jar to point at) for one latent call in the `alarm` plugin. Android 7.0 and 7.1 are no longer supported. Pinned explicitly because it has silently regressed to `flutter.minSdkVersion` before. MobSF names the version in its HIGH finding ("... unpatched Android version 8.0, [minSdk=26]"); `.github/security-exceptions.json` accepts it with a prefix key (`... Android version *`, supported by `scripts/mobsf_summary.py`). |
 | targetSdk | 36 (Flutter default, `flutter.targetSdkVersion`) | |
 | NDK | intentionally left unset in `app/build.gradle.kts` (no `ndkVersion = flutter.ndkVersion` line) | AGP uses whichever NDK is installed (currently 28.2.13676358) instead of requiring an exact pin |
 

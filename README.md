@@ -31,7 +31,7 @@ Welcome to Crescendo Alarm, an innovative alarm clock app designed for individua
 
 ## Supported Platforms
 
-- **Android** is the actual target platform. `minSdk` 24 (Android 7.0), `targetSdk` 36 (Android 16).
+- **Android** is the actual target platform. `minSdk` 26 (Android 8.0), `targetSdk` 36 (Android 16).
 - **iOS** has project scaffolding but has never actually been built or run - treat it as
   unverified, not supported, until someone with a Mac/Xcode does that work.
 
