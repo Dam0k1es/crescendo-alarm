@@ -141,8 +141,14 @@ void main() {
     // relative to it.
     final appState = await _fresh();
     final realNow = DateTime.now();
-    final tomorrow = realNow.add(const Duration(days: 1));
-    final dayAfter = realNow.add(const Duration(days: 2));
+    // Calendar days, not 24-hour multiples: on the day clocks go back a local
+    // day has 25 hours, so "now + 24 h" and "now + 48 h" can fall on the SAME
+    // date (CI at 22:22 UTC on 2026-10-23 is already 00:22 on the 24th in
+    // Berlin) and the two day keys collide.
+    final tomorrow = DateTime(realNow.year, realNow.month, realNow.day + 1,
+        realNow.hour, realNow.minute, realNow.second);
+    final dayAfter = DateTime(realNow.year, realNow.month, realNow.day + 2,
+        realNow.hour, realNow.minute, realNow.second);
     appState.pendingDayValues = {
       isoDate(tomorrow): _ms(tomorrow),
       isoDate(dayAfter): _ms(dayAfter),

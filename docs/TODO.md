@@ -8690,3 +8690,9 @@ red and that stays invisible in the rest of the suite today.
   calendar and replans the new scenario's week away). `planOneCalendarEvent` now uses one appointment for the whole file and
   `tearDown` no longer withdraws `debugFetchEventsOverride`, so a late checkpoint plans the same week instead of an empty
   one; the file then passed 7/7 twice. The race itself (a checkpoint queued behind calendar I/O) is not removed from the app.
+- **Time-bomb test found by CI (2026-10-23, 22:22 UTC):** `scheduled_alarm_inactive_consumers_test.dart` ("the bedtime
+  reminder is timed from the next ENABLED day") failed in the Berlin and Troll legs: it built "tomorrow" and "the day
+  after" as now + 24 h / + 48 h and keyed them by local date. On the day clocks go back a local day has 25 hours and a CI
+  run at 22:22 UTC is already after midnight in Berlin, so both fell on 2026-10-25, the keys collided and the disabled day
+  swallowed the enabled one. Reproduced locally in that window (red before, green after); the fixture now uses calendar-day
+  arithmetic. The code was right.
