@@ -113,6 +113,7 @@ jobs:
           python3 scripts/check_apk_dependency_block.py --self-test
           python3 scripts/gen_android_library_notices.py --self-test
           python3 scripts/check_manifest_permissions.py --self-test
+          python3 scripts/check_exported_components.py --self-test
           python3 scripts/mobsf_summary.py --self-test
           python3 scripts/mobsfscan_check.py --self-test
       - name: Analyze
@@ -204,6 +205,11 @@ jobs:
       # for the tool connection). aapt2, under a second.
       - name: Permissions match the allow-list (R6/R7, T-49)
         run: python3 scripts/check_manifest_permissions.py --variant debug build/app/outputs/flutter-apk/app-debug.apk
+
+      # docs/TODO.md T-241: the set of exported components of the merged
+      # manifest (what a plugin bump can add and the source tests cannot see).
+      - name: Exported components match the reviewed list (T-241)
+        run: python3 scripts/check_exported_components.py build/app/outputs/flutter-apk/app-debug.apk
 
       # docs/TODO.md T-198: JVM unit tests for the native half of the
       # sleep-time Do Not Disturb trigger (android/app/src/test,
@@ -318,6 +324,9 @@ jobs:
         # claim had no automated guard before) and on a needed one going
         # missing (WRITE_CALENDAR, which device_calendar requires to read).
         run: python3 scripts/check_manifest_permissions.py build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Exported components match the reviewed list (T-241)
+        run: python3 scripts/check_exported_components.py build/app/outputs/flutter-apk/app-release.apk
 
       - name: No dependency-metadata block in the APK (F-Droid, T-213)
         # AGP's encrypted dependency list (signing-block ID 0x504b4453) is

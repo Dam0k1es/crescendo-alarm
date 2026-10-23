@@ -102,6 +102,10 @@ jobs:
         # going missing.
         run: python3 scripts/check_manifest_permissions.py build/app/outputs/flutter-apk/app-release.apk
 
+      - name: Exported components match the reviewed list (T-241)
+        # docs/TODO.md T-241: see ci.yml's build-android-release job.
+        run: python3 scripts/check_exported_components.py build/app/outputs/flutter-apk/app-release.apk
+
       - name: No dependency-metadata block in the APK (F-Droid, T-213)
         # docs/TODO.md T-213: see ci.yml's build-android-release job.
         run: python3 scripts/check_apk_dependency_block.py build/app/outputs/flutter-apk/app-release.apk
