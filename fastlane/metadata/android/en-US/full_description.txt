@@ -1,0 +1,20 @@
+Crescendo Alarm is an alarm clock for people with irregular sleep schedules - shift workers, frequent travellers, anyone whose days start at different times.
+
+Features
+- Calendar-derived wake times: reads your device calendar and plans a wake-up time for every day from your first appointment, the time you need to wake up and to get ready, and how far your wake time may shift from one day to the next.
+- Gentle wake-up: the volume rises gradually.
+- Optional "guaranteed" wake-up: a physical QR code or barcode - printed from the app, or one you already have - has to be scanned to stop the alarm.
+- Manual alarms with repeat days, a snooze budget, per-alarm tone, volume and code settings, imported custom tones.
+- A bedtime reminder and an optional sleep-time Do Not Disturb.
+- Fully offline: the app has no internet permission, no account, no ads and no trackers. Nothing leaves your device. A local diagnostics log is off by default.
+
+Please read before you rely on it
+- "Guaranteed" is not absolute. A ring nobody stops ends itself 60 minutes after its due time, and an emergency stop appears if the camera does not work.
+- Force-stopping the app removes its alarms until you open it again (Android). After a restart with the phone still locked, a fallback siren rings for an alarm that is at most 60 minutes overdue; an older one is reported by a silent notice.
+- Manual alarms follow a changed time zone only when you open the app. Check your alarms after travelling.
+- On a phone you are using, Android shows a ringing alarm only as a notification. To let the app open the alarm screen by itself, allow "Display over other apps" under Settings > Alarm Screen. On Android 14 and newer also allow full-screen notifications there; the app warns you if they are off.
+- Developed and tested mostly on Android 13, plus an Android 16 emulator. If oversleeping would be costly, keep a second alarm.
+
+Permissions: calendar (the app only reads; the calendar plugin requires the write permission to be granted, the app never writes), camera (to scan the code), notifications, exact alarms, full-screen notifications, "Display over other apps" (optional, only to bring the alarm screen to the front) and Do Not Disturb access (optional).
+
+Free software under the GNU GPL v3. Source and issue tracker: https://github.com/Dam0k1es/crescendo-alarm

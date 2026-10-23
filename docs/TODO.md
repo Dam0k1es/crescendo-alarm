@@ -8589,3 +8589,16 @@ red and that stays invisible in the rest of the suite today.
   failed; with the offer already answered: 7/7 twice). Fix: `pumpFreshApp` pre-sets `alarmScreenPromptShown` (the
   scenarios are not about the offer, which has widget tests and a device check). The underlying race between a late
   open-sync checkpoint and a test's plan is not removed.
+
+### F-Droid readiness (2026-10-23) - store listing in the repository
+- `fastlane/metadata/android/en-US/` now holds the listing F-Droid reads from the repo: `title.txt`,
+  `short_description.txt` (75/80 characters), `full_description.txt` (about 2,300/4,000; it states the limits - the
+  60-minute end of a ring, force-stop, time zones, the overlay/full-screen access, one device family tested, second
+  alarm advised), `changelogs/7.txt` (versionCode of 1.6.0), `images/icon.png` (512x512, from `assets/icons/icon.png`,
+  CC BY-SA 4.0 like the app icon) and three phone screenshots taken on the Fairphone 3 with generic test appointments.
+  `test/fdroid_metadata_test.dart` keeps the limits, a changelog for the pubspec versionCode, the icon size and the
+  honest phrases in place - **a release bump without `changelogs/<versionCode>.txt` now fails the suite**.
+- The README screenshot was replaced with the current Alarms screen (the old one showed the red theme and the old tab
+  order). Still open for F-Droid: pin the Flutter version in the fdroiddata recipe (and, for consistency, in the repo),
+  `distributionSha256Sum` for the Gradle wrapper, the licence notices (libyuv, rfc5545-datetime), T-220, the exported
+  `awesome_notifications` receivers (Philipp), and the remaining items of the readiness list.

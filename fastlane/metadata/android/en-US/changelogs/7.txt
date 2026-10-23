@@ -1,0 +1,5 @@
+New in 1.6.0:
+- A ring nobody stops ends itself after 60 minutes, with a silent notice.
+- The alarm screen can open by itself on an unlocked phone (optional "Display over other apps"); Settings > Alarm Screen explains it and warns if full-screen notifications are off (Android 14+).
+- Manual alarms follow a changed time zone when you open the app.
+- Fixes: a ringing alarm is no longer stopped as stale; an exported service could crash a ring.

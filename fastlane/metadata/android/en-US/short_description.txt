@@ -1,0 +1,1 @@
+Calendar-aware alarm clock with gentle wake-up and an optional QR-code stop
