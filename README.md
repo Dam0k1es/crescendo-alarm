@@ -13,7 +13,7 @@ Welcome to Crescendo Alarm, an innovative alarm clock app designed for individua
 
 - **Calendar Integration:** Syncs with your mobile calendar to derive intelligent alarm schedules based on your commitments.
 - **Gentle Wake-Up:** Alarm volume increases gradually for a smoother start to your day.
-- **Guaranteed Wake-Up:** Requires scanning a physical QR code to turn off the alarm, ensuring you get out of bed. "Guaranteed" isn't absolute: a couple of narrow fail-safes exist so a broken camera can't lock you in with a ringing alarm forever - see `docs/REQUIREMENTS.md` R4 for exactly what they are and why they're there.
+- **Guaranteed Wake-Up:** Requires scanning a physical QR code to turn off the alarm, ensuring you get out of bed. "Guaranteed" isn't absolute: a couple of narrow fail-safes exist so a broken camera can't lock you in with a ringing alarm forever, and a ring nobody stops ends itself 60 minutes after its due time (also one that needs the code) - see `docs/REQUIREMENTS.md` R4 for exactly what they are and why they're there. On a phone you are using, Android shows a ringing alarm only as a notification unless you allow "Display over other apps" (Settings > Alarm Screen), which lets the app open the alarm screen by itself; on Android 14+ also check that full-screen notifications are allowed there.
 - **Also:** manual alarms (repeat days, per-alarm tone/volume/snooze/code settings), snooze within
   a wake-up budget, a bedtime reminder, an optional sleep-time Do Not Disturb, imported custom
   alarm tones, choosing which calendars count and ignoring single events, sharing/printing the

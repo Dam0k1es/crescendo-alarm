@@ -1,3 +1,9 @@
+`flutter test` currently runs **1057 tests across 142 files** (2026-10-23, v1.6.0), and CI runs them ten times over -
+once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
+tests for native code (77 as of T-240: 27 in `SleepTimeDndPolicyTest`, 21 in
+`DirectBootFallbackPolicyTest`, 12 in `RingTimeoutPolicyTest`, 10 in `RingNotificationPolicyTest`, 7 in
+`RingScreenLaunchPolicyTest`), run with
+`cd android && ./gradlew :app:testDebugUnitTest` (locally from the native-filesystem worktree, and in
 # Crescendo Alarm
 
 A Flutter alarm-clock app for people with irregular sleep schedules: calendar-derived alarm
