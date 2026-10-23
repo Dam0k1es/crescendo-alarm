@@ -233,3 +233,15 @@ afterwards. Defaults: wake 15 min, get ready 45 min, preferred wake-up 08:00, ma
 | App opened after the change (resume re-alignment, T-205) | No churn: entries unchanged. |
 | Both alarms ring | Rang at local 08:01:00 and 08:30:00 CET - confirmed. |
 | Not covered | A real change over a real night; other zones; an alarm armed before the clocks change for a day after it (resolved at arming here, the case above). |
+
+## E5 and an unattended ring overnight, 2026-10-24 (phone time), Fairphone 3, dev build 76fcded
+
+Scheduled alarm for 08:00 from a LOCAL-calendar appointment, app volume 0, diagnostics on, app not opened afterwards,
+the ring not stopped.
+
+| Check | Result |
+|---|---|
+| E5: after the morning alarm a `dayAdvance` event with `daysProcessed >= 1` | Confirmed. `alarmRang` was recorded, then the alarm-ring checkpoint logged `dayAdvance` with `needsDayAdvance=1`, `daysProcessed=1` (a later foreground checkpoint logged 0, as it should). |
+| T-237 on an unattended ring | The ring was over at 09:17; the "Alarm stopped" notice (id 536) was posted at 09:00:00 - 60 minutes after the 08:00 due time. |
+| Next days | The following day's alarm (and its timeout) was still armed. |
+| Not covered | The ring screen opening by itself on the locked phone was not observed; Android 13 only. |
