@@ -22,8 +22,8 @@ E2E suite runs against a real emulator and proves FR-18 all the way to the alarm
 things it structurally **cannot** show, and those are exactly what's here:
 
 1. **Real calendar accounts.** The CI emulator has none. Every E2E scenario injects its
-   appointments via the `fetchEvents` parameter — the real chain `device_calendar` → `eventToMeeting`
-   → `TZDateTime` in the *appointment's own* zone stays unchecked. That is, of all things, the
+   appointments via the `fetchEvents` parameter — the real chain `device_calendar_plus` → `eventToMeeting`
+   → device-local `DateTime` (all-day: local midnight of its date) stays unchecked. That is, of all things, the
    source of T-61.
 2. **Sound.** The emulator runs without audio (`-noaudio`); the only substitute is a `dumpsys
    audio` log as circumstantial evidence.

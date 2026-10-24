@@ -63,18 +63,12 @@ void main() {
       ],
       'Protocol Buffers': ['Copyright 2008 Google Inc.'],
       // docs/TODO.md L1-01 / L1-02: BSD-3-Clause clause 2 and Apache-2.0 4(d).
-      // CameraX (via flutter_zxing) statically links libyuv; device_calendar
-      // brings two dmfs libraries that ship a NOTICE.
+      // CameraX (via flutter_zxing) statically links libyuv. (The two dmfs
+      // libraries `device_calendar` brought in left with it - T-244.)
       'libyuv (in androidx.camera:camera-core)': [
         'Copyright 2011 The LibYuv Project Authors',
         'Redistributions in binary form must reproduce',
         'Neither the name of Google',
-      ],
-      'lib-recur and rfc5545-datetime (org.dmfs)': [
-        'lib-recur - A recurrence processor for Java',
-        'Copyright 2013 Marten Gajda',
-        'rfc5545-datetime - Java RFC 5545 datetime implementation',
-        'Copyright 2014 Marten Gajda',
       ],
       'archive': ['JZLib', 'zlib.js'],
       'image': ['libwebp', 'OpenEXR', 'QuickPVR'],
@@ -82,6 +76,12 @@ void main() {
       'Crescendo Alarm app icon': ['icon.png', 'Dam0k1es', 'CC-BY-SA-4.0'],
       'Crescendo Alarm alarm tones': ['.mp3'],
     };
+
+    test('no notice for the dmfs libraries that left with device_calendar', () {
+      expect(byPackage.keys.where((k) => k.contains('dmfs')), isEmpty,
+          reason: 'a notice for a library the app no longer ships is a false '
+              'statement about what is inside it (T-244)');
+    });
 
     for (final MapEntry(key: package, value: markers) in expected.entries) {
       test('lists "$package"', () {

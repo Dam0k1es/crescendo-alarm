@@ -10,10 +10,9 @@ Why exact, in both directions:
   and nothing noticed. `INTERNET` in particular contradicts R7's "fully
   offline" claim, which had no automated guard before this script.
 - A *missing* permission breaks a feature silently. `WRITE_CALENDAR` looks
-  unused (the app never writes to a calendar), but `device_calendar`'s
-  `arePermissionsGranted()` requires it to be granted before it reads
-  anything, so stripping it would leave the scheduler with no calendar at
-  all. Such a permission is listed here with that reason, so "cleaning it up"
+  unused (the app never writes to a calendar), but `permission_handler_android` refuses to
+  check or request the calendar permission unless it is declared (T-244), so
+  stripping it would leave the scheduler with no calendar at all. Such a permission is listed here with that reason, so "cleaning it up"
   fails this check instead of shipping.
 
 Adding a permission to ALLOWED is a reviewed decision: give the feature that
@@ -43,11 +42,12 @@ _ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
 # manifest's package name.
 ALLOWED = {
     "android.permission.READ_CALENDAR":
-        "calendar-derived wake times (device_calendar reads events)",
+        "calendar-derived wake times (device_calendar_plus reads events)",
     "android.permission.WRITE_CALENDAR":
-        "never used to write, but device_calendar's arePermissionsGranted()/"
-        "requestPermissions() require it granted before any read - removing "
-        "it makes every calendar read fail with NOT_AUTHORIZED",
+        "never used to write, but permission_handler_android 13.0.1 refuses "
+        "to check or request Permission.calendarFullAccess unless it is "
+        "declared next to READ_CALENDAR - removing it means READ_CALENDAR can "
+        "never be granted on a fresh install (T-244)",
     "android.permission.RECEIVE_BOOT_COMPLETED":
         "re-arming alarms after a reboot (alarm plugin, awesome_notifications)",
     "android.permission.WAKE_LOCK": "ringing the alarm with the screen off",

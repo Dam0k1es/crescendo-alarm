@@ -1,4 +1,4 @@
-import 'package:device_calendar/device_calendar.dart';
+import 'package:device_calendar_plus/device_calendar_plus.dart' as plus;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -27,8 +27,8 @@ Future<AppState> _pumpSchedule(WidgetTester tester) async {
 void main() {
   setUp(() {
     calendars = [
-      Calendar(id: 'work-id', name: 'Work', color: 0xFF0000FF),
-      Calendar(id: 'personal-id', name: 'Personal', color: 0xFFFF0000),
+      plus.Calendar(id: 'work-id', name: 'Work', readOnly: true, colorHex: '#0000FF'),
+      plus.Calendar(id: 'personal-id', name: 'Personal', readOnly: true, colorHex: '#FF0000'),
     ];
   });
 
@@ -100,7 +100,7 @@ void main() {
     // plain, non-scrolling Column used to overflow rather than scroll.
     calendars = List.generate(
       20,
-      (i) => Calendar(id: 'cal-$i', name: 'Calendar number $i', color: 0xFF0000FF),
+      (i) => plus.Calendar(id: 'cal-$i', name: 'Calendar number $i', readOnly: true, colorHex: '#0000FF'),
     );
     await tester.binding.setSurfaceSize(const Size(360, 640));
     addTearDown(() => tester.binding.setSurfaceSize(null));

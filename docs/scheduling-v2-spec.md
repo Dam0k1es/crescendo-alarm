@@ -596,7 +596,7 @@ A value already computed for a day, but not yet triggered, stays revisable: if t
 calendar re-read** yields a changed calendar picture, the value may be adjusted retroactively
 (including reapplying FR-5–FR-7). Only the value that has actually been triggered is fixed forever.
 
-**No live detection:** `device_calendar` (`^4.3.2`) offers no change notification (no
+**No live detection:** `device_calendar_plus` (`^0.12.0`; `device_calendar` `^4.3.2` before T-244) offers no change notification (no
 stream/callback, no `ContentObserver`, neither on the Dart nor the native side) - the actual
 re-read instants are FR-8's ring checkpoint and FR-17's app-foreground checkpoint, whichever comes
 first. A live mechanism would be technically buildable (Android `JobInfo.addTriggerContentUri`),

@@ -169,7 +169,7 @@
   <text x="36" y="1020" class="n">D  Denial of Service</text>
   <text x="230" y="1020" class="ns">The heaviest category here - see its own row above. T-64 and T-78 fixed; R3 force-stop and long idle unresolved.</text>
   <text x="36" y="1048" class="n">E  Elevation</text>
-  <text x="230" y="1048" class="ns">WRITE_CALENDAR is declared (device_calendar requires both calendar permissions before any read) but never used -</text>
+  <text x="230" y="1048" class="ns">WRITE_CALENDAR is declared (permission_handler requires both calendar permissions before it will request a read) but never used -</text>
   <text x="230" y="1066" class="ns">test/no_calendar_write_test.dart forbids every calendar write (T-161, T-49). READ_EXTERNAL_STORAGE is stripped from the manifest;</text>
   <text x="230" y="1084" class="ns">scripts/check_manifest_permissions.py pins the release APK's permissions to an exact allow-list (T-49).</text>
   <text x="230" y="1102" class="ns">ACCESS_NOTIFICATION_POLICY (Do Not Disturb access, granted by the user in system settings) lets the app switch DND - global DND on</text>

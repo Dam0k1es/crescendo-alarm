@@ -322,7 +322,7 @@ jobs:
         # allow-list, read from the signed APK with aapt2: fails on any
         # permission a plugin merges in (INTERNET above all - R7's offline
         # claim had no automated guard before) and on a needed one going
-        # missing (WRITE_CALENDAR, which device_calendar requires to read).
+        # missing (WRITE_CALENDAR, which permission_handler needs declared to request the calendar).
         run: python3 scripts/check_manifest_permissions.py build/app/outputs/flutter-apk/app-release.apk
 
       - name: Exported components match the reviewed list (T-241)

@@ -14,7 +14,7 @@ Not listed: the Flutter engine (io.flutter:*) and the Flutter plugins' own
 Android modules - both are covered by their Dart packages' entries under
 "Third-Party Licenses".
 
-144 libraries:
+141 libraries:
 
   androidx.activity:activity 1.13.0 - Apache-2.0
   androidx.activity:activity-ktx 1.13.0 - Apache-2.0
@@ -126,9 +126,8 @@ Android modules - both are covered by their Dart packages' entries under
   com.getkeepsafe.relinker:relinker 1.4.5 - Apache-2.0
   com.google.android.material:material 1.13.0 - Apache-2.0
   com.google.auto.value:auto-value-annotations 1.6.3 - Apache-2.0
-  com.google.code.gson:gson 2.14.0 - Apache-2.0
   com.google.dagger:dagger 2.59 - Apache-2.0
-  com.google.errorprone:error_prone_annotations 2.48.0 - Apache-2.0
+  com.google.errorprone:error_prone_annotations 2.41.0 - Apache-2.0
   com.google.guava:failureaccess 1.0.3 - Apache-2.0
   com.google.guava:guava 33.5.0-android - Apache-2.0
   com.google.guava:listenablefuture 9999.0-empty-to-avoid-conflict-with-guava - Apache-2.0
@@ -139,8 +138,6 @@ Android modules - both are covered by their Dart packages' entries under
   javax.inject:javax.inject 1 - Apache-2.0
   me.carda:AndroidAwnCore 0.12.1 - Apache-2.0
   me.leolin:ShortcutBadger 1.1.22 - Apache-2.0
-  org.dmfs:lib-recur 0.11.2 - Apache-2.0
-  org.dmfs:rfc5545-datetime 0.2.4 - Apache-2.0
   org.jetbrains.kotlin:kotlin-android-extensions-runtime 1.9.22 - Apache-2.0
   org.jetbrains.kotlin:kotlin-bom 1.8.22 - Apache-2.0
   org.jetbrains.kotlin:kotlin-parcelize-runtime 1.9.22 - Apache-2.0
@@ -163,5 +160,5 @@ Android modules - both are covered by their Dart packages' entries under
 
 Licence texts:
 
-  Apache-2.0: the full text is reproduced in "Native Code Notices" (zxing-cpp section) and under many Dart packages in "Third-Party Licenses"; the NOTICE files of org.dmfs:lib-recur and org.dmfs:rfc5545-datetime are listed under "lib-recur and rfc5545-datetime (org.dmfs)".
+  Apache-2.0: the full text is reproduced in "Native Code Notices" (zxing-cpp section) and under many Dart packages in "Third-Party Licenses".
   BSD-3-Clause: the 3-clause BSD text, with the copyright line of Protocol Buffers (repackaged as androidx.datastore:datastore-preferences-external-protobuf), is listed under "Protocol Buffers" in "Third-Party Licenses"; the copyright notice of libyuv (statically linked into androidx.camera:camera-core) is listed under "libyuv (in androidx.camera:camera-core)".

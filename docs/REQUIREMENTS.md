@@ -423,7 +423,7 @@ and the calendar entries the user explicitly grants access to.
   | Permission | Why |
   |---|---|
   | `READ_CALENDAR` | calendar-derived wake times |
-  | `WRITE_CALENDAR` | never used to write (`test/no_calendar_write_test.dart`), but `device_calendar` 4.3.3 requires both calendar permissions granted before any read; without it every read fails with `NOT_AUTHORIZED` |
+  | `WRITE_CALENDAR` | never used to write (`test/no_calendar_write_test.dart`), but `permission_handler_android` 13.0.1 denies the calendar status and request unless it is declared next to `READ_CALENDAR` (T-244) |
   | `RECEIVE_BOOT_COMPLETED` | re-arming alarms after a reboot |
   | `WAKE_LOCK` | ringing with the screen off |
   | `VIBRATE` | alarm vibration |
@@ -596,7 +596,7 @@ working contact method.
   `ACCESS_NETWORK_STATE` from the manifest entirely. Both fixed in `assets/text/Privacy.md`. The
   `WRITE_CALENDAR` permission remains declared but unused (known since T-17); T-161 records why
   removing it is not a safe same-session fix.
-- **Decided, not left open (2026-09-24, `docs/TODO.md` T-161):** `WRITE_CALENDAR` stays declared,
+- **Decided, not left open (2026-09-24, `docs/TODO.md` T-161; re-checked for T-244):** `WRITE_CALENDAR` stays declared,
   accepted as the necessary cost of `permission_handler`'s only available "read calendar" request
   shape on Android. That acceptance is backed by `test/no_calendar_write_test.dart`, which forbids
   every `device_calendar` write method from being called anywhere in `lib/` - not merely a manifest

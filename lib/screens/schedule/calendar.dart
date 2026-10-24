@@ -21,35 +21,36 @@ part of 'screen_schedule.dart';
 /// shared by the Schedule display ([getCalendarEntries]) and scheduling
 /// ([fetchMeetingsUncached]), each filtering it by the user's selection
 /// (docs/TODO.md T-53). Stays empty in the Linux dev build, where
-/// `device_calendar` has no implementation.
-List<Calendar> calendars = [];
-final DeviceCalendarPlugin _deviceCalendarPlugin = DeviceCalendarPlugin();
+/// `device_calendar_plus` has no implementation.
+List<plus.Calendar> calendars = [];
+
+/// A calendar without a colour of its own is drawn like a default Meeting.
+const Color _fallbackCalendarColor = Colors.green;
 
 /// Loads the device's calendars into [calendars] and, if any were found,
 /// sets `AppState.calendarsInitialized`. A failure (including the Linux dev
-/// build, where `retrieveCalendars()` throws) is only logged and leaves
+/// build, where `listCalendars()` throws) is only logged and leaves
 /// [calendars] as it was.
+///
+/// The plugin's own permission handling stays off (`autoPermissions` null);
+/// the request goes through `permission_handler` in
+/// `lib/utils/permissions.dart` (T-244). Without the grant the read throws and
+/// [calendars] stays empty.
 Future initCalendars(AppState appState) async {
   debugPrint("=====initCalendars");
 
-  Result result = Result();
-
+  List<plus.Calendar>? found;
   try {
-    result = await _deviceCalendarPlugin.retrieveCalendars();
+    found = await plus.DeviceCalendar.instance.listCalendars();
   } catch (e) {
     debugPrint("=====initCalendars: Error retrieving calendars: ${e.runtimeType}");
   }
 
-  for (ResultError error in result.errors) {
-    debugPrint(
-        '======initCalendars: Error init calendars: ${error.errorCode} ${error.errorMessage}');
-  }
-
-  if (result.isSuccess) {
-    calendars = result.data;
-    // docs/TODO.md T-89: for Google/Exchange accounts, device_calendar
-    // returns the account name as Calendar.name, i.e. regularly the user's
-    // real email address. Only log the count.
+  if (found != null) {
+    calendars = found;
+    // docs/TODO.md T-89: for Google/Exchange accounts, the plugin returns the
+    // account name as Calendar.name, i.e. regularly the user's real email
+    // address. Only log the count.
     debugPrint("======initCalendars: Found ${calendars.length} calendar(s)");
     if (calendars.isNotEmpty) {
       appState.calendarsInitialized = true;
@@ -65,16 +66,11 @@ Future<List<Meeting>> getCalendarEntries(
   Color selectedColor;
   List<Meeting> meetingCollection = [];
 
-  // Callers pass an exclusive end (start + 7, 14 or 42 days). Subtracting a
-  // whole day treats device_calendar's endDate as an inclusive day, but it
-  // is an instant: the query ends a day early - the cut-off docs/TODO.md
-  // T-70 removed from fetchMeetingsUncached below (which subtracts 1 ms).
+  // Callers pass an exclusive end (start + 7, 14 or 42 days), and
+  // `listEvents` takes a half-open `[start, end)` window, so it is handed
+  // through as it is (docs/TODO.md T-70, T-244).
   debugPrint(
-      "=====getCalendarEntries: Retrieving calendar entries from $startTime to ${endTime.subtract(const Duration(days: 1))}");
-  final params = RetrieveEventsParams(
-    startDate: startTime,
-    endDate: endTime.subtract(const Duration(days: 1)),
-  );
+      "=====getCalendarEntries: Retrieving calendar entries from $startTime to $endTime");
 
   debugPrint(
       '======getCalendarEntries: Calendars list has size ${calendars.length}.');
@@ -84,35 +80,37 @@ Future<List<Meeting>> getCalendarEntries(
   // of scheduling below - both read the same module-level `calendars` list,
   // so the same filter has to apply to both loops.
   final selectedCalendars =
-      calendars.where((c) => appState.isCalendarSelected(c.id!)).toList();
+      calendars.where((c) => appState.isCalendarSelected(c.id)).toList();
 
-  for (Calendar calendar in selectedCalendars) {
-    final result =
-        await _deviceCalendarPlugin.retrieveEvents(calendar.id, params);
-
-    for (ResultError error in result.errors) {
+  for (final calendar in selectedCalendars) {
+    final List<plus.Event> events;
+    try {
+      events = await plus.DeviceCalendar.instance.listEvents(
+          startTime, endTime,
+          calendarIds: [calendar.id]);
+    } catch (e) {
       debugPrint(
-          '======getCalendarEntries: Error check event exist: ${error.errorCode} ${error.errorMessage}');
+          '======getCalendarEntries: Error retrieving events: ${e.runtimeType}');
+      continue;
     }
 
-    selectedColor = Color(calendar.color!);
+    selectedColor = calendar.color ?? _fallbackCalendarColor;
 
-    if (result.isSuccess) {
-      for (Event event in result.data ?? []) {
-        Meeting meeting =
-            eventToMeeting(event, selectedColor, timeZone, timeZone);
-        try {
-          if (!appState.meetings.contains(meeting)) {
-            meetingCollection.add(meeting);
-          } else {
-            // docs/TODO.md T-89: eventName is the appointment title from the
-            // device calendar ("Oncology follow-up"). Never log it.
-            debugPrint(
-                "=====getCalendarEntries: meeting already in list, skipping");
-          }
-        } catch (e) {
-          debugPrint("=====getCalendarEntries: Error add meeting to list: ${e.runtimeType}");
+    for (final event in events) {
+      if (event.status == plus.EventStatus.canceled) continue;
+      Meeting meeting =
+          eventToMeeting(event, selectedColor, timeZone, timeZone);
+      try {
+        if (!appState.meetings.contains(meeting)) {
+          meetingCollection.add(meeting);
+        } else {
+          // docs/TODO.md T-89: eventName is the appointment title from the
+          // device calendar ("Oncology follow-up"). Never log it.
+          debugPrint(
+              "=====getCalendarEntries: meeting already in list, skipping");
         }
+      } catch (e) {
+        debugPrint("=====getCalendarEntries: Error add meeting to list: ${e.runtimeType}");
       }
     }
   }
@@ -124,7 +122,7 @@ Future<List<Meeting>> getCalendarEntries(
 }
 
 /// docs/TODO.md T-61/T-60: fetches events for `[start, end)` directly from
-/// `_deviceCalendarPlugin`, bypassing both `_fetchedCalendarWeeks`
+/// the device calendar plugin, bypassing both `_fetchedCalendarWeeks`
 /// (`isCalendarWeekFetched`/`updateCalendarData`'s cache, T-60) and
 /// `getCalendarEntries`'s own dedup-against-`appState.meetings` check -
 /// scheduling-v2's `replan()` (`lib/models/scheduling/replan.dart`) needs the
@@ -153,32 +151,27 @@ Future<List<Meeting>> fetchMeetingsUncached(
     await initCalendars(appState);
   }
 
-  // docs/TODO.md T-70: `end` is exclusive here (unlike getCalendarEntries'
-  // inclusive-day convention, which this used to copy). Subtracting a whole
-  // day meant the last day of FR-8's 7-day window ended at its own midnight,
-  // so nothing on that day was ever returned and hardFloor(window[6]) was
-  // always null - the window effectively covered 6 days of data, not 7.
-  final params = RetrieveEventsParams(
-    startDate: start,
-    endDate: end.subtract(const Duration(milliseconds: 1)),
-  );
-
+  // docs/TODO.md T-70: `end` is exclusive, which is also what `listEvents`
+  // takes (a half-open window), so it is handed through unchanged. Subtracting
+  // a whole day here once meant the last day of FR-8's 7-day window ended at
+  // its own midnight, so nothing on that day was ever returned and
+  // hardFloor(window[6]) was always null.
   final meetings = <Meeting>[];
   var perCalendarErrors = 0;
   // docs/TODO.md T-53: same deselection filter as `getCalendarEntries` above
   // - a calendar the user opted out of must not feed scheduling either.
   final selectedCalendars =
-      calendars.where((c) => appState.isCalendarSelected(c.id!)).toList();
+      calendars.where((c) => appState.isCalendarSelected(c.id)).toList();
   for (final calendar in selectedCalendars) {
-    final result = await _deviceCalendarPlugin.retrieveEvents(calendar.id, params);
-    for (final error in result.errors) {
+    try {
+      final events = await plus.DeviceCalendar.instance
+          .listEvents(start, end, calendarIds: [calendar.id]);
+      meetings.addAll(
+          eventsToMeetings(events, calendar.color ?? _fallbackCalendarColor));
+    } catch (e) {
       perCalendarErrors++;
       debugPrint(
-          '======fetchMeetingsUncached: Error retrieving events: ${error.errorCode} ${error.errorMessage}');
-    }
-    if (!result.isSuccess) continue;
-    for (final event in result.data ?? []) {
-      meetings.add(eventToMeeting(event, Color(calendar.color!), '', ''));
+          '======fetchMeetingsUncached: Error retrieving events: ${e.runtimeType}');
     }
   }
 

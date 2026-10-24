@@ -300,12 +300,14 @@
 
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- The app never writes to a calendar, but WRITE_CALENDAR is NOT
-         removable: device_calendar 4.3.3's arePermissionsGranted()
-         (CalendarDelegate.kt) requires BOTH calendar permissions to be
-         granted before retrieveCalendars/retrieveEvents run, and its
-         requestPermissions() asks for WRITE_CALENDAR first and only checks
-         that first result. Undeclared, it can never be granted, so every
-         calendar read would fail with NOT_AUTHORIZED (docs/TODO.md T-49).
+         removable: permission_handler_android 13.0.1 answers "denied" to
+         both the status check and the request for
+         Permission.calendarFullAccess (the only calendar request it has)
+         unless BOTH calendar permissions are declared
+         (PermissionManager.isValidManifestForCalendarFullAccess), so a
+         fresh install could never be granted READ_CALENDAR and would read
+         no calendar (docs/TODO.md T-49, T-244). device_calendar_plus alone
+         would read with READ_CALENDAR.
          scripts/check_manifest_permissions.py fails if it goes missing. -->
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 

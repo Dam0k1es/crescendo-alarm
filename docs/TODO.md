@@ -8696,3 +8696,33 @@ red and that stays invisible in the rest of the suite today.
   run at 22:22 UTC is already after midnight in Berlin, so both fell on 2026-10-25, the keys collided and the disabled day
   swallowed the enabled one. Reproduced locally in that window (red before, green after); the fixture now uses calendar-day
   arithmetic. The code was right.
+
+### T-244 · `device_calendar` replaced by `device_calendar_plus`; `WRITE_CALENDAR`, gson pin and dmfs libraries gone — on `dev`, device test pending (2026-10-24) (maintainer decision, P1)
+- **Why:** `device_calendar` is unmaintained (last release 2024-09-29), pinned `timezone ^0.9.0` (hence the override), pulled in
+  `gson` (T-148's CVE pin) and the dmfs recurrence libraries (T-242's NOTICE file), and needed `WRITE_CALENDAR` granted
+  before any read (T-161). `device_calendar_plus` 0.12.0 is MIT, has Dart dependencies the app already carries, no Maven
+  runtime library, an empty Android manifest, and reads with `READ_CALENDAR` alone.
+- **What changed:** `calendar.dart` lists calendars and events through `DeviceCalendar.instance` (per-calendar try/catch,
+  the half-open `[start, end)` window handed through unchanged - `getCalendarEntries` no longer subtracts a day);
+  `eventToMeeting`/`eventsToMeetings` (`meeting_data.dart`) are the adapter. A timed event's local `DateTime` is the instant;
+  an all-day event arrives as LOCAL midnight of its date and is re-read as UTC-tagged midnight of that date, the convention
+  `Meeting` always had, so the planner and the Schedule tab are untouched. Event ids are still the series' event id, so
+  persisted ignored events and calendar selections keep working. **Behaviour change:** occurrences with status `canceled`
+  are dropped (Android keeps a cancelled occurrence of a series in its instance table).
+- **Permissions - `WRITE_CALENDAR` STAYS (corrected the same day):** a first version of this change removed it, believing
+  `permission_handler` would then request READ alone. The independent review showed otherwise: `permission_handler_android`
+  13.0.1 `PermissionManager.isValidManifestForCalendarFullAccess` (l. 672-685) makes both the status check and the request
+  answer "denied" unless WRITE and READ are declared, so a fresh install could never be granted READ. (An update over an
+  install that already holds the grant would have hidden it.) Manifest, allow-list and docs are back as before. The plugin
+  reads with READ alone; its own `requestPermissions`/`autoPermissions` are never used (also need WRITE declared). Removing
+  WRITE would need a small native READ-only request of our own - not built, a decision for later.
+  `test/no_calendar_write_test.dart` guards the plugin's write API and both declarations.
+- **Removed with it:** `timezone` override, `gson` force in `app/build.gradle.kts`, `dmfs_NOTICE.txt` and its registration,
+  `AndroidLibraries.txt` regenerated (141 libraries). Resolving `releaseRuntimeClasspath` shows neither gson nor dmfs.
+- **Tests:** `test/device_calendar_plus_adapter_test.dart` (red first), `no_calendar_write_test.dart`,
+  `licence_notices_test.dart`, `screen_schedule_calendar_selection_test.dart`.
+- **Not verified:** nothing here ran against a real calendar provider, and the permission dialog on a FRESH install (not an update) has to be checked on the device. Open for the device test: recurring series (one
+  `Event` per occurrence), all-day events west and east of UTC, cancelled occurrences, a changed device zone, the permission
+  dialog asking for READ only (and the app still reading), and the Schedule tab's colours. The plugin's build files pull
+  AGP 8.9.1 and Kotlin 2.1.0 into the Gradle buildscript classpath of its own module, and its maintainer is a company that
+  accepts no outside pull requests (pre-1.0 API): both are risks to watch, not fixed.

@@ -149,20 +149,12 @@ tasks.named<org.cyclonedx.gradle.CyclonedxDirectTask>("cyclonedxDirectBom") {
     includeConfigs.set(listOf("releaseRuntimeClasspath"))
 }
 
-// docs/TODO.md T-148: the one real finding the scoped SBOM above turned up -
-// `device_calendar` transitively pulls `gson:2.8.8`, which carries
-// GHSA-4jrv-ppp4-jm57/CVE-2022-25647 (a deserialization type-confusion
-// issue, CVSS 7.7). Forced to a fixed release (2.8.9 or later) rather than
-// accepted as an exception: there is no reason to carry a fixable HIGH when
-// the fix is a one-line version bump. Dependabot keeps bumping this pin
-// (2.8.9 -> 2.14.0 on 2026-09-25), so it is no longer the same-minor patch
-// release T-148 chose: every bump has to keep `device_calendar` working,
-// which serializes calendars and events to Dart with Gson.
-configurations.all {
-    resolutionStrategy {
-        force("com.google.code.gson:gson:2.14.0")
-    }
-}
+// docs/TODO.md T-148, T-244: the scoped SBOM above once turned up a real
+// finding - `device_calendar` transitively pulled `gson:2.8.8` (CVE-2022-25647,
+// CVSS 7.7), which this file pinned to a fixed release. `device_calendar_plus`
+// brings no Maven library, gson left the release classpath with the old plugin,
+// and so did the pin. A library that returns through a plugin is caught by the
+// SBOM scan and the licence-notice check, not by a forced version here.
 
 dependencies {
     // docs/TODO.md T-198: JVM unit tests for SleepTimeDndPolicy

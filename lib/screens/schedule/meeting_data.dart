@@ -19,8 +19,8 @@ part of 'screen_schedule.dart';
 
 /// One device-calendar event as the app sees it ([eventToMeeting]), drawn by
 /// the Schedule tab ([meetingToCalendarEvent]) and read by scheduling-v2.
-/// [from] and [to] are absolute instants: the `tz.TZDateTime`s
-/// `device_calendar` returns, in the event's own zone.
+/// [from] and [to] are absolute instants for a timed event; for an all-day one
+/// they are UTC-tagged midnights of its calendar dates ([eventToMeeting]).
 class Meeting {
   Meeting({
     required this.from,
@@ -84,8 +84,10 @@ class Meeting {
 /// **The frame conversion lives here, and getting it right is the whole job.**
 /// Syncfusion's `CalendarDataSource` took a `startTimeZone` per appointment;
 /// `calendar_view` has no timezone concept at all and draws the raw fields of
-/// whatever `DateTime` it is handed. `device_calendar` hands out
-/// `tz.TZDateTime` in the *event's own* zone, so something has to convert.
+/// whatever `DateTime` it is handed. `device_calendar` handed out
+/// `tz.TZDateTime` in the *event's own* zone (T-244: the new plugin hands out
+/// device-local `DateTime`s, which a `Meeting` may still hold as any instant), so
+/// something has to convert.
 ///
 /// It must NOT be `toLocal()`. On a `TZDateTime` that converts to `tz.local`,
 /// and `tz.local` stays `Etc/UTC` unless somebody calls `tz.setLocalLocation` -
@@ -99,8 +101,8 @@ class Meeting {
 /// the T-61/T-83 trap one level deeper.)
 ///
 /// **All-day entries are the exception and must not take that path.**
-/// `device_calendar` deliberately normalises an Android all-day event to
-/// midnight UTC to preserve its calendar date (see its `Event.fromJson`), so
+/// A `Meeting` holds an all-day event as UTC-tagged midnight of its calendar
+/// date ([eventToMeeting] normalises it so, as `device_calendar` did itself), so
 /// their date has to be read in UTC too. Converting them to device time would
 /// move every all-day event one day earlier for any device west of UTC. They
 /// also carry no start/end time: calendar_view reads that as a full-day event,
@@ -160,17 +162,45 @@ CalendarEventData<Meeting> meetingToCalendarEvent(
 //   );
 // }
 
-Meeting eventToMeeting(Event event, Color selectedColor, String startTimeZone,
-    String endTimeZone) {
+/// Maps one `device_calendar_plus` event onto a [Meeting]
+/// (docs/TODO.md T-244).
+///
+/// The plugin returns plain device-local `DateTime`s. A timed event's value is
+/// already the instant, so it passes through untouched. An all-day event is
+/// reported as LOCAL midnight of its calendar date (a floating date): its
+/// fields, not its instant, are the information, so they are re-read as
+/// UTC-tagged midnight of the same date - the convention [Meeting] has always
+/// had for all-day entries, which the planner and [meetingToCalendarEvent]
+/// both rely on. Reading the local value as an instant instead would move the
+/// date for any zone whose midnight falls on another UTC date.
+Meeting eventToMeeting(plus.Event event, Color selectedColor,
+    String startTimeZone, String endTimeZone) {
+  final from = event.isAllDay
+      ? DateTime.utc(
+          event.startDate.year, event.startDate.month, event.startDate.day)
+      : event.startDate;
+  final to = event.isAllDay
+      ? DateTime.utc(event.endDate.year, event.endDate.month, event.endDate.day)
+      : event.endDate;
   return Meeting(
-    from: event.start!,
-    to: event.end!,
-    eventName: event.title ?? '(No title)',
+    from: from,
+    to: to,
+    eventName: event.title.isEmpty ? '(No title)' : event.title,
     description: event.description ?? '',
-    isAllDay: event.allDay ?? false,
+    isAllDay: event.isAllDay,
     background: selectedColor,
     startTimeZone: startTimeZone,
-    ids: [event.eventId!],
+    ids: [event.eventId],
     endTimeZone: endTimeZone,
   );
 }
+
+/// [events] as [Meeting]s, without the cancelled ones: Android keeps a
+/// cancelled occurrence of a recurring series in its instance table with
+/// `STATUS_CANCELED`, and it is not an appointment (it must neither be drawn
+/// nor pull a wake-up time earlier). Tentative and status-less events count.
+List<Meeting> eventsToMeetings(List<plus.Event> events, Color color) => [
+      for (final e in events)
+        if (e.status != plus.EventStatus.canceled)
+          eventToMeeting(e, color, '', ''),
+    ];

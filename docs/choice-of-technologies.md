@@ -58,6 +58,6 @@
   pub.dev candidate (`do_not_disturb`, MPL-2.0, unmaintained) was rejected already in
   T-184. (T-184's own `DoNotDisturbChannel` existed until that feature was removed in
   T-197; `SleepTimeDnd` is a new design, not a restoration of it.)
-- **`device_calendar`** is the only external data source the app reads from at all, and
+- **`device_calendar_plus`** (it replaced `device_calendar` in T-244) is the only external data source the app reads from at all, and
   it's still entirely on-device: the phone's own local calendar provider, not a calendar
   server or API.

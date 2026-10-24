@@ -18,7 +18,7 @@
 import 'dart:async';
 
 import 'package:calendar_view/calendar_view.dart';
-import 'package:device_calendar/device_calendar.dart';
+import 'package:device_calendar_plus/device_calendar_plus.dart' as plus;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -383,14 +383,14 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
                               // account email address (Google/Exchange) -
                               // never logged, but fine to show here since
                               // it's the user's own device.
-                              calendar.name ?? calendar.id ?? 'Unnamed calendar',
+                              calendar.name.isEmpty ? 'Unnamed calendar' : calendar.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            value: appState.isCalendarSelected(calendar.id!),
+                            value: appState.isCalendarSelected(calendar.id),
                             onChanged: (value) {
                               appState.setCalendarSelected(
-                                  calendar.id!, value ?? true);
+                                  calendar.id, value ?? true);
                               setSheetState(() {});
                               // The same trigger _showIgnoreEventSheet uses
                               // below: a change here feeds hardFloor

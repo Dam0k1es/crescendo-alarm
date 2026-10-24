@@ -42,7 +42,11 @@ dependencies:
   # travel inside a GPLv3 APK. calendar_view is MIT. Guarded by
   # test/no_proprietary_dependencies_test.dart so it cannot come back quietly.
   calendar_view: ^2.0.0
-  device_calendar: ^4.3.2
+  # docs/TODO.md T-244: replaced `device_calendar` (unmaintained since 2024,
+  # pinned timezone ^0.9.0, pulled in gson and the dmfs recurrence libraries and
+  # needed WRITE_CALENDAR granted). MIT, no native library dependencies. Its own
+  # permission handling stays off: see calendar.dart.
+  device_calendar_plus: ^0.12.0
 
   provider: ^6.1.2
   shared_preferences: ^2.2.3
@@ -110,17 +114,7 @@ dev_dependencies:
   # rules only (see analysis_options.yaml) and is never imported at runtime.
   flutter_lints: ^6.0.0
 
-# device_calendar (even its latest release, 4.3.3) still pins `timezone: ^0.9.0`,
-# while this app itself declares `timezone: ^0.11.0` above and uses 0.11's
-# refreshed IANA data for the frame handling in lib/models/scheduling/ -
-# a genuine, currently unresolved conflict between the two packages' declared
-# constraints. Forcing timezone to 0.11.x here is safe in practice: the public
-# API (TZDateTime, Location, getLocation) hasn't changed between 0.9.x and
-# 0.11.x, only the bundled IANA timezone data was refreshed. Revisit this once
-# device_calendar publishes a release that allows timezone ^0.11.0.
 dependency_overrides:
-  timezone: ^0.11.0
-
   # permission_handler_android >=14.0.0 hardcodes compileSdk = 37, which only
   # exists as a preview-numbered package (android-37.0/.1/.2) in the current
   # Android SDK repository, not as a plain "android-37" target - so any AGP

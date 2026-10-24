@@ -39,9 +39,7 @@ import sys
 LICENCE_TEXTS = {
     "Apache-2.0": (
         "the full text is reproduced in \"Native Code Notices\" (zxing-cpp "
-        "section) and under many Dart packages in \"Third-Party Licenses\"; "
-        "the NOTICE files of org.dmfs:lib-recur and org.dmfs:rfc5545-datetime "
-        "are listed under \"lib-recur and rfc5545-datetime (org.dmfs)\"."
+        "section) and under many Dart packages in \"Third-Party Licenses\"."
     ),
     "BSD-3-Clause": (
         "the 3-clause BSD text, with the copyright line of Protocol Buffers "

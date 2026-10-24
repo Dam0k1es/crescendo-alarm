@@ -47,7 +47,7 @@ entry says why.
 
 The remaining direct dependencies are BSD-3, MIT or Apache-2.0 - the permissive licences GPLv3
 absorbs without further conditions. That includes the Flutter SDK and first-party plugins
-(`shared_preferences`, `path_provider`), `permission_handler`, `alarm`, `audioplayers`, `device_calendar`,
+(`shared_preferences`, `path_provider`), `permission_handler`, `alarm`, `audioplayers`, `device_calendar_plus` (MIT; replaced `device_calendar`, T-244),
 `awesome_notifications`, `provider`, `timezone`, `intl`, `qr_flutter`, `uuid`,
 `flutter_colorpicker`, `flutter_markdown_plus`, and the two replacements themselves,
 `calendar_view` and `flutter_zxing`. `file_picker` (MIT, `docs/TODO.md` T-146, the custom-tone

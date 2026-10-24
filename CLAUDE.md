@@ -300,8 +300,8 @@ see "PII policy" below.
 
 - **Android** is the actual target platform this app is built for.
 - **Linux desktop** exists only as a fast local dev/debug loop (no emulator/device needed to smoke-test
-  UI and core logic changes) - it is not a real deployment target. `device_calendar` has no Linux
-  implementation, so `retrieveCalendars()` throws there; the generic `try/catch` around that call in
+  UI and core logic changes) - it is not a real deployment target. `device_calendar_plus` has no Linux
+  implementation, so `listCalendars()` throws there; the generic `try/catch` around that call in
   `lib/screens/schedule/calendar.dart` swallows it like any other error (there is no
   `MissingPluginException`-specific handling), leaving `calendars` empty and the app simply
   proceeding with none, by design.
@@ -463,7 +463,8 @@ Four workflows under `.github/workflows/` (plus shared scripts under `.github/sc
   `scripts/check_manifest_permissions.py` against the signed APK (`docs/TODO.md` T-49): the
   permissions `aapt2` reads from it must match the script's allow-list **exactly**, in both
   directions - a permission a plugin merges in (`INTERNET` above all, R7) fails, and so does a
-  needed one going missing (`WRITE_CALENDAR`, which `device_calendar` requires before any read).
+  needed one going missing (`WRITE_CALENDAR`, which `permission_handler_android` needs declared next to
+  `READ_CALENDAR` before it will check or request the calendar permission; the app never writes a calendar - T-244).
   Adding a permission there is a reviewed decision with the feature and code path named.
 - **`release.yml`** is triggered by a `v*.*.*` tag or `workflow_dispatch` and gates its signed
   build on **both** `e2e-tests` and `security-gate`. It attaches exactly one asset to the GitHub
@@ -637,15 +638,11 @@ removed the offending AAR from the build, so the workaround lost its reason. Ver
   preview-numbered packages (`android-37.0`, `.1`, `.2`), not a plain `android-37` target AGP can
   resolve - any build fails with `Failed to find target with hash string 'android-37'`. Revisit
   once upstream publishes a fixed release.
-- **`timezone: ^0.11.0`** - `device_calendar` (even its latest release) still pins
-  `timezone: ^0.9.0`, while this app itself declares `^0.11.0` and relies on 0.11's refreshed IANA
-  data for the frame handling in `lib/models/scheduling/`. (Until 2026-09-17 the other side of this
-  conflict was `syncfusion_flutter_calendar`; that package is gone, this override is not.) Forcing 0.11.x is safe in practice: the
-  public API (`TZDateTime`, `Location`, `getLocation`) is unchanged between 0.9.x and 0.11.x, only
-  the bundled IANA timezone data was refreshed. Revisit once `device_calendar` allows `^0.11.0`.
+- There used to be a second override, `timezone: ^0.11.0`, because `device_calendar` pinned
+  `timezone: ^0.9.0`. It left with that plugin (T-244); the app's own `timezone: ^0.11.0`
+  dependency needs no override any more.
 
-Both overrides carry explanatory comments in `pubspec.yaml` itself - keep them in sync if you
-change either.
+The override carries an explanatory comment in `pubspec.yaml` itself - keep the two in sync.
 
 ## Licence position (GPLv3)
 
@@ -782,7 +779,7 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
 
 - `app_state_calendar_selection_test.dart` and `screen_schedule_calendar_selection_test.dart` cover
   T-53: a checkable calendar list reachable from a corner button on the Schedule screen filters
-  which `device_calendar` calendars feed both the display and scheduling, following the same
+  which device calendars feed both the display and scheduling, following the same
   `StatefulBuilder`-in-a-modal-sheet shape T-149's "ignore this event" sheet already established
   (the calendar list uses `CheckboxListTile`s, the ignore sheet a single `SwitchListTile`).
 
@@ -919,7 +916,7 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
 - `test/ignored_events_test.dart`, `test/replan_ignored_events_test.dart`,
   `test/meeting_data_test.dart` and `test/ignore_event_ui_test.dart` (`docs/TODO.md` T-149): a
   calendar event can be marked "ignored" - excluded from `hardFloor` derivation, grayed out with an
-  X on its `DayView`/`WeekView` tile, persisted by `device_calendar` event id
+  X on its `DayView`/`WeekView` tile, persisted by the calendar plugin's event id
   (`AppState.ignoredEventIds`), never written back to the calendar. Split across four files by
   layer (persistence, scheduling filter, tile colour, tap-to-toggle UI), the same shape as the
   disabledDays/FR-21 tests elsewhere in this list.
@@ -951,7 +948,7 @@ pre-scheduling-v2 files plus the shape of the new ones; `ls test/` is the author
   log) - that run is what closed T-91, so don't describe the engine as never having been on a
   device.
   Still not covered by anything: audible playback and the gentle-wake ramp (the CI emulator runs
-  with audio disabled), and the real `device_calendar` boundary - every engine scenario injects its
+  with audio disabled), and the real calendar-plugin boundary - every engine scenario injects its
   events through `fetchEvents`, so the chain that produced T-61 stays untested. Real camera QR
   decoding is separately confirmed (T-143), but on a real device by hand, not through this
   emulator-based suite (the CI emulator has no real camera to point at a code).

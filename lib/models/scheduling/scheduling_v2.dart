@@ -299,7 +299,8 @@ DateTime? hardFloor({
 
   final earliest = nonAllDay.reduce((a, b) => a.from.isBefore(b.from) ? a : b);
   // docs/TODO.md T-61: normalise the frame. `Meeting.from` is what
-  // `device_calendar` produced - a `TZDateTime` in the **event's own** zone,
+  // the calendar plugin produced - until T-244 a `TZDateTime` in the **event's
+  // own** zone (now a device-local `DateTime`; the handling is the same),
   // whose `.hour`/`.minute` are that zone's digits. Every other value in this
   // layer is UTC-tagged, and `_wallClockDelta` compares digit fields, so
   // handing the event's own frame onward made ΔT wrong by the device offset on

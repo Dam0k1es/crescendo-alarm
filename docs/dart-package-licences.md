@@ -11,18 +11,18 @@ is simply a BSD-3 text, which also matches the shorter BSD-2 pattern):
 
 | Class | Packages |
 |---|---:|
-| BSD-3-Clause + BSD-2-Clause | 93 |
-| MIT | 39 |
+| BSD-3-Clause + BSD-2-Clause | 92 |
+| MIT | 43 |
 | Apache-2.0 | 10 |
 | BSD-3-Clause (Flutter SDK; test-only) | 3 |
 | Apache-2.0 + BSD-3-Clause + BSD-2-Clause | 3 |
-| BSD-2-Clause | 2 |
+| BSD-2-Clause | 1 |
 | MPL-2.0 | 1 |
 | BSD-3-Clause (Flutter SDK; web-only) | 1 |
 | BSD-3-Clause (Flutter SDK; tooling-only) | 1 |
 | BSD-3-Clause AND bundled engine notices (Flutter SDK) | 1 |
 
-Total: 154 packages. Nothing is copyleft except `dbus` (MPL-2.0, GPLv3-compatible through its
+Total: 156 packages (2026-10-24: `device_calendar` and `sprintf` out, the four `device_calendar_plus` packages in; counts adjusted by hand, the test is the source of truth). Nothing is copyleft except `dbus` (MPL-2.0, GPLv3-compatible through its
 section 3.3; a Linux-only transitive dependency that is not part of the Android build).
 
 | Package | Licence(s) found |
@@ -58,7 +58,7 @@ section 3.3; a Linux-only transitive dependency that is not part of the Android 
 | `cross_file` | BSD-3-Clause + BSD-2-Clause |
 | `crypto` | BSD-3-Clause + BSD-2-Clause |
 | `dbus` | MPL-2.0 |
-| `device_calendar` | BSD-3-Clause + BSD-2-Clause |
+| `device_calendar_plus` (and `_android`, `_ios`, `_platform_interface`) | MIT |
 | `equatable` | MIT |
 | `fake_async` | Apache-2.0 |
 | `ffi` | BSD-3-Clause + BSD-2-Clause |
@@ -156,7 +156,6 @@ section 3.3; a Linux-only transitive dependency that is not part of the Android 
 | `shared_preferences_windows` | BSD-3-Clause + BSD-2-Clause |
 | `sky_engine` | BSD-3-Clause AND bundled engine notices (Flutter SDK) |
 | `source_span` | BSD-3-Clause + BSD-2-Clause |
-| `sprintf` | BSD-2-Clause |
 | `stack_trace` | BSD-3-Clause + BSD-2-Clause |
 | `stream_channel` | BSD-3-Clause + BSD-2-Clause |
 | `stream_transform` | BSD-3-Clause + BSD-2-Clause |

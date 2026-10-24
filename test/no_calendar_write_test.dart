@@ -2,39 +2,39 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-// docs/TODO.md T-161 (independent security-researcher review, T-17): the
-// android:permission WRITE_CALENDAR remains declared in
-// android/app/src/main/AndroidManifest.xml even though this app only ever
-// *reads* the calendar. It was investigated and deliberately left, not
-// forgotten: permission_handler's Android implementation has no "calendar,
-// read-only" request - Permission.calendarFullAccess (the only option that
-// yields READ_CALENDAR, used by lib/utils/permissions.dart) asks for
-// WRITE_CALENDAR in the same runtime dialog, so declaring only
-// READ_CALENDAR in the manifest would leave that runtime request asking
-// for a permission the manifest no longer grants.
+// docs/TODO.md T-161, T-244: this app only ever *reads* the calendar, yet
+// WRITE_CALENDAR stays declared in android/app/src/main/AndroidManifest.xml.
+// It was investigated twice and deliberately left: permission_handler's
+// Android implementation has no "calendar, read-only" request -
+// Permission.calendarFullAccess (the only way to get READ_CALENDAR, used by
+// lib/utils/permissions.dart) answers "denied" to both status and request
+// unless WRITE_CALENDAR is declared next to READ_CALENDAR
+// (permission_handler_android 13.0.1, PermissionManager
+// .isValidManifestForCalendarFullAccess). The move to `device_calendar_plus`
+// (T-244) did not change that: the plugin itself reads with READ alone, but
+// nothing could obtain the grant without the declaration.
 //
-// Accepting the permission is only defensible for as long as the CODE
-// never actually exercises it - a manifest entry with no matching runtime
-// behaviour is a stated, checkable claim, not just a belief. This guards
-// that claim structurally: every `device_calendar` API that can mutate a
-// calendar (createOrUpdateEvent, deleteEvent, deleteEventInstance,
-// createCalendar, deleteCalendar - the package's full write surface, see
-// ~/.pub-cache/hosted/pub.dev/device_calendar-*/lib/src/device_calendar.dart)
-// must never be CALLED anywhere in lib/. Same "forbid the channel, not the
-// symptom" reasoning as test/no_proprietary_dependencies_test.dart and
-// test/diag_log_api_test.dart - a value-based/manual check would only ever
-// catch a write path already known about.
+// Declaring a permission is only defensible for as long as the CODE never
+// exercises it, so this guards that structurally: no plugin API that can
+// mutate a calendar - or that asks the plugin to request permissions itself -
+// may be CALLED anywhere in lib/. Same "forbid the channel, not the symptom"
+// reasoning as test/no_proprietary_dependencies_test.dart and
+// test/diag_log_api_test.dart.
 
 const _writeMethods = <String>[
-  'createOrUpdateEvent',
-  'deleteEventInstance',
+  'createEvent',
+  'updateEvent',
+  'updateRecurring',
   'deleteEvent',
+  'deleteRecurring',
   'createCalendar',
+  'updateCalendar',
   'deleteCalendar',
+  'showCreateEventModal',
 ];
 
 /// Strips '//' line comments so a call mentioned only in an explanatory
-/// comment - or intentionally disabled, as `createOrUpdateEvent` currently
+/// comment - or intentionally disabled, as `createEvent` currently
 /// is in `calendar.dart` - does not fail this test; only a live call must.
 String _stripLineComments(String source) {
   return source
@@ -53,7 +53,7 @@ Iterable<File> _libDartFiles() => Directory('lib')
 
 void main() {
   group('the app never writes to the device calendar (T-17/T-161)', () {
-    test('no device_calendar write method is called anywhere in lib/', () {
+    test('no calendar write method is called anywhere in lib/', () {
       final offenders = <String>[];
       for (final file in _libDartFiles()) {
         final source = _stripLineComments(file.readAsStringSync());
@@ -65,10 +65,40 @@ void main() {
       }
 
       expect(offenders, isEmpty,
-          reason: 'WRITE_CALENDAR is accepted in the manifest ONLY because '
-              'nothing in lib/ ever exercises it (docs/TODO.md T-161) - a '
+          reason: 'WRITE_CALENDAR is declared ONLY because permission_handler '
+              'needs it to request a read (docs/TODO.md T-161, T-244) - a '
               'live call to any of these changes that risk assessment and '
               'must not land silently:\n${offenders.join('\n')}');
+    });
+
+    test('the plugin never requests permissions itself', () {
+      // Its full-access request needs WRITE_CALENDAR declared; the request
+      // goes through permission_handler (lib/utils/permissions.dart), which
+      // asks for exactly what the manifest declares. `autoPermissions` would
+      // make every read prompt through the plugin instead.
+      final offenders = <String>[];
+      for (final file in _libDartFiles()) {
+        final source = _stripLineComments(file.readAsStringSync());
+        if (RegExp(r'DeviceCalendar(\.instance|\(\))\s*\.requestPermissions')
+                .hasMatch(source) ||
+            source.contains('autoPermissions')) {
+          offenders.add(file.path);
+        }
+      }
+      expect(offenders, isEmpty);
+    });
+
+    test('the manifest declares both calendar permissions (T-244)', () {
+      final manifest =
+          File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+      final withoutComments =
+          manifest.replaceAll(RegExp(r'<!--.*?-->', dotAll: true), '');
+      for (final p in ['READ_CALENDAR', 'WRITE_CALENDAR']) {
+        expect(withoutComments, contains('android.permission.$p'),
+            reason: 'permission_handler_android denies the calendar status '
+                'and request unless both are declared; without $p a fresh '
+                'install can never be granted a calendar read');
+      }
     });
 
     test('the guard would actually catch a real call', () {
@@ -77,20 +107,20 @@ void main() {
       // matches because the check itself quietly broke.
       const liveFixture = '''
 void _example() async {
-  await _deviceCalendarPlugin.createOrUpdateEvent(event);
+  await DeviceCalendar.instance.createEvent(event);
 }
 ''';
       final stripped = _stripLineComments(liveFixture);
-      expect(stripped, contains('createOrUpdateEvent'));
-      expect(RegExp(r'\.createOrUpdateEvent\s*\(').hasMatch(stripped), isTrue);
+      expect(stripped, contains('createEvent'));
+      expect(RegExp(r'\.createEvent\s*\(').hasMatch(stripped), isTrue);
 
       // And prove the comment-stripping half actually works: the real,
       // currently-disabled call in calendar.dart's own shape must NOT be
       // found by the same check the first test above runs.
       const commentedFixture =
-          '//       await _deviceCalendarPlugin.createOrUpdateEvent(event);';
+          '//       await DeviceCalendar.instance.createEvent(event);';
       expect(
-          RegExp(r'\.createOrUpdateEvent\s*\(')
+          RegExp(r'\.createEvent\s*\(')
               .hasMatch(_stripLineComments(commentedFixture)),
           isFalse);
     });
