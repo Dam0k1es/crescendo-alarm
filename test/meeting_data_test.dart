@@ -37,6 +37,44 @@ void main() {
     expect(event.color, Colors.grey);
   });
 
+  // T-244 device finding: the plugin reports an all-day event's end as the
+  // EXCLUSIVE next midnight, so a one-day event (29th, end 30th 00:00) was
+  // drawn across two day columns.
+  test('a one-day all-day event covers only its own day', () {
+    final event = meetingToCalendarEvent(Meeting(
+      from: DateTime.utc(2026, 10, 29),
+      to: DateTime.utc(2026, 10, 30),
+      isAllDay: true,
+      startTimeZone: '',
+      endTimeZone: '',
+    ));
+    expect(event.date, DateTime(2026, 10, 29));
+    expect(event.endDate, DateTime(2026, 10, 29));
+  });
+
+  test('a three-day all-day event ends on its last day, not the day after',
+      () {
+    final event = meetingToCalendarEvent(Meeting(
+      from: DateTime.utc(2026, 10, 29),
+      to: DateTime.utc(2026, 11, 1),
+      isAllDay: true,
+      startTimeZone: '',
+      endTimeZone: '',
+    ));
+    expect(event.endDate, DateTime(2026, 10, 31));
+  });
+
+  test('a zero-length all-day event stays on its day', () {
+    final event = meetingToCalendarEvent(Meeting(
+      from: DateTime.utc(2026, 10, 29),
+      to: DateTime.utc(2026, 10, 29),
+      isAllDay: true,
+      startTimeZone: '',
+      endTimeZone: '',
+    ));
+    expect(event.endDate, DateTime(2026, 10, 29));
+  });
+
   // Repository hygiene pass (2026-09): Meeting's toJson() had been commented
   // out, but hashCode still called jsonEncode(this), which falls back to
   // calling toJson() when it exists - with the method gone entirely, every
