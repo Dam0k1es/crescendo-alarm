@@ -1927,6 +1927,8 @@ rather than expanded into more scope here: see T-185.
 
 ### T-217 · Direct-boot siren for an overdue alarm of any age; a late first unlock can lose the real alarm (P1) — RESOLVED on `dev` (2026-10-06), device checks outstanding
 
+- **Android 16 (maintainer's hand report, 2026-10-26):** after a reboot an alarm rings before the first unlock, and after the unlock the siren hands over to the real alarm. Reported by ear, no log; whether it rang once or twice around the unlock was not noted.
+
 - [ ] Found by the code-comment review of 2026-10-01 (`DirectBootReceiver.kt`, the `alarm` plugin's
   boot handling). Not yet reproduced on a device.
 - **Finding:** since `alarm` 5.11 the plugin drops alarms that are more than 15 minutes overdue at
@@ -8550,8 +8552,9 @@ red and that stays invisible in the rest of the suite today.
   (`appops set ... SYSTEM_ALERT_WINDOW allow`): unlocked + launcher, unlocked + Settings in front, and unlocked
   with the process killed all brought the ring screen (Snooze/Stop) to the front; locked → `SKIP_LOCKED`, the
   full-screen intent as before; the new tab reads the state and **Allow** opens the system overlay screen.
-- **Not verified:** Android 14+ (full-screen-intent access denied/allowed, Android 16 behaviour of the background
-  start with the overlay permission); the diagnostics log does not yet record whether the phone was locked or the
+- **Android 16 (maintainer's hand report, 2026-10-26):** with the app in the background, also with another app in
+  front, the full screen opens; Settings > Alarm Screen shows both accesses green. No exported log.
+- **Not verified:** Android 14 and 15, and the full-screen-intent access switched off on 14+; the diagnostics log does not yet record whether the phone was locked or the
   app in front at the ring.
 - **Reviews (2026-10-23, Günther / Philipp / Lea):** no blocking defect;
   Philipp: ACCEPT (no third-party path to the trigger, QR gate not bypassed, no overlay-drawing code in the app or

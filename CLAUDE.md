@@ -285,9 +285,11 @@ starts an activity (`docs/TODO.md` T-240, device-reproduced on the Fairphone 3).
   the launcher's in-process last state (`ringState` channel method) - so "it rang but no screen opened" can be read
   from an exported log. `RingLaunchDecision` (Dart) and `RingScreenLaunchPolicy.Decision.code` (Kotlin) are kept
   equal by `test/alarm_screen_contract_test.dart`.
-- Device-verified on Android 13 only (unlocked + launcher, unlocked + another app, process killed, locked
-  = untouched). Android 14+'s full-screen-intent access is read through `canUseFullScreenIntent()` and
-  has not been seen on a device.
+- Device-verified on Android 13 (unlocked + launcher, unlocked + another app, process killed, locked
+  = untouched) and, by the maintainer's own report of 2026-10-26, on an Android 16 phone: with the app in
+  the background, also with another app in front, the full screen opens, and Settings > Alarm Screen
+  shows both accesses granted. Not seen: Android 14 and 15, the full-screen-intent access switched off
+  (J9), and no exported log backs the Android 16 report.
 
 License: GNU GPLv3 or later, SPDX `GPL-3.0-or-later` (see `LICENSE`; decision 2026-10-23, kept consistent across source headers, README, the About page, the store listing and the F-Droid recipe by `test/licence_form_test.dart`). Copyright holders named in tracked files: Dam0k1es, centron5961
 - two of the three original developers of the project this repository grew from. All three have

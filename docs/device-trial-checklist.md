@@ -259,7 +259,7 @@ the phone's.
 | J4 | **Locked**, screen off, allowed or not | the full-screen intent as before; the launcher does nothing | confirmed (`SKIP_LOCKED`, ring screen over the lock screen) |
 | J5 | Not allowed, unlocked | heads-up only, as before | confirmed (`SKIP_NO_PERMISSION`) |
 | J6 | Settings > Alarm Screen, denied state: **Allow** | opens the system "Display over other apps" screen for the app | confirmed |
-| J7 | **Android 14, 15, 16:** the same J1-J4 and the full-screen-intent card (access on and off) | to be run | **not run** |
+| J7 | **Android 14, 15, 16:** the same J1-J4 and the full-screen-intent card (access on and off) | to be run | Android 16 (maintainer's phone, hand report 2026-10-26): J1-J4 as expected, both accesses green, full screen with the app in the background and with another app in front; Android 14, 15 and the access-off card **not run** |
 | J8 | Fresh install, open the Alarms screen | a one-time dialog "Open the alarm screen by itself?" (Allow / Not now); after Not now and a restart it does not come back | Fairphone 3 / Android 13: confirmed |
 | J9 | Android 14+: switch full-screen notifications off for the app (system settings) and open the Alarms screen | a warning at the top with **Open settings**; gone after switching it on and coming back | **not run** (Android 13 only) |
 | J10 | Diagnostics on; one unlocked ring without and one with the overlay access; export | two `ringScreenState` lines: decision 5 (no access), decision 1 (launched), numbers only | Fairphone 3: confirmed (read from the stored log) |
