@@ -71,8 +71,8 @@ Alarms you create yourself, independent of any calendar.
   stop it (the app-wide "Guaranteed Wake-Up" feature - see "Scan Code" below). Greyed out and
   shown as off whenever no code is configured at all there, since it has no effect yet; becomes
   available once you generate or import one. A new alarm is saved as "required" even then, so it is
-  gated as soon as you set a code up; alarms saved earlier with the switch off (before this
-  behaviour, 1.8.0) stay off until you switch them on.
+  gated as soon as you set a code up; alarms an older version saved with the switch off stay off
+  until you switch them on.
 - **Exclude from Sleep Time** - off by default. Switch it on for an alarm that should not count as
   "the next alarm" for the Sleep Habits **Do Not Disturb** trigger (see below) - for example a
   medication reminder in the middle of the night: it neither ends the Do Not Disturb sleep time early

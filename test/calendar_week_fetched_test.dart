@@ -37,6 +37,21 @@ void main() {
     expect(await appState.isCalendarWeekFetched(midWeekDay), isTrue);
   });
 
+  test(
+      'T-244 (review N3): a late-evening Sunday across a DST change still '
+      'finds its own week', () async {
+    final appState = AppState();
+    await appState.initialized;
+
+    // Sun 25 Oct 2026 23:30: in Europe/Berlin that is after the fall-back.
+    // 144 hours earlier is Tue 20 Oct 00:30 there, so subtracting six
+    // 24-hour days named the wrong week; calendar days name Mon 19 Oct.
+    appState.fetchedCalendarWeeks.add(DateTime(2026, 10, 19));
+
+    expect(await appState.isCalendarWeekFetched(DateTime(2026, 10, 25, 23, 30)),
+        isTrue);
+  });
+
   test('T-55: a day whose week was never fetched is still reported as such',
       () async {
     final appState = AppState();

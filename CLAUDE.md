@@ -1,4 +1,4 @@
-`flutter test` currently runs **1057 tests across 142 files** (2026-10-23, v1.6.0), and CI runs them ten times over -
+`flutter test` currently runs **1122 tests across 151 files** (2026-10-27; 38 more are skipped by design in some timezone legs), and CI runs them ten times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
 tests for native code (77 as of T-240: 27 in `SleepTimeDndPolicyTest`, 21 in
 `DirectBootFallbackPolicyTest`, 12 in `RingTimeoutPolicyTest`, 10 in `RingNotificationPolicyTest`, 7 in
@@ -677,7 +677,7 @@ individually, including AI-assistant chat history that can leak real usernames a
 
 ## Testing status
 
-`flutter test` currently runs **952 tests across 130 files** (2026-10-20), and CI runs them ten times over -
+`flutter test` currently runs **1122 tests across 151 files** (2026-10-27; 38 more are skipped by design in some timezone legs), and CI runs them ten times over -
 once per timezone in the matrix described above. Separately, `android/app/src/test` holds JVM unit
 tests for native code (58 as of T-233: 27 in `SleepTimeDndPolicyTest`, 21 in
 `DirectBootFallbackPolicyTest`, 10 in `RingNotificationPolicyTest`), run with

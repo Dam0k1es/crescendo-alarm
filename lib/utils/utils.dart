@@ -150,14 +150,14 @@ Future<void> preloadCalendarData(AppState appState,
   DateTime weekStart = getStartOfWeek(DateTime.now());
 
   for (int i = 0; i < pastWeeks; i++) {
-    DateTime startOfWeek = weekStart.subtract(Duration(days: i * 7));
+    DateTime startOfWeek = addCalendarDays(weekStart, -i * 7);
     markWeekFetched(appState, startOfWeek);
     debugPrint(
         "=====preloadCalendarData: Preloaded the week starting with $startOfWeek");
   }
 
   for (int i = 1; i <= futureWeeks; i++) {
-    DateTime startOfWeek = weekStart.add(Duration(days: i * 7));
+    DateTime startOfWeek = addCalendarDays(weekStart, i * 7);
     markWeekFetched(appState, startOfWeek);
     debugPrint(
         "=====preloadCalendarData: Preloaded the week starting with $startOfWeek");

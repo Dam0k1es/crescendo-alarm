@@ -1852,8 +1852,7 @@ class AppState extends ChangeNotifier {
   /// [dateTime] is already Monday. Removed rather than wired up to a UI
   /// nobody asked for.
   Future<bool> isCalendarWeekFetched(DateTime dateTime) async {
-    DateTime startOfWeek =
-        dateTime.subtract(Duration(days: dateTime.weekday - 1));
+    DateTime startOfWeek = getStartOfWeek(dateTime);
     DateTime dateOnly =
         DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
 

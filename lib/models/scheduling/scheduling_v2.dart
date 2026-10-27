@@ -41,7 +41,8 @@
 
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:crescendo_alarm/models/scheduling/day_marker.dart';
-import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart' show Meeting;
+import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart'
+    show Meeting;
 import 'package:crescendo_alarm/utils/wall_clock.dart'
     show ZoneOffsetAt, resolvePlannedClockTime;
 
@@ -700,11 +701,11 @@ DateTime _coldStartReading(DateTime day, TimeOfDay preferredWakeUpTime) =>
     DateTime.utc(day.year, day.month, day.day, preferredWakeUpTime.hour,
         preferredWakeUpTime.minute);
 
-/// FR-10: values for [days] (chronological, all strictly before the first
-/// real `hardFloor` point) when there is no established
-/// `lastEffectiveWakeTime` yet - the very first planning run ever. The first
-/// real `hardFloor` day itself is not part of [days]; it's handled directly
-/// by FR-2 and becomes the new anchor for whatever follows (computeWeekPlan).
+/// FR-10: values for [days] (chronological) when there is no established
+/// `lastEffectiveWakeTime` yet - the very first planning run ever: each day
+/// holds the preferred time. `computeWeekPlan` uses the same reading for a
+/// window without any real `hardFloor`; when there IS one, the preferred time
+/// is the anchor the normal loop starts from (docs/TODO.md T-223).
 /// [days] are **device-local calendar dates** (date markers - only their
 /// year/month/day are read), and [preferredWakeUpTime] is a bare device-local time
 /// (FR-3), so producing an absolute instant (FR-1) needs the zone's rules -
@@ -917,7 +918,6 @@ WeekPlanResult computeWeekPlan({
       // first `hardFloor` and then jump onto it.
       anchorDay = dayMarker(window[0], -1);
       anchorReading = _coldStartReading(anchorDay, preferredWakeUpTime);
-      anchor = resolve(anchorReading);
     } else {
       addColdStart(window.sublist(0, firstRealIndex));
       anchor = hardFloorByDay[window[firstRealIndex]]!;

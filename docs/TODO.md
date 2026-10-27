@@ -3126,6 +3126,7 @@ defects found and fixed in the follow-up commit:**
   the CI emulator) - it is the non-gating T-62 leg.
 
 ### T-193 · "Deactivation Code Required" is now forced off (and disabled) with no code configured — DONE (2026-09-26)
+- **Superseded in part by T-245 (2026-10-27):** the switch still SHOWS off and is disabled without a code, but the stored value is no longer forced to `false` - see T-245 (audit G5-02).
 
 - [x] Maintainer request, verbatim: "Achja: Wenn kein code gesetzt ist, soll auch die option auf off
   sein. macht nur sinn so." (Oh right: if no code is set, the option should also be off. Only makes
@@ -8737,3 +8738,5 @@ red and that stays invisible in the rest of the suite today.
 - **Cause:** the manual-alarm dialog stored `requireDeactivationCode = false` whenever no code existed (T-193 made the switch show off, and "genuinely stored" it). Once a code was set up later, those alarms rang with a one-tap Stop, and re-saving an alarm after removing the code stripped its gate for good.
 - **Fix:** the switch is only *displayed* off and disabled without a code; the stored value stays the alarm's own (a new alarm: on). T-193's request ("with no code set, the option shows off") still holds. `test/screen_alarms_dialog_toggles_test.dart` (audit G5-02 cases, three red first).
 - **Not changed:** alarms already stored as `false` before this fix cannot be told from an alarm the user switched off on purpose; they stay off (`docs/USER_GUIDE.md` says so).
+- **Known limit of T-223 (Markus's review, 2026-10-27, not changed):** the anchor `replan` reads is yesterday's stored value; with `scheduleOnGapDays = false` the mask nulls gap days before the merge, so on a later checkpoint there can be no anchor again and the cold start (preferred time as anchor) applies once more. The smoothing then restarts from the preferred time instead of from what rang. This comes from the existing anchor mechanism, not from T-223, and is not covered by a `replan`-level test.
+- **Review follow-ups (2026-10-27):** `isCalendarWeekFetched` and `preloadCalendarData` use calendar days too (`test/calendar_week_fetched_test.dart`, red in Europe/Berlin first).

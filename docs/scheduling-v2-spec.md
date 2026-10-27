@@ -575,8 +575,9 @@ correctness-critical mechanism).
 
 ## FR-10 — Cold start
 
-If no `lastEffectiveWakeTime` exists (the very first planning run), **no** value is invented for
-days before the first real `hardFloor`:
+If no `lastEffectiveWakeTime` exists (the very first planning run), no wake time is invented that
+nobody asked for - what stands in for the missing anchor is the `preferredWakeUpTime`, if there is
+one:
 
 - With `preferredWakeUpTime`: it is the anchor (resolved by R_plan on each day with that day's own
   zone rules, FR-1) and the window is planned like any other: the way to the first real

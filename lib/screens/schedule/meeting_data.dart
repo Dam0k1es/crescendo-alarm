@@ -124,10 +124,9 @@ CalendarEventData<Meeting> meetingToCalendarEvent(
     // An all-day event's end is the EXCLUSIVE next midnight (Android's
     // DTEND, T-244): the last day it covers is the one before. A zero-length
     // entry stays on its own day.
-    final lastDay = meeting.to.toUtc().isAfter(fromDay)
+    final toDay = meeting.to.toUtc().isAfter(fromDay)
         ? meeting.to.toUtc().subtract(const Duration(days: 1))
         : fromDay;
-    final toDay = lastDay;
     return CalendarEventData<Meeting>(
       title: meeting.eventName,
       description: meeting.description,

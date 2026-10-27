@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:crescendo_alarm/models/scheduling/scheduling_v2.dart';
 import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 import 'package:crescendo_alarm/utils/wall_clock.dart';
+
+import 'support/zone_rules.dart' as zr;
 
 // docs/TODO.md T-223 (maintainer decision 2026-10-27, "Glätten + Hinweis"):
 // FR-10's cold start - no lastEffectiveWakeTime, a fresh install or after data
@@ -43,7 +47,55 @@ WeekPlanResult _plan(
     );
 
 void main() {
+  setUpAll(tzdata.initializeTimeZones);
   final window = List.generate(7, (i) => _utc(0, 0, day: 1 + i));
+
+  test('with real zone rules, a spring-forward in the run is no shift', () {
+    // Europe/Berlin, Sat 28 Mar - Fri 3 Apr 2026 (the change is Sun 29 Mar),
+    // preferred 07:00, first appointment Thu 2 Apr 05:00 local.
+    final berlin = tz.getLocation('Europe/Berlin');
+    final rules = zr.zoneRules(berlin);
+    final days = List.generate(7, (i) => DateTime.utc(2026, 3, 28 + i));
+    final appointment = zr
+        .wall(2026, 4, 2, 5, 0)
+        .subtract(rules(DateTime.utc(2026, 4, 2))); // 05:00 CEST as an instant
+    final result = computeWeekPlan(
+      window: days,
+      lastEffectiveWakeTime: null,
+      allEvents: [
+        Meeting(
+          from: appointment,
+          to: appointment.add(const Duration(hours: 1)),
+          isAllDay: false,
+          startTimeZone: 'Europe/Berlin',
+          endTimeZone: 'Europe/Berlin',
+        ),
+      ],
+      offsetAt: rules,
+      durationToWakeUp: Duration.zero,
+      durationToGetReadyForDay: (_) => Duration.zero,
+      preferredWakeUpTime: const TimeOfDay(hour: 7, minute: 0),
+      maxDailyDelta: const Duration(minutes: 30),
+      gapDayCounter: 0,
+      scheduleOnGapDays: true,
+    );
+
+    int minuteOfDay(DateTime instant) {
+      final r = zr.readingOf(instant, rules);
+      return r.hour * 60 + r.minute;
+    }
+
+    final readings = [
+      for (final d in days) minuteOfDay(result.valuesByDay[d]!)
+    ];
+    expect(readings.first <= 7 * 60, isTrue);
+    for (var i = 1; i < readings.length; i++) {
+      expect(readings[i - 1] - readings[i] <= 30, isTrue,
+          reason: 'day ${i + 1}: $readings');
+    }
+    expect(readings[5], 5 * 60, reason: '$readings');
+    expect(result.overrunNotificationNeeded, isFalse);
+  });
 
   test('an earlier first appointment is approached in steps, not in one jump',
       () {
