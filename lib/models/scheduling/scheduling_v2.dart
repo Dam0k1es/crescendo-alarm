@@ -907,13 +907,26 @@ WeekPlanResult computeWeekPlan({
         plannedClockTimes: plannedClockTimes,
       );
     }
-    addColdStart(window.sublist(0, firstRealIndex));
-    anchor = hardFloorByDay[window[firstRealIndex]]!;
-    anchorReading = readingOf(anchor);
-    valuesByDay[window[firstRealIndex]] = anchor;
-    instantAnchoredDays.add(window[firstRealIndex]);
-    anchorDay = window[firstRealIndex];
-    startIndex = firstRealIndex + 1;
+    if (preferredWakeUpTime != null) {
+      // docs/TODO.md T-223 (maintainer decision 2026-10-27): with a
+      // `preferredWakeUpTime` a cold start plans like any other day - that
+      // time, as it stood the day before the window, is the anchor, so the
+      // way to the first real `hardFloor` is smoothed (FR-5/FR-7), a later
+      // appointment is only a cap (T-132), and a jump that cannot be spread
+      // is reported (FR-6). It used to hold the preferred time up to the
+      // first `hardFloor` and then jump onto it.
+      anchorDay = dayMarker(window[0], -1);
+      anchorReading = _coldStartReading(anchorDay, preferredWakeUpTime);
+      anchor = resolve(anchorReading);
+    } else {
+      addColdStart(window.sublist(0, firstRealIndex));
+      anchor = hardFloorByDay[window[firstRealIndex]]!;
+      anchorReading = readingOf(anchor);
+      valuesByDay[window[firstRealIndex]] = anchor;
+      instantAnchoredDays.add(window[firstRealIndex]);
+      anchorDay = window[firstRealIndex];
+      startIndex = firstRealIndex + 1;
+    }
   } else {
     // T206-R10: the stored clock time counts only while it is consistent with
     // the value that rang - compared in whole milliseconds, the precision

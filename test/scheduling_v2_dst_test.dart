@@ -101,8 +101,10 @@ void main() {
         List.generate(7, (i) => tz.TZDateTime(berlin, 2026, 3, 28 + i));
 
     // First real appointment on 2026-03-31 (i.e. after the transition), so
-    // the cold-start branch sets its anchor in the middle of the window and
-    // the dayOffsets afterward get counted across the transition.
+    // the cold start's run toward it, and the dayOffsets afterward, get
+    // counted across the transition. Since T-223 the preferred time is the
+    // anchor and the appointment has to be EARLIER than it (04:00 UTC =
+    // 06:00 CEST against 07:00): a later one would only be a cap.
     Meeting at(int day, int utcHour, int utcMinute) => Meeting(
           from: tz.TZDateTime.from(
               DateTime.utc(2026, 3, day, utcHour, utcMinute), berlin),
@@ -116,7 +118,7 @@ void main() {
     final result = computeWeekPlan(
       window: window,
       lastEffectiveWakeTime: null,
-      allEvents: [at(31, 6, 0), at(2, 6, 0)],
+      allEvents: [at(31, 4, 0), at(2, 6, 0)],
       offsetAt: fixedOffset(cest),
       durationToWakeUp: const Duration(minutes: 30),
       durationToGetReadyForDay: (_) => Duration.zero,
@@ -126,10 +128,12 @@ void main() {
       scheduleOnGapDays: true,
     );
 
-    // The anchor day (Mar 31) carries its own hardFloor and is
-    // instant-anchored; all seven days must have a value.
-    expect(result.valuesByDay[window[3]], DateTime.utc(2026, 3, 31, 5, 30));
-    expect(result.instantAnchoredDays.contains(window[3]), isTrue);
+    // The run reaches the appointment's hardFloor exactly on its own day
+    // (03:30 UTC), in steps of at most maxDailyDelta, and every day has a
+    // value.
+    expect(result.valuesByDay[window[3]], DateTime.utc(2026, 3, 31, 3, 30));
     expect(result.valuesByDay.length, 7);
+    expect(result.valuesByDay.values.every((v) => v != null), isTrue);
+    expect(result.overrunNotificationNeeded, isFalse);
   });
 }

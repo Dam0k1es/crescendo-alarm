@@ -578,14 +578,22 @@ correctness-critical mechanism).
 If no `lastEffectiveWakeTime` exists (the very first planning run), **no** value is invented for
 days before the first real `hardFloor`:
 
-- With `preferredWakeUpTime`: these days use it, resolved by R_plan on each day with that day's
-  own zone rules (FR-1).
-- Without: no alarm planned.
-- The first real `hardFloor` is set on its own day (FR-2) and becomes the anchor for all following
-  days from then on.
+- With `preferredWakeUpTime`: it is the anchor (resolved by R_plan on each day with that day's own
+  zone rules, FR-1) and the window is planned like any other: the way to the first real
+  `hardFloor` is smoothed by FR-5/FR-7 (at most `maxDailyDelta` a day where the days allow it), a
+  `hardFloor` later than the preferred time is only a cap (FR-2, T-132), and a jump that cannot be
+  spread over the days is reported by FR-6 (decision 2026-10-27, `docs/TODO.md` T-223; before, the
+  preferred time was held flat and then jumped onto the first `hardFloor` without a notice).
+- Without: no alarm planned. The first real `hardFloor` is set on its own day (FR-2) and becomes
+  the anchor for all following days from then on - nothing is invented, so there is nothing to
+  smooth.
 
 - **Test:** days 1–5 appointment-free, day 6 `hardFloor=05:30`, no `preferredWakeUpTime` → days 1–5
   no alarm, day 6=05:30 becomes the new anchor.
+- **Test (T-223):** `preferredWakeUpTime=07:00`, first appointment 05:00 on day 5, `maxDailyDelta=30
+  min` → no day moves by more than 30 min, day 5 = 05:00, no FR-6 notice. Same with the appointment
+  on day 1 (07:00 → 04:00 in one day) → day 1 = 04:00 and FR-6 is notified. An appointment at 11:00
+  on day 4 → days 1-4 stay 07:00. (`test/scheduling_v2_cold_start_test.dart`)
 - **Test (DST, T-206):** `Europe/Berlin`, window Sat 28 Mar – Fri 3 Apr 2026, no appointment,
   `preferredWakeUpTime=07:00`, no `lastEffectiveWakeTime` → 07:00 by the clock every day: 28 Mar
   06:00 UTC, from 29 Mar on 05:00 UTC.

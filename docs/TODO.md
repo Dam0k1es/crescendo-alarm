@@ -2163,9 +2163,10 @@ rather than expanded into more scope here: see T-185.
   "Waiting on a decision" at the top.
 - **Requirement:** R2; FR-12, FR-21.
 
-### T-223 · FR-10's cold start can jump hours without smoothing or an FR-6 notice (P2, open question to the maintainer)
+### T-223 · FR-10's cold start can jump hours without smoothing or an FR-6 notice — DECIDED and FIXED on `dev` (2026-10-27) (P2)
 
-- [ ] Found by the spec audit of 2026-10-05 while closing T-139.
+- **Decision (maintainer, 2026-10-27, "Glätten + Hinweis"):** with a `preferredWakeUpTime` the cold start follows the normal rules: the preferred time is the anchor, the way to the first `hardFloor` is smoothed, a later appointment is only a cap, a jump that cannot be spread is reported (FR-6). Without a preferred time FR-10 is unchanged. Spec FR-10 updated; `computeWeekPlan` starts the loop at `window[0]` with the preferred reading of the day before as the anchor. Tests: `test/scheduling_v2_cold_start_test.dart` (three red first); `scheduling_v2_dst_test.dart`'s T-76 cold-start case now uses an appointment earlier than the preferred time; `t206_lemma_c_differential_test.dart` gets a second frozen allowlist (`_t223Divergent`, the cold starts with a preferred time that differ from the 8ac1d9e oracle), judged by the independent invariants against the new anchor.
+- [x] (done) Found by the spec audit of 2026-10-05 while closing T-139.
 - **Finding:** with no anchor (`lastEffectiveWakeTime` absent - a fresh install, or after data
   loss), FR-10 sets the first real `hardFloor` on its own day and anchors everything after it
   there. Two consequences that contradict the rules normal planning follows:
