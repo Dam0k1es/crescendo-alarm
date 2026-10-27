@@ -123,17 +123,22 @@ written cannot pass until T-199 is resolved; do not record a missing bedtime ent
 The two Android models behave differently and must be recorded separately - a result on one never
 covers the other (`CLAUDE.md`, "Sleep-time Do Not Disturb"). Fill the header's Android version in.
 
+Run 2026-10-28 on the Fairphone 3 (Android 13, global DND model, dev build 61b4b59, `current.apk`): every row marked
+confirmed below was run on that phone only. The phone clock was moved with `cmd alarm set-time` between steps (automatic
+time off), the app's own volume was 0 and vibration off, and Do Not Disturb access was granted with
+`cmd notification allow_dnd` after G1. Not covered: a real night, Android 14 and 15, and a force-stop during sleep time.
+
 | # | Check | Expectation | Result |
 |---|---|---|---|
-| G1 | Sleep Habits → switch on **Do Not Disturb** for the first time | Android's Do Not Disturb access screen opens; without granting it the switch stays off | |
-| G2 | Next alarm in more than one Sleep Goal: wait for (or move the alarm towards) bedtime = alarm − Sleep Goal, app closed | DND switches on at bedtime, "alarms only" | |
-| G3 | Let that alarm ring | DND switches off at the first ring, not at Stop; a snooze does not switch it on again | |
-| G4 | Next alarm **less** than one Sleep Goal away (e.g. a backup alarm +10 min) | after the first ring DND comes back on about two minutes later until that alarm rings (T-203) | |
-| G5 | Same as G4, but the closer manual alarm has **Exclude from Sleep Time** on | that alarm neither starts nor ends sleep time; DND follows the next non-excluded alarm | |
-| G6 | Switch the Do Not Disturb setting off during sleep time | DND off right away | |
-| G7 | Reboot during sleep time without opening the app | DND window still ends at the alarm's first ring (re-armed by `DirectBootReceiver`) | |
-| G8 | **Android 15 and newer:** check Settings → Modes and the quick-settings DND tile during sleep time | the app's own mode is on; the global DND tile is not; your own DND and other modes untouched | |
-| G9 | **Android 14 and older:** switch DND on by hand before bedtime | the app leaves it alone and does not switch it off in the morning | |
+| G1 | Sleep Habits → switch on **Do Not Disturb** for the first time | Android's Do Not Disturb access screen opens; without granting it the switch stays off | Fairphone 3 / Android 13 (2026-10-28, phone time): confirmed - the access screen opened; back out without granting: switch off, `sleepTimeDndEnabled` false |
+| G2 | Next alarm in more than one Sleep Goal: wait for (or move the alarm towards) bedtime = alarm − Sleep Goal, app closed | DND switches on at bedtime, "alarms only" | confirmed (Android 13, global DND): alarm 16:02, window start 08:02; `zen_mode` 0 -> 3 (alarms only) at 08:02:07, app in the background (not force-stopped) |
+| G3 | Let that alarm ring | DND switches off at the first ring, not at Stop; a snooze does not switch it on again | confirmed: `zen_mode` 0 at 16:02:08 while the alarm was still ringing; after "Snooze 5 min" it stayed 0, the snooze ring at 16:07 did not switch it on |
+| G4 | Next alarm **less** than one Sleep Goal away (e.g. a backup alarm +10 min) | after the first ring DND comes back on about two minutes later until that alarm rings (T-203) | confirmed: a backup alarm +10 min created after the ring; DND on again within about two minutes (zen 3 at 16:06 for a 16:13 alarm); the snooze ring at 16:07 left it on; the backup ring at 16:13 switched it off |
+| G5 | Same as G4, but the closer manual alarm has **Exclude from Sleep Time** on | that alarm neither starts nor ends sleep time; DND follows the next non-excluded alarm | confirmed: the excluded alarm (16:23) was not the window end (native end = the 16:33 alarm); its ring and Stop left `zen_mode` 3; the 16:33 ring switched it off |
+| G6 | Switch the Do Not Disturb setting off during sleep time | DND off right away | confirmed: switch off during sleep time, `zen_mode` 3 -> 0 at once |
+| G7 | Reboot during sleep time without opening the app | DND window still ends at the alarm's first ring (re-armed by `DirectBootReceiver`) | confirmed: reboot at 08:47 inside the window, app never opened; `zen_mode` 3 survived the boot, `SLEEP_TIME_END` and the siren alarm were armed again before the first unlock; clock moved to 16:01:40 with the phone still locked: `zen_mode` 0 at 16:02:26, `DirectBootFallbackService` running |
+| G8 | **Android 15 and newer:** check Settings → Modes and the quick-settings DND tile during sleep time | the app's own mode is on; the global DND tile is not; your own DND and other modes untouched | not applicable on Android 13 (the global model); Android 15 and newer not run in this round |
+| G9 | **Android 14 and older:** switch DND on by hand before bedtime | the app leaves it alone and does not switch it off in the morning | confirmed: `cmd notification set_dnd priority` before bedtime; across bedtime 08:43, the ring at 16:43 and Stop `zen_mode` stayed 1, `active_by_us` false, nothing switched off |
 
 ## H — v1.5.0: restart/force-stop fallback, tones, permissions, tabs, ring notification (T-217, T-212, T-228, T-229)
 
@@ -264,3 +269,13 @@ the phone's.
 | J9 | Android 14+: switch full-screen notifications off for the app (system settings) and open the Alarms screen | a warning at the top with **Open settings**; gone after switching it on and coming back | Android 16 (maintainer's phone, hand report 2026-10-27): with the full-screen access off, the "On an unlocked screen" entry is red and opens the system settings; Android 14, 15 **not run** |
 | J10 | Diagnostics on; one unlocked ring without and one with the overlay access; export | two `ringScreenState` lines: decision 5 (no access), decision 1 (launched), numbers only | Fairphone 3: confirmed (read from the stored log) |
 | J11 | Android 14+: fresh install, read the exact-alarm access (`SCHEDULE_EXACT_ALARM` is denied by default from 14) | the app tells the user and the alarm still rings | **accepted test gap** (maintainer, 2026-10-27): not run on any device |
+
+## Calendar run 2, 2026-10-28, Fairphone 3 (Android 13), dev build 61b4b59
+
+A throw-away LOCAL calendar was created over `content insert` and deleted again; the phone was cleaned up afterwards.
+
+| Check | Result |
+|---|---|
+| Fresh install (`pm clear`), refuse the calendar permission ("Nicht zulassen") | The Schedule tab stays usable and empty, no crash, process alive; the permission stays `granted=false`. |
+| Diagnostics after the refusal | `calendarRead` carries outcome 5 (`permissionDenied`), not "no calendars". |
+| Three-day all-day event 29.-31.10. (UTC dates, exclusive end 1.11.) with the permission granted | Drawn as exactly three tiles on Thu, Fri and Sat in the all-day row, in Europe/Berlin, Asia/Tokyo, America/New_York and Pacific/Kiritimati. |

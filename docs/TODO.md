@@ -2701,7 +2701,7 @@ rather than expanded into more scope here: see T-185.
   marker detection never worked in three runs (`flutter test` and the `testWidgets` zone both hold
   output back until a test ends), and it cost up to ~20 min of every master E2E job.
 
-### T-198 · Sleep-time Do Not Disturb, re-implemented natively — IMPLEMENTED (2026-09-27), confirmed on an Android 16 phone (2026-09-28); Android 14 and older unverified
+### T-198 · Sleep-time Do Not Disturb, re-implemented natively — IMPLEMENTED (2026-09-27), confirmed on an Android 16 phone (2026-09-28) and an Android 13 phone (2026-10-28); Android 14 and 15 unverified
 
 - [x] Maintainer request, verbatim: "Bitte implementiere eine Funktionalität, um während der
   Schlafenszeit den Do not Disturb Modus zu aktivieren und beim ersten klingeln des nächsten Weckers
@@ -3002,8 +3002,7 @@ defects found and fixed in the follow-up commit:**
   - **Open question 1 (A1) is answered:** removed at the maintainer's decision (T-203, 023fe1a).
     Decisions 1-3 and 5 and open questions 2-3 have no recorded answer; the implementation stands as
     described.
-  - **Not verified anywhere:** Android 14 and older (global Do Not Disturb - no device, and no E2E
-    since the emulator moved to API 36), a reboot inside the window, a force-stop during sleep time.
+  - **Android 13 (global Do Not Disturb), Fairphone 3, 2026-10-28:** `docs/device-trial-checklist.md` G1-G7 and G9 confirmed (G8 does not apply), including a reboot inside the window and the T-203 catch-up after a ring. **Not verified anywhere:** Android 14 and 15, a force-stop during sleep time, a real night (the phone clock was moved between steps).
 
 ### T-197 · Do Not Disturb removed completely, pending a fresh design — DONE (2026-09-27)
 
@@ -8702,7 +8701,7 @@ red and that stays invisible in the rest of the suite today.
   swallowed the enabled one. Reproduced locally in that window (red before, green after); the fixture now uses calendar-day
   arithmetic. The code was right.
 
-### T-244 · `device_calendar` replaced by `device_calendar_plus`; `WRITE_CALENDAR`, gson pin and dmfs libraries gone — on `dev`, device test pending (2026-10-24) (maintainer decision, P1)
+### T-244 · `device_calendar` replaced by `device_calendar_plus`; `WRITE_CALENDAR`, gson pin and dmfs libraries gone — on `dev`, device test done (2026-10-28) (maintainer decision, P1)
 - **Why:** `device_calendar` is unmaintained (last release 2024-09-29), pinned `timezone ^0.9.0` (hence the override), pulled in
   `gson` (T-148's CVE pin) and the dmfs recurrence libraries (T-242's NOTICE file), and needed `WRITE_CALENDAR` granted
   before any read (T-161). `device_calendar_plus` 0.12.0 is MIT, has Dart dependencies the app already carries, no Maven
@@ -8731,7 +8730,7 @@ red and that stays invisible in the rest of the suite today.
   dialog asking for READ only (and the app still reading), and the Schedule tab's colours. The plugin's build files pull
   AGP 8.9.1 and Kotlin 2.1.0 into the Gradle buildscript classpath of its own module, and its maintainer is a company that
   accepts no outside pull requests (pre-1.0 API): both are risks to watch, not fixed.
-- **Device test, Fairphone 3 / Android 13 (2026-10-26/27):** fresh install, permission dialog and a real read, recurring series (one entry per occurrence), a cancelled occurrence (not drawn, does not move the wake time), the planner reading new events, device zone Tokyo / New York / Kiritimati (instants kept, all-day date kept), ignored events (ids stay in the old format), calendar selection (ids stay in the old format), colours: all as expected. **One defect found and fixed:** an all-day event was drawn across two days because the plugin's end is the exclusive next midnight (`meetingToCalendarEvent`, `d1e84d3`). Still not run on a device: a refused calendar permission, a multi-day all-day event.
+- **Device test, Fairphone 3 / Android 13 (2026-10-26/27):** fresh install, permission dialog and a real read, recurring series (one entry per occurrence), a cancelled occurrence (not drawn, does not move the wake time), the planner reading new events, device zone Tokyo / New York / Kiritimati (instants kept, all-day date kept), ignored events (ids stay in the old format), calendar selection (ids stay in the old format), colours: all as expected. **One defect found and fixed:** an all-day event was drawn across two days because the plugin's end is the exclusive next midnight (`meetingToCalendarEvent`, `d1e84d3`). **Second round, 2026-10-28 (dev build 61b4b59):** a refused calendar permission on a fresh install leaves the app usable and logs `calendarRead` outcome 5 (`permissionDenied`); a three-day all-day event is drawn as three tiles on the right days in Europe/Berlin, Asia/Tokyo, America/New_York and Pacific/Kiritimati. Nothing from the device test is open any more.
 - **Review follow-ups done (N2-N4):** `listCalendarsFromDevice` / `listEventsFromDevice` seams make the error paths of `fetchMeetingsUncached` and `getCalendarEntries` testable (`test/calendar_fetch_paths_test.dart`); the cancelled filter lives only in `eventsToMeetings`; `Diag.calendarRead` now records `CalendarOutcome.permissionDenied` (5), `initThrew` (2) and `retrieveThrew` (3), so a refused permission no longer reads as "no calendars"; the Schedule's fetch window uses calendar days (`addCalendarDays`, `test/update_calendar_data_window_test.dart` - red in the Europe/Berlin leg before the change, the week across the 25 Oct DST change ended at 23:00); zero-length all-day events and all-day dates on a gap midnight are pinned in `test/device_calendar_plus_adapter_test.dart`; stale `device_calendar` wording in comments replaced.
 
 ### T-245 · Alarms created before a deactivation code existed stayed ungated (audit G5-02) — FIXED on `dev` (2026-10-27)
