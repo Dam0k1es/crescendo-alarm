@@ -406,15 +406,17 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
     // docs/TODO.md T-193 (maintainer request): "wenn kein code gesetzt ist,
     // soll auch die Option auf off sein" (with no code set, the option should
     // be off too) - with no deactivation code configured at all, this toggle
-    // has no effect whatsoever (`shouldRequireDeactivationCode` in
-    // handler.dart already ignores it without a code), so showing/allowing
-    // "on" would be actively misleading. Forced off (not just displayed off -
-    // genuinely stored as `false`) whenever no code exists, and the Switch
-    // below is disabled to match, rather than defaulting `true` and silently
-    // diverging from what's shown.
+    // has no effect right now (`shouldRequireDeactivationCode` in
+    // handler.dart ignores it without a code), so showing/allowing "on"
+    // would be misleading: the Switch shows off and is disabled.
+    //
+    // Audit G5-02: it is only DISPLAYED off. The stored value stays what the
+    // alarm already had (new alarm: on), because a code set up later makes it
+    // matter - storing `false` here left every alarm created before the code
+    // permanently ungated, and the user found out only by stopping one
+    // half-asleep.
     final codeConfigured = _appState.deactivationCode != null;
-    bool requireDeactivationCode =
-        codeConfigured ? (alarm?.requireDeactivationCode ?? true) : false;
+    bool requireDeactivationCode = alarm?.requireDeactivationCode ?? true;
     // docs/TODO.md T-198 (R5, maintainer request): "Ein manueller Alarm soll
     // durch einen Schalter von der Schlafenszeit ausgenommen werden
     // können." (a switch should let a manual alarm be excluded from the
@@ -625,7 +627,8 @@ class _ScreenAlarmsState extends State<ScreenAlarms>
                                   style: TextStyle(fontSize: 20)),
                             ),
                             Switch(
-                              value: requireDeactivationCode,
+                              value:
+                                  codeConfigured && requireDeactivationCode,
                               // docs/TODO.md T-193: disabled (not just
                               // defaulted off) whenever no code is
                               // configured - same "greyed out, genuinely

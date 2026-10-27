@@ -26,6 +26,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crescendo_alarm/app_state.dart';
 import 'package:crescendo_alarm/models/scan_code/deactivation_code.dart';
+import 'package:crescendo_alarm/models/alarms/handler.dart';
+import 'package:crescendo_alarm/models/alarms/manual_alarm.dart';
 import 'package:crescendo_alarm/screens/alarms/screen_alarms.dart';
 
 Future<AppState> _openAddDialog(WidgetTester tester) async {
@@ -203,8 +205,94 @@ void main() {
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
+      // Audit G5-02: shown off, but NOT stored off - otherwise an alarm
+      // created before a code exists stays ungated once one is set up.
       final created = appState.manualAlarms.single;
-      expect(created.requireDeactivationCode, isFalse);
+      expect(created.requireDeactivationCode, isTrue);
+    });
+
+    testWidgets(
+        'audit G5-02: an alarm created before any code exists is gated once '
+        'a code is set up later', (tester) async {
+      final appState = await _openAddDialog(tester);
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      appState.deactivationCode = DeactivationCode(payload: 'later-payload');
+
+      expect(
+          shouldRequireDeactivationCode(
+              appState.manualAlarms.single, appState.deactivationCode != null),
+          isTrue);
+    });
+
+    testWidgets(
+        'audit G5-02: re-saving a gated alarm while no code exists keeps it '
+        'gated', (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final appState = AppState();
+      await appState.initialized;
+      // A gated alarm whose code was removed in the meantime.
+      appState.manualAlarms.add(ManualAlarm(
+          time: const TimeOfDay(hour: 7, minute: 0),
+          id: 1,
+          requireDeactivationCode: true));
+      expect(appState.deactivationCode, isNull);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: appState,
+          child: const MaterialApp(home: ScreenAlarms()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Manual'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(ListTile));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(appState.manualAlarms.single.requireDeactivationCode, isTrue);
+    });
+
+    testWidgets(
+        'audit G5-02: an alarm the user turned off with a code present stays '
+        'off when re-saved without one', (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final appState = AppState();
+      await appState.initialized;
+      appState.manualAlarms.add(ManualAlarm(
+          time: const TimeOfDay(hour: 7, minute: 0),
+          id: 1,
+          requireDeactivationCode: false));
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: appState,
+          child: const MaterialApp(home: ScreenAlarms()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Manual'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(ListTile));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(appState.manualAlarms.single.requireDeactivationCode, isFalse);
     });
   });
 
