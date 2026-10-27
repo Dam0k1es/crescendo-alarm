@@ -27,7 +27,7 @@ Future<AppState> _pumpScheduleWithMeeting(
   );
   await tester.pump();
   // updateCalendarData's own calendar fetch throws in a unit test (no
-  // device_calendar channel) and is caught internally - a couple of pumps
+  // device calendar plugin) and is caught internally - a couple of pumps
   // let that settle before the sync-to-_events step (which runs regardless
   // of the fetch outcome, using appState.meetings as the source of truth)
   // is checked.

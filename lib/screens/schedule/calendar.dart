@@ -27,6 +27,35 @@ List<plus.Calendar> calendars = [];
 /// A calendar without a colour of its own is drawn like a default Meeting.
 const Color _fallbackCalendarColor = Colors.green;
 
+/// The two plugin calls this file makes, as replaceable function variables:
+/// `DeviceCalendar` is a hard singleton, so the error paths below are
+/// reachable in a test only through these (docs/TODO.md T-244). Production
+/// never reassigns them.
+Future<List<plus.Calendar>> Function() listCalendarsFromDevice =
+    () => plus.DeviceCalendar.instance.listCalendars();
+
+Future<List<plus.Event>> Function(
+        DateTime start, DateTime end, String calendarId) listEventsFromDevice =
+    (start, end, calendarId) => plus.DeviceCalendar.instance
+        .listEvents(start, end, calendarIds: [calendarId]);
+
+/// Puts both seams, the init state and the calendar list back.
+void resetCalendarSourcesForTest() {
+  listCalendarsFromDevice = () => plus.DeviceCalendar.instance.listCalendars();
+  listEventsFromDevice = (start, end, calendarId) => plus
+      .DeviceCalendar.instance
+      .listEvents(start, end, calendarIds: [calendarId]);
+  calendarInitState = CalendarInitState.notRun;
+}
+
+/// How the last [initCalendars] ended. It lets [fetchMeetingsUncached] tell a
+/// refused calendar permission from a device that simply has no calendars
+/// when it records `Diag.calendarRead` - the log cannot hold the exception, so
+/// the cause is reduced to this enum.
+enum CalendarInitState { notRun, ok, permissionDenied, threw }
+
+CalendarInitState calendarInitState = CalendarInitState.notRun;
+
 /// Loads the device's calendars into [calendars] and, if any were found,
 /// sets `AppState.calendarsInitialized`. A failure (including the Linux dev
 /// build, where `listCalendars()` throws) is only logged and leaves
@@ -41,12 +70,18 @@ Future initCalendars(AppState appState) async {
 
   List<plus.Calendar>? found;
   try {
-    found = await plus.DeviceCalendar.instance.listCalendars();
+    found = await listCalendarsFromDevice();
   } catch (e) {
-    debugPrint("=====initCalendars: Error retrieving calendars: ${e.runtimeType}");
+    calendarInitState = e is plus.DeviceCalendarException &&
+            e.errorCode == plus.DeviceCalendarError.permissionDenied
+        ? CalendarInitState.permissionDenied
+        : CalendarInitState.threw;
+    debugPrint(
+        "=====initCalendars: Error retrieving calendars: ${e.runtimeType}");
   }
 
   if (found != null) {
+    calendarInitState = CalendarInitState.ok;
     calendars = found;
     // docs/TODO.md T-89: for Google/Exchange accounts, the plugin returns the
     // account name as Calendar.name, i.e. regularly the user's real email
@@ -85,9 +120,7 @@ Future<List<Meeting>> getCalendarEntries(
   for (final calendar in selectedCalendars) {
     final List<plus.Event> events;
     try {
-      events = await plus.DeviceCalendar.instance.listEvents(
-          startTime, endTime,
-          calendarIds: [calendar.id]);
+      events = await listEventsFromDevice(startTime, endTime, calendar.id);
     } catch (e) {
       debugPrint(
           '======getCalendarEntries: Error retrieving events: ${e.runtimeType}');
@@ -96,10 +129,8 @@ Future<List<Meeting>> getCalendarEntries(
 
     selectedColor = calendar.color ?? _fallbackCalendarColor;
 
-    for (final event in events) {
-      if (event.status == plus.EventStatus.canceled) continue;
-      Meeting meeting =
-          eventToMeeting(event, selectedColor, timeZone, timeZone);
+    for (final meeting
+        in eventsToMeetings(events, selectedColor, timeZone: timeZone)) {
       try {
         if (!appState.meetings.contains(meeting)) {
           meetingCollection.add(meeting);
@@ -110,7 +141,8 @@ Future<List<Meeting>> getCalendarEntries(
               "=====getCalendarEntries: meeting already in list, skipping");
         }
       } catch (e) {
-        debugPrint("=====getCalendarEntries: Error add meeting to list: ${e.runtimeType}");
+        debugPrint(
+            "=====getCalendarEntries: Error add meeting to list: ${e.runtimeType}");
       }
     }
   }
@@ -164,8 +196,7 @@ Future<List<Meeting>> fetchMeetingsUncached(
       calendars.where((c) => appState.isCalendarSelected(c.id)).toList();
   for (final calendar in selectedCalendars) {
     try {
-      final events = await plus.DeviceCalendar.instance
-          .listEvents(start, end, calendarIds: [calendar.id]);
+      final events = await listEventsFromDevice(start, end, calendar.id);
       meetings.addAll(
           eventsToMeetings(events, calendar.color ?? _fallbackCalendarColor));
     } catch (e) {
@@ -185,13 +216,9 @@ Future<List<Meeting>> fetchMeetingsUncached(
   // emulator.
   Diag.calendarRead(
     // docs/TODO.md T-53: reflects what actually fed the plan, not what
-    // device_calendar returned - a user who deselected every calendar
+    // the plugin returned - a user who deselected every calendar
     // should read the same as one with none at all.
-    outcome: selectedCalendars.isEmpty
-        ? CalendarOutcome.noCalendars
-        : (perCalendarErrors > 0
-            ? CalendarOutcome.partialErrors
-            : CalendarOutcome.ok),
+    outcome: _calendarOutcome(selectedCalendars.length, perCalendarErrors),
     calendarCount: selectedCalendars.length,
     eventCount: meetings.length,
     allDayEventCount: meetings.where((m) => m.isAllDay).length,
@@ -200,6 +227,29 @@ Future<List<Meeting>> fetchMeetingsUncached(
   );
 
   return meetings;
+}
+
+/// The outcome `fetchMeetingsUncached` records. With nothing selected, the
+/// cause of an empty calendar list is told apart only when the list itself is
+/// empty (a refused permission, a failed read): a user who deselected every
+/// calendar must still read as "no calendars".
+CalendarOutcome _calendarOutcome(int selected, int errors) {
+  if (selected == 0) {
+    if (calendars.isEmpty) {
+      switch (calendarInitState) {
+        case CalendarInitState.permissionDenied:
+          return CalendarOutcome.permissionDenied;
+        case CalendarInitState.threw:
+          return CalendarOutcome.initThrew;
+        case CalendarInitState.notRun:
+        case CalendarInitState.ok:
+          break;
+      }
+    }
+    return CalendarOutcome.noCalendars;
+  }
+  if (errors == selected) return CalendarOutcome.retrieveThrew;
+  return errors > 0 ? CalendarOutcome.partialErrors : CalendarOutcome.ok;
 }
 
 // For future development. Disabled on purpose: WRITE_CALENDAR stays in the

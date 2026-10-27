@@ -74,7 +74,7 @@ class AppState extends ChangeNotifier {
   TimeOfDay _durationToWakeUp = const TimeOfDay(hour: 0, minute: 15);
   Set<String> _disabledDays = <String>{};
 
-  /// Calendar events (by their `device_calendar` id, `Meeting.ids`) the user
+  /// Calendar events (by their device-calendar event id, `Meeting.ids`) the user
   /// has chosen to leave out of scheduling - a feature request
   /// (docs/TODO.md T-149), not an FR:
   /// some appointments (on a shared calendar the user doesn't own, or just
@@ -84,7 +84,7 @@ class AppState extends ChangeNotifier {
   /// same real-world appointment is still recognised.
   Set<String> _ignoredEventIds = <String>{};
 
-  // docs/TODO.md T-53: which `device_calendar` calendars (by `Calendar.id`,
+  // docs/TODO.md T-53: which device calendars (by `Calendar.id`,
   // never a name - regularly the user's own email address for a Google/
   // Exchange account) are left out of both the Schedule display and
   // scheduling. Stores what's explicitly DESELECTED, not what's selected -
@@ -300,7 +300,7 @@ class AppState extends ChangeNotifier {
     _prefs.setStringList('disabledDays', _disabledDays.toList()..sort());
   }
 
-  /// The raw set of ignored `device_calendar` event ids - never the
+  /// The raw set of ignored device-calendar event ids - never the
   /// `Meeting` objects themselves, so ignoring an event can never write
   /// anything back to the calendar (which may not even belong to the user).
   Set<String> get ignoredEventIds => _ignoredEventIds;

@@ -131,6 +131,53 @@ void main() {
     });
   });
 
+  group('an all-day event at the edges', () {
+    test('of zero length stays on its own day, drawn and read', () {
+      final m = eventToMeeting(
+          _event(
+              start: DateTime(2026, 7, 10),
+              end: DateTime(2026, 7, 10),
+              allDay: true),
+          color,
+          '',
+          '');
+
+      expect(m.from, DateTime.utc(2026, 7, 10));
+      expect(m.to, DateTime.utc(2026, 7, 10));
+      final shown = meetingToCalendarEvent(m);
+      expect(shown.date, DateTime(2026, 7, 10));
+      expect(shown.endDate, DateTime(2026, 7, 10));
+    });
+
+    // The date lives in the fields. On a date whose local midnight does not
+    // exist (America/Santiago on 6 Sep 2026, America/Nuuk on 28 Mar 2026
+    // depending on the leg's zone) `DateTime(y, m, d)` resolves to 01:00 or
+    // the like - the DATE must survive it, in every leg.
+    for (final day in [
+      DateTime(2026, 9, 6),
+      DateTime(2026, 3, 28),
+      DateTime(2026, 3, 29),
+      DateTime(2026, 10, 25),
+    ]) {
+      test('on ${day.year}-${day.month}-${day.day} keeps its date', () {
+        final m = eventToMeeting(
+            _event(
+                start: day,
+                end: DateTime(day.year, day.month, day.day + 1),
+                allDay: true),
+            color,
+            '',
+            '');
+
+        expect(m.from, DateTime.utc(day.year, day.month, day.day));
+        expect(m.to, DateTime.utc(day.year, day.month, day.day + 1));
+        final shown = meetingToCalendarEvent(m);
+        expect(shown.date, DateTime(day.year, day.month, day.day));
+        expect(shown.endDate, DateTime(day.year, day.month, day.day));
+      });
+    }
+  });
+
   group('eventsToMeetings', () {
     test('drops a cancelled occurrence and keeps the others', () {
       final events = [

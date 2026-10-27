@@ -7,7 +7,7 @@ import 'package:crescendo_alarm/screens/schedule/screen_schedule.dart';
 // then plays no part in scheduling-v2's hardFloor derivation, without ever
 // being written back to the calendar itself (which could be a shared
 // calendar the user does not own). Persisted by the event's own
-// `device_calendar` id (`Meeting.ids`), not by the Meeting object's value
+// device-calendar event id (`Meeting.ids`), not by the Meeting object's value
 // equality - the same event, refetched on a later sync, must still be
 // recognised as ignored even though it is a freshly-constructed `Meeting`.
 

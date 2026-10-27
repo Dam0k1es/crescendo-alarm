@@ -20,7 +20,7 @@ import 'support/zone_rules.dart';
 // The trigger layer above this (FR-16 checkpoint 1, FR-17, T-65) lives in
 // test/checkpoint_test.dart. fetchEvents/now/deviceUtcOffset are injected
 // everywhere so these
-// tests never touch the real device_calendar plugin or the ambient system
+// tests never touch the real calendar plugin or the ambient system
 // clock/timezone (same testability rationale as FR-2's deviceUtcOffset
 // parameter, see scheduling_v2_test.dart).
 

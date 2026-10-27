@@ -67,8 +67,8 @@ void main() {
       // in every timezone while the screen drew every appointment at the wrong
       // hour.
       //
-      // The trap underneath: `meeting.from` is a `tz.TZDateTime` from
-      // device_calendar, and `TZDateTime.toLocal()` converts to `tz.local` -
+      // The trap underneath: `meeting.from` was a `tz.TZDateTime` from
+      // the old device_calendar plugin (T-244 replaced it), and `TZDateTime.toLocal()` converts to `tz.local` -
       // which stays `Etc/UTC` unless somebody calls `tz.setLocalLocation`, and
       // this app never does. So `.toLocal()` was `.toUtc()` in disguise: a
       // 09:00 Berlin appointment was drawn at 07:00 in summer.
@@ -134,8 +134,9 @@ void main() {
     });
 
     test('an all-day entry keeps its calendar date west of UTC', () {
-      // device_calendar normalises an Android all-day event to midnight UTC so
-      // that its DATE survives. Reading that through the device zone would
+      // A Meeting holds an Android all-day event as midnight UTC (the old
+      // device_calendar plugin did it itself; eventToMeeting keeps the
+      // convention, T-244) so that its DATE survives. Reading that through the device zone would
       // move it to the previous evening for any negative offset - the whole
       // entry would jump a day back for users west of UTC. CI's St John's and
       // Chatham legs are where this bites.

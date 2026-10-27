@@ -319,8 +319,8 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
       endDuration: endDuration,
     );
     final allIgnored = events.isNotEmpty &&
-        events.every(
-            (e) => e.event != null && appState.isEventIgnored(e.event!));
+        events
+            .every((e) => e.event != null && appState.isEventIgnored(e.event!));
     if (!allIgnored) return tile;
     return Stack(
       fit: StackFit.expand,
@@ -334,10 +334,8 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
   /// Opens the ignore/un-ignore sheet for a tap on the day/week views, where
   /// several overlapping events can land on the same tap.
   void _onEventTap(List<CalendarEventData<Meeting>> events, DateTime date) {
-    final meetings = events
-        .map((e) => e.event)
-        .whereType<Meeting>()
-        .toList(growable: false);
+    final meetings =
+        events.map((e) => e.event).whereType<Meeting>().toList(growable: false);
     if (meetings.isEmpty) return;
     _showIgnoreEventSheet(meetings);
   }
@@ -376,14 +374,15 @@ class _ScreenScheduleState extends State<ScreenSchedule> {
                     children: [
                       for (final calendar in calendars)
                         StatefulBuilder(
-                          builder: (context, setSheetState) =>
-                              CheckboxListTile(
+                          builder: (context, setSheetState) => CheckboxListTile(
                             title: Text(
                               // docs/TODO.md T-89: regularly the user's own
                               // account email address (Google/Exchange) -
                               // never logged, but fine to show here since
                               // it's the user's own device.
-                              calendar.name.isEmpty ? 'Unnamed calendar' : calendar.name,
+                              calendar.name.isEmpty
+                                  ? 'Unnamed calendar'
+                                  : calendar.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -615,8 +614,8 @@ Future<void> loadCalendarData(AppState appState, Duration timeToFetch,
 void _syncEventsFromAppState(AppState appState) {
   _events.removeWhere((_) => true);
   _events.addAll(appState.meetings
-      .map((m) =>
-          meetingToCalendarEvent(m, ignored: appState.isEventIgnored(m)))
+      .map(
+          (m) => meetingToCalendarEvent(m, ignored: appState.isEventIgnored(m)))
       .toList());
 }
 
@@ -679,8 +678,10 @@ Future<void> updateCalendarData(AppState appState, Duration timeToFetch,
           "=====updateCalendarData: ${appState.visibleDate} has not been fetched. First update: ${appState.firstUpdateOfCalendar}, Visible date: ${appState.visibleDate}, Fetched weeks: ${appState.fetchedCalendarWeeks}");
       try {
         debugPrint("=====updateCalendarData: Reading calendar data from OS");
-        meetings = await getCalendarEntries(appState,
-            startOfWeek.subtract(backwards), startOfWeek.add(timeToFetch));
+        meetings = await getCalendarEntries(
+            appState,
+            addCalendarDays(startOfWeek, -backwards.inDays),
+            addCalendarDays(startOfWeek, timeToFetch.inDays));
       } catch (e) {
         debugPrint(
             "=====updateCalendarData: Error reading calendar data from OS: ${e.runtimeType}");
@@ -698,9 +699,9 @@ Future<void> updateCalendarData(AppState appState, Duration timeToFetch,
       // `markWeekFetched` (not a raw `.add`), the same dedup-aware helper
       // `preloadCalendarData` uses - otherwise a week this loop covers that
       // some other path already recorded ends up in the list twice.
-      for (DateTime week = startOfWeek.subtract(backwards);
-          week.isBefore(startOfWeek.add(timeToFetch));
-          week = week.add(const Duration(days: 7))) {
+      for (DateTime week = addCalendarDays(startOfWeek, -backwards.inDays);
+          week.isBefore(addCalendarDays(startOfWeek, timeToFetch.inDays));
+          week = addCalendarDays(week, 7)) {
         markWeekFetched(appState, week);
       }
 

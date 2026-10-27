@@ -8,8 +8,8 @@ import 'package:crescendo_alarm/utils/wall_clock.dart';
 
 // docs/TODO.md T-61, levels 1 and 4 of the planned test structure - with the
 // infrastructure that had been missing so far: `tz.initializeTimeZones()`
-// plus a fixture helper that builds `Meeting.from` the way `device_calendar`
-// delivers it in production - as a `tz.TZDateTime` in the **appointment's
+// plus a fixture helper that builds `Meeting.from` the way the old
+// `device_calendar` plugin delivered it (T-244: `Meeting` keeps that frame) - as a `tz.TZDateTime` in the **appointment's
 // own** zone, not UTC-tagged. That's exactly what the earlier partial fix
 // failed on: every fixture used `DateTime.utc(...)`, so it happened to share
 // the same frame as the anchor.

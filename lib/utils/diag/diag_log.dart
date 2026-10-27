@@ -271,7 +271,9 @@ enum CalendarOutcome {
   noCalendars(1),
   initThrew(2),
   retrieveThrew(3),
-  partialErrors(4);
+  partialErrors(4),
+  // The device calendar permission was refused (docs/TODO.md T-244, review N4).
+  permissionDenied(5);
 
   const CalendarOutcome(this.code);
   final int code;

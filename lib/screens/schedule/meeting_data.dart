@@ -205,8 +205,13 @@ Meeting eventToMeeting(plus.Event event, Color selectedColor,
 /// cancelled occurrence of a recurring series in its instance table with
 /// `STATUS_CANCELED`, and it is not an appointment (it must neither be drawn
 /// nor pull a wake-up time earlier). Tentative and status-less events count.
-List<Meeting> eventsToMeetings(List<plus.Event> events, Color color) => [
+///
+/// [timeZone] is the display zone name the Schedule read stamps on each
+/// meeting (it takes part in `Meeting ==`); scheduling leaves it blank.
+List<Meeting> eventsToMeetings(List<plus.Event> events, Color color,
+        {String timeZone = ''}) =>
+    [
       for (final e in events)
         if (e.status != plus.EventStatus.canceled)
-          eventToMeeting(e, color, '', ''),
+          eventToMeeting(e, color, timeZone, timeZone),
     ];

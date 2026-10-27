@@ -138,7 +138,8 @@ Future<void> preloadCalendarData(AppState appState,
   try {
     appState.firstUpdateOfCalendar = false;
   } catch (e) {
-    debugPrint("=====updateCalendarData: Error loading app state: ${e.runtimeType}");
+    debugPrint(
+        "=====updateCalendarData: Error loading app state: ${e.runtimeType}");
   }
 
   int pastDays = pastWeeks * 7;
@@ -191,8 +192,33 @@ void markWeekFetched(AppState appState, DateTime startOfWeek) {
 // already a no-op when [dateTime] is already Monday. Removed rather than
 // wired up to a UI nobody asked for.
 DateTime getStartOfWeek(DateTime dateTime) {
-  return dateTime.subtract(Duration(days: dateTime.weekday - 1));
+  return addCalendarDays(dateTime, -(dateTime.weekday - 1));
 }
+
+/// [dateTime] moved by [days] CALENDAR days, keeping its wall-clock time.
+/// `dateTime.add(Duration(days: n))` is `n * 24` hours, which on a local
+/// DateTime lands an hour off across a daylight-saving change (docs/TODO.md
+/// T-244 review N3: the Schedule's week window ended at 23:00 or 01:00
+/// instead of midnight).
+DateTime addCalendarDays(DateTime dateTime, int days) => dateTime.isUtc
+    ? DateTime.utc(
+        dateTime.year,
+        dateTime.month,
+        dateTime.day + days,
+        dateTime.hour,
+        dateTime.minute,
+        dateTime.second,
+        dateTime.millisecond,
+        dateTime.microsecond)
+    : DateTime(
+        dateTime.year,
+        dateTime.month,
+        dateTime.day + days,
+        dateTime.hour,
+        dateTime.minute,
+        dateTime.second,
+        dateTime.millisecond,
+        dateTime.microsecond);
 
 /// docs/TODO.md T-61 (FR-18's boundary to the alarm plugin): a planned value
 /// is an absolute **instant** (FR-1, typically UTC-tagged), while the alarm
