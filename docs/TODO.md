@@ -1927,7 +1927,7 @@ rather than expanded into more scope here: see T-185.
 
 ### T-217 · Direct-boot siren for an overdue alarm of any age; a late first unlock can lose the real alarm (P1) — RESOLVED on `dev` (2026-10-06), device checks outstanding
 
-- **Android 16 (maintainer's hand report, 2026-10-26):** after a reboot an alarm rings before the first unlock, and after the unlock the siren hands over to the real alarm. Reported by ear, no log; whether it rang once or twice around the unlock was not noted.
+- **Android 16 (maintainer's hand report, 2026-10-26):** after a reboot an alarm rings before the first unlock, and after the unlock the siren hands over to the real alarm. Reported by ear, no log; at the hand-over the siren ends briefly, then the app alarm starts (2026-10-27): a short silence, no double ring.
 
 - [ ] Found by the code-comment review of 2026-10-01 (`DirectBootReceiver.kt`, the `alarm` plugin's
   boot handling). Not yet reproduced on a device.
