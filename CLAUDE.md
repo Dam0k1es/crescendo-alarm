@@ -1002,7 +1002,7 @@ result field per line), `scheduling-v2-spec.md` (FR-1 … FR-21; FR-19 was disca
 `timezone-requirements.md` (TZ-1 … TZ-9, what is and is not promised about daylight saving and
 travel), `t206-dst-requirements.md` (T-206's requirement/test ids cited in tests and `lib/`),
 `USER_GUIDE.md` (every screen and control, for end users), the point-in-time
-`security-assessment-2026-09.md`, plus `personas.md`, `use-cases.md`
+`security-assessment-2026-09.md` and `dependency-audit-2026-10.md` (every dependency version in the history checked for hostile code; open points are `docs/TODO.md` T-246), plus `personas.md`, `use-cases.md`
 and `choice-of-technologies.md` from the original project planning. Those three markdown documents
 predate the finished app and have been annotated inline where they describe features that were
 planned but never implemented (e.g. NFC-tag deactivation) or claims that no longer hold - don't
